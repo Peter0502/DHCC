@@ -1,0 +1,280 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"card_consum_lmt_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int card_consum_lmt_con ( struct card_consum_lmt_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct card_consum_lmt_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->ac_no);
+}
+int Card_consum_lmt_Debug(struct card_consum_lmt_c *ps){
+	vtcp_log("card_consum_lmt_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("card_consum_lmt_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("card_consum_lmt_c.da_cash_lmt=[%f]\n",ps->da_cash_lmt);
+	vtcp_log("card_consum_lmt_c.da_amt_lmt=[%f]\n",ps->da_amt_lmt);
+	vtcp_log("card_consum_lmt_c.da_con_lmt=[%f]\n",ps->da_con_lmt);
+	vtcp_log("card_consum_lmt_c.od_cash_lmt=[%f]\n",ps->od_cash_lmt);
+	vtcp_log("card_consum_lmt_c.od_amt_lmt=[%f]\n",ps->od_amt_lmt);
+	vtcp_log("card_consum_lmt_c.mo_cash_lmt=[%f]\n",ps->mo_cash_lmt);
+	vtcp_log("card_consum_lmt_c.mo_amt_lmt=[%f]\n",ps->mo_amt_lmt);
+	vtcp_log("card_consum_lmt_c.mo_con_lmt=[%f]\n",ps->mo_con_lmt);
+	vtcp_log("card_consum_lmt_c.da_all_cash_lmt=[%f]\n",ps->da_all_cash_lmt);
+	vtcp_log("card_consum_lmt_c.da_all_amt_lmt=[%f]\n",ps->da_all_amt_lmt);
+	vtcp_log("card_consum_lmt_c.da_all_con_lmt=[%f]\n",ps->da_all_con_lmt);
+	vtcp_log("card_consum_lmt_c.mo_all_cash_lmt=[%f]\n",ps->mo_all_cash_lmt);
+	vtcp_log("card_consum_lmt_c.mo_all_amt_lmt=[%f]\n",ps->mo_all_amt_lmt);
+	vtcp_log("card_consum_lmt_c.mo_all_con_lmt=[%f]\n",ps->mo_all_con_lmt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Card_consum_lmt_Sel(reply,card_consum_lmt_c,fmtstr,va_alist)
+char    *reply;
+struct  card_consum_lmt_c *card_consum_lmt_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Card_consum_lmt_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Card_consum_lmt_Fet_Sel( card_consum_lmt_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Card_consum_lmt_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Card_consum_lmt_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,card_consum_lmt.* FROM card_consum_lmt WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE card_consum_lmt_sel FROM :comm;
+	EXEC SQL DECLARE sel_card_consum_lmt CURSOR FOR card_consum_lmt_sel;
+
+	EXEC SQL OPEN sel_card_consum_lmt;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_consum_lmt_Fet_Sel ( struct card_consum_lmt_c *card_consum_lmt_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_card_consum_lmt INTO :card_consum_lmt_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch card_consum_lmt error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch card_consum_lmt finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(card_consum_lmt_c);
+
+	return 0;
+}
+
+int Card_consum_lmt_Clo_Sel (){
+	EXEC SQL CLOSE sel_card_consum_lmt;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Card_consum_lmt_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,card_consum_lmt.* FROM card_consum_lmt WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE card_consum_lmt_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_card_consum_lmt CURSOR FOR card_consum_lmt_upd;
+
+	EXEC SQL OPEN upd_card_consum_lmt;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_consum_lmt_Fet_Upd( struct card_consum_lmt_c *card_consum_lmt_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_card_consum_lmt INTO :card_consum_lmt_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH card_consum_lmt finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(card_consum_lmt_c);
+
+	return 0;
+}
+
+int Card_consum_lmt_Upd_Upd( struct card_consum_lmt_c card_consum_lmt_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE card_consum_lmt SET ac_no=:card_consum_lmt_c.ac_no,
+			da_cash_lmt=:card_consum_lmt_c.da_cash_lmt,
+			da_amt_lmt=:card_consum_lmt_c.da_amt_lmt,
+			da_con_lmt=:card_consum_lmt_c.da_con_lmt,
+			od_cash_lmt=:card_consum_lmt_c.od_cash_lmt,
+			od_amt_lmt=:card_consum_lmt_c.od_amt_lmt,
+			mo_cash_lmt=:card_consum_lmt_c.mo_cash_lmt,
+			mo_amt_lmt=:card_consum_lmt_c.mo_amt_lmt,
+			mo_con_lmt=:card_consum_lmt_c.mo_con_lmt,
+			da_all_cash_lmt=:card_consum_lmt_c.da_all_cash_lmt,
+			da_all_amt_lmt=:card_consum_lmt_c.da_all_amt_lmt,
+			da_all_con_lmt=:card_consum_lmt_c.da_all_con_lmt,
+			mo_all_cash_lmt=:card_consum_lmt_c.mo_all_cash_lmt,
+			mo_all_amt_lmt=:card_consum_lmt_c.mo_all_amt_lmt,
+			mo_all_con_lmt=:card_consum_lmt_c.mo_all_con_lmt
+	WHERE rowid=:card_consum_lmt_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Card_consum_lmt_Del_Upd(struct card_consum_lmt_c card_consum_lmt_c , char * reply  ){
+
+	EXEC SQL DELETE FROM card_consum_lmt WHERE rowid=:card_consum_lmt_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_consum_lmt_Clo_Upd( ){
+	EXEC SQL CLOSE upd_card_consum_lmt;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Card_consum_lmt_Ins( struct card_consum_lmt_c card_consum_lmt_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO card_consum_lmt VALUES (:card_consum_lmt_c.ac_no,
+			:card_consum_lmt_c.da_cash_lmt,
+			:card_consum_lmt_c.da_amt_lmt,
+			:card_consum_lmt_c.da_con_lmt,
+			:card_consum_lmt_c.od_cash_lmt,
+			:card_consum_lmt_c.od_amt_lmt,
+			:card_consum_lmt_c.mo_cash_lmt,
+			:card_consum_lmt_c.mo_amt_lmt,
+			:card_consum_lmt_c.mo_con_lmt,
+			:card_consum_lmt_c.da_all_cash_lmt,
+			:card_consum_lmt_c.da_all_amt_lmt,
+			:card_consum_lmt_c.da_all_con_lmt,
+			:card_consum_lmt_c.mo_all_cash_lmt,
+			:card_consum_lmt_c.mo_all_amt_lmt,
+			:card_consum_lmt_c.mo_all_con_lmt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT card_consum_lmt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

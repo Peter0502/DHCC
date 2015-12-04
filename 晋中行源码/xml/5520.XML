@@ -1,0 +1,880 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111111111100000000000000000" TITLE="5520 银行端缴款业务交易申请"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  //FD62 存放纳税人编码
+  //FD61 存放征收机关代码
+  //因为本行申报，所以付款人开户行根据付款人帐户查
+  //付款人帐号只要本行有效就可以使用fd30
+  //FD25 存放缴款单位名称 仅仅60位
+  //FD20 申报状态
+  //FD37 外部申报电子序号
+  //FD39 交易金额
+  //FD72 缴款类型
+  $FD62=getitems('#TAXPAYCODE');
+  $FD61=getitems('#TAXORGCODE');
+  $FD30=getitems('#PAYACCT19');
+  $FD25=getitems('#HANDORGNAME');
+  $FD20=getitems('#LEVYSTATE');
+  $FD37=getitems('#OUTERLEVYNO');
+  //$FD37=#OUTERLEVYNO;
+
+  $FD39=getitems('#TRAAMT');
+  $FD72=getitems('#PAYTYPE');
+  commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(5520                    银行端缴款业务交易申请)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5540)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#INIT" TYPE="%1s">  
+  <ONLOSTFOCUS>
+  "{
+    if(#INIT=='')
+    {
+    list_init(9,60,13,5);
+    list_setcolcnt(7);
+    list_setcol(0,'项目序号',9,0);
+    list_setcol(1,'税种代码',13,0);
+    list_setcol(2,'税款所属日期起',15,0);
+    list_setcol(3,'税款所属日期止',15,0);
+    list_setcol(4,'税款类型',9,0);
+    list_setcol(5,'税种金额',21,0);
+    list_setcol(6,'明细条数',9,0);
+    list_show();
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <!--输入变量-->
+  <ITEM LINE="5" COL="5" TYPE="%-12s" FUNCTIONS="T(纳税人编码:)"/>
+  <ITEM NAME="#TAXORGTYPE" TYPE="%1s" FUNCTIONS=""/><!--征收机关类型 -->
+  <ITEM NAME="#TAXPAYCODE" INPUT="TEXT" LINE="5" COL="17" TYPE="%-20s" FUNCTIONS="V(NB)T()"/>
+  <ITEM LINE="5" COL="40" TYPE="%-14s" FUNCTIONS="T(征收机关代码:)"/>
+  <ITEM NAME="#ZSJG"  TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#TAXORGCODE" INPUT="TEXT" LINE="5" COL="53" TYPE="%-12s" FUNCTIONS="V(NB)T()">
+  <ONLOSTFOCUS>
+  "{
+    dim @c as string;
+    dim @d as string;
+    dim @a as string;
+    dim @b as string;
+    dim @e as string;
+    dim @f as string;
+    dim @g as string;
+    dim @FullMsg as string;
+    @FullMsg='';
+    initfd();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9410';
+    $FD61=#TAXORGCODE;
+    commsend_001();
+    calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    @d = substr($FD95,12,60);//名称
+    @c =substr($FD95,72,1);//类型
+    @a = substr($FD95,73,1);//级别
+    @b = substr($FD95,74,1);
+    //@FullMsg='户名:'+@d+chr(10)+'类型:'+@c+chr(10)+'征收机关类型:'+@a+chr(10)+'机构级次:'+@b;20090707 RM 
+    //20090707 ADD BY ZHGF
+    if(@c=='1'){
+	@e='国税';
+    }else {
+	@e='地税';
+    }
+    //add by xijie20090708
+    if(@a=='1'){
+    @g='国家';
+    }else if(@a=='2'){
+    @g='省';
+    }else if(@a=='3'){
+    @g='市';
+    }else if(@a=='4'){
+    @g='县';
+    }else{
+    @g='乡';
+    }
+    //20090707 ADD BY ZHGF
+    @FullMsg ='户名:'+@d+chr(10)+'征收机关类型:'+@e+chr(10)+'机构级次:'+@g;
+    //showhelp(6,70,8,3,'征收机关基本信息',@FullMsg);
+    showhelp(5,70,8,3,'征收机关基本信息',@FullMsg);
+    //#TAXORGTYPE=substr(@a,0,1);RM BY ZHGF 20090707
+    #TAXORGTYPE=substr(@c,0,1);
+    //$FD20=@b;REPLACE BY NEXTLINE
+    $FD20=@c;
+    #ZSJG=@d;
+    // TODO在这里calltips判断征收机关代码是否存在
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="6" COL="5" TYPE="%-10s" FUNCTIONS="T(缴款类型:)"/>
+  <ITEM NAME="#PAYTYPE" INPUT="SELECT" LINE="6" COL="15" TYPE="%-1s" FUNCTIONS="T(2)V(2|1)">
+  <SELECT>
+    <OPTION VALUE="2" TITLE="2.转帐缴款"/>
+    <OPTION VALUE="1" TITLE="1.现金缴款"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+    if(#PAYTYPE=='1'){
+      #PAYACCT19='10101';
+      enable(#PAYACCT19,false);
+      enable(#AC_SEQN,false);
+      //goitem(#AC_SEQN);
+    }else if(#PAYTYPE=='2'){
+      #AC_SEQN='0001';
+      enable(#AC_SEQN,true);
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ACC_BAL" TYPE="%17.2f"/> <!-- 帐户余额 用于发送是提示帐户余额不足 -->
+  <ITEM NAME="#AC_NO"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#cName"   TYPE="%-61s" FUNCTIONS=""/>
+  <ITEM NAME="#NOTETYPE"  TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#NOTETYPE1" TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#NOTENO"    TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#ZQMM"    TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#IDTYPE"    TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#IDNO"      TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM LINE="6" COL="30" TYPE="%-10s" FUNCTIONS="T(付款账户: )"/>
+  <ITEM NAME="#PAYACCT19" INPUT="TEXT" LINE="6" COL="40" TYPE="%-20s" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#AC_SEQN"   INPUT="TEXT" TYPE="%-4s" LINE="6" COL="61" FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+  "{
+    dim @baktxno as string;
+    dim @name as string;
+    dim @avbal as string;
+    dim @pwd_ind as string;
+    dim @actype as string;
+    dim @prdt_name as string;
+    dim @notetype as number;
+    dim @note_type1 as string;
+    dim @id_yn   as string;
+    dim @zj_lx as string;
+    dim @zhzt  as string;
+    dim @djzt  as string;
+    dim @jzzt  as string;
+    
+    if(#PAYTYPE == '2'){  //转账交款需要检查账号  20090621  HS chengbo
+          @baktxno=$TXNO;
+          $TXNO='9731';
+          $FD65='DH001';
+          #AC_NO=substr(#PAYACCT19,0,24)+space(24-len(#PAYACCT19))+'';
+          $FD102=#AC_NO+#AC_SEQN;
+          $FD30=#PAYACCT19;
+          $FD33=#PAYACCT19;
+          $FD36=#AC_SEQN;
+          //showmsg('$FD33=['+$FD33+']$FD36=['+$FD36+']');
+          commsend_001();
+          callserver();
+          $TXNO=@baktxno;
+          if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+          }
+          @zhzt=$FD68;
+          //showmsg('1111111='+@zhzt);
+          if($FD68!='1'){
+                showmsg('该账户状态不正常，请检查!');         
+                return(false);
+          }
+          @djzt=$FD70;
+          //showmsg('2222222='+@djzt);
+ //陈柳材20091023 临时把验证冻结的注掉了
+//         if($FD70 !='0'){
+  //              showmsg('该账户已冻结，请检查!');
+   //           return(false);
+   //    }
+    @jzzt=$FD72;
+          //showmsg('333333='+@jzzt);
+          if($FD72 =='1'){
+                showmsg('该账号介质已挂失，请检查!');
+                return(false);
+          }
+          
+          #NOTETYPE=$FD92;
+          #NOTETYPE1=itoa(atoi(#NOTETYPE),'%03d');
+          
+          #NOTENO=substr($FD102,31,16);
+          @name =substr($FD102,125,60);
+          @avbal=substr($FD102,185,16);
+          @pwd_ind=substr($FD102,48,1);
+          @actype=substr($FD102,207,1);
+          @id_yn=substr($FD102,61,1);
+          #ZQMM=substr($FD102,55,6);
+          #IDNO=substr($FD102,62,20);
+          #IDTYPE=substr($FD102,124,1);
+          //if(substr($FD102,61,1)=='Y'){
+                              
+                 if(#IDTYPE=='1'){
+                 
+                    @zj_lx='身份证';
+                 }else if(#IDTYPE=='2'){
+                 
+                    @zj_lx='户口本';
+                 }else if(#IDTYPE=='3'){
+                 
+                    @zj_lx='护照';
+                 }else if(#IDTYPE=='4'){
+                 
+                    @zj_lx='军人证';
+                 }else if(#IDTYPE=='5'){
+                 
+                    @zj_lx='回乡证';
+                 }else if(#IDTYPE=='6'){
+                    @zj_lx='居住证';
+                 }else if(#IDTYPE=='7'){
+                 
+                    @zj_lx='驾照';
+                 }else if(#IDTYPE=='8'){
+                 
+                    @zj_lx='企业代码证';
+                 }else if(#IDTYPE=='9'){
+                 
+                    @zj_lx='组织机构号';
+                 }else if(#IDTYPE=='A'){
+                 
+                    @zj_lx='营业执照';
+                 }else if(#IDTYPE=='B'){
+                 
+                    @zj_lx='经营许可证';
+                 }else if(#IDTYPE=='C'){
+                 
+                    @zj_lx='事业法人证';
+                 }
+                 
+         //}
+                  
+          #cName=@name;
+          #HANDORGNAME = substr(#cName,0,60); 
+          enable(#HANDORGNAME, false);
+          @prdt_name=rtrim(substr($FD102,313,30));
+          showhelp(8,68,5,10,'请核对帐户信息','户名:'+@name+' 余额:'+itoa(val(@avbal,0.01),'%16.2f')+space(6)+' 产品名称:'+@prdt_name+space(21)+'证件类型:'+@zj_lx+space(11)+'证件号码:'+#IDNO);
+          #ACC_BAL=val(@avbal,0.01);
+          
+          
+    }
+    if( #PAYTYPE == '2' and substr($FD102,48,1)=='Y'){
+          
+           show(#CXMM,true);
+           show(#DRAW_PWD,true);
+    
+    }else {
+           show(#CXMM,false);
+           show(#DRAW_PWD,false);
+         
+    }
+    
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CXMM"    LINE="6"   COL="65"  TYPE="%-6s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(密码:)"/>
+  <ITEM NAME="#DRAW_PWD1"    TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#DRAW_PWD2"    TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#DRAW_PWD" LINE="6"   COL="71" TYPE="%-6s"  VISABLE="FALSE" INPUT="TEXT"  DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+  <ONLOSTFOCUS>
+  "{  
+    
+    //showmsg('#DRAW_PWD0='+#DRAW_PWD);
+    // 直接在这里校验密码了
+    // 9317 密码检查
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9317';
+    commsend_001();
+    $FD30=#PAYACCT19;
+    $FD79=getitems('#DRAW_PWD');
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    //if($FD12=='0000'){
+    //  show(#CXMM,false);
+    //  show(#DRAW_PWD,false);
+    //}
+	  //showmsg('#DRAW_PWD1='+#DRAW_PWD);    
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#GAC_SEQN"   TYPE="%-4s" FUNCTIONS="T(0001)"/>
+  <ITEM NAME="#PAYACCT" TYPE="%-32s" FUNCTIONS="T(#PAYACCT19)"/>
+  <ITEM LINE="7" COL="5" TYPE="%-14s" FUNCTIONS="T(缴款单位名称:)"/>
+  <ITEM NAME="#HANDORGNAME" INPUT="TEXT" LINE="7" COL="18" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#LEVYSTATE" TYPE="%-1s" FUNCTIONS="T(0)"/><!--申报状态-->
+  <!--
+  <ITEM LINE="8" COL="5" TYPE="%-14s" FUNCTIONS="T(申报  状态:)"/>
+  <ITEM NAME="#LEVYSTATE" INPUT="SELECT" LINE="8" COL="17" TYPE="%-1s" FUNCTIONS="T(0)V(0|1)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.未申报"/>
+    <OPTION VALUE="1" TITLE="1.已申报"/>
+  </SELECT>
+  </ITEM>
+  -->
+  <ITEM LINE="8" COL="5" TYPE="%-14s" FUNCTIONS="T(交易金额:)"/>
+  <ITEM NAME="#TRAAMT" INPUT="TEXT" LINE="8" COL="17" TYPE="%17.2f"  DEVICE="NONE" ENABLE="FALSE" FUNCTIONS="V(00000000000000001,99999999999999999)"/>   
+  <ITEM LINE="8" COL="40" TYPE="%-14s" FUNCTIONS="T(申请序号:)"/>
+  <ITEM LINE="8" COL="53" NAME="#SQXH" TYPE="%8d" INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+     dim @cnt as number;
+     dim @msg as string;
+     dim @baktxno as string;
+     dim @filename as string;
+     dim @id as number;
+     dim @txamt as string;
+     @cnt=0;
+     @msg='';
+     // 查询cfx_declare中是否有此记录
+     initfd();
+     $FD61=getitems('#TAXORGCODE');
+     $FD44=getitems('$HDATE');
+     $FD78=getitems('#SQXH');
+     $FD36=getitems('#CFXNO');
+     if(len(#SQXH)!=0)
+     {
+        @baktxno=$TXNO;
+        $TXNO='9419';
+        commsend_001();
+        @msg=calltips();
+        setitems('#TRAAMT',$FD43);
+        show(#TRAAMT,true);
+        @filename='../tmp/'+$KINBR+$TTYNAME;
+        savefiletxt(@filename,@msg);
+        $TXNO=@baktxno;
+        if($FD12!='0000' and $FD12!='D104'){
+               showmsg(geterror());
+               return (false);
+        }
+        if($FD12!='D104'){
+          list_load('../tmp/'+$KINBR+$TTYNAME);
+          @cnt=list_getrowcnt();
+          if(@cnt!=0)
+          {
+             list_work();
+             @id =list_getselid();
+             #TAXTYPECODE=list_gettext(@id,1); enable(#TAXTYPECODE,true);
+             #TAXSTARTDATE=list_gettext(@id,2);enable(#TAXSTARTDATE,true);
+             #TAXENDDATE=list_gettext(@id,3);enable(#TAXENDDATE,true);
+             #TAXTYPE=list_gettext(@id,4);enable(#TAXTYPE,true);
+             @txamt=list_gettext(@id,5);
+             #TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);
+          }
+        }
+        goitem(#TAXTYPECODE);
+     }
+     //showmsg('#DRAW_PWD2='+#DRAW_PWD); 
+    // TODO在这里calltips查出来相关信息
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM LINE="8" COL="63" TYPE="%16s" FUNCTIONS="T(首次输入可为空)"/>
+
+  <ITEM NAME="#ADDSZ" LINE="9" COL="65" TYPE="%-8s" FUNCTIONS="T(添加申请)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    initfd();
+    $FD98='1';
+    //FD62 存放纳税人编码
+    //FD61 存放征收机关代码
+    //因为本行申报，所以付款人开户行根据付款人帐户查
+    //付款人帐号只要本行有效就可以使用fd30
+    //FD25 存放缴款单位名称 仅仅60位
+    //FD20 申报状态
+    //FD37 外部申报电子序号
+    //FD39 交易金额
+    //FD72 缴款类型
+    $FD62=getitems('#TAXPAYCODE');
+    $FD61=getitems('#TAXORGCODE');
+    // showmsg('payactno==='+#PAYACCT19);
+    $FD30=getitems('#PAYACCT19');
+    $FD25=getitems('#HANDORGNAME');
+    $FD20=getitems('#LEVYSTATE');
+    $FD37=#OUTERLEVYNO;
+
+    $FD39=getitems('#TRAAMT');
+    $FD72=getitems('#PAYTYPE');
+    commsend_001();
+    if(len(#SQXH)==0){
+      calltips();
+    }
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+    }
+    setitems('#SQXH',$FD28);
+    showmsg('申请添加成功,序号=['+#SQXH+']');
+    enable(#SQXH,true);
+    //showmsg('#DRAW_PWD3='+#DRAW_PWD); 
+  }"
+  </ONCLICK>
+  </ITEM>
+
+  <ITEM LINE="9" COL="10" TYPE="%-50s" FUNCTIONS="T(-----------------------税种明细----------------------)"/>
+  <ITEM LINE="10" COL="5" TYPE="%-14s" FUNCTIONS="T(税种代码:)"/>
+  <ITEM NAME="#TAXTYPECODE" INPUT="TEXT" LINE="10" COL="17" TYPE="%10s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    initfd();
+    commsend_001();
+    // TODO在这里calltips查找输入的税种是否正确
+    dim @baktxno as string;
+    dim @name as string;
+    dim @avbal as string;
+    dim @pwd_ind as string;
+    dim @actype as string;
+    dim @prdt_name as string;
+    @baktxno=$TXNO;
+    $TXNO='9417';
+    $FD33=#TAXTYPECODE;
+    $FD20=#TAXORGTYPE;
+    commsend_001();
+    calltips();
+    $TXNO=@baktxno;
+    //showmsg('#DRAW_PWD4='+#DRAW_PWD); 
+    if($FD12!='0000'){
+       showmsg(geterror());
+       return(false);
+    }
+    showhelp(3,70,8,3,'税种名称',substr($FD95,11,60));
+    
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="10" COL="40" TYPE="%-14s" FUNCTIONS="T(税款所属日期起:)"/>
+  <ITEM NAME="#TAXSTARTDATE" INPUT="TEXT" LINE="10" COL="55" TYPE="%8d" FUNCTIONS="D()V(NB)T($HDATE)"/>
+  <ITEM LINE="11" COL="5" TYPE="%-14s" FUNCTIONS="T(税款类型:)"/>
+  <ITEM NAME="#TAXTYPE" INPUT="SELECT" LINE="11" COL="17" TYPE="%-1s" FUNCTIONS="T(1)V(1|2|3|4)">
+  <SELECT>
+    <OPTION VALUE="1" TITLE="1.当期收入"/>
+    <OPTION VALUE="2" TITLE="2.补缴欠税"/>
+    <OPTION VALUE="3" TITLE="3.三代结缴"/>
+    <OPTION VALUE="4" TITLE="4.检查补税"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#SZDTLCNT"  TYPE="%4d"/>
+  <ITEM NAME="#CFXNO"  TYPE="%4d" FUNCTIONS="T(2090)"/>
+  <ITEM LINE="11" COL="40" TYPE="%-14s" FUNCTIONS="T(税款所属日期止:)"/>
+  <ITEM NAME="#TAXENDDATE" INPUT="TEXT" LINE="11" COL="55" TYPE="%8d" FUNCTIONS="D()V(NB)T($HDATE)"/>
+ <ITEM LINE="12" COL="30" NAME="#ITEM015" TYPE="%-16s" VISABLE="TRUE" INPUT="LABEL" FUNCTIONS="T(外部电子申请序号)"/>
+  <ITEM LINE="12" COL="47" NAME="#OUTERLEVYNO" TYPE="%-20s" VISABLE="TRUE"  INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()"/>
+  <!----
+  <ITEM LINE="12" COL="47" NAME="#OUTERLEVYNO" TYPE="%-16s" VISABLE="TRUE"  INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()"/>
+  ---->
+ <!--<ITEM LINE="12" COL="5" TYPE="%-14s" FUNCTIONS="T(税种金额:)"/>-->
+  <!---<ITEM NAME="#TAXTYPEAMT" INPUT="TEXT" LINE="12" COL="17" TYPE="%17.2f" ENABLE="FALSE"  FUNCTIONS="V(NB)"/>--->
+  <ITEM NAME="#TAXTYPEAMT"  TYPE="%17.2f"  FUNCTIONS=""/>
+  <ITEM NAME="#PROID"  TYPE="%3d"/>
+  <ITEM NAME="#ADDSZ" LINE="10" COL="65" TYPE="%-8s" FUNCTIONS="T(添加税种)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @cTxamt as string;
+    dim @cTxamt1 as string;
+    dim @txamt as string;
+    dim @iLen as number;
+    dim @a as number;
+    dim @id as number;
+    dim @cnt as number;
+    
+    $FD98='2';
+    #SZDTLCNT='0';
+    //FD62 存放纳税人编码
+    //FD61 存放征收机关代码
+    //因为本行申报，所以付款人开户行根据付款人帐户查
+    //付款人帐号只要本行有效就可以使用fd30
+    //FD25 存放缴款单位名称 仅仅60位
+    //FD20 申报状态
+    //FD37 外部申报电子序号
+    //FD39 交易金额
+    //FD72 缴款类型
+    //FD28 申报序号8位
+
+    //FD53 税种代码
+    //FD44 税款所属日期起
+    //FD45 税款所属日期止
+    //fd67 税款类型
+    //FD40 税种金额
+    $FD62=getitems('#TAXPAYCODE');
+    $FD61=getitems('#TAXORGCODE');
+    $FD30=getitems('#PAYACCT19');
+    $FD25=getitems('#HANDORGNAME');
+    $FD20=getitems('#LEVYSTATE');
+    $FD37=#OUTERLEVYNO;
+
+    $FD39=getitems('#TRAAMT');
+    $FD72=getitems('#PAYTYPE');
+    $FD28=getitems('#SQXH');
+    $FD53=getitems('#TAXTYPECODE');
+    $FD44=getitems('#TAXSTARTDATE');
+    $FD45=getitems('#TAXENDDATE');
+    $FD67=getitems('#TAXTYPE');
+    $FD40=getitems('#TAXTYPEAMT');
+    commsend_001();
+    @cTxamt=itoa(#TAXTYPEAMT*100);
+    @iLen=len(@cTxamt);
+    @cTxamt1=substr(@cTxamt,0,@iLen-2)+'.'+substr(@cTxamt,@iLen-2,2);
+    @a=msgbox('是否将上述明细增加？','确认增加吗','ok|cancel');
+    if(@a==0){
+      calltips();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      setitems('#PROID',$FD50);
+      list_additem('',#PROID,#TAXTYPECODE,#TAXSTARTDATE,#TAXENDDATE,#TAXTYPE,@cTxamt1,#SZDTLCNT);
+    }
+    @cnt=list_getrowcnt(); 
+    list_work();
+    if(@cnt!=0){
+      //@id =list_getselid();
+      //#TAXTYPECODE=list_gettext(@id,0); enable(#TAXTYPECODE,true);
+      //#TAXSTARTDATE=list_gettext(@id,1);enable(#TAXSTARTDATE,true);
+      //#TAXENDDATE=list_gettext(@id,2);enable(#TAXENDDATE,true);
+      //#TAXTYPE=list_gettext(@id,3);enable(#TAXTYPE,true);
+      //@txamt=list_gettext(@id,4);
+      //#TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);
+      #INIT='1';
+    }
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#ADDSM" LINE="11"   COL="65"  TYPE="%-8s" FUNCTIONS="T(输入税目)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @cnt as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @id as number;
+    dim @txamt as string;
+    dim @opflag as number;
+    dim @baktxno as string;
+    dim @filename as string;
+    @id=0;
+    @cnt=list_getrowcnt();
+    @opflag=0;
+    if(@cnt!=0){
+      @msg='请选择要添加税目明细的税种';
+      showmsg(@msg,2);
+      list_work();
+      @id =list_getselid();
+      #PROID=list_gettext(@id,0); enable(#PROID,true);
+      //showmsg(#PROID);
+      #TAXTYPECODE=list_gettext(@id,1); enable(#TAXTYPECODE,true);
+      #TAXSTARTDATE=list_gettext(@id,2);enable(#TAXSTARTDATE,true);
+      #TAXENDDATE=list_gettext(@id,3);enable(#TAXENDDATE,true);
+      #TAXTYPE=list_gettext(@id,4);enable(#TAXTYPE,true);
+      #SZDTLCNT=list_gettext(@id,6);
+      //ZHGF@txamt=list_gettext(@id,5);
+      //ZHGF#TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);
+      @msg='注意：要添加第'+itoa(@id+1)+'条税种的税目明细';
+    }
+    #DRAW_PWD1=#DRAW_PWD;
+    //showmsg('#DRAW_PWD5='+#DRAW_PWD); 
+    
+    if(@cnt!=0){
+      open('5520_1.XML','#TAXTYPECODE='+#TAXTYPECODE+';#TAXSTARTDATE='+#TAXSTARTDATE+';#TAXTYPE='+#TAXTYPE+';#TAXENDDATE='+#TAXENDDATE+';#SQXH='+#SQXH+';#PROID='+#PROID+';#TAXORGCODE='+#TAXORGCODE+';#TAXORGTYPE='+#TAXORGTYPE+';#SZDTLCNT='+#SZDTLCNT+';');
+      @opflag=1;
+      return(true);
+    } else {
+      showmsg('请先添加税种然后再增加数目明细');
+      goitem(#TAXTYPECODE);
+      @opflag=0;
+      return(false);
+    }
+    #DRAW_PWD2=#DRAW_PWD1;
+    @a=msgbox('是否继续增加新的明细？','继续新增加吗','ok|cancel');
+    if(@a==0){
+      goitem(#TAXTYPECODE);
+    }
+    
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#CLOSERET" TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+     
+     dim @id as number;
+     dim @baktxno as string;
+     dim @filename as string;
+     dim @msg as string;
+     //@id =list_getselid();
+     //showmsg(#SZDTLCNT);
+     //list_settext(@id,6,#SZDTLCNT);
+     //开始查询税种明细
+  $FD44=getitems('#TAXSTARTDATE');
+  $FD61=#TAXORGCODE;
+  $FD28=getitems('#SQXH');
+  $FD36=getitems('#CFXNO');
+  @baktxno=$TXNO;
+  $TXNO='9424';
+  $FD36=getitems('#CFXNO');
+  $FD52=getitems('#TAXPAYCODE');
+  commsend_001();
+  $TXNO=@baktxno;
+  @msg=calltips();
+  if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+   }
+   setitems('#TRAAMT',$FD43);
+   show(#TRAAMT,true);
+   
+   @filename='../tmp/'+$KINBR+$TTYNAME;
+   savefiletxt(@filename,@msg);
+   list_load('../tmp/'+$KINBR+$TTYNAME);
+   list_work();
+   }"
+   </ONLOSTFOCUS>
+   </ITEM>
+  <ITEM NAME="#NEXT" LINE="12"   COL="65"  TYPE="%-8s" FUNCTIONS="T(下一税种)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+      goitem(#TAXTYPECODE);
+      return(true);
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#DELSZ" LINE="13"   COL="65"  TYPE="%-8s" FUNCTIONS="T(删除税种)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @id as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @txamt as string;
+    dim @cnt as number;
+    dim @baktxno as string;
+    dim @filename as string;
+    $FD98='4';
+    //FD62 存放纳税人编码
+    //FD61 存放征收机关代码
+    //因为本行申报，所以付款人开户行根据付款人帐户查
+    //付款人帐号只要本行有效就可以使用fd30
+    //FD25 存放缴款单位名称 仅仅60位
+    //FD20 申报状态
+    //FD37 外部申报电子序号
+    //FD39 交易金额
+    //FD72 缴款类型
+    //FD28 申报序号8位
+
+    //FD53 税种代码
+    //FD44 税款所属日期起
+    //FD45 税款所属日期止
+    //fd67 税款类型
+    //FD40 税种金额
+    //FD50 项目序号
+    @cnt=list_getrowcnt();
+    list_work();
+    if(@cnt!=0){
+      @id =list_getselid();                                       
+      #PROID=list_gettext(@id,0); enable(#PROID,true);
+      #TAXTYPECODE=list_gettext(@id,1);enable(#TAXTYPECODE,true);
+      #TAXSTARTDATE=list_gettext(@id,2);enable(#TAXSTARTDATE,true);
+      #TAXENDDATE=list_gettext(@id,3);enable(#TAXENDDATE,true);
+      #TAXTYPE=list_gettext(@id,4);enable(#TAXTYPE,true);
+      @txamt=list_gettext(@id,5);
+      #TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);
+      $FD62=getitems('#TAXPAYCODE');
+      $FD61=getitems('#TAXORGCODE');
+      $FD30=getitems('#PAYACCT19');
+      $FD25=getitems('#HANDORGNAME');
+      $FD20=getitems('#LEVYSTATE');
+      $FD37=#OUTERLEVYNO;
+
+      $FD39=getitems('#TRAAMT');
+      $FD72=getitems('#PAYTYPE');
+      $FD28=getitems('#SQXH');
+      $FD53=getitems('#TAXTYPECODE');
+      $FD44=getitems('#TAXSTARTDATE');
+      $FD45=getitems('#TAXENDDATE');
+      $FD67=getitems('#TAXTYPE');
+      $FD40=getitems('#TAXTYPEAMT');
+      $FD50=getitems('#PROID');
+      commsend_001();
+      @msg='确认要删除第'+itoa(@id+1)+'条税种明细';
+      @a=msgbox(@msg,'删除确认？','ok|cancel');
+      if(@a==0){
+        calltips();
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return(false);
+        }
+        list_rmitem(@id);
+      }
+    } else {
+      showmsg('请先添加税种然后再删除');
+      goitem(#TAXTYPECODE);
+      return(false);
+    }
+    
+    // 重新查询
+    initfd();
+    @baktxno=$TXNO;
+    $TXNO='9419';
+    $FD61=getitems('#TAXORGCODE');
+    $FD44=getitems('$HDATE');
+    $FD78=getitems('#SQXH');
+    commsend_001();
+    @msg=calltips();
+    @filename='../tmp/'+$KINBR+$TTYNAME;                   
+    savefiletxt(@filename,@msg);
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    
+    list_load('../tmp/'+$KINBR+$TTYNAME);
+    @cnt=list_getrowcnt();
+    if(@cnt!=0)
+    {
+      list_work();
+      @id =list_getselid();
+      #TAXTYPECODE=list_gettext(@id,1); enable(#TAXTYPECODE,true);
+      #TAXSTARTDATE=list_gettext(@id,2);enable(#TAXSTARTDATE,true);
+      #TAXENDDATE=list_gettext(@id,3);enable(#TAXENDDATE,true);
+      #TAXTYPE=list_gettext(@id,4);enable(#TAXTYPE,true);
+      @txamt=list_gettext(@id,5);
+      #TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);
+      goitem(#TAXTYPECODE);
+   }
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#TXAMT" TYPE="%17.2f"/>   
+
+<ITEM NAME="#SUBMIT" LINE="21"   COL="65"  TYPE="%-8s" FUNCTIONS="T(发送申请)" INPUT="BUTTON">
+<ONCLICK>
+"{
+    dim @id as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @txamt as string;
+    dim @cnt as number;
+    dim @baktxno as string;
+    dim @filename as string;
+    
+    
+    
+    $FD98='6';
+    //FD61 存放征收机关代码
+    //FD28 申报序号8位
+    // 判断金额是否购扣
+    //if(#ACC_BAL &lt; #TRAAMT){
+    //   @a=msgbox('警告帐户余额不足以支付本次缴款？','确认发送吗','ok|cancel');
+    //   if(@a==0){
+    //   } else {
+    //       showmsg('发送被取消');
+    //       return(false);
+    //	 }
+    //}
+    
+    $FD28=getitems('#SQXH');
+    $FD61=getitems('#TAXORGCODE');
+    $FD30=getitems('#PAYACCT19');
+    $TXNO='5540';
+    //添加事中监督     chengbo     20090703  begin  HS
+  //  $FD16='5540';
+  //  $FD39=getitems('#TRAAMT');
+  //  $FD62=getitems('#TAXPAYCODE');
+  //  $FD25=getitems('#HANDORGNAME');
+  //  $FD71=getitems('#PAYTYPE');
+  //  if(waitsupertips()){
+  //  }else {
+  //        return(false);
+  //  }
+    //   end         chengbo       20090703    HS
+    commsend_001();
+    
+    @msg=calltips();
+    if($FD12!='0000'){
+       showmsg(geterror());
+       return(false);
+    }
+    
+    //showmsg($FD54);
+    
+    setitems('#TXAMT',$FD39);
+    if(substr($FD54,5,5)=='90000')
+    {
+       showmsg('发送成功，且收到1008回执，请用户确认缴款');
+    }
+    else
+    {
+      showmsg('发送成功，但收到1008回执为申请纳税失败');
+      return(false);
+    }
+    runoutput();
+    
+    //rerun();
+  
+    if(#PAYTYPE == '2'){
+        open('5521_2.XML','#ENTRUSTDATE='+$FD46+';#TRANO='+$FD29+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+$FD39+';#CNOTETYPE='+#NOTETYPE1+';#CNOTENO='+#NOTENO+';#CPASSWD='+#DRAW_PWD1+';#CIDTYPE='+#IDTYPE+';#CIDNO='+#IDNO+';');   
+    }else {
+        open('5521_2.XML','#ENTRUSTDATE='+$FD46+';#TRANO='+$FD29+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+$FD39+';');
+    }
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<!------------------------------------------------
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"    LINESPACE="27"  DESC="银行端缴款业务交易申请单">
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+$KINDNO = '00';
+}"
+</INIT>
+  <PRINT>
+  "{ 
+     
+     dim @row as number;
+     dim @f   as file;
+     dim @str as string;
+     dim @acno as string;
+     dim @bal  as string;
+     dim @date as string;
+     dim @name as string;
+    
+    print( 5,20,'机构名称:[30]',$BRNAME); 
+		print( 5, 2,'代码:5520'); 
+		print( 5,20,'交易:银行端缴款业务申请');
+		print( 7,10,'征税机关代码:[12]',#TAXORGCODE);
+		print( 8,10,'征税机关名称:[60]',#ZSJG);
+		print( 9,10,'纳税人编号:[60]',#TAXPAYCODE);
+		print(10,10,'纳税人名称:[60]',#HANDORGNAME);
+		print(11,10,'缴税账号:[24]',#PAYACCT19);
+		
+    print(20,77,'客户签字:______________');
+		
+		
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8]',$HDATE);
+		print(24,15,'主管柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+   
+  }"
+  </PRINT>
+</RESPONSE>
+--------------------------------------------------->
+</TRANSACTION>
+

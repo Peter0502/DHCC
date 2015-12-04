@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7058 财付通一点通查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7058                          财付通一点通查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7058)"/>
+
+  <ITEM LINE="6"  COL="35"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+  <ITEM NAME="#LDQFS" LINE="6"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="16" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="6" COL="46" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="6"  COL="46" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+
+						commsend_001();
+						$FD16='9961';
+						$FD30=#CARD_NO;
+    					callserver();
+    					if($FD12!='0000'){
+    						showmsg(geterror());
+    						return(false);
+    					}
+						#KHM=$FD25;
+						show(#KHM,true);
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	   <ITEM LINE="7" COL="16" NAME="#KHM"  ENABLE="FALSE" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+	   	<ITEM  LINE="8"  COL="16"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+<ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#JYXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZJHM" TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#KHXM" TYPE="%-60s"   FUNCTIONS=""/> 
+  <ITEM NAME="#TEL"  TYPE="%-30s"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZJLX" TYPE="%-1s"  FUNCTIONS=""/>
+  <ITEM NAME="#ADDR" TYPE="%-50s"  FUNCTIONS=""/> 
+  <ITEM NAME="#JYXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#DBXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZFB"  TYPE="%-30s"  FUNCTIONS=""/>
+  <ITEM NAME="#KHLX" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#JYQD" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#YHLX" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#SIGNDATE" TYPE="%-10s" FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD35=#KLX;
+		$FD30=#CARD_NO;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#TEL=$FD26;
+		#KHXM=$FD27;
+		#ZJHM=$FD63;
+		#KHLX=$FD67;
+		#ZJLX=$FD68;
+		#ADDR=$FD81;
+		#ZFB=$FD31;
+		#JYQD=$FD34;
+		#KLX=$FD35;
+		#YHLX=$FD36;
+		#SIGNDATE=$FD44;
+		runoutput();
+		close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+    <PRINT>"{
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 6, 20,'代码:7058');
+	print( 7, 20,'交易:财付通一点通查询');
+	print( 8, 20,'卡    号:[20]',#CARD_NO);
+	print( 9, 20,'客 户 名:[60]',#KHXM);
+	print( 10, 20,'财付通号:[50] ',#ZFB);
+	print( 11,20,'证件号码:[20]',#ZJHM);
+	//print( 12,20,'联系电话:[30]',#TEL);
+	//print( 13,20,'联系地址:[50]',#ADDR);
+	print( 12,20,'单日支付限额:[20]', ltrim(comma($FD39,20)));
+	print( 13,20,'单笔支付限额:[20]', ltrim(comma($FD40,20)));
+	print( 14,20,'签约时间:[10]', #SIGNDATE);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:7058');
+	print( 5, 13,'交易:财付通一点通查询');
+	print( 8, 20,'卡    号:[20]',#CARD_NO);
+	print( 9, 20,'客 户 名:[60]',#KHXM);
+	print( 10, 20,'财付通号:[50] ',#ZFB);
+	print( 11,20,'证件号码:[20]',#ZJHM);
+	//print( 12,20,'联系电话:[30]',#TEL);
+	//print( 13,20,'联系地址:[50]',#ADDR);
+	print( 12,20,'单日支付限额:[20]', ltrim(comma($FD39,20)));
+	print( 13,20,'单笔支付限额:[20]', ltrim(comma($FD40,20)));
+	print( 14,20,'签约时间:[10]', #SIGNDATE);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3508 在旧存折上打印新帐号"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(3508                      在旧存折上打印新帐号)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8922)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="6"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(                             【 查询条件 】)"/>
+  <ITEM LINE="8"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+  <ITEM LINE="12" COL="20" TYPE="%-10s" FUNCTIONS="T(旧帐/卡号:)"/>
+  <ITEM LINE="14" COL="20" TYPE="%-10s" FUNCTIONS="T(户     名:)"/>
+  <ITEM NAME="#JZH" INPUT="TEXT" LINE="12" COL="31" TYPE="%-20s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	initfd();
+	commsend_001();
+	$FD101=#JZH;
+	$FD16='9951';
+	callserver();
+	if($FD12 != '0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	//showmsg(substr($FD101,73,50));
+	//showhelp(3,70,14,5,'户名','户名:'+substr($FD101,73,50));
+	#NAME = substr($FD101,73,50);
+	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#NAME" INPUT="LABEL" LINE="14" COL="31" TYPE="%-30s" FUNCTIONS=""/>
+  <ITEM NAME="#XZH" TYPE="%-20s" FUNCTIONS=""/>
+ 
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @tota as string;
+    initfd();
+    commsend_001();
+		$FD38=#JZH;
+		$TXNO='8922';
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+				showmsg(geterror());
+				return(false);
+		}
+		if(autolist(@tota))
+		{
+			#XZH=list_gettext(1,3);
+			//showmsg(#XZH);
+		}
+		runoutput();
+  "}
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="13" DESC="打印存折">
+NOTHING
+</PACKAGE>
+<PRINT>
+ "{
+	$KINDNO='00';
+	print(18,5,'\L0新帐号:[20]\L1',#XZH);
+	}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

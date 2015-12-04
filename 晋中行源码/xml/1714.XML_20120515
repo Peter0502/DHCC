@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHT="11110100" TITLE="1714  二级账户名修改"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD30=delspace(#AC_NO);
+	$FD77=#AC_SEQ;
+	$FD25=#S_NAME;
+	$FD68=#S_PAPERTYPE;
+	$FD62=#S_PAPERNO;
+	$FD27=#S_TELEPHONE;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-52s" FUNCTIONS=
+	"T(1714                         二级账户名修改)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1714)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+	<ITEM LINE="8" COL="16" TYPE="%-12s" FUNCTIONS="T(主  账  号:)"/>
+	<ITEM LINE="8" COL="28" TYPE="%-24s" NAME="#AC_NO" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		initfd();
+		commsend_001();
+		$FD16='9706';
+		$FD30=delspace(#AC_NO);
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		if($OPNBR!=$FD2)
+		{
+			showmsg('请到开户行'+$FD2+'办理此业务;');
+			return(false);
+		}
+		#M_NAME=delspace($FD25);
+		show(#M_HM,true);
+		show(#M_NAME,true);
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="10" COL="16" TYPE="%-12s" NAME="#M_HM"    INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(主账号户名:)"/>
+	<ITEM LINE="10" COL="28" TYPE="%-50s" NAME="#M_NAME"  INPUT="LABEL" VISABLE="FALSE" FUNCTIONS=""/>
+	<ITEM LINE="12" COL="16" TYPE="%-12s" FUNCTIONS="T(子账户序号:)"/>
+	<ITEM LINE="12" COL="28" TYPE="%-5s"  NAME="#AC_SEQ" INPUT="TEXT" FUNCTIONS="">
+	<ONLOSTFOCUS>"{
+		dim @tota as string;
+		dim @filename as string;
+		dim @file as file;
+		dim @line as string;
+		initfd();
+		//先设置下拉菜单
+		commsend_001();
+		$FD16='9799';
+		$FD67='1';
+		@tota=callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		setsel(#S_PAPERTYPE,@tota,'o5t20o1v1o2');
+		commsend_001();
+		$FD16='9598';
+		//$FD123='select name from sub_dd_mst where ac_no='+chr(39)+#AC_NO+chr(39)+' and sub_ac_seqn='+atoi(#AC_SEQ);
+		$FD123='select name,paper_type,paper_no,telephone from sub_dd_mst where ac_no='+chr(39)+#AC_NO+chr(39)+' and sub_ac_seqn='+itoa(atoi(#AC_SEQ));
+		// showmsg($FD123);
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		@filename='../tmp/'+$KINBR+$TTYNAME+'_1714.txt';
+		savefiletxt(@filename,@tota);
+		@file=openfile(@filename,'rb');
+		if(@file &lt; 0){
+		   showmsg(geterror());
+		   closefile(@file);
+		   return(false);
+		}
+		@line=readline(@file);
+		#S_NAME=strfld(@line,'|',0);
+		setitems('#S_PAPERTYPE',strfld(@line,'|',1));
+		#S_PAPERNO=strfld(@line,'|',2);
+		#S_TELEPHONE=strfld(@line,'|',3);
+		#TMP_NAME=strfld(@line,'|',0);
+		#TMP_PAPERTYPE=strfld(@line,'|',1);
+		#TMP_PAPERNO=strfld(@line,'|',2);
+		#TMP_TELEPHONE=strfld(@line,'|',3);
+		closefile(@file);
+		refresh();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM TYPE="%-50s" NAME="#TMP_NAME" FUNCTIONS=""/>
+	<ITEM TYPE="%-1s" NAME="#TMP_PAPERTYPE" FUNCTIONS=""/>
+	<ITEM TYPE="%-20s" NAME="#TMP_PAPERNO" FUNCTIONS=""/>
+	<ITEM TYPE="%-20s" NAME="#TMP_TELEPHONE" FUNCTIONS=""/>
+	<ITEM LINE="14" COL="16" TYPE="%-12s"  FUNCTIONS="T(子账号户名:)"/>
+	<ITEM LINE="14" COL="28" TYPE="%-50s" NAME="#S_NAME" INPUT="TEXT" FUNCTIONS=""/>
+	<ITEM LINE="15" COL="16" TYPE="%-10s"  FUNCTIONS="T(证件类型:)"/>
+	<ITEM LINE="15" COL="28" TYPE="%-1s" NAME="#S_PAPERTYPE" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+	<ITEM TYPE="%-40s" NAME="#SS_PAPERTYPE" FUNCTIONS="S(#S_PAPERTYPE,#S_PAPERTYPE)"/>
+	<ITEM LINE="16" COL="16" TYPE="%-10s"  FUNCTIONS="T(证件号码:)"/>
+	<ITEM LINE="16" COL="28" TYPE="%-20s" NAME="#S_PAPERNO" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		dim @l as number;
+		dim @tota as string;
+		@l = len(#S_PAPERNO);
+		if('1' == #S_PAPERTYPE){
+		if(@l == 15 or  @l == 18){
+		}else{
+		showmsg('身份证号码位数错误');
+		return(false);
+		}
+	}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="17" COL="16" TYPE="%-10s"  FUNCTIONS="T(联系电话:)"/>
+	<ITEM LINE="17" COL="28" TYPE="%-20s" NAME="#S_TELEPHONE" INPUT="TEXT" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+		if((#TMP_NAME==#S_NAME) and (#TMP_PAPERTYPE==#S_PAPERTYPE) and (#TMP_PAPERNO==#S_PAPERNO) and (#TMP_TELEPHONE==#S_TELEPHONE))
+		{
+		showmsg('未做修改无需做此交易!');
+		return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="20" COL="63" TYPE="%-6s" INPUT="SUBMIT" FUNCTIONS="T(确 定)"/>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="修改成功!">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	print( 2,16,'主  账  号: [24]',#AC_NO);
+	print( 4,16,'主账号户名: [50]',#M_NAME);
+	print( 6,16,'子  账  号：[24]  子账号序号: [ 4]',$FD33,$FD77);
+	print( 8,16,'子账号户名: [50]',$FD25);
+	print(10,16,'子账户证件类型: [40]',#SS_PAPERTYPE);
+	print(12,16,'子账户证件号码: [20]',#S_PAPERNO);
+	print(14,16,'联系电话: [20]',#S_TELEPHONE);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO == '00';
+		dim @txtime  as string;
+		dim @skhlx as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		print( 5,12,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:1714');
+		print( 5,12,'交易:二级账户修改');
+		print( 7,12,'主  账  号: [24]',#AC_NO);
+ 		print( 8,12,'子  账  号：[24]',$FD33);
+ 		print( 9,12,'子账号户名: [50]',$FD25);
+ 		print(10,12,'子账号序号: [ 4]',$FD77);
+ 		print(11,12,'子账户证件类型: [20]',#SS_PAPERTYPE);
+ 		print(12,12,'子账户证件号码: [20]',#S_PAPERNO);
+ 		print(13,12,'联系电话: [20]',#S_TELEPHONE);
+ 		print(18,12,'备注:');
+		print(18,20,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(18, 5,'柜员:[6]',$FD7);
+		print(18, 5,'流水号:[6]',$FD4);
+ 	}"
+ 	</PRINT>
+ </RESPONSE>
+<LASTWORK>
+	"{
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J003';
+		$FD30=$FD33;               //帐号
+		$FD25=#S_NAME;             //户主名称
+		$FD18=#S_PAPERTYPE;        //证件类型
+		$FD63=#S_PAPERNO;          //证件号码
+		$FD62=#S_TELEPHONE;        //联系电话
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+	}"
+</LASTWORK>
+
+<OUTPUT>
+</OUTPUT>
+
+</TRANSACTION>

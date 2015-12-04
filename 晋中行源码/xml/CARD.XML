@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="4820 卡写磁条复核"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+<VARIABLE UPLOOP="FALSE">
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+  "T(4820                           卡写磁条复核)"/>
+  <ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+  <!--  公共变量的定义. -->
+  <ITEM NAME="#HEJFNO"  TYPE="%-6s"  FUNCTIONS="T($HEJFNO=000000)T($CCHED=0)"/>
+  <ITEM NAME="#HTRMSEQ" TYPE="%-2s"  FUNCTIONS="T($HTRMSEQ)"/>
+  <ITEM NAME="#HCODE"   TYPE="%-1s"  FUNCTIONS="T($HCODE)"/>
+  <ITEM NAME="#TRMSEQ"  TYPE="%-2s"  FUNCTIONS="T($TRMSEQ)"/>
+  <ITEM NAME="#EJFNO"   TYPE="%-6s"  FUNCTIONS="T($TXTNO)"/>
+  <ITEM NAME="#TASKID"  TYPE="%-2s"  FUNCTIONS="T(UC)"/>
+  <ITEM NAME="#TMTYPE"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TXTYPE"  TYPE="%-2s"  FUNCTIONS="T()"/>
+  <ITEM NAME="#APTYPE"  TYPE="%-1s"  FUNCTIONS="T(T)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-2s"  FUNCTIONS="T(59)"/>
+  <ITEM NAME="#DSCPT"   TYPE="%-3s"  FUNCTIONS="T(004)"/>		
+  <ITEM NAME="#PTYPE"   TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#MULTTX"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#CRDB"    TYPE="%-1s"  FUNCTIONS="T(1)"/>
+  <ITEM NAME="#TRNMOD"  TYPE="%-1s"  FUNCTIONS="T(1)"/>
+  <ITEM NAME="#SBTMOD"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TLRNO"   TYPE="%-6s"  FUNCTIONS="T($TLRNO)"/>
+  <ITEM NAME="#CURCD"   TYPE="%-3s"  FUNCTIONS="T(RMB)"/>
+  <ITEM NAME="#NBCD"    TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#XCRT"    TYPE="%-8s"  FUNCTIONS="T($XCRT)"/>
+  <ITEM NAME="#REASON"  TYPE="%-6s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SUPIN1"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SUPIN2"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TXAMT"   TYPE="%-12s" FUNCTIONS="T(0)"/>
+  
+  <!---输入项定义--->
+  <ITEM LINE="10"  COL="25" TYPE="%-10s"  FUNCTIONS="T(卡顺序号: )" />
+  <ITEM LINE="10"  COL="49" TYPE="%-8s"   FUNCTIONS="T(<校验位>)" />
+  <ITEM LINE="12"  COL="25" TYPE="%-10s"  FUNCTIONS="T(磁条卡号: )" />
+  
+  <ITEM NAME="#OPNBR4"  TYPE="%4d"   FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#OPNBR"   TYPE="%-7s"  FUNCTIONS="T(#OPNBR4)"/>
+
+<ITEM NAME="#UNIONPAY"  TYPE="%-6s"  FUNCTIONS="T(622421)"/>
+<ITEM NAME="#KFAREA"    TYPE="%-2s"  FUNCTIONS="T(71)"/>
+<ITEM LINE="10"  COL="35" NAME="#CARDORDNO" TYPE="%10d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  }"
+  </ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="10"  COL="47" NAME="#CHECKBIT"  TYPE="%1s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+<ITEM LINE="12"  COL="35" NAME="#MSRCARDNO" TYPE="%19s" DEVICE="MSR"      FUNCTIONS="m($MSR2,1,19)V(NB)"/>
+<ITEM NAME="#CBNCARDNO"   TYPE="%19s"       FUNCTIONS="T(#UNIONPAY+#KFAREA+#CARDORDNO+#CHECKBIT)">
+<ONLOSTFOCUS>
+"{
+	dim @cardorderno as string;  //卡顺序号
+	dim @checkbit    as string;  //卡校验位
+	dim @msrcardno   as string;  //卡号
+	dim @msrorderno  as string;  //卡磁道顺序号
+	dim @f as file;
+	@f=openfile('cardmsr.txt','w');
+	writeline(@f,$MSR2);
+	writeline(@f,'一下是三磁道信息');
+	writeline(@f,$MSR3);
+	closefile(@f);
+	@cardorderno = #CARDORDNO;
+	@checkbit    = #CHECKBIT;
+	@msrcardno   = #MSRCARDNO;
+	@msrorderno  = substr(@msrcardno,8,11);
+
+	if(@msrcardno == #CBNCARDNO)
+	{
+		showhelp(5,35,14,23,'写磁正确','    该卡号写磁正确!'+chr(10)+'卡号为:'+@msrcardno+chr(10)+'    请继续下一张卡!');
+	}
+	else
+	{
+		showhelp(5,35,14,23,'错误信息','  该卡号磁道信息错误或输入错误!'+chr(10)+'     请手工输入下一张卡序号!');
+		goitem(#CARDORDNO);
+	}
+	
+	//showmsg('请准备新的卡，要复制词条了');
+	//showmsg('你确认吗？新卡词条要被复制成员卡内容');
+	//writemsr($MSR2,$MSR3);
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CMSR"     TYPE="%18s"   FUNCTIONS="T($MSR2,20,18)"/><!---第二磁道后面信息--->
+<ITEM NAME="#ACTNO"    TYPE="%18s"   FUNCTIONS="T(#UNIONPAY+#KFAREA+#CARDOPDNO)"/><!---卡号前十八位--->
+<ITEM NAME="#RCHECKBIT" TYPE="%-1s"   FUNCTIONS="T( )"/><!---卡校验位--->
+<ITEM NAME="#FLAG"     TYPE="%-1s"   FUNCTIONS="T(1)"/><!---写磁工作方式:1--集体 2--单独 --->
+
+<ITEM LINE="21"       COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+	
+	//#CARDORDNO  = itoa(atoi(#CARDORDNO)+1,'%010d');
+	#CARDORDNO  = itoa(val(#CARDORDNO)+1,'%010.0f');
+	enable(#CARDORDNO,true);
+	goitem(#CHECKBIT);
+	#CHECKBIT = ' ';
+	enable(#CHECKBIT,true);
+
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+
+<REQUEST><PACKAGE SERVICE="dh48190">
+$APCTLHD$HTRMSEQ$HEJFNO#OPNBR$KINBR#TRMSEQ#EJFNO#TASKID#TMTYPE#APTYPE#TXNO#PTYPE#DSCPT
+$HCODE#ACTNO#TXTYPE#MULTTX#CRDB$SUPCD1$SUPCD2#REASON#TLRNO#NBCD#TRNMOD#SBTMOD#CURCD#XCRT#TXAMT
+#CARDNO#PASSWD
+</PACKAGE></REQUEST>
+</TRANSACTION>

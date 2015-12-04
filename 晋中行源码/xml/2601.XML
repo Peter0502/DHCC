@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2601  建议与投诉信息录入"
+ xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+   "{ 
+    }"
+</COMMSEND>
+<COMMRECV>
+  "{       
+     commrecv_001();
+   }"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+   "T(2601                       建议与投诉信息录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1601)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!-------输入变量------->
+  <ITEM LINE="8"  COL="6" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="10" COL="6" TYPE="%-10s" FUNCTIONS="T(客户名称:)"/>
+  <ITEM LINE="12" COL="6" TYPE="%-10s" FUNCTIONS="T(具体信息: )"/>
+  <ITEM LINE="14" COL="6" TYPE="%-10s" FUNCTIONS="T(建议类型:!)"/>
+  <ITEM LINE="16" COL="6" TYPE="%-10s" FUNCTIONS="T(投诉对象:)"/>
+  <ITEM NAME="#SHOW" LINE="18" COL="6" TYPE="%-10s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(序    号:)"/>
+  <ITEM LINE="8" COL="16" TYPE="%-8s"  NAME="#CUSTNO" INPUT="TEXT" FUNCTIONS="h()V(NB)">
+    <ONLOSTFOCUS>
+ 	    "{initfd();
+ 	  	  dim @txno_bak as string;
+ 	 	    dim @tota as string;
+ 	  	  @txno_bak=$TXNO;
+ 	 	    $TXNO='9849';
+ 	 	    $FD28=#CUSTNO;
+ 	   	  commsend_001();
+ 	  	  @tota=callserver();
+ 	  	  $TXNO=@txno_bak;
+		    if($FD12!='0000'){
+			  showmsg(geterror());
+			  return(false);
+		    } 
+		    #CUSTNAME=delspace($FD26);
+		    show(#CUSTNAME,true);
+		    enable(#CUSTNAME,false);
+		 }"	 	
+   </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="10" COL="16" TYPE="%-60s" NAME="#CUSTNAME" INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM LINE="12" COL="16" TYPE="%-40s" NAME="#JTINFO" INPUT="TEXT" MESSAGE="请输入投诉信息"FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#ADTYPE" INPUT="SELECT" LINE="14" COL="16" TYPE="%-1s" FUNCTIONS="T(1)">
+    <SELECT>
+       <OPTION VALUE="1" TITLE="建议"/>
+       <OPTION VALUE="2" TITLE="投诉"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#SADTYPE" TYPE="%4s" FUNCTIONS="S(#ADTYPE,#ADTYPE)"/>
+  <ITEM NAME="#GO1"     TYPE="%1d" FUNCTIONS="G(#ADTYPE=1,#GO2)"/>
+  
+  
+  <ITEM NAME="#TSOBJE"  INPUT="TEXT" LINE="16" COL="16" TYPE="%-4s" FUNCTIONS="T()" />
+  <ITEM NAME="#GO2"     TYPE="%1d"   FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	commsend_001();
+	$FD28=#CUSTNO;
+	$FD26=#CUSTNAME;
+	$FD67=#ADTYPE;
+	$FD81=#JTINFO;
+	$FD92=#TSOBJE;
+	callserver();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	
+	#SEQUNO=$FD48;
+	show(#SHOW,true);
+	show(#SEQUNO,true);
+	enable(#SEQUNO,true);
+	goitem(#PASSWD);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SEQUNO" LINE="18" COL="16" TYPE="%4d" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS=""/>
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错------------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59" TYPE="%-6s" FUNCTIONS="T(确 定)" INPUT="BUTTON">
+  <ONLOSTFOCUS>
+  "{
+	runoutput();	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		if(#ADTYPE == '1')
+		{
+			print( 3,30,'建议与投诉信息录入');
+			print( 5,6,'建议类型: [ 4]',#SADTYPE);
+			print( 6,6,'序    号: [ 4]',#SEQUNO);
+			print( 7,6,'客 户 号: [ 8]',#CUSTNO);
+			print( 8,6,'客户姓名: [60]',#CUSTNAME);
+			print( 9,6,'具体信息: [40]',#JTINFO);
+		}
+		else
+		{
+			print( 3,30,'建议与投诉信息录入');
+			print( 5,6,'建议类型: [ 4]',#SADTYPE);
+			print( 6,6,'序    号: [ 4]',#SEQUNO);
+			print( 7,6,'客 户 号: [ 8]',#CUSTNO);
+			print( 8,6,'客户姓名: [60]',#CUSTNAME);
+			print( 9,6,'具体信息: [40]',#JTINFO);
+			print(10,6,'投诉对象: [ 5]',#TSOBJE);
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

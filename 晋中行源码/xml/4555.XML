@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4204 对公销户业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	dim @i as number;
+	dim @j as number;
+	@i = len(#TRAN_ACTNO);
+	@j = len(#ACTNO);
+
+	commsend_001();
+	
+	if(#CASHFLAG == '2')
+	{ //转帐
+		$FD40  = getitems('#AVBALTOT');
+		$FD101 = #TRAN_ACTNO+space(24-@i)+#ACSEQNO+getitems('#TRAN_TXAMT')+#TRAN_VTYPE+space(16)+substr(#STRAN_RESUME,0,10)+space(1)+#TRAN_NAME+getitems('#TRAN_AVBAL')+#TRAN_CUR+#CASHFLAG+#TRAN_RESUME+space(1)+#AC_TYPE+#ACSEQNO2+#TRAN_PNAME;
+		$FD102 = #ACTNO+space(24-@j)+space(4)+#VOCTYPE+#VOCNUM+space(36)+#PMFLAG+space(16)+#OUTDATE+space(17)+#CUSTNAME+getitems('#AVBAL')+#CUR+#CASHFLAG+#RESUME+space(1)+#ACT_TYPE+space(5)+space(16,'0')+space(32)+space(16,'0')+space(16)+space(10,'0')+space(10)+#PRDTNAME+space(25)+#SRESUME;
+	}
+	else
+	{ //现金及同城
+		$FD40  = getitems('#AVBALTOT');
+		$FD101 = space(24)+#ACSEQNO2+getitems('#AVBALTOT')+space(80)+space(16,'0')+space(2)+#CASHFLAG+space(4);
+		$FD102 = #ACTNO+space(24-@j)+space(4)+#VOCTYPE+#VOCNUM+space(36)+#PMFLAG+space(16)+#OUTDATE+space(17)+#CUSTNAME+getitems('#AVBAL')+#CUR+#CASHFLAG+#RESUME+space(1)+#ACT_TYPE+space(5)+space(16,'0')+space(32)+space(16,'0')+space(16)+space(10,'0')+space(10)+#PRDTNAME+space(25)+#SRESUME;
+		call_9986();
+	}
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4204                          对公销户业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2208)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <PAGE NAME="DEFAULT">
+  <ITEM NAME="#LACTNO" LINE="6"  COL="7"  TYPE="%-10s"  FUNCTIONS="T(帐    号: )"/>
+  <ITEM NAME="#ACTNO"  LINE="6"  COL="17" TYPE="%-24s"  INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno  as string;
+	dim @tota  as string;
+	dim @list1 as string;
+	dim @list2 as string;
+	dim @i     as number;
+	
+	@txno = $TXNO;
+	$TXNO = '9950';
+	$FD102=#ACTNO;
+	commsend_001();
+	@tota=callserver();
+	$TXNO = @txno;
+	if($FD12!='0000'){
+		showmsg('帐号输入错误!');
+	//	showmsg(geterror());
+		return(false);
+	}
+	showblock('ACTINFO',true,true);
+	setitems('#AVBALTOT',$FD40);               //本息合计
+	setitems('#AVBAL',substr($FD102,175,16));  //本金
+	#CUSTNAME = substr($FD102,125,60);
+	#CUR      = substr($FD102,201,2);
+	#PRDTNAME = substr($FD102,313,30);
+	#VOCTYPE  = substr($FD102,28,3);
+	#ACT_TYPE = substr($FD102,207,1);          //销户帐户类型
+	
+	show(#AVBALTOT,true);
+	enable(#AVBALTOT,false);
+	show(#AVBAL,true);
+	enable(#AVBAL,false);
+	show(#CUSTNAME,true);
+	enable(#CUSTNAME,false);
+	show(#CUR,true);
+	enable(#CUR,false);
+	show(#PRDTNAME,true);
+	enable(#PRDTNAME,false);
+	show(#PMFLAG,true);
+	enable(#PMFLAG,false);
+
+	while(substr(@tota, @i, 4)=='102L'){
+		 @i = @i + 30;
+	}
+	 @list1=substr(@tota, 0 , @i+1);
+	 @list2=substr(@tota, @i, len(@tota)-@i);
+	 setsel(#RESUME,@list1,'o5t20o1v2o2');
+	 setsel(#VOCTYPE,@list2,'o5t20o1v3o2');
+	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ACT_TYPE"  TYPE="%-1s"   FUNCTIONS="T()"/><!---销户帐户类型--->
+  
+  <ITEM LINE="7"  COL="5" TYPE="%-69s"  FUNCTIONS="T(---------------------------------------------------------------------)"/>
+ 
+  <BLOCK NAME="ACTINFO"  VISABLE="FALSE">
+  <ITEM LINE="8"  COL="7"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9"  COL="7"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="10" COL="7"  TYPE="%-10s" FUNCTIONS="T(产品名称:!)"/>
+  <ITEM LINE="11" COL="7"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="12" COL="7"  TYPE="%-10s" FUNCTIONS="T(本息合计:)"/>
+  
+  <ITEM LINE="14" COL="7"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="14" COL="47" TYPE="%-12s" FUNCTIONS="T(凭  证  号:)"/>
+  <ITEM LINE="15" COL="7"  TYPE="%-10s" FUNCTIONS="T(出票日期:)"/>
+  <ITEM LINE="15" COL="47" TYPE="%-12s" FUNCTIONS="T(密码支付器:!)"/>
+  <ITEM LINE="16" COL="7"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="17" COL="7"  TYPE="%-10s" FUNCTIONS="T(摘    要:!)"/>
+  
+  <ITEM NAME="#CUSTNAME"  LINE="8"  COL="17" TYPE="%-60s"  INPUT="TEXT"    FUNCTIONS="T()"/>
+  <ITEM NAME="#CUR"       LINE="9"  COL="17" TYPE="%-50s"  INPUT="SELECT"  FUNCTIONS="T(01)">
+  <SELECT LINE="9" COL="19">
+  	<OPTION VALUE="01"  TITLE="人民币"/>
+  </SELECT>
+  </ITEM>
+  
+  <ITEM NAME="#PRDTNAME"  LINE="10" COL="17" TYPE="%-30s"  INPUT="TEXT"    FUNCTIONS="T()"/>
+  <ITEM NAME="#AVBAL"     LINE="11" COL="17" TYPE="%17.2f" INPUT="TEXT"    FUNCTIONS="T()"/>
+  <ITEM NAME="#XAVBAL"    TYPE="%-21s"       FUNCTIONS="X(#AVBAL)"/>
+  
+  <ITEM NAME="#AVBALTOT"  LINE="12" COL="17" TYPE="%17.2f" INPUT="TEXT"    FUNCTIONS="T()"/>
+  <ITEM NAME="#XAVBALTOT" TYPE="%-21s"       FUNCTIONS="X(#AVBALTOT)"/>
+  
+  
+  <ITEM NAME="#VOCTYPE"   LINE="14" COL="17" TYPE="%3s"    INPUT="SELECT"  FUNCTIONS="T(001)">
+  <SELECT>
+  	<OPTION VALUE="001" TITLE="现金支票"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#SVOCTYPE" TYPE="%-20s"        FUNCTIONS="S(#VOCTYPE,#VOCTYPE)"/>
+  
+  <ITEM NAME="#VOCNUM"    LINE="14" COL="59" TYPE="%16d"   INPUT="TEXT"    FUNCTIONS="T()"/>
+  <ITEM NAME="#OUTDATE"   LINE="15" COL="17" TYPE="%8s"    INPUT="TEXT"    FUNCTIONS="T()D()"/>
+  <ITEM NAME="#PMFLAG"    LINE="15" COL="59" TYPE="%1s"    INPUT="SELECT"  FUNCTIONS="T(N)">
+  <SELECT>
+  	<OPTION VALUE="Y"   TITLE="是"/>
+  	<OPTION VALUE="N"   TITLE="否"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#CASHFLAG"  LINE="16" COL="17" TYPE="%1s"    INPUT="SELECT"  FUNCTIONS="T(1)">
+  <SELECT>
+  	<OPTION VALUE="1"   TITLE="现金"/>
+  	<OPTION VALUE="2"   TITLE="转帐"/>
+  	<OPTION VALUE="3"   TITLE="同城"/>
+  	<OPTION VALUE="4"   TITLE="大额"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+	if(#VOCTYPE != '001' and #CASHFLAG == '1')
+	{
+		
+		showmsg('此凭证类型不能选择现金取款!');
+		return(false);
+	}
+	if(#VOCTYPE == '001' and #CASHFLAG != '1')
+	{
+		showmsg('现金支票必须选择现金取款!');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SCASHFLAG" TYPE="%-4s"        FUNCTIONS="S(#CASHFLAG,#CASHFLAG)"/>
+  
+  <ITEM NAME="#RESUME"    LINE="17" COL="17" TYPE="%2s"   INPUT="SELECT"   FUNCTIONS="T()"/>
+  <ITEM NAME="#SRESUME"   TYPE="%-20s"       FUNCTIONS="S(#RESUME,#RESUME)"/>
+  <ITEM NAME="#GO"        TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+	if(#CASHFLAG == '2')
+	{
+		show(#NEXTPAGE,true);
+		goitem(#NEXTPAGE);
+	}
+	else
+	{
+		goitem(#SUBMIT1);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#NEXTPAGE"  LINE="21" COL="65" TYPE="%6s"   INPUT="BUTTON" VISABLE="FALSE"  FUNCTIONS="T(下一页)">
+  <ONLOSTFOCUS>
+  "{
+	loadpage('TRANPAGE');
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SUBMIT1"   LINE="21" COL="65" TYPE="%6s"   INPUT="SUBMIT" FUNCTIONS="T(确  定)"/>
+  </BLOCK>
+  </PAGE>
+  
+  <!---转帐页面---><!---先写出向对公活期转的页面--->
+  <PAGE NAME="TRANPAGE">
+  <ITEM LINE="6"  COL="7"  TYPE="%-10s"  FUNCTIONS="T(对方帐号:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-69s"  FUNCTIONS="T(---------------------------------------------------------------------)"/>
+  
+  <ITEM NAME="#TRAN_ACTNO" LINE="6" COL="17"  TYPE="%-24s"  FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno  as string;
+	dim @tota  as string;
+	dim @i     as number;
+	dim @list1 as string;
+	dim @list2 as string;
+	
+	@i = 0;
+	initfd();
+	@txno  = $TXNO;
+	$FD12  = '2208';
+	$TXNO  = '9730';
+	$FD101 = #TRAN_ACTNO;
+	
+	commsend_001();
+	@tota  = callserver();
+	$TXNO  = @txno;
+	
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	
+	#TRAN_NAME  = substr($FD101,74,50);
+	#TRAN_CUR   = substr($FD101,130,2);
+	#TRAN_AVBAL = val(substr($FD101,74,16),0.01);
+	#TRAN_PNAME = substr($FD101,151,30);
+	#AC_TYPE    = substr($FD101,146,1); //帐户类型
+	#ACSEQNO    = substr($FD101,24,4);  //帐户序号
+	
+	#TRAN_TXAMT = #AVBALTOT;            //转入金额为本息合计
+	
+	if(#AC_TYPE == '2')
+	{
+		while(substr(@tota, @i, 4)=='101C'){
+		 	@i = @i + 30;
+		}
+	 	@list1=substr(@tota, 0 , @i+1);
+	 	@list2=substr(@tota, @i, len(@tota)-@i);
+	 	setsel(#TRAN_RESUME,@list1,'o5t20o1v2o2');
+	 	setsel(#TRAN_VTYPE,@list2,'o5t20o1v3o2');
+	}
+	else
+	{
+		selsel(#TRAN_VTYPE,@tota,'o5t20o1v3o2');
+	}
+	
+	if(#AC_TYPE == '2')
+	{
+		show(#TS_RESUME,true);
+		show(#TRAN_RESUME,true);
+		enable(#TRAN_RESUME,true);
+	}
+	else
+	{
+		show(#TS_RESUME,false);
+		show(#TRAN_RESUME,false);
+		enable(#TRAN_RESUME,false);
+	}
+	
+	show(#TRAN_NAME,true);
+	enable(#TRAN_NAME,false);
+	show(#TRAN_CUR,true);
+	enable(#TRAN_CUR,false);
+	show(#TRAN_AVBAL,true);
+	enable(#TRAN_AVBAL,false);
+	show(#TRAN_PNAME,true);
+	enable(#TRAN_PNAME,false);
+	show(#TRAN_TXAMT,true);
+	enable(#TRAN_TXAMT,false);
+	
+	showblock('TRANSFER',true,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#AC_TYPE" TYPE="%1s"  FUNCTIONS=""/><!---帐户类型--->
+  
+  <BLOCK NAME="TRANSFER" VISABLE="FALSE">
+  <ITEM LINE="9"  COL="7"   TYPE="%-10s"  FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="10" COL="7"   TYPE="%-10s"  FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="11" COL="7"   TYPE="%-10s"  FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="12" COL="7"   TYPE="%-10s"  FUNCTIONS="T(产品名称:)"/>
+                            
+  <ITEM LINE="14" COL="7"   TYPE="%-10s"  FUNCTIONS="T(凭证种类:!)"/>
+  <ITEM LINE="16" COL="7"   TYPE="%-10s"  FUNCTIONS="T(转入金额:)"/>
+  
+  <ITEM NAME="#TS_RESUME"   LINE="14" COL="45" TYPE="%-10s"  FUNCTIONS="T(摘要选项:!)"/>
+  
+  <ITEM NAME="#TRAN_NAME"   LINE="9"  COL="17" TYPE="%-50s"  FUNCTIONS="T()"/>
+  <ITEM NAME="#TRAN_CUR"    LINE="10" COL="17" TYPE="%-2s"   INPUT="SELECT" FUNCTIONS="T()">
+  <SELECT>
+	<OPTION VALUE="01"  TITLE="人民币"/>
+  </SELECT>
+  </ITEM>
+  
+  <ITEM NAME="#TRAN_AVBAL"  LINE="11" COL="17" TYPE="%17.2f" FUNCTIONS="T()"/>
+  <ITEM NAME="#TRAN_PNAME"  LINE="12" COL="17" TYPE="%-30s"  FUNCTIONS="T()"/>
+  <ITEM NAME="#TRAN_VTYPE"  LINE="14" COL="17" TYPE="%-3s"   INPUT="SELECT" FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#TRAN_RESUME" LINE="14" COL="55" TYPE="%-2s"   INPUT="SELECT" FUNCTIONS="T()"/>
+  <ITEM NAME="#STRAN_RESUME"TYPE="%-20s"   INPUT="SELECT" FUNCTIONS="S(#TRAN_RESUME,#TRAN_RESUME)"/>
+  
+  <ITEM NAME="#TRAN_TXAMT"  LINE="16" COL="17" TYPE="%17.2f" FUNCTIONS="T()"/>
+  
+  </BLOCK>
+  <ITEM NAME="#GOSUB"       TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+	goitem(#SUBMIT2);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#PFPAGE"      LINE="21" COL="55" TYPE="%6s"    INPUT="BUTTON" FUNCTIONS="T(上一页)">
+  <ONLOSTFOCUS>
+  "{
+	loadpage('DEFAULT');
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SUBMIT2"     LINE="21" COL="65" TYPE="%6s"    INPUT="SUBMIT" FUNCTIONS="T(确  定)"/>
+  
+  </PAGE>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD"   TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#ACSEQNO"  TYPE="%4s"  FUNCTIONS="T()"/> <!---帐户序号--->
+  <ITEM NAME="#ACSEQNO2" TYPE="%4s"  FUNCTIONS="T(0000)"/> <!---帐户序号2--->
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE  DEVICE="SCREEN" DESC="对公销户">
+NOTHING
+</PACKAGE>
+	<PRINT>"{
+		if(#CASHFLAG == '2') {
+			print( 3,30,'对公销户');
+			print( 4,22,'销户方式: [ 4]',#CASHFLAG);
+			print( 5,22,'帐    号: [24]',#ACTNO);
+			print( 6,22,'户    名: [60]',#CUSTNAME);
+			print( 7,22,'产品名称: [30]',#PRDTNAME);
+			print( 8,22,'余    额: 0.00');
+			print( 9,22,'本    金: [21]',#XAVBAL);
+			print(10,22,'本息合计: [21]',#XAVBALTOT);
+			print(11,22,'销户摘要: [20]',#SRESUME);
+			print(12,22,'对方帐号: [24]',#TRAN_ACTNO);
+			print(13,22,'对方户名: [50]',#TRAN_ACTNO);
+			print(14,22,'产品名称: [30]',#TRAN_PNAME);
+			print(15,22,'转入金额: [21]',#XAVBALTOT);
+			print(16,22,'转入摘要: [20]',#STRAN_RESUME);
+			print(17,22,'流 水 号: [ 5]',$FD4);
+		} else{
+			print( 3,30,'对公销户');
+			print( 4,22,'销户方式: [ 4]',#CASHFLAG);
+			print( 5,22,'帐    号: [24]',#ACTNO);
+			print( 6,22,'户    名: [60]',#CUSTNAME);
+			print( 7,22,'产品名称: [30]',#PRDTNAME);
+			print( 8,22,'余    额: 0.00');
+			print( 9,22,'本    金: [21]',#XAVBAL);
+			print(10,22,'本息合计: [21]',#XAVBALTOT);
+			print(11,22,'销户摘要: [20]',#SRESUME);
+			print(12,22,'流 水 号: [ 5]',$FD4);
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印取款凭条">
+	QKPT|@actno|@custname|@txamt|@prodname|@txday|@brno|@custno|||||@avbal
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		print( 3,20,'取款凭条');
+		print( 4, 6,'机 构 号:\[[5  ]\]       操 作 员:[4 ]      流 水 号:[6   ]',@brno ,$TLRNO,$FD4);
+		print( 5, 6,'取款帐号:\[[19               ]\]',@actno);
+		print( 6, 6,'取款户名:[60]',@custname);
+		print(10, 6,'取款金额:[16]',ltrim(comma(@txamt,16)));
+		print(12, 6,'帐户余额:[16]',ltrim(comma(@avbal,16)));
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

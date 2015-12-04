@@ -1,0 +1,770 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3402 增加卡折交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		//发往神码的开卡交易
+  	initfd();
+	commsend_001();
+	//add by ck 20100302 开卡
+	//dim @fee as string;
+	if(#MEDIUMTYPE == '0020')
+	{
+		$FD16   = '7001';
+		$FD21   = #CURCD;
+		$FD39   = itoa(#TXAMT*100);
+		$FD28   = #KHHM;
+		$FD67   = #ZJLX;
+		$FD62   = #ZJHM;
+		$FD25   = #CUSTNAME;
+		$FD26   = #KHYWM;
+		$FD70	= #KHXB;
+		$FD82   = #JTZZ;
+		$FD17   = #JTYB;
+		$FD61   = #JTDH;
+		$FD119  = #DWMC;
+		$FD81   = #DWDZ;
+		$FD64   = #DWYB;
+		$FD60   = #DWDH;
+		$FD58   = #SJHM;
+		$FD100  = #MAIL;
+		$FD72   = #XYDJ; 
+		$FD40	= itoa(#YSR*100);
+		$FD47   = #CSRQ;
+		$FD71   = #HYZK;
+		$FD30	= #N_CARDNO;
+		$FD68	= #KSX;
+		$FD34	= #N_PWD_YN;
+		$FD79	= #N_PASSWD;
+		$FD75	= $MSR2;
+		$FD76	= $MSR3;
+		//showmsg('$FD70 = ['+$FD70+']');
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//initfd();	
+		
+	
+       #YEAR_FEE = val($FD40);
+		#COST_FEE = val($FD41);
+		#TRAN_FEE = val($FD42);
+		#YEAR_FEE1 = val($FD40,0.01);
+		#COST_FEE1 = val($FD41,0.01);
+		#TRAN_FEE1 = val($FD42,0.01);
+		#CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+		//showmsg('#CARD_TRACENO1='+#CARD_TRACENO);
+		//暂时YEAR_FEE,COST_FEE,TRAN_FEE 赋初值
+		//#YEAR_FEE = 663;
+		//#COST_FEE = 722;
+		//#TRAN_FEE = 850;
+		//#YEAR_FEE1 = 6.63;
+		//#COST_FEE1 = 7.22;
+		//#TRAN_FEE1 = 8.50;
+		//增加开卡收手续费模块 
+		$FD39 = itoa(#YEAR_FEE,'%16.0f');
+		$FD40 = itoa(#COST_FEE,'%16.0f');
+		$FD41 = itoa(#TRAN_FEE,'%16.0f');
+		call_9986_card();
+		setitems('#FEETLRNO#FEE_PWD#FEEFLAG',$FD9);  //得到收费标志
+		showmsg('#FEEFLAG = ['+#FEEFLAG+']');
+		if(#FEEFLAG != '3' and #FEEFLAG != '' and #MEDIUMTYPE == '0020' ) //费用为0时,#FEEFLAG为空
+		{
+			#FEEFLAG1 = '0';
+		}
+		else
+		{
+			#FEEFLAG1 = '1';
+		}	
+		
+		 //showmsg('调用平台结束!');
+		 $FD70='';	
+	}
+	//add by ck 20100302
+	dim @len_n_idno as number;
+	dim @len_o_idno as number;
+	dim @len_n_card as number;
+
+	@len_n_idno		=   20 - len(#N_ID_NO);
+	@len_o_idno		=   20 - len(#O_ID_NO);
+	@len_n_card	 	=   19 - len(#N_CARDNO);
+	
+	$TXNO = '2402';
+	showmsg(#O_CARDNO);
+	$FD102 =#O_CARDNO;
+	$FD115 = space(1)+#N_PWD_YN+space(6)+#N_PASSWD+#N_ID_YN+#N_ID_NO+space(@len_n_idno)+space(1)+#N_ID_TYPE+space(2);
+	$FD114 = space(1)+#O_PWD_YN+space(6)+#O_PASSWD+#O_ID_YN+#O_ID_NO+space(@len_o_idno)+space(1)+#O_ID_TYPE+space(2);
+	$FD116 = #MEDIUMTYPE+#N_CARDNO+space(@len_n_card)+space(112)+#CREDENCENO;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	//返回内容
+	//#SEQNO  = space(12)+delspace(substr($FD103,120,50));
+	#SEQNO = delspace(substr($FD103,140,4));
+	showmsg('#SEQNO1'+#SEQNO);
+	#RACTNO = delspace(substr($FD116,106,19));
+		//卡交易核心处理失败往数码发送取消交易
+	if(($FD12!='0000') and ($FD12!='Z003') and ($FD12!='Z201') and (substr(#N_CARDNO,0,6)=='621223'))
+	{
+		//showmsg('#RESP_CODE='+$FD12);
+		#RESP_CODE=$FD12;
+		//showmsg('#RESP_CODE='+$FD12);
+		showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#N_CARDNO;
+		$FD39=itoa(#TXAMT*100);
+		$FD43=#CARD_TRACENO;
+		//showmsg('#CARD_TRACENO2='+#CARD_TRACENO);
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg('撤销卡系统开户失败:['+geterror()+']');
+			return (false);  
+		}
+	}
+	
+
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3402                          增加卡折交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2402)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  
+  <ITEM LINE="6" COL="12" TYPE="%-9s" FUNCTIONS="T(原卡折号:)"/>
+  <ITEM LINE="7" COL="12" TYPE="%-9s" FUNCTIONS="T(姓    名:)"/>
+
+  <ITEM LINE="08" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB0" VISABLE="FALSE" FUNCTIONS="T(密码支取:)"/>
+  <ITEM LINE="08" COL="47" TYPE="%-9s"  INPUT="LABEL" NAME="#LB1" VISABLE="FALSE" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="09" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB2" VISABLE="FALSE" FUNCTIONS="T(证件支取:)"/>
+  <ITEM LINE="10" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB3" VISABLE="FALSE" FUNCTIONS="T(证件类型:)"/>
+  <ITEM LINE="10" COL="47" TYPE="%-9s"  INPUT="LABEL" NAME="#LB4" VISABLE="FALSE" FUNCTIONS="T(证件号码:)"/>
+  
+  <ITEM LINE="12" COL="12" TYPE="%-60s" INPUT="LABEL" NAME="#LB5" VISABLE="FALSE"  FUNCTIONS="T(--------------------新卡折信息---------------------------------)"/>
+
+  <ITEM LINE="14" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB6"  VISABLE="FALSE"  FUNCTIONS="T(介质种类:)"/>
+  <ITEM LINE="15" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB7"  VISABLE="FALSE"  FUNCTIONS="T(新卡折号:)"/>
+  <ITEM LINE="16" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB8"  VISABLE="FALSE"  FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="17" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB9"  VISABLE="FALSE"  FUNCTIONS="T(密码支取:)"/>
+  <ITEM LINE="17" COL="47" TYPE="%-9s"  INPUT="LABEL" NAME="#LB10" VISABLE="FALSE"  FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="18" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB11" VISABLE="FALSE"  FUNCTIONS="T(证件支取:)"/> 
+  <ITEM LINE="19" COL="12" TYPE="%-10s" INPUT="LABEL" NAME="#LB12" VISABLE="FALSE"  FUNCTIONS="T(证件类型:)"/>
+  <ITEM LINE="19" COL="47" TYPE="%-9s"  INPUT="LABEL" NAME="#LB13" VISABLE="FALSE"  FUNCTIONS="T(证件号码:)"/>
+
+	 <!--add by ck 20100226  客户信息字段-->
+  <ITEM NAME="#KHHM" TYPE="%-12s" FUNCTIONS="V(NB)"/>  <!--客户号码-->
+  <ITEM NAME="#ZJLX" TYPE="%-1s" FUNCTIONS="V(NB)"/>   <!--证件类型-->
+  <ITEM NAME="#ZJHM" TYPE="%-20s" FUNCTIONS="V(NB)"/>   <!--证件号码-->
+  <ITEM NAME="#KHYWM" TYPE="%-30s" FUNCTIONS=""/>	   <!--客户英文名-->
+  <ITEM NAME="#KHXB" TYPE="%-1s" FUNCTIONS="V(NB)"/>   <!--客户性别-->
+  <ITEM NAME="#JTZZ" TYPE="%-50s" FUNCTIONS="V(NB)"/>  <!--家庭住址-->
+  <ITEM NAME="#JTYB" TYPE="%-6s" FUNCTIONS="V(NB)"/>  <!--家庭邮编-->
+  <ITEM NAME="#JTDH" TYPE="%-15s" FUNCTIONS=""/>  <!--家庭电话-->
+  <ITEM NAME="#DWMC" TYPE="%-60s" FUNCTIONS=""/>  <!--单位名称-->
+  <ITEM NAME="#DWDZ" TYPE="%-50s" FUNCTIONS=""/>  <!--单位地址-->
+  <ITEM NAME="#DWYB" TYPE="%-6s" FUNCTIONS=""/>  <!--单位邮编-->
+  <ITEM NAME="#DWDH" TYPE="%-15s" FUNCTIONS=""/>  <!--单位电话-->
+  <ITEM NAME="#SJHM" TYPE="%-15s" FUNCTIONS=""/>  <!--手机号码-->
+  <ITEM NAME="#MAIL" TYPE="%-100s" FUNCTIONS=""/>  <!--电子邮件-->
+  <ITEM NAME="#XYDJ" TYPE="%-1s" FUNCTIONS=""/>  <!--信誉等级-->
+  <ITEM NAME="#YSR" TYPE="%17.2f" FUNCTIONS=""/>  <!--月收入-->
+  <ITEM NAME="#CSRQ" TYPE="%-8s" FUNCTIONS=""/>  <!--出生日期-->  
+  <ITEM NAME="#HYZK" TYPE="%-1s" FUNCTIONS=""/>  <!--婚姻状况-->
+  <!--add by ck 20100226  客户信息字段-->  
+
+	<ITEM NAME="#YEAR_FEE"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----年费---->	
+  <ITEM NAME="#COST_FEE"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----工本费----> 
+  <ITEM NAME="#TRAN_FEE"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费---->  
+  <ITEM NAME="#YEAR_FEE1"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----年费---->	
+  <ITEM NAME="#COST_FEE1"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----工本费----> 
+  <ITEM NAME="#TRAN_FEE1"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费----> 
+  <ITEM NAME="#FEETLRNO" TYPE="%4s" FUNCTIONS=""/><!---授权柜员号---> 
+  <ITEM NAME="#FEE_PWD"  TYPE="%6s" FUNCTIONS=""/><!---授权柜员口令---> 
+  <ITEM NAME="#FEEFLAG"  TYPE="%1s" FUNCTIONS=""/><!---收费标志---> 
+  <ITEM NAME="#FEEFLAG1"  TYPE="%1s" FUNCTIONS=""/><!---收费标志---> 
+  <ITEM NAME="#TXAMT" TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#CUSTNAME" TYPE="%-60s"  FUNCTIONS=""/><!---户名--->
+   <ITEM NAME="#TXNAME"      TYPE="%-20s" FUNCTIONS="T(增加卡折交易)"/>  <!---交易名称---> 
+
+
+ <ITEM NAME="#O_CARDNO" INPUT="TEXT" LINE="6" COL="22" TYPE="%-19s" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+	show(#LB0,		false);
+	show(#LB1,		false);
+	show(#LB2,		false);
+	show(#LB3,		false);
+	show(#LB4,		false);
+	show(#LB5,		false);
+	show(#LB6,		false);
+	show(#LB7,		false);
+	show(#LB8,		false);
+	show(#LB9,		false);
+	show(#LB10,		false);
+	show(#LB11,		false);
+	show(#LB12,		false);
+	show(#LB13,		false);
+
+	show(#O_PWD_YN,		false);
+	show(#O_PASSWD,		false);
+	show(#O_ID_YN,		false);
+	show(#O_ID_TYPE,	false);
+	show(#O_ID_NO,		false);
+	show(#MEDIUMTYPE,	false);
+	show(#N_CARDNO,		false);
+	show(#CREDENCENO,	false);
+	show(#N_PWD_YN,		false);
+	show(#N_PASSWD,		false);
+	show(#N_ID_YN,		false);
+	show(#N_ID_TYPE,	false);
+	show(#N_ID_NO,		false);
+
+	initfd();
+	$FD102 =#O_CARDNO;
+	commsend_001();
+	$FD16 = '9764';
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (false);
+	}
+	
+   
+	#O_USERNAME= substr($FD116, 56, 50);
+	#O_PWD_YN  = substr($FD114,  1, 1);
+	#O_ID_YN   = substr($FD114, 14, 1);
+	#MEDIUMTYPE= substr($FD116,  0, 4);
+	#O_ID_TYPE = substr($FD114, 36, 1);
+	#N_ID_TYPE = substr($FD114, 36, 1);
+
+	show(#O_USERNAME,true);
+	enable(#O_USERNAME,false);
+
+	if(#O_PWD_YN=='Y')
+	{
+		show(#O_PASSWD, true);
+		show(#LB1,      true);
+		show(#O_PWD_YN, true);
+		show(#LB0,      true);
+	}
+	if(#O_ID_YN=='Y')
+	{
+		show(#LB2,		true);
+		show(#LB3,		true);
+		show(#LB4,		true);
+		show(#O_ID_YN,	true);
+		show(#O_ID_TYPE,true);
+		show(#O_ID_NO,	true);
+	}
+	
+	//add by CK 20100226 调用1713交易取客户详细信息**/
+	#KHHM     	= '';
+	#KHYWM      = '';
+	#KHXB       = '';
+	#JTZZ       = '';
+	#JTYB       = '';
+	#JTDH       = '';
+	#DWMC       = '';
+	#DWDZ       = '';
+	#DWYB       = '';
+	#DWDH       = '';
+	#SJHM       = '';
+	#MAIL       = '';
+	#XYDJ       = '';
+	#YSR        = 0.00;
+	#CSRQ       = '';
+	#HYZK       = ''; 
+	#ZJHM		= '';
+	#ZJLX		= '';
+	#CUSTNAME   = '';  
+    initfd();
+    commsend_001();
+    
+		$FD79	= #N_PASSWD;
+		$FD66=#N_PWD_YN;
+    $FD16='1713';
+    $FD62=#O_CARDNO;
+    callserver();
+	if($FD12 != '0000')
+	{		
+	showmsg(geterror());
+	return(false);
+	}  
+	#KHHM=substr(delspace($FD54),2,8);
+	#JTZZ       = delspace($FD25);
+	#JTYB       = delspace($FD29);
+	#DWMC       = delspace($FD27);
+	#DWDZ       = delspace($FD74);
+	#DWYB       = delspace($FD84);
+	#SJHM       = delspace($FD30);
+	#MAIL       = delspace($FD82);
+	#XYDJ       = delspace($FD34);
+	#ZJHM		= delspace($FD62);
+	#ZJLX		= delspace($FD67);
+	#CSRQ       = delspace($FD28);
+	#HYZK       = delspace($FD24);
+	#CUSTNAME   = delspace($FD26);
+	//showmsg(itoa(#YSR,'%8.2f')); **/
+ //add by CK 20100226 调用1713交易取客户详细信息执行完毕**/
+
+}"
+</ONLOSTFOCUS>
+</ITEM>
+  <ITEM NAME="#O_USERNAME" INPUT="TEXT"  LINE="7" COL="22" TYPE="%-50s" FUNCTIONS=""/>
+
+  <ITEM NAME="#O_PWD_YN"   INPUT="LABEL" LINE="08" COL="22" TYPE="%1s"  VISABLE="FALSE" FUNCTIONS="G(N,#O_ID_YN)">
+      <SELECT>
+		<OPTION VALUE="N" TITLE="0.否"/>
+		<OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+  </ITEM>
+  <ITEM NAME="#O_PASSWD"   INPUT="TEXT"  LINE="08" COL="57" TYPE="%-6s" VISABLE="FALSE" DEVICE="PINPAD"  FUNCTIONS="i()V(NB)L(6,6)"/>
+  <ITEM NAME="#O_ID_YN"    INPUT="LABEL" LINE="09" COL="22" TYPE="%1s"  VISABLE="FALSE"  FUNCTIONS="G(N,#MID)V(NB)">
+      <SELECT>
+		<OPTION VALUE="N" TITLE="0.否"/>
+		<OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+  </ITEM>
+    <ITEM NAME="#O_ID_TYPE" INPUT="LABEL"  LINE="10" COL="22" TYPE="%1s" VISABLE="FALSE"  FUNCTIONS="">
+	<SELECT>
+	<OPTION VALUE="1" TITLE="1 身份证"/>
+	<OPTION VALUE="2" TITLE="2 户口簿"/>
+	<OPTION VALUE="3" TITLE="3 护照"/>
+	<OPTION VALUE="4" TITLE="4 军官证"/>
+	<OPTION VALUE="5" TITLE="5 回乡证"/>
+	<OPTION VALUE="8" TITLE="8 企业代码证"/>
+	<OPTION VALUE="9" TITLE="9 经营许可证"/>
+
+  </SELECT>
+  </ITEM>
+	<ITEM NAME="#CURCD" LINE="10"  COL="21" TYPE="%-2s"  DEVICE="KEYBOARD" INPUT="SELECT" VISABLE="FALSE"  FUNCTIONS="T(0)">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="人民币"/>
+	</SELECT>
+	</ITEM>
+	<ITEM LINE="9"  COL="10" TYPE="%-2s" NAME="#KSX"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)" VISABLE="FALSE">  
+    <SELECT>
+        <OPTION VALUE="0" TITLE="个人卡"/>
+        <!--OPTION VALUE="1" TITLE="单位卡"/-->
+    </SELECT>
+	</ITEM>
+	<!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+  <ITEM NAME="#O_ID_NO"   INPUT="TEXT"  LINE="10" COL="57" TYPE="%-20s"  VISABLE="FALSE" FUNCTIONS="V(NB)">
+  	"{
+  	//add 20131030 wudawei start 调用身份核查
+  		  dim @res as string;
+				if(#O_ID_TYPE=='1' or #O_ID_TYPE=='2')
+				{
+					@res = idcheck(#O_ID_NO,#O_USERNAME);
+					#HCJGBL = strfld(@res,'|',1);
+					@res =  strfld(@res,'|',0);
+					if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+					{
+							showmsg('身份核查结果不通过，不能继续办理！');
+							return(false);
+					}
+				}
+				//add 20131030 end
+  	}"
+  </ITEM>
+
+  <ITEM NAME="#MID" TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+		show(#LB5,			true);
+		show(#LB6,			true);
+		show(#LB7,			true);
+		show(#LB8,			true);
+		show(#MEDIUMTYPE,	true);
+		show(#N_CARDNO,		true);
+		show(#CREDENCENO,	true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<!----从这里开始进入了 新开卡折的信息录入-------->
+ <ITEM NAME="#MEDIUMTYPE"   INPUT="SELECT"  LINE="14" COL="22" TYPE="%-4s" VISABLE="FALSE" FUNCTIONS="">
+      <SELECT LINE="14" COL="25">
+        <OPTION VALUE="0020" TITLE="0.储蓄卡"/>
+        <OPTION VALUE="0010" TITLE="0.储蓄活期存折"/>
+     </SELECT>
+<ONLOSTFOCUS>
+"{
+        dim @spa as string;
+        @spa = space(138,' ');
+        if(#MEDIUMTYPE=='0010')
+        {
+            enable(#N_CARDNO,false);
+        }
+		else
+		{
+	        enable(#N_CARDNO,true);	
+		}
+        initfd();
+        commsend_001();
+        $FD116 = #MEDIUMTYPE+@spa;
+        $FD16 = '9739';
+        callserver();
+        if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+ <ITEM NAME="#N_CARDNO" INPUT="TEXT" LINE="15" COL="22" TYPE="%-19s" VISABLE="FALSE"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	if((substr(#O_CARDNO,0,6)=='621223') and (substr(#N_CARDNO,0,6)=='621223'))
+	{
+		showmsg('此交易不允许开子卡!');
+		return(false);
+	}
+
+    dim @spa as string;
+    dim @len_cardno as number;
+    @len_cardno = 19 - len(#N_CARDNO);
+    @spa = space(102);
+
+	if(len(#N_CARDNO)!=19)
+	{
+		showmsg('卡号长度错误!');
+		return(false);
+	}
+
+    initfd();
+    $MSGTYPE='03001';
+    commsend_001();
+    $FD16 = '9738';  //**检查凭证是否合法*/
+    $FD116 = #MEDIUMTYPE+#N_CARDNO+space(@len_cardno)+@spa+#CREDENCENO;
+    callserver();
+    if($FD12!='0000')
+    {
+        showmsg(geterror());
+        return (false);
+	}
+	#CREDENCENO=substr($FD116,135,16);
+	show(#CREDENCENO,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#CREDENCENO" INPUT="TEXT"  LINE="16" COL="22" TYPE="%16d" VISABLE="FALSE"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	
+	show(#LB9,			false);
+	show(#LB10,			false);
+	show(#LB11,			false);
+	show(#LB12,			false);
+	show(#LB13,			false);
+	show(#N_PWD_YN,		false);
+	show(#N_PASSWD,		false);
+	show(#N_ID_YN,		false);
+	show(#N_ID_NO,		false);
+	show(#N_ID_TYPE,	false);
+    dim @spa as string;
+    dim @len_cardno as number;
+    @len_cardno = 19 - len(#N_CARDNO);
+    @spa = space(102);
+    initfd();
+    $MSGTYPE='03001';
+    commsend_001();
+    $FD16 = '9782';  //**检查凭证是否合法*/
+    //$FD116 = #MEDIUMTYPE+#N_CARDNO+space(@len_cardno)+@spa+#CREDENCENO;
+	if(#MEDIUMTYPE=='0020')
+		{
+			$FD116=#MEDIUMTYPE+#N_CARDNO+space(112)+#CREDENCENO;
+		}
+		else
+		{
+			$FD116=#MEDIUMTYPE+space(131)+#CREDENCENO;
+		}
+    callserver();
+    if($FD12!='0000')
+    {
+        showmsg(geterror());
+        return (false);
+	}
+	show(#LB9,			true);
+	show(#LB11,			true);
+	show(#N_PWD_YN,		true);
+	show(#N_ID_YN,		true);
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <ITEM NAME="#N_PWD_YN"   INPUT="SELECT"  LINE="17" COL="22" TYPE="%1s" VISABLE="FALSE"  FUNCTIONS="T(Y)G(Y,#N_ID_YN">
+   <SELECT>
+        <OPTION VALUE="N" TITLE="0.否"/>
+        <OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+     <ONLOSTFOCUS>
+     "{
+		show(#LB10,			false);
+		show(#N_PASSWD,		false);
+		if(#N_PWD_YN=='Y')
+		{
+			show(#LB10,			true);
+			show(#N_PASSWD,		true);
+		}
+     }"
+ </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#N_PASSWD"   INPUT="TEXT"  LINE="17" COL="57" TYPE="%-6s" VISABLE="FALSE"  FUNCTIONS="i()I()V(NB)L(6,6)"/>
+
+<ITEM NAME="#N_ID_YN" INPUT="SELECT"  LINE="18" COL="22" TYPE="%1s" VISABLE="FALSE"  FUNCTIONS="T(N)V(NB)G(N,#SERV)">
+      <SELECT>
+        <OPTION VALUE="N" TITLE="0.否"/>
+        <OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+    <ONLOSTFOCUS>
+	"{
+			
+		show(#LB12,		false);
+		show(#LB13,		false);
+		show(#N_ID_TYPE,false);
+		show(#N_ID_NO,	false);
+		if(#N_ID_YN=='Y')
+		{
+			show(#LB12,		true);
+			show(#LB13,		true);
+			show(#N_ID_TYPE,true);
+			show(#N_ID_NO,	true);
+		}
+    }"
+</ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#N_ID_TYPE"   INPUT="TEXT"  LINE="19" COL="22" TYPE="%1s" VISABLE="FALSE"  FUNCTIONS="V(NB)">
+    <SELECT>
+    <OPTION VALUE="1" TITLE="1 身份证"/>
+    <OPTION VALUE="2" TITLE="2 户口簿"/>
+    <OPTION VALUE="3" TITLE="3 护照"/>
+    <OPTION VALUE="4" TITLE="4 军官证"/>
+    <OPTION VALUE="5" TITLE="5 回乡证"/>
+ 	<OPTION VALUE="8" TITLE="8 企业代码证"/>
+    <OPTION VALUE="9" TITLE="9 经营许可证"/>
+
+  </SELECT>
+</ITEM>
+  <ITEM NAME="#N_ID_NO"   INPUT="TEXT"  LINE="19" COL="57" TYPE="%-20s"  VISABLE="FALSE" FUNCTIONS="V(NB)J(#SERV)"/>
+
+  
+ 
+<!---161上跟踪并未调9986 -20060827--->
+ <!----太BT了还需要调用一个9986服务
+  <ITEM NAME="#SERV"   TYPE="%-6s"  FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+	dim @len_n_idno as number;
+	dim @len_o_idno as number;
+	dim @len_n_card as number;
+
+	@len_n_idno		=   20 - len(#N_ID_NO);
+	@len_o_idno		=   20 - len(#O_ID_NO);
+	@len_n_card	 	=   19 - len(#N_CARDNO);
+
+
+	initfd();
+	commsend_001();
+	$FD12 = '2402';
+	$FD16 = '9986';
+	$FD102 = #O_CARDNO;
+	$FD115 = space(1)+#N_PWD_YN+space(6)+#N_PASSWD+#N_ID_YN+#N_ID_NO+space(@len_n_idno)+space(1)+#N_ID_TYPE+space(2);
+	$FD114 = space(1)+#O_PWD_YN+space(6)+#O_PASSWD+#O_ID_YN+#O_ID_NO+space(@len_o_idno)+space(1)+#O_ID_TYPE+space(2);
+	$FD116 = #MEDIUMTYPE+#N_CARDNO+space(@len_n_card)+space(102)+#CREDENCENO;
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (FALSE);
+	}
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ ---->
+ <ITEM NAME="#PASSWD" TYPE="%-6s"  FUNCTIONS=""/> 
+ 
+ <!---返回变量--->
+ <ITEM NAME="#SEQNO"  TYPE="%-10s"  FUNCTIONS="T()"/><!---返回序号--->
+ <ITEM NAME="#RACTNO" TYPE="%-19s" FUNCTIONS="T()"/><!---返回帐号--->
+
+ <ITEM NAME="#CONFIRM"  LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<INIT>
+showmsg('#SEQNO2'+#SEQNO);
+if(#SEQNO=='' or #SEQNO=='    ')
+{
+    #SEQNO='0';
+	showmsg('#SEQNO3'+#SEQNO);
+}
+</INIT>
+<PRINT>"{
+print(7,20,'    账 /卡号: [19] ',#RACTNO);
+print(9,20,'    帐户序号: [20 ]',#SEQNO);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="38" DESC="新凭证">
+CPCZ|@actno|@name|@bal|@ac_type|@op_day|@opnbr|@ac_id|||||||@zqfs||||@pz|||||@end_day||||@pzzk|@ac_no|@zpk|@tlr|||@brname|@wssrno|@cardno
+</PACKAGE>
+<PRINT>"{
+dim @txtime as string;
+dim @feetype as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+//print( 5,20,'机构名称:[30]',$BRNAME);
+//print( 5, 2,'代码:3402');
+//print( 5,13,'交易名称:[20]',#TXNAME);
+//print( 7,30,'\L0增加卡折凭条\L1');
+//print( 9,20,'客户号：   [20                           ]',@ac_id);
+//print( 10,20,'凭证号：   [19                           ]',@cardno);
+//print(11,20,'业务类型:  [20                           ]',@zpk);
+//print(12,20,'产品名称:  [20                           ]',@ac_type);
+//print(13,20,'原账(卡)号:[20                           ]    新账(卡)号:[20                   ]',@ac_no,@actno);
+//print(16,80,'\H0本人已确认银行打印记录正确无误\H1');
+//print(19,80,'客户签名:_____________________');
+//print(21,5,'柜员:[4]',$FD7);
+//print(21,5,'流水号:[6]',$FD4);
+//print(21,27,'交易日期:[8] [8]',$HDATE,@txtime);
+//print(21,20,'备注:');
+print( 5,20,'机构名称:[30]',$BRNAME);
+print( 5, 2,'代码:3402');
+print( 5,13,'交易:[20]',#TXNAME);
+print( 7,30,'\L0增加卡折凭条\L1');
+print( 9,20,'客户号：   [20                           ]',@ac_id);
+print( 10,20,'凭证号：   [19                           ]',@cardno);
+print(11,20,'业务类型:  [20                           ]',@zpk);
+print(12,20,'产品名称:  [20                           ]',@ac_type);
+print(13,20,'原账(卡)号:[20                           ]    新账(卡)号:[20                   ]',@ac_no,@actno);
+print(14,20,'身份核查结果:[60] ',#HCJGBL);
+print_sq();
+print(19,80,'\H0本人已确认银行打印记录正确无误\H1');
+print(21,80,'客户签名:_____________________');
+print(23,20,'备注:');
+print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+print(23,5,'柜员:[4]',$FD7);
+print(23,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="存折首页">
+CZFY|@actno|@name|@avbal|@prdtname|@txday|@brno|@custno|||||||@trwnpwd||||@brf||||||||||@cardno||@tlrno||@phnum|@brname|||
+</PACKAGE>
+<PRINT>
+"{
+	if(#MEDIUMTYPE == '0010')
+	{
+		print( 3,19,'帐    号: [20]',@actno);
+		print( 4,19,'姓    名: [50]',@name);
+		print( 5,19,'客 户 号: [ 8]',@custno);
+		print( 6,19,'联系电话: [20]',@phnum);
+		print( 7,19,'交易日期: [4/2/2]',@txday);
+		print( 8,19,'支取方式: [20]',@trwnpwd);
+		print( 9,19,'产品名称: [30]',@prdtname);
+	}
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE>
+CZFY|@actno|@name|@avbal|@prdtname|@txday|@brno|@custno|||||||@trwnpwd||||@brf||||||||||@cardno||@tlrno||@phnum|@brname|||
+</PACKAGE>
+<INIT>"{
+	$KINDNO='02';
+}"
+</INIT>
+<PRINT>
+"{
+	dim @txamt as string;
+	@txamt = ltrim(comma(itoa(@avbal,'13.2f'),16));
+	if(#MEDIUMTYPE == '0030')
+	{
+		//print(11,0,'[8]   [4]                    [16]  [4]',@txday,@brf,@txamt,@tlrno);	
+	}
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(手续费)" LINESPACE="24" CHECK="#FEEFLAG1=0">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+	if(#MEDIUMTYPE == '0020')
+	{
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO='00';
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 3402');
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0增加卡折交易\L1');
+		print( 9,20,'卡号:[19]    户名:[60]',#N_CARDNO,#CUSTNAME);
+		//print(10,20,'帐户余额:[21]',#TXAMT);
+		//add by luolz 20091026 begin
+		switch( #FEEFLAG ) {
+			case '1' :
+				print(11,20,'缴费方式:现金');	
+				break;
+			case '2' :
+				print(11,20,'缴费方式:转账');
+				break;	
+			default :
+				print(11,20,'缴费方式:不收');	
+				break;
+		}
+		if( delspace(itoa(#YEAR_FEE1,'%16.2f')) != '0.00')
+		{
+			print(12,20,'银行卡年费:[21]',delspace(itoa(#YEAR_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa(#COST_FEE1,'%16.2f')) != '0.00' )	
+		{
+			print(13,20,'银行卡工本费:[21]',delspace(itoa(#COST_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa(#TRAN_FEE1,'%16.2f')) != '0.00' )
+		{
+			print(14,20,'银行卡手续费:[21]',delspace(itoa(#TRAN_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa((#YEAR_FEE1+#COST_FEE1+#TRAN_FEE1),'%16.2f')) != '0.00' )
+		{
+			print(15,20,'收费总额:[21]',delspace(itoa((#YEAR_FEE1+#COST_FEE1+#TRAN_FEE1),'%16.2f')));											
+		}
+		
+		//add by luolz 20091026 end	
+		//printacdtl_1();	
+		print_sq();
+		print(24,20,'备注:');
+		print(24,20,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,20,'柜员:[4]',$FD7);
+		print(24,20,'流水号:[6]',$FD4);
+	}
+	       }"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

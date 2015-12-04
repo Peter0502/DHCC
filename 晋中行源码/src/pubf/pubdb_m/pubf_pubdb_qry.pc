@@ -1,0 +1,948 @@
+#include "find_debug.h" 
+/***************************************************************
+* 文 件 名:     pubf_pubdb_qry.ec
+* 功能描述：   	查询函数族 
+*            
+* 作    者:    	power
+* 完成日期：   	2004.1.27 -- 2004.2.2
+*
+* 修改记录：    
+* 1. 日    期: 	
+*    修 改 人: 	
+*    修改内容: 	
+*
+**************************************************************/
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include <varargs.h>
+#define EXTERN
+#include "public.h"
+#include "doc_dic_c.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+/********************** 定义全局变量 *************************/
+EXEC SQL BEGIN DECLARE SECTION;
+	char	g_cTable[10][30];	/* 表名 */
+	char	g_cField[100][200];	/* 打印到文件中得字段 */
+	char	g_cValue[100][200];	/* 取值变量 */
+EXEC SQL END DECLARE SECTION;  
+	int	g_iFieldNum;		/* 字段个数 */
+	int	g_iTableNum;		/* 表名个数 */
+	FILE    *g_fp;			/* 文件句柄 */
+
+/******************************************************************
+* 函数名：    	pub_pubdb_single_qry
+* 函数功能：   	查询所有表的通用函数
+*		其中：帐号ac_id、科目号acchrt、客户号cif、数据字典内容需要特殊处理
+*
+* 作者/时间：    power//2004年1月27日
+* 
+* 参数：
+*     输入： 
+*           	char *table_name	查询表名
+*		char *qry_field		查询字段
+*		char *where_list	where条件
+*
+*     输出： 
+*		g_pub_tx.reply	响应码
+* 返 回 值: 	0 成功,-1 失败
+*           
+* 修改历史：
+*
+******************************************************************/
+int pub_pubdb_single_qry( table_name ,qry_field , fmtstr , va_alist )
+char *table_name;
+char *qry_field;
+char *fmtstr;
+va_dcl
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cSqlStr[2048];		/* sql语句 */
+		char	cFetValue[1024];	/* fetch语句取出来的值 */
+	EXEC SQL END DECLARE SECTION;
+	char	cTabName[512];
+	char	where_list[512];
+	int	num = 0;				/* 表示从表中取出的记录数 */
+	int	i;
+	int	ret;
+	
+	va_list ap;
+	
+	MEMSET_DEBUG( cSqlStr, 0x00, sizeof( cSqlStr ) );
+	MEMSET_DEBUG( where_list, 0x00, sizeof( where_list ) );
+
+	/* 组织where条件 */
+	va_start(ap);
+	vsprintf ( where_list , fmtstr , ap );
+	va_end(ap);
+
+	/* 创建文件 */
+	/* 根据柜员号、终端号生成临时文件 */
+	ret = pub_pubdb_GenFile( );
+	if ( ret )
+	{
+		sprintf( acErrMsg, "创建并打开文件错[%d]", ret );
+		WRITEMSG
+		return(	ret );
+	}
+	
+	/* 拆分表.显示字段 */
+	strcpy( cTabName, table_name );
+	split_table_field( cTabName, qry_field );
+	
+	/* 产生sql语句 */
+        gen_sql( table_name, where_list, cSqlStr );
+      
+	/* 准备游标 */
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE CurQry FROM :cSqlStr;
+	if ( sqlca.sqlcode )
+        {
+                sprintf( acErrMsg, "prepare cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                return sqlca.sqlcode;
+        }
+        /* 声明游标 */
+        EXEC SQL DECLARE qry_cur CURSOR FOR CurQry;
+	if ( sqlca.sqlcode )
+        {
+                sprintf( acErrMsg, "declare cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                return sqlca.sqlcode;
+        }
+	/* 打开游标 */
+	EXEC SQL OPEN qry_cur;
+        if (sqlca.sqlcode)
+        {
+                sprintf( acErrMsg, "open cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                EXEC SQL CLOSE qry_cur;
+                return sqlca.sqlcode;
+        }
+        
+        /* 打印表头 */
+	ret = prt_head();
+	if ( ret )
+	{
+		sprintf( acErrMsg, "打印表头错[%d]", ret );
+		WRITEMSG
+		fclose( g_fp );
+		return(ret);	
+	}
+	
+	/* 取值，并输出到文件中 */
+	while ( 1 )
+	{
+		MEMSET_DEBUG( cFetValue, 0x00, sizeof( cFetValue ) );
+		/* 取值 */
+		EXEC SQL FETCH qry_cur INTO :cFetValue;
+		if ( sqlca.sqlcode == 100 && num == 0 )
+		{
+			sprintf( acErrMsg, "没有满足条件的记录" );
+			WRITEMSG
+			sprintf( g_pub_tx.reply, "S049" );
+			fclose( g_fp );
+			return(-1);
+		}else if ( sqlca.sqlcode == 100 && num > 0 )
+		{
+			break;	
+		}else if ( sqlca.sqlcode )
+		{
+			sprintf( acErrMsg, "从游标中取值错[%d]", sqlca.sqlcode );
+			WRITEMSG
+			fclose( g_fp );
+			return sqlca.sqlcode;
+		}
+		
+		/* 拆分取出来的值 */
+		split_value( cFetValue );
+		
+	        /* 打印到文件中 */
+	        ret = prt_body();
+	        if ( ret )
+	        {
+	        	sprintf( acErrMsg, "打印表体错[%d]", ret );
+			WRITEMSG
+			fclose( g_fp );
+			return(ret);
+	        }
+	        num++;
+	}/* end while */
+	
+	/* 关闭游标 */
+	EXEC SQL CLOSE qry_cur;
+        if (sqlca.sqlcode)
+        {
+                sprintf( acErrMsg, "close error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                fclose( g_fp );
+                return sqlca.sqlcode;
+        }
+	
+	/* 关闭文件 */
+	fclose( g_fp );
+	
+	return(0);
+}
+/******************************************************************
+* 函数名：    	pub_pubdb_qry
+* 函数功能：   	查询所有表的通用函数
+*		其中：帐号ac_id、科目号acchrt、客户号cif、数据字典内容需要特殊处理
+*
+* 作者/时间：    power//2004年1月27日
+* 
+* 参数：
+*     输入： 
+*           	char *table_name	查询表名
+*		char *qry_field		查询字段
+*		char *where_list	where条件
+*
+*     输出： 
+*		g_pub_tx.reply	响应码
+* 返 回 值: 	0 成功,-1 失败
+*           
+* 修改历史：
+*
+******************************************************************/
+int pub_pubdb_qry( table_name ,qry_field , fmtstr , va_alist )
+char *table_name;
+char *qry_field;
+char *fmtstr;
+va_dcl
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cSqlStr[2048];		/* sql语句 */
+		char	cFetValue[1024];	/* fetch语句取出来的值 */
+	EXEC SQL END DECLARE SECTION;
+	char	cTabName[512];
+	char	where_list[512];
+	int	num = 0;				/* 表示从表中取出的记录数 */
+	int	i;
+	int	ret;
+	
+	va_list ap;
+	
+	MEMSET_DEBUG( cSqlStr, 0x00, sizeof( cSqlStr ) );
+	MEMSET_DEBUG( where_list, 0x00, sizeof( where_list ) );
+
+	/* 组织where条件 */
+	va_start(ap);
+	vsprintf ( where_list , fmtstr , ap );
+	va_end(ap);
+
+	/* 创建文件 */
+	/* 根据柜员号、终端号生成临时文件 */
+	ret = pub_pubdb_GenFile( );
+	if ( ret )
+	{
+		sprintf( acErrMsg, "创建并打开文件错[%d]", ret );
+		WRITEMSG
+		return(	ret );
+	}
+	
+	/* 拆分表.显示字段 */
+	strcpy( cTabName, table_name );
+	split_table_field( cTabName, qry_field );
+	
+	/* 产生sql语句 */
+        gen_sql( table_name, where_list, cSqlStr );
+      
+	/* 准备游标 */
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE CurQry FROM :cSqlStr;
+	if ( sqlca.sqlcode )
+        {
+                sprintf( acErrMsg, "prepare cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                return sqlca.sqlcode;
+        }
+        /* 声明游标 */
+        EXEC SQL DECLARE qry_cur1 CURSOR FOR CurQry;
+	if ( sqlca.sqlcode )
+        {
+                sprintf( acErrMsg, "declare cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                return sqlca.sqlcode;
+        }
+	/* 打开游标 */
+	EXEC SQL OPEN qry_cur1;
+        if (sqlca.sqlcode)
+        {
+                sprintf( acErrMsg, "open cursor error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                EXEC SQL CLOSE qry_cur;
+                return sqlca.sqlcode;
+        }
+        
+        /* 打印表头 */
+	ret = prt_head();
+	if ( ret )
+	{
+		sprintf( acErrMsg, "打印表头错[%d]", ret );
+		WRITEMSG
+		fclose( g_fp );
+		return(ret);	
+	}
+	
+	/* 取值，并输出到文件中 */
+	while ( 1 )
+	{
+		MEMSET_DEBUG( cFetValue, 0x00, sizeof( cFetValue ) );
+		/* 取值 */
+		EXEC SQL FETCH qry_cur1 INTO :cFetValue;
+		if ( sqlca.sqlcode == 100 && num == 0 )
+		{
+			sprintf( acErrMsg, "没有满足条件的记录" );
+			WRITEMSG
+			sprintf( g_pub_tx.reply, "S049" );
+			fclose( g_fp );
+			return(-1);
+		}else if ( sqlca.sqlcode == 100 && num > 0 )
+		{
+			break;	
+		}else if ( sqlca.sqlcode )
+		{
+			sprintf( acErrMsg, "从游标中取值错[%d]", sqlca.sqlcode );
+			WRITEMSG
+			fclose( g_fp );
+			return sqlca.sqlcode;
+		}
+		
+		/* 拆分取出来的值 */
+		split_value( cFetValue );
+		
+	        /* 打印到文件中 */
+	        ret = prt_body();
+	        if ( ret )
+	        {
+	        	sprintf( acErrMsg, "打印表体错[%d]", ret );
+			WRITEMSG
+			fclose( g_fp );
+			return(ret);
+	        }
+	        num++;
+	}/* end while */
+	
+	/* 关闭游标 */
+	EXEC SQL CLOSE qry_cur;
+        if (sqlca.sqlcode)
+        {
+                sprintf( acErrMsg, "close error[%d]", sqlca.sqlcode );
+                WRITEMSG
+                fclose( g_fp );
+                return sqlca.sqlcode;
+        }
+	
+	/* 关闭文件 */
+	fclose( g_fp );
+	
+	return(0);
+}
+
+/******************************************************************
+* 函数名：    	pub_pubdb_GenFile
+* 函数功能：   	根据柜员号、终端号创建文件、打开文件
+*
+* 作者/时间：    power//2004年2月1日
+* 
+* 参数：
+*     输入： 
+*		无           	
+*     输出： 
+*		g_fp	全局变量  文件句柄
+* 返 回 值: 	0 成功,-1 失败
+*
+******************************************************************/
+int	pub_pubdb_GenFile( )
+{
+	char	cFileName[50];
+	int	ret;
+	
+	MEMSET_DEBUG( cFileName, 0x00, sizeof( cFileName ) );
+	
+	ret = pub_base_AllDwnFilName( cFileName ); 
+	if( ret )
+	{
+		sprintf( acErrMsg, "生成下传全路经文件名(批量)错" );
+		WRITEMSG
+		return(-1);
+	}
+	
+	/* 打开文件 */
+	g_fp = fopen( cFileName, "w" );
+	if( g_fp==NULL )
+	{
+		sprintf( acErrMsg, "临时文件错误!" );
+		WRITEMSG
+		sprintf( g_pub_tx.reply, "B080" );
+		return(-1);
+	}
+	
+	return(0);
+}
+
+/******************************************************************
+* 函数名：    	split_table_field
+* 函数功能：   	拆分表名、字段名
+*
+* 作者/时间：    power//2004年2月1日
+* 
+* 参数：
+*     输入： 
+*		char *table_name	表名字符串
+*		char *qry_field         查询的字段名字符串	
+*     输出： 
+*		g_iTableNum		全局变量	表的数量
+*		g_iFieldNum		全局变量 字段的数量
+*		g_cTable		全局变量 表名数组
+*		g_cField		全局变量 字段数组
+*		
+* 返 回 值: 	0 成功   !0失败
+*           
+* 修改历史：
+*
+******************************************************************/
+int	split_table_field( char *table_name, char *qry_field )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cFied[30];	/* 字段 */
+		char	cTable[30];	/* 表名 */
+	EXEC SQL END DECLARE SECTION;
+	char	cStrTmp[52];
+	char	*p;
+	int	ret;
+	
+	/* 拆分表 */
+	g_iTableNum = 0;
+	while( 1 )
+	{
+		if( table_name[0] == '\0' || table_name[0] == '\n' )
+	    	{
+			break;
+	    	}
+	    	pub_base_GetFirstSubStr( table_name, g_cTable[g_iTableNum] );
+            	g_iTableNum++;
+	}
+	
+	/* 拆分字段 */
+	g_iFieldNum = 0;
+	/* 如果查询字段是*号，则需要查找systables和syscolumns表，取出所有字段 */
+	if ( !strcmp( qry_field, "*" ) )
+	{
+		ret = get_all_field( g_cTable[0] , 0 );
+		if ( ret )
+		{
+			sprintf( acErrMsg, "执行	get_all_field错[%d]", ret );
+			WRITEMSG
+			return(ret);
+		}		
+	}
+	else	/* 如果不是*号，则需要拆分字段 */
+	{	
+		while(1)
+	        {
+	        	MEMSET_DEBUG( cStrTmp, 0x00, sizeof( cStrTmp ) );
+	        	
+	        	if( qry_field[0] == '\0' || qry_field[0] == '\n' )
+			{
+				break;
+			}
+			pub_base_GetFirstSubStr( qry_field, cStrTmp );
+			
+			/* 判断是否是表名*号 */
+			/* 如果是表名.*,转换成表名.字段名 */
+			p = strstr( cStrTmp, "*" );
+			if ( strlen( p ) > 0 )
+			{
+				/* 拆分表名和*号 */
+				MEMSET_DEBUG( cTable, 0x00, sizeof( cTable ) );
+				MEMSET_DEBUG( cFied, 0x00, sizeof( cFied ) );
+				
+				split_table_field_name( cStrTmp, cTable, cFied );
+								
+				/* 查找字段名 */
+				ret = get_all_field( cTable, 1 );
+				if ( ret )
+				{
+					sprintf( acErrMsg, "执行	get_all_field错[%d]", ret );
+					WRITEMSG
+					return(ret);
+				}			
+			}
+			else
+			{
+				strcpy( g_cField[g_iFieldNum], cStrTmp );
+				g_iFieldNum++;
+			}		
+	        }/* end  while */
+	}/* end if */
+        
+	return(0);
+}
+
+/* 拆分字符串,赋给全局变量g_cValue */
+int	split_value( char *str )
+{
+	int	i;
+	
+	pub_base_DelSpaces( str );
+	i = 0;
+	while(1)
+	{
+	       	if( str[0] == '\0' || str[0] == '\n' )
+		{
+			break;
+		}
+		pub_base_GetFirstSubStr( str, g_cValue[i] );	
+		i++;
+	}
+	
+	return(0);
+}
+
+/******************************************************************
+* 函数名：    	gen_sql
+* 函数功能：   	产生sql语句
+*
+* 作者/时间：    power//2004年2月1日
+* 
+* 参数：
+*     输入： 
+*		char *table_name	表名
+*		char *where_list	where条件
+*           	
+*     输出： 
+*		char *sql_str		sql语句
+*
+* 返 回 值: 	0 成功
+*            
+* 修改历史：
+*
+******************************************************************/
+int	gen_sql( char *table_name, char *where_list, char *sql_str )
+{
+	char	cAllField[1024];	/* 组合后的字段 */
+	char	cWhere[512];		/* where条件 */
+	int	i;
+	
+	MEMSET_DEBUG( cAllField, 0x00, sizeof( cAllField ) );
+	MEMSET_DEBUG( cWhere, 0x00, sizeof( cWhere ) );
+	
+   	/* 组合显示字段，用逗号,区分开 */
+        for ( i=0; i< g_iFieldNum; i++ )
+        {
+        	if ( !i )
+        	{
+        		strcpy( cAllField , g_cField[i] );
+        	}else
+        	{
+        		sprintf( cAllField, "%s||','||%s",cAllField,g_cField[i] );
+        	}
+        }/* end for */
+
+	/* 准备where条件 */
+	if ( strlen(where_list) )
+	{
+		sprintf( cWhere, "where %s", where_list );
+	}
+	
+	/* 准备sql语句 */	
+	sprintf( sql_str, "select %s from %s %s;", cAllField, table_name, cWhere );
+
+	return(0);
+}
+
+/*************************************************
+* 函数名：    	prt_head
+* 函数功能：   	打印表头
+*
+* 作者/时间：    power//2004年2月1日
+* 
+* 参数：
+*     输入： 
+*		无
+*           	
+*     输出： 
+*		无
+*
+* 返 回 值: 	0 成功  非0失败
+*           
+* 修改历史：
+*
+*************************************************/
+int	prt_head()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cStrTmp[1024];
+		char	cPrtStr[2048];
+		char	cTableName[512];
+		char	cFieldName[512];
+	EXEC SQL END DECLARE SECTION;
+	int	i;	
+		
+	MEMSET_DEBUG( cPrtStr, 0x00, sizeof( cPrtStr ) );
+	strcpy( cPrtStr, "~" );	/* 表头必须以~开头 */
+	
+	/* 打印表头 */
+	fprintf( g_fp, "%s", "~" );
+	for ( i=0; i<g_iFieldNum; i++ )
+	{
+		MEMSET_DEBUG( cTableName, 0x00, sizeof( cTableName ) );
+		MEMSET_DEBUG( cFieldName, 0x00, sizeof( cFieldName ) );
+		
+		pub_base_DelSpaces( g_cField[i] );
+		/* 判断是否是一个表，如果是则不必拆分 */
+		if ( g_iTableNum > 1 )
+		{
+			split_table_field_name( g_cField[i], cTableName , cFieldName );	
+		}else
+		{
+			strcpy( cTableName, g_cTable[0] );
+			strcpy( cFieldName, g_cField[i] );			
+		}
+				
+		pub_base_DelSpaces( cTableName );
+		pub_base_DelSpaces( cFieldName );
+		
+		MEMSET_DEBUG( cStrTmp, 0x00, sizeof( cStrTmp ) );
+		
+		/* 根据表名、字段名查找字段的中文名称 */
+		EXEC SQL select mo into :cStrTmp from doc_dic \
+			where tab = :cTableName and fied = :cFieldName;
+		if (sqlca.sqlcode)
+	        {
+	                sprintf( acErrMsg, "查询doc_dic表字段中文意思错[%d]", sqlca.sqlcode );
+	                WRITEMSG
+	                EXEC SQL CLOSE Cu_Tbcount;
+	                return sqlca.sqlcode;
+	        }
+	        
+		/* 特殊处理部分 */
+		if ( !strcmp( g_cField[i], "ac_id" ) )
+		{
+			strcpy( cStrTmp, "卡/帐 号" );
+		}else if ( !strcmp( g_cField[i] , "acc_hrt" ) )
+		{
+			strcpy( cStrTmp, "科 目 号" );
+		}
+		
+		pub_base_DelSpaces( cStrTmp );
+		fprintf( g_fp, "%s|", cStrTmp );	
+	}
+	fprintf( g_fp, "%s", "\n" );
+
+	return(0);
+}
+
+/*************************************************
+* 函数名：    	prt_body
+* 函数功能：   	打印表体
+*
+* 作者/时间：    power//2004年2月1日
+* 
+* 参数：
+*     输入： 
+*		无
+*           	
+*     输出： 
+*		无
+*
+* 返 回 值: 	0 成功  非0失败
+*           
+* 修改历史：
+*
+*************************************************/
+int prt_body()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cStrTmp[1024];
+		char	cPrCode[16];		/* 数据字典中的项目编码 */
+		char	cTableName[512];
+		char	cFieldName[512];
+	EXEC SQL END DECLARE SECTION;
+	int	i, ret;
+	
+	for ( i=0; i<g_iFieldNum; i++ )
+	{
+	       	MEMSET_DEBUG( cStrTmp, 0x00, sizeof( cStrTmp ) );
+        
+	       	/**** 特殊处理部分 ****/
+	        /* 如果是帐号id,需要差到帐号 */
+	        if ( !strcmp(g_cValue[i], "ac_id") )
+	        {
+	        	EXEC SQL select ac_no INTO :cStrTmp \
+	        		   from mdm_ac_rel
+	        		  where ac_id = :g_cValue[i] \
+	        		  	and ac_seqn = :g_cValue[i+1];
+	        	i++;
+	        	if ( sqlca.sqlcode )
+	        	{
+	        		sprintf( acErrMsg, "select acno from mdm_ac_rel error[%d]", sqlca.sqlcode );
+              	 			WRITEMSG
+               			return sqlca.sqlcode;
+	        	}
+	        }
+	        /* 如果是科目控制字acchrt,需要查到科目号 */
+	        else if ( !strcmp(g_cValue[i], "acc_hrt") )
+	        {
+	        	EXEC SQL select acc_no INTO :cStrTmp \
+	        		   from com_item
+	        		  where acc_hrt = :g_cValue[i];
+	        	if ( sqlca.sqlcode )
+	        	{
+	        		sprintf( acErrMsg, "select acc_no from com_item error[%d]", sqlca.sqlcode );
+              	 			WRITEMSG
+               			return sqlca.sqlcode;
+	        	}
+	        }
+	        
+	        MEMSET_DEBUG( cTableName, 0x00, sizeof( cTableName ) );
+	        MEMSET_DEBUG( cFieldName, 0x00, sizeof( cFieldName ) );
+	        
+	        if ( g_iTableNum > 1 )
+		{
+			split_table_field_name( g_cField[i], cTableName , cFieldName);	
+		}else
+		{
+			strcpy( cTableName, g_cTable[0] );
+			strcpy( cFieldName, g_cField[i] );			
+		}
+		
+		pub_base_DelSpaces( cTableName );
+		pub_base_DelSpaces( cFieldName );
+		
+	        /* 如果是数据字典内容,需要查数据字典 */
+	        EXEC SQL select dic_code INTO :cPrCode from doc_dic \
+	        	  where tab = :cTableName and fied = :cFieldName;
+	        if ( sqlca.sqlcode )
+	        {
+	        	sprintf( acErrMsg, "select dic_code from doc_dic error[%d]", sqlca.sqlcode );
+              	 	WRITEMSG
+               		return sqlca.sqlcode;
+	        }
+	        if ( strlen(cPrCode) > 0 )
+	        {
+	        	EXEC SQL select content	INTO :cStrTmp from dic_data \
+	        		 where pr_code = :cPrCode \
+	        		 	and pr_seq = :g_cValue[i];
+	        	if ( sqlca.sqlcode )
+		        {
+		        	sprintf( acErrMsg, "select dic_data error[%d]", sqlca.sqlcode );
+	       	 		WRITEMSG
+	               		return sqlca.sqlcode;
+		        }
+	        }
+	        else
+	        {
+	        	strcpy( cStrTmp, g_cValue[i] );
+		}
+	        
+	        /**** 特殊处理部分结束 ****/
+		        
+	        /* 打印文件中 */
+	        pub_base_DelSpaces( cStrTmp );
+	        fprintf( g_fp, "%s|", cStrTmp );		
+	} /* end for */
+	/* 打印回车换行符 */
+	fprintf( g_fp, "%s", "\n" );
+
+	return(0);
+}
+
+/**********************************************************************
+ * 函 数 名：   split_table_field_name
+ * 函数功能：   依据"."拆分表名和字段名.
+ * 作者/时间：  power
+ *
+ * 参数：
+ *     输入: 
+ *		s_str 	表名.字段名
+ *     输出: 
+ *		char *table_name 表名
+ *		char *field      字段名
+ *     返回: 0   成功  -1 失败
+ *
+ * 修改历史：
+ *
+********************************************************************/
+int split_table_field_name(char  *s_str, char *table_name, char *field_name)
+{
+    int     i, k = 0;
+    int     str_len;
+
+    /***  去掉字符串前后空格  ***/
+    pub_base_DelSpaces( s_str );
+    str_len = strlen(s_str);
+
+    for(i = 0; i<=str_len; i++,k++)
+    {
+   	if( s_str[i] == '.' || s_str[i] == '\0' || s_str[i] == '\n')
+   	{
+   		break;
+   	}
+   	table_name[k] = s_str[i];
+    }
+    table_name[k+1] = '\0';
+
+    strcpy(field_name,s_str+i+1);
+    pub_base_DelSpaces( field_name );
+
+    return 0;
+}
+
+/**********************************************************************
+ * 函 数 名：   get_all_field
+ * 函数功能：   依据表名查找所有的字段名，并组合.
+ * 作者/时间：  power//2004.2.2
+ *
+ * 参数：
+ *     输入: 
+ *		char *table_name 	表名
+ *		int flag		标志位：1表名.字段名
+ *					       0字段名
+ *     输出: 
+ *		全局变量  g_cField   如果flag=1,为表名.字段名
+ *					flag=0,为字段名
+ *		全局变量  g_iFieldNum	字段个数
+ *
+ *     返回: 	0   成功  非0 失败
+ *
+ * 修改历史：
+ *
+********************************************************************/
+int	get_all_field( char *table_name, int flag )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cTable[30];
+		char	cField[30];
+		long	lTabid;
+	EXEC SQL END DECLARE SECTION;
+	
+	strcpy( cTable, table_name );
+	
+	/* 查找表id */
+	EXEC SQL select tabid into :lTabid from systables \
+			where tabname = :cTable;
+	if ( sqlca.sqlcode )
+	{
+		sprintf( acErrMsg, "查询系统表systables错[%d]", sqlca.sqlcode );
+		WRITEMSG
+		return sqlca.sqlcode;	
+	}
+	
+	/* 查找syscolumns表字段名 */
+	/* 声明游标 */
+	EXEC SQL DECLARE sys_cur CURSOR FOR \
+	       	select colname from syscolumns where tabid = :lTabid;
+	if ( sqlca.sqlcode )
+	{
+	        sprintf( acErrMsg, "declare cursor error[%d]", sqlca.sqlcode );
+	        WRITEMSG
+	        return sqlca.sqlcode;
+	}
+	/* 打开游标 */
+	EXEC SQL OPEN sys_cur;
+	if (sqlca.sqlcode)
+	{
+	       sprintf( acErrMsg, "open cursor error[%d]", sqlca.sqlcode );
+	       WRITEMSG
+	       EXEC SQL CLOSE sys_cur;
+	       return sqlca.sqlcode;
+	 }
+	        
+	 while ( 1 )
+	 {
+	 	MEMSET_DEBUG( cField, 0x00, sizeof( cField ) );
+	 	
+	        EXEC SQL FETCH sys_cur into :cField;
+	       	if ( sqlca.sqlcode == 100 )
+	       	{
+	       		break;	
+	       	}else if (sqlca.sqlcode)
+		{
+		       sprintf( acErrMsg, "fetch error[%d]", sqlca.sqlcode );
+		       WRITEMSG
+		       EXEC SQL CLOSE sys_cur;
+		       return sqlca.sqlcode;
+		}
+		if ( flag == 1 )
+		{
+			sprintf( g_cField[g_iFieldNum], "%s.%s", cTable, cField );
+		}else
+		{
+			sprintf( g_cField[g_iFieldNum], "%s", cField );
+		}
+		g_iFieldNum++;	        	
+	 }
+	 
+	 return(0);
+}
+pub_pubdb_prt_title( char dstr[1024],char *tablelist,char *fieldlist )
+{
+	struct doc_dic_c doc_dic;
+	char vfld[21];
+	int i=0;
+	int j=0;
+	char vbasewhere[1024];
+	char vwhere[1024];
+	int ret=0;
+
+	MEMSET_DEBUG( vfld,0,sizeof(vfld) );
+	MEMSET_DEBUG( vbasewhere,0,sizeof(vwhere) );
+	strcpy( vbasewhere,"(" );
+
+	for ( i=0; i<=strlen(tablelist); i++ )
+	{
+		if( tablelist[i]==',' || tablelist[i]=='\0' )
+		{
+			if( strlen(vbasewhere)!=1 )
+			{
+				strcat( vbasewhere," or " );
+			}
+				strcat( vbasewhere,"tab='" );
+				strcat( vbasewhere,vfld );
+				strcat( vbasewhere,"'" );
+			MEMSET_DEBUG( vfld,0,sizeof(vfld) );
+			j=0;
+		}
+		else
+		{
+			vfld[j]=tablelist[i];
+			j++;
+		}
+	}
+	strcat( vbasewhere,")" );
+
+vtcp_log( "where [%s]",vbasewhere );
+vtcp_log( "having [%s]",fieldlist );
+	MEMSET_DEBUG( vfld,0,sizeof(vfld) );
+	strcpy( dstr,"" );
+
+	for ( i=0; i<=strlen(fieldlist); i++ )
+	{
+		if( fieldlist[i]==',' || fieldlist[i]=='\0' )
+		{
+			sprintf( vwhere,"%s and fied='%s'",vbasewhere,vfld );
+			ret=Doc_dic_Sel(g_pub_tx.reply,&doc_dic,vwhere);
+			if( ret ) strcpy( doc_dic.mo,"XXXX" );
+			pub_base_strpack( doc_dic.mo );
+			if( !strncmp(doc_dic.type,"char",4) )
+				strcat( dstr,"@" );
+			else if( !strncmp(doc_dic.type,"decimal",7) && doc_dic.dec==2 )
+				strcat( dstr,"$" );
+			strcat( dstr,doc_dic.mo );
+			strcat( dstr,"|" );
+vtcp_log( "having get a fld[%s] [%s]",vfld,doc_dic.mo );
+			MEMSET_DEBUG( vfld,0,sizeof(vfld) );
+			j=0;
+		}
+		else
+		{
+			vfld[j]=fieldlist[i];
+			j++;
+		}
+	}
+}
+

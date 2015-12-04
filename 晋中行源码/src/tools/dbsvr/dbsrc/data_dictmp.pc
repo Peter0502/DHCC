@@ -1,0 +1,255 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"data_dictmp_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int data_dictmp_con ( struct data_dictmp_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct data_dictmp_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->data_code);
+	zip_tail(ps->data_type);
+	zip_tail(ps->data_name);
+}
+int Data_dictmp_Debug(struct data_dictmp_c *ps){
+	vtcp_log("data_dictmp_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("data_dictmp_c.data_code=[%s]\n",ps->data_code);
+	vtcp_log("data_dictmp_c.data_type=[%s]\n",ps->data_type);
+	vtcp_log("data_dictmp_c.data_leng=[%ld]\n",ps->data_leng);
+	vtcp_log("data_dictmp_c.data_dec=[%ld]\n",ps->data_dec);
+	vtcp_log("data_dictmp_c.data_name=[%s]\n",ps->data_name);
+	vtcp_log("data_dictmp_c.bit_seq=[%ld]\n",ps->bit_seq);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Data_dictmp_Sel(reply,data_dictmp_c,fmtstr,va_alist)
+char    *reply;
+struct  data_dictmp_c *data_dictmp_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Data_dictmp_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Data_dictmp_Fet_Sel( data_dictmp_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Data_dictmp_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Data_dictmp_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,data_dictmp.* FROM data_dictmp WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE data_dictmp_sel FROM :comm;
+	EXEC SQL DECLARE sel_data_dictmp CURSOR FOR data_dictmp_sel;
+
+	EXEC SQL OPEN sel_data_dictmp;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dictmp_Fet_Sel ( struct data_dictmp_c *data_dictmp_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_data_dictmp INTO :data_dictmp_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch data_dictmp error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch data_dictmp finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(data_dictmp_c);
+
+	return 0;
+}
+
+int Data_dictmp_Clo_Sel (){
+	EXEC SQL CLOSE sel_data_dictmp;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Data_dictmp_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,data_dictmp.* FROM data_dictmp WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE data_dictmp_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_data_dictmp CURSOR FOR data_dictmp_upd;
+
+	EXEC SQL OPEN upd_data_dictmp;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dictmp_Fet_Upd( struct data_dictmp_c *data_dictmp_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_data_dictmp INTO :data_dictmp_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH data_dictmp finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(data_dictmp_c);
+
+	return 0;
+}
+
+int Data_dictmp_Upd_Upd( struct data_dictmp_c data_dictmp_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE data_dictmp SET data_code=:data_dictmp_c.data_code,
+			data_type=:data_dictmp_c.data_type,
+			data_leng=:data_dictmp_c.data_leng,
+			data_dec=:data_dictmp_c.data_dec,
+			data_name=:data_dictmp_c.data_name,
+			bit_seq=:data_dictmp_c.bit_seq
+	WHERE rowid=:data_dictmp_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Data_dictmp_Del_Upd(struct data_dictmp_c data_dictmp_c , char * reply  ){
+
+	EXEC SQL DELETE FROM data_dictmp WHERE rowid=:data_dictmp_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dictmp_Clo_Upd( ){
+	EXEC SQL CLOSE upd_data_dictmp;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Data_dictmp_Ins( struct data_dictmp_c data_dictmp_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO data_dictmp VALUES (:data_dictmp_c.data_code,
+			:data_dictmp_c.data_type,
+			:data_dictmp_c.data_leng,
+			:data_dictmp_c.data_dec,
+			:data_dictmp_c.data_name,
+			:data_dictmp_c.bit_seq);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT data_dictmp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

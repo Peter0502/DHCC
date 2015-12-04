@@ -1,0 +1,291 @@
+/*************************************************************
+* 文 件 名: gD406.c
+* 功能描述: 重新统计利息税
+*           首先从分段表mo_intst_tax取出记录并按税率、产品分开插入sum_tax_new中,
+*           然后在将sum_tax里活期的插入sum_tax_new里，这样sum_tax_new里就全了
+*           最后更正下百分比的关系
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403){\
+	sprintf(acErrMsg,"sqlerror[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	strcpy( g_pub_tx.reply,"D103" );\
+	goto ErrExit;\
+	}
+#define ERR_DEAL if(ret){sprintf(acErrMsg,"ERROR");WRITEMSG goto ErrExit;}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "trace_log_bk_c.h"
+#include "sum_tax_new_c.h"
+#include "com_branch_c.h"
+#include "com_sys_parm_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+gD406()
+{
+	int ret = 0;
+	int br_type;
+ 	char br_no[6];
+ 	char prdt_no[4];
+ 	double tax=0.00;
+ 	double intst=0.00;
+ 	int cnt=0;
+ 	int i=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	long sql_tx_date,sql_trace_no,sql_next_date,tx_date=0;
+	char sql_tx_code[5],sql_prdt_no[4],sql_br_no[6];
+	struct sum_tax_new_c s_sum_tax_new;
+	double tmp_intst,tmp_20_intst,tmp_tax,sum_cnt,tmp_20_tax,xiubu_tax,all_tax,bfz20_tax,bfz20_cnt,bfz20_intst,intst_tax_rate;
+	int tmp_cnt,tmp_20_cnt;
+	EXEC SQL END DECLARE SECTION;
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+        /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+	vtcp_log("getthere hehe [%s][%d]\n"__FILE__,__LINE__);
+  EXEC SQL SELECT lst_date into :tx_date from com_sys_parm;
+	MYSQLERR
+	ret=pub_base_deadlineM(tx_date,-1,&sql_tx_date);
+	ERR_DEAL
+	sql_next_date=sql_tx_date/100*100+32;
+	EXEC SQL drop table tmp_tax;
+	/****************/
+	EXEC SQL create table tmp_tax as select * from mo_int_tax_hst where substr(tx_date,1,6)=(select substr(lst_date,1,6) from com_sys_parm); /* 因为这个程序是日终后执行所以得取 lst_date */
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL  update tmp_tax a set a.brf=(select distinct b.prdt_no from td_mst b where a.ac_id=b.ac_id and a.ac_seqn=b.ac_seqn) where a.ac_id||a.ac_seqn in(select ac_id||ac_seqn from td_mst);
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL  update tmp_tax a set a.filler=(select distinct b.opn_br_no from td_mst b where a.ac_id=b.ac_id and a.ac_seqn=b.ac_seqn) where a.ac_id||a.ac_seqn in(select ac_id||ac_seqn from td_mst);
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL drop table tmp_tax_2;
+  EXEC SQL create table tmp_tax_2 as select distinct * from tmp_tax where trace_cnt=0 and tx_code!='2103';
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL drop table tmp_tax_1;
+	EXEC SQL create table tmp_tax_1 as select sum(intst_tax) tax,trace_no,ac_id,tx_date from tmp_tax_2  group by trace_no,ac_id,tx_date,trace_cnt;
+  /*EXEC SQL update tmp_tax_2 c set c.intst_tax=(select d.AMT from (select b.*,b.tax-a.amt,a.amt,a.acc_hrt,a.entry_code,a.tx_opn_br_no,a.note_type,a.note_no from dc_log_rz a,tmp_tax_1 b where a.trace_no=b.trace_no and a.tx_date=b.tx_date and a.tx_date>20070831 and a.acc_hrt='26800' and a.entry_code!='A01600' and a.sts='0')  d where d.tax=0 and d.ac_id=c.ac_id) where c.intst_tax_rate=.20 and c.ac_id in(select d.ac_id from (select b.*,b.tax-a.amt,a.amt,a.acc_hrt,a.entry_code,a.tx_opn_br_no,a.note_type,a.note_no from dc_log_rz a,tmp_tax_1 b where a.trace_no=b.trace_no and a.tx_date=b.tx_date and a.tx_date>20070831 and a.acc_hrt='26800' and a.entry_code!='A01600' and a.sts='0')  d where d.tax=0);  */
+  sql_execute2(" update tmp_tax_2 c set c.intst_tax=(select d.AMT from (select b.*,b.tax-a.amt,a.amt,a.acc_hrt,a.entry_code,a.tx_opn_br_no,a.note_type,a.note_no from dc_log_rz a,tmp_tax_1 b where a.trace_no=b.trace_no and a.tx_date=b.tx_date and a.tx_date>%ld and a.acc_hrt='26800' and a.entry_code!='A01600' and a.sts='0')  d where d.tax=0 and d.ac_id=c.ac_id) where c.intst_tax_rate=.20 and c.ac_id in(select d.ac_id from (select b.*,b.tax-a.amt,a.amt,a.acc_hrt,a.entry_code,a.tx_opn_br_no,a.note_type,a.note_no from dc_log_rz a,tmp_tax_1 b where a.trace_no=b.trace_no and a.tx_date=b.tx_date and a.tx_date>%ld and a.acc_hrt='26800' and a.entry_code!='A01600' and a.sts='0')  d where d.tax=0)",sql_tx_date,sql_tx_date);
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL drop table tmp_tax_20;
+  EXEC SQL create table tmp_tax_20 as select ' ' "date",filler,brf,0 cls_amt,sum(intst) intst,sum(intst_tax) tax,count(*) cnt ,0.20 intst_tax_rate from tmp_tax_2 where intst_tax_rate=.20  group by brf,filler;
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL drop table tmp_tax_all_1;	
+  /*EXEC SQL create table tmp_tax_all_1 as select  ' ' "date",br_no,prdt_no,0 cls_amt,sum(intst) intst,sum(tax) tax,sum(cnt) cnt from sum_tax where prdt_no not in('101','102','103','146')  and br_no !='10000' and "date">20070832 and tax>0 group by br_no,prdt_no;
+	MYSQLERR*/
+  sql_execute2("create table tmp_tax_all_1 as select  ' ' \"date\",br_no,prdt_no,0 cls_amt,sum(intst) intst,sum(tax) tax,sum(cnt) cnt from sum_tax where prdt_no not in('101','102','103','146')  and br_no !='10000' and \"date\" >%ld group by br_no,prdt_no",sql_next_date);
+	MYSQLERR
+	
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);	
+  EXEC SQL declare bfz20_cur cursor for select filler,intst,tax,cnt,brf from tmp_tax_20 order by filler,brf;
+	MYSQLERR
+	EXEC SQL open bfz20_cur;
+	MYSQLERR
+	while(1)
+	{
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		memset(sql_prdt_no,'\0',sizeof(sql_prdt_no));		
+		bfz20_tax=0;
+		bfz20_intst=0;
+		bfz20_cnt=0;
+		vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+		EXEC SQL fetch bfz20_cur into :sql_br_no,:bfz20_intst,:bfz20_tax,:bfz20_cnt,:sql_prdt_no;
+		if(sqlca.sqlcode==1403)
+	  {
+	      	break;
+	  }
+	  else if(sqlca.sqlcode)
+	  {
+	       	vtcp_log(" sumtax err[%d][%d]\n",sqlca.sqlcode,__LINE__);
+					goto ErrExit;
+	  }
+    vtcp_log("getthere hehe [%s][%d][%s][%s]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no);
+		EXEC SQL select * from tmp_tax_all_1 where br_no=:sql_br_no and prdt_no=:sql_prdt_no;		
+		if(sqlca.sqlcode==1403)
+	  {
+	      	continue;
+	  }
+		else if(sqlca.sqlcode)
+		{
+	     vtcp_log(" sumtax err[%d][%d]\n",sqlca.sqlcode,__LINE__);
+			 goto ErrExit;
+		}
+	     vtcp_log("getthere hehe [%s][%d][%s][%s]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no);
+		EXEC SQL update tmp_tax_all_1 set intst=intst-:bfz20_intst, tax=tax-:bfz20_tax,cnt=cnt-:bfz20_cnt where br_no=:sql_br_no and prdt_no=:sql_prdt_no;
+		if(sqlca.sqlcode)
+		{
+			 vtcp_log(" upd sum_tax_new err[%d]",sqlca.sqlcode);
+			goto ErrExit;
+		}
+       vtcp_log("getthere hehe [%s][%d][%s][%s]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no);
+  }
+	vtcp_log("getthere hehe [%s][%d][%s][%s]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no);
+	EXEC SQL drop table tmp_tax_5;
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);	   
+  EXEC SQL create table tmp_tax_5 as select tmp_tax_all_1.*, 0.05 intst_tax_rate from tmp_tax_all_1;
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	/* 将活期的插入sum_tax_new里，因为sum_tax_new里没有活期的*/
+	EXEC SQL truncate table sum_tax_new;
+	EXEC SQL insert into sum_tax_new select sum_tax.*,0.05 from sum_tax where prdt_no in('101','102','103','146') and substr("date",1,6)=(select substr(lst_date,1,6) from com_sys_parm);
+	MYSQLERR
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL INSERT INTO sum_tax_new select '',filler,brf,cls_amt,intst,tax,cnt,intst_tax_rate from tmp_tax_20;
+	MYSQLERR
+	EXEC SQL INSERT INTO sum_tax_new select '',br_no,prdt_no,cls_amt,intst,tax,cnt,intst_tax_rate from tmp_tax_5;
+	MYSQLERR
+	EXEC SQL INSERT INTO sum_tax_new select '','10000',brf,sum(cls_amt),sum(intst),sum(tax),sum(cnt),intst_tax_rate from tmp_tax_20 group by brf,intst_tax_rate;
+	MYSQLERR
+  EXEC SQL INSERT INTO sum_tax_new select '','10000',prdt_no,sum(cls_amt),sum(intst),sum(tax),sum(cnt),intst_tax_rate from tmp_tax_5 group by prdt_no,intst_tax_rate;
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+	/* 更改使得 利息 * 税率=利息税 */
+	vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+  /****** 更新利息以利息税为准**********
+  EXEC SQL update sum_tax_new set intst=tax*(1/intst_tax_rate) where prdt_no not in('211','212','213');***/
+  /*************/
+  /**插入教育储蓄的收税的纪录
+  EXEC SQL INSERT into sum_tax_new select '',br_no,prdt_no,cls_amt,tax*5,tax,cnt,intst_tax_rate from sum_tax_new where intst_tax_rate=0.2 and prdt_no in('211','212','213');
+	MYSQLERR  
+  EXEC SQL INSERT into sum_tax_new select '',br_no,prdt_no,cls_amt,tax*20,tax,cnt,intst_tax_rate from sum_tax_new where intst_tax_rate=0.05 and prdt_no in('211','212','213');
+	MYSQLERR **/ 
+  /* 更新教育的利息,使得教育的利息只是不缴税的利息***  
+	EXEC SQL update sum_tax_new set intst=intst-tax*5,tax=0 where intst_tax_rate=0.2 and prdt_no in('211','212','213') ;
+	MYSQLERR
+	EXEC SQL update sum_tax_new set intst=intst-tax*20,tax=0 where intst_tax_rate=0.05 and prdt_no in('211','212','213');
+	MYSQLERR  */
+	/*EXEC SQL update sum_tax_new set intst=tax*(1/intst_tax_rate) where prdt_no not in('211','212','213');*/
+/*************/
+/* 更新教育的利息,使得教育的利息只是不缴税的利息****/
+  
+ /**插入教育储蓄的收税的纪录**/
+ 	EXEC SQL drop table tax_sum_jy cascade constraint;
+	if( sqlca.sqlcode && sqlca.sqlcode!=-942)
+	{
+		sprintf(acErrMsg,"检查总分平衡准备错误![%d]",sqlca.sqlcode);
+		WRITEMSG
+        goto ErrExit;
+	}
+  exec sql create table tax_sum_jy as select * from sum_tax_new where prdt_no in('211','212','213') and tax>0;
+	MYSQLERR
+	exec sql update tax_sum_jy set intst=tax/intst_tax_rate;
+	MYSQLERR
+  EXEC SQL update sum_tax_new set intst=intst-tax/intst_tax_rate,tax=0 where prdt_no in('211','212','213') ;
+  MYSQLERR
+  EXEC SQL update sum_tax_new set intst=0 where prdt_no in('211','212','213') and intst<0;
+	MYSQLERR
+  EXEC SQL INSERT into sum_tax_new select * from tax_sum_jy; 
+	MYSQLERR 
+	EXEC SQL update sum_tax_new set intst=tax*(1/intst_tax_rate) where prdt_no not in('211','212','213');
+
+	/*EXEC SQL update sum_tax_new set intst=intst-tax*5 where intst_tax_rate=0.2 and prdt_no in('211','212','213') and tax*5<=intst;
+	MYSQLERR
+	EXEC SQL update sum_tax_new set intst=intst-tax*20 where intst_tax_rate=0.05 and prdt_no in('211','212','213') and tax*20<=intst;
+	MYSQLERR  
+  EXEC SQL update sum_tax_new set intst=0 where intst_tax_rate=0.2 and prdt_no in('211','212','213') and (intst-tax*5)<0;
+  EXEC SQL  update sum_tax_new set intst=0 where intst_tax_rate=0.05 and prdt_no in('211','212','213') and (intst-tax*20)<0;
+	*****************/
+	/**更新教育储蓄的扣缴人次,需要考虑**/
+
+	EXEC SQL drop table cnt_sum_tax cascade constraint;
+	if( sqlca.sqlcode && sqlca.sqlcode!=-942)
+	{
+		sprintf(acErrMsg,"检查总分平衡准备错误![%d]",sqlca.sqlcode);
+		WRITEMSG
+        goto ErrExit;
+	}
+	exec sql create table cnt_sum_tax as select distinct ac_id,filler,intst_tax_rate,brf from tmp_tax_2;
+	MYSQLERR
+	EXEC SQL declare cnt_cur cursor for select br_no,prdt_no,cnt,intst_tax_rate from sum_tax_new where tax>0 and br_no!='10000' and prdt_no not in('101','102','103','146');
+	MYSQLERR
+	EXEC SQL open cnt_cur;
+	MYSQLERR
+	while(1)
+	{
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		memset(sql_prdt_no,'\0',sizeof(sql_prdt_no));		
+		cnt=0;
+		intst_tax_rate=0.0;
+		sum_cnt=0;
+		vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+		EXEC SQL fetch cnt_cur into :sql_br_no,:sql_prdt_no,:cnt,:intst_tax_rate;
+		if(sqlca.sqlcode==1403)
+	  {
+	      	break;
+	  }
+	  else if(sqlca.sqlcode)
+	  {
+	       	vtcp_log(" sumtax err[%d][%d]\n",sqlca.sqlcode,__LINE__);
+					goto ErrExit;
+	  }
+    vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+		EXEC SQL select count(*) into :sum_cnt from  cnt_sum_tax where filler=:sql_br_no and brf=:sql_prdt_no and intst_tax_rate=:intst_tax_rate;
+		MYSQLERR
+	  vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+	  
+		EXEC SQL update sum_tax_new set cnt=:sum_cnt where br_no=:sql_br_no and prdt_no=:sql_prdt_no and intst_tax_rate=:intst_tax_rate and tax>0;
+		if(sqlca.sqlcode)
+		{
+			 vtcp_log(" upd sum_tax_new err[%d]",sqlca.sqlcode);
+			goto ErrExit;
+		}
+       vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+  }  
+	EXEC SQL declare zonghangcnt_cur cursor for select br_no,prdt_no,cnt,intst_tax_rate from sum_tax_new where tax>0 and br_no='10000' and prdt_no not in('101','102','103','146');
+	MYSQLERR
+	EXEC SQL open zonghangcnt_cur;
+	MYSQLERR
+	while(1)
+	{
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		memset(sql_prdt_no,'\0',sizeof(sql_prdt_no));		
+		cnt=0;
+		intst_tax_rate=0.0;
+		sum_cnt=0;
+		vtcp_log("getthere hehe [%s][%d]\n",__FILE__,__LINE__);
+		EXEC SQL fetch zonghangcnt_cur into :sql_br_no,:sql_prdt_no,:cnt,:intst_tax_rate;
+		if(sqlca.sqlcode==1403)
+	  {
+	      	break;
+	  }
+	  else if(sqlca.sqlcode)
+	  {
+	       	vtcp_log(" sumtax err[%d][%d]\n",sqlca.sqlcode,__LINE__);
+					goto ErrExit;
+	  }
+    vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+		EXEC SQL select count(*) into :sum_cnt from  cnt_sum_tax where brf=:sql_prdt_no and intst_tax_rate=:intst_tax_rate;
+		MYSQLERR
+	  vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+	  
+		EXEC SQL update sum_tax_new set cnt=:sum_cnt where br_no=:sql_br_no and prdt_no=:sql_prdt_no and intst_tax_rate=:intst_tax_rate and tax>0;
+		if(sqlca.sqlcode)
+		{
+			 vtcp_log(" upd sum_tax_new err[%d]",sqlca.sqlcode);
+			goto ErrExit;
+		}
+       vtcp_log("getthere hehe [%s][%d][%s][%s][%.2f]\n",__FILE__,__LINE__,sql_br_no,sql_prdt_no,intst_tax_rate);
+  }	
+  /*****************/
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"补丁 mo_int_tax_hst OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"补丁 mo_int_tax_hst ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	strcpy( g_pub_tx.reply,"D103" );
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

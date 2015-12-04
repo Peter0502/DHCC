@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4818    柜员长短款处理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+    initfd();
+    commsend_001();
+    $FD68=#OPTINO;
+    $FD39=itoa(#MONEY*100,'%016.0f');
+    $FD44=#DATE;
+    $FD78=#NUM;
+    //$FD118=space(37)+#CASH_CODE;
+
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+   commrecv_001();
+   #CDK_SEQN=$FD28; //长短款序号
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(4818                          柜员长短款处理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8619)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="6"  COL="15"  TYPE="%-12s" FUNCTIONS="T(操  作  码:!)"/>
+  <ITEM LINE="8"  COL="15"  TYPE="%-13s" FUNCTIONS="T(日      期:)"/>
+  <ITEM LINE="10" COL="15"  TYPE="%-12s" FUNCTIONS="T(序      号:)"/>
+  <ITEM LINE="12" COL="15"  TYPE="%-12s" FUNCTIONS="T(长短款金额:)"/>
+<!--
+  <ITEM NAME="#SCASH_CODE"LINE="11"  COL="15" TYPE="%-12s" FUNCTIONS="T(现金收支码:)"  VISABLE="FALSE" INPUT="LABEL" />
+-->
+  <ITEM LINE="6" COL="27" NAME="#OPTINO" TYPE="%1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1|2|3|4|5)">
+         <!-- SELECT选择窗口的大小是自动计算生成的, 无需指定窗口有多少行和多少列 -->
+    <!-- 如果按指定的起始行和起始列生成窗口会超出屏幕范围, 程序会自动调整起始行号和起始列号 -->
+    <SELECT>
+      <OPTION VALUE="0  长款登记 " TITLE="0. 长款登记"/>
+      <OPTION VALUE="1  长款入帐 " TITLE="1. 长款入帐"/>
+      <OPTION VALUE="2  短款登记 " TITLE="2. 短款登记"/>
+      <OPTION VALUE="3  短款入帐 " TITLE="3. 短款入帐"/>
+      <OPTION VALUE="4  长款冲回 " TITLE="4. 长款冲回"/>
+      <OPTION VALUE="5  短款冲回 " TITLE="5. 短款冲回"/>
+     </SELECT>
+     <ONLOSTFOCUS>
+     "{
+               if(#OPTINO=='0' or #OPTINO=='2')
+               {
+               enable(#DATE,false);
+               enable(#NUM,false);
+               enable(#MONEY,true);
+               }
+               else
+               {
+               		enable(#DATE,true);
+               		enable(#NUM,true);
+               		//enable(#MONEY,false);
+               }
+     }"
+     </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#MONEYBOX" TYPE="%1s"  FUNCTIONS="j(#OPTINO=0,T{$MONEYBOX=0})
+  j(#OPTINO=1,T{$MONEYBOX=1})j(#OPTINO=2,T{$MONEYBOX=0})j(#OPTINO=3,T{$MONEYBOX=2})
+  j(#OPTINO=4,T{$MONEYBOX=2})j(#OPTINO=5,T{$MONEYBOX=1})"/>
+  <ITEM LINE="8" COL="27" NAME="#DATE" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="10" COL="27" NAME="#NUM" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+	initfd();
+	commsend_001();
+	$FD16='9622';
+	$FD28=#NUM;
+	$FD44=#DATE;
+	callserver();
+	if($FD12 !='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#MONEY = val($FD42,0.01); //长短款入账/冲正金额
+        enable(#MONEY,false);
+  }"</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12" COL="27" NAME="#MONEY" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,0000099999999999)">
+<!--
+  <ONLOSTFOCUS>
+	"{
+		dim @tota as string;
+		//if(#CASHCD == '1')
+		//{
+			//show(#CASH_CODE,true);
+			//show(#SCASH_CODE,true);
+			commsend_001();
+			$FD16='9598';
+			$FD123='select content,pr_seq from dic_data where pr_code='+chr(39)+'cash_ind'+chr(39)+'order by pr_seq';
+			@tota=callserver();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if(@tota=='')
+			{
+				showmsg('没有现金收支码!');
+				return(false);
+			}
+			setsel(#CASH_CODE,@tota,'t30o1v4o2');
+	//	}else{
+	//		show(#CASH_CODE,false);
+	//		show(#SCASH_CODE,false);
+	//	}
+	}"</ONLOSTFOCUS>
+-->
+	</ITEM>
+<!--
+<ITEM  NAME="#CASH_CODE" TYPE="%-4s"  FUNCTIONS="V(NB)">
+  <SELECT>
+	<OPTION VALUE="1001"   TITLE="商品销售收入"/>
+  </SELECT>
+  </ITEM>
+-->
+  <ITEM NAME="#XMONEY"     TYPE="%-30s"  FUNCTIONS="X(#MONEY)"/>
+  <ITEM NAME="#CDK_SEQN"     TYPE="%8d"  FUNCTIONS=""/>
+ <ITEM NAME="#TCRDB"   TYPE="%8s" FUNCTIONS="j(#OPTINO=0,T{长款登记})j(#OPTINO=1,T{长款入帐})j(#OPTINO=2,T{短款登记})j(#OPTINO=3,T{短款入帐})j(#OPTINO=4,T{长款冲回})j(#OPTINO=5,T{短款冲回})"/>
+<ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键打印">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 6,30,'交易种类: [8]',#TCRDB);
+	print( 7,30,'长短款金额[30]',#XMONEY);
+	print(08,30,'操 作 员: [4]',$FD7);
+	if(#OPTINO != '4' and  #OPTINO !='5'){
+             print(09,30,'长短款登记序号: [8]',#CDK_SEQN);
+        }else{
+             print(09,30,'长短款登记序号:[8]',#NUM);
+        }
+	print(10,30,'流 水 号: [6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印长短款专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码: 4818');
+	print( 5,13,'交易:柜员长短款处理');
+	
+	print( 7,20,'交易种类: [8]',#TCRDB);
+	if(#OPTINO =='0'){
+	      print( 9,20,'长 款  金 额: [30]',#XMONEY);
+	    }else if(#OPTINO =='2')
+	 {
+	     print( 9,20,'短 款  金 额:[30]',#XMONEY);
+	 }
+	if(#OPTINO=='0')
+	{
+		print( 10,20,'长款登记序号: [8]',#CDK_SEQN);
+	}else if(#OPTINO=='2')
+	{
+		print( 10,20,'短款登记序号: [8]',#CDK_SEQN);
+	}
+
+	if(#OPTINO=='4'){
+	  print(11,20,'长款登记序号:[8]',#NUM);
+        }else if(#OPTINO=='5'){
+	  print(11,20,'短款登记序号:[8]',#NUM);
+	  }
+	printacdtl_1();
+	//print(16,20,'操 作 员: [4]    流 水 号: [6]',$FD7,$FD4);
+	print(24,20,'备注:');
+    print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+    print(24,5,'柜员:[4]',$FD7);
+    print(24, 5,'流水号:[6]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

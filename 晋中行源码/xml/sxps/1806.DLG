@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="业务名称：定期借记业务付款人信息录入"
+		xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<INIT>"{
+	list_init(17,75,5,1);
+	list_setcolcnt(8);
+	list_setcol(0,'开户行行号',15);
+	list_setcol(1,'开户行行名',20);
+	list_setcol(2,'付款人账号',24);
+	list_setcol(3,'付款人姓名',20);
+	list_setcol(4,'付款人地址',20);
+	list_setcol(5,'付款金额',17);
+	list_setcol(6,'回执期限',10);
+	list_setcol(7,'扣款协议',20);
+	list_sumcol(5,16,2);
+}"
+</INIT>
+
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+	strfld(@fline,'|',1)+'|'+
+	strfld(@fline,'|',2)+'|'+
+	strfld(@fline,'|',3)+'|'+
+	strfld(@fline,'|',4)+'|'+
+	strfld(@fline,'|',5)+'|'+
+	strfld(@fline,'|',6)+'|'+
+	strfld(@fline,'|',7)+'|';
+}"
+</LOAD>
+
+<SHOW>"{
+	#PAY_OPN_BR_NO=strfld(@line,'|',0);
+	#PAY_OPN_NAME =strfld(@line,'|',1);
+	#PAY_AC_NO    =strfld(@line,'|',2);
+	#PAY_NAME     =strfld(@line,'|',3);
+	#PAY_ADDR     =strfld(@line,'|',4);
+	#PAY_AMT  =val(strfld(@line,'|',5));
+	#PAY_DAY      =strfld(@line,'|',6);
+	#KKXY         =strfld(@line,'|',7);
+}"
+</SHOW>
+
+<UPDATE>
+"{
+	@line=#PAY_OPN_BR_NO+'|'+#PAY_OPN_NAME+'|'+#PAY_AC_NO+'|'+#PAY_NAME+'|'+#PAY_ADDR+'|'+itoa(#PAY_AMT,'%.2f')+ '|' +#PAY_DAY+ '|' + #KKXY;
+}"
+</UPDATE>
+
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+	strfld(@line,'|',1)+'|'+
+	strfld(@line,'|',2)+'|'+
+	strfld(@line,'|',3)+'|'+
+	strfld(@line,'|',4)+'|'+
+	strfld(@line,'|',5)+'|'+
+	strfld(@line,'|',6)+'|'+
+	strfld(@line,'|',7)+'|';
+}"
+</SAVE>
+
+<VARIABLE>
+
+	<ITEM LINE="01"  COL="03" TYPE="%-40s" FUNCTIONS="T(                定期借记付款人信息录入)"/>
+	<ITEM NAME="#PAY_QS_NO"  TYPE="%-14s" FUNCTIONS=""/>
+	<ITEM LINE="05" COL="05"  TYPE="%-11s" NAME="#L1" FUNCTIONS="T(开户行行号:)"/>
+	<ITEM LINE="05" COL="16"  TYPE="%-12s"  NAME="#PAY_OPN_BR_NO" INPUT="TEXT" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			if(delspace(#PAY_OPN_BR_NO)!='')
+			{
+				dim @num as number;
+				dim @str as string;
+				@str=delspace(#PAY_OPN_BR_NO);
+				@num=len(@str);
+				if(@num!=12 and @str!='')
+				{
+					showmsg('格式输入不正确');
+					return(false);
+				}
+				initfd();
+				commsend_001();
+				$FD16='1101';
+				$FD18='pbp';
+				$FD59=#PAY_OPN_BR_NO;      //接收清算行
+				callagnpbp();
+				if($FD12=='0000')
+				{
+					#PAY_OPN_NAME=$FD76;
+					#PAY_QS_NO=$FD114;
+					enable(#PAY_OPN_NAME,false);
+				}
+				else
+				{
+					showmsg(geterror());
+					return(false);
+				}
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="06" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(开户行行名:)"/>
+	<ITEM LINE="06" COL="16" TYPE="%-60s"  NAME="#PAY_OPN_NAME"  INPUT="TEXT" FUNCTIONS="V(NB)">
+		<!--
+		<ONLOSTFOCUS>
+		"{
+			if(delspace(#PAY_OPN_BR_NO)=='')
+			{
+				dim @baktxno as string;
+				dim @str as string;
+				dim @selid as number;
+				dim @file as file;
+
+				@baktxno=$TXNO;
+
+				initfd();
+				commsend_001();
+				$FD16='9002';
+				$FD18='pbp';
+				$FD118=#PAY_OPN_NAME;
+
+				//showmsg($FD118);
+
+				//callagn_zfpt();
+				$TXNO=@baktxno;
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				@file=openfile('../tmp/'+$KINBR+$TLRNO+$TTYNAME+'zfpt');
+				if(@file &lt; 0){
+					showmsg('未找到记录!');
+					return(false);
+				}
+				closefile(@file);
+				@str=getfiletxt('../tmp/'+$KINBR+$TLRNO+$TTYNAME+'zfpt');
+				if(autolist(@str))
+				{
+					@selid=list_work();
+					if(@selid &lt; 0)
+					{
+						list_del();
+						rerun();
+						return(true);
+					}
+
+					@selid=list_getselid();
+					if(@selid &lt; 0)
+					{
+						list_del();
+						rerun();
+						return(true);
+					}
+
+					#PAY_OPN_BR_NO=ltrim(list_gettext(@selid,0));
+					#PAY_OPN_NAME=ltrim(list_gettext(@selid,1));
+					show(#PAY_OPN_BR_NO,true);
+					show(#PAY_OPN_NAME,true);
+				}
+			}
+		}"
+		</ONLOSTFOCUS>
+		-->
+	</ITEM>
+
+	<ITEM LINE="07" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(付款人账号:)"/>
+	<ITEM LINE="07" COL="16" TYPE="%-32s"  NAME="#PAY_AC_NO"     INPUT="TEXT" FUNCTIONS="V(NB)"/>
+	<ITEM LINE="08" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(付款人名称:)"/>
+	<ITEM LINE="08" COL="16" TYPE="%-60s"  NAME="#PAY_NAME"      INPUT="TEXT" FUNCTIONS="V(NB)"/>
+	<ITEM LINE="09" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(付款人地址:)"/>
+	<ITEM LINE="09" COL="16" TYPE="%-60s"  NAME="#PAY_ADDR"      INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM LINE="10" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(付款  金额:)"/>
+	<ITEM LINE="10" COL="16" TYPE="%16.2f" NAME="#PAY_AMT"       INPUT="TEXT" FUNCTIONS="V(NB)"/>
+
+	<ITEM LINE="11" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(回执  期限:)"/>
+	<ITEM LINE="11" COL="16" NAME="#PAY_DAY"  TYPE="%-1s"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+		<!--
+		<ONLOSTFOCUS>
+		"{
+			dim @maxbkget as number; //后台返回的最大期限天数
+			dim @minbkget as number; //后台返回的最小期限天数
+			dim @fget as number;
+			dim @minbkgets as string; //后台返回的最小期限天数
+			initfd();
+			commsend_001();
+			$FD16 = '9014';
+			$FD18='pbp';
+			$FD62 = #PAY_OPN_BR_NO;//付款人开户行号
+			//callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			else
+			{
+				@fget  = atoi(#PAY_DAY);
+				@minbkget = atoi($FD83);
+				@maxbkget = atoi($FD82);//借记回执最长期限
+				if (@fget &gt; @maxbkget)
+				{
+					showmsg('回执期限大于规定的时间！');
+					return(false);
+				}
+			}
+		}"
+		</ONLOSTFOCUS>
+		-->
+	</ITEM>
+
+	<ITEM LINE="12" COL="05"  TYPE="%-11s" NAME="#L2" FUNCTIONS="T(扣款  协议:)"/>
+	<ITEM LINE="12" COL="16" TYPE="%-60s"  NAME="#KKXY" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+
+	<ITEM LINE="15" COL="65"   TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+
+</TRANSACTION>

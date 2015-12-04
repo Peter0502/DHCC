@@ -1,0 +1,317 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"accounthtreg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int accounthtreg_con ( struct accounthtreg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct accounthtreg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->change_no);
+	zip_tail(ps->br_ame);
+	zip_tail(ps->note_type);
+	zip_tail(ps->note_no);
+	zip_tail(ps->pay_ac_no);
+	zip_tail(ps->pay_name);
+	zip_tail(ps->cash_ac_no);
+	zip_tail(ps->cash_name);
+	zip_tail(ps->cash_opn_br_no);
+	zip_tail(ps->cash_chg_no);
+	zip_tail(ps->cash_opn_name);
+	zip_tail(ps->put_flag);
+	zip_tail(ps->stat);
+	zip_tail(ps->tel);
+	zip_tail(ps->chk);
+	zip_tail(ps->pwd);
+}
+int Accounthtreg_Debug(struct accounthtreg_c *ps){
+	vtcp_log("accounthtreg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("accounthtreg_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("accounthtreg_c.trace_no=[%ld]\n",ps->trace_no);
+	vtcp_log("accounthtreg_c.seqno=[%ld]\n",ps->seqno);
+	vtcp_log("accounthtreg_c.change_no=[%s]\n",ps->change_no);
+	vtcp_log("accounthtreg_c.br_ame=[%s]\n",ps->br_ame);
+	vtcp_log("accounthtreg_c.note_type=[%s]\n",ps->note_type);
+	vtcp_log("accounthtreg_c.note_no=[%s]\n",ps->note_no);
+	vtcp_log("accounthtreg_c.pay_ac_no=[%s]\n",ps->pay_ac_no);
+	vtcp_log("accounthtreg_c.pay_name=[%s]\n",ps->pay_name);
+	vtcp_log("accounthtreg_c.amt=[%f]\n",ps->amt);
+	vtcp_log("accounthtreg_c.cash_ac_no=[%s]\n",ps->cash_ac_no);
+	vtcp_log("accounthtreg_c.cash_name=[%s]\n",ps->cash_name);
+	vtcp_log("accounthtreg_c.cash_opn_br_no=[%s]\n",ps->cash_opn_br_no);
+	vtcp_log("accounthtreg_c.cash_chg_no=[%s]\n",ps->cash_chg_no);
+	vtcp_log("accounthtreg_c.cash_opn_name=[%s]\n",ps->cash_opn_name);
+	vtcp_log("accounthtreg_c.put_flag=[%s]\n",ps->put_flag);
+	vtcp_log("accounthtreg_c.tx_date=[%ld]\n",ps->tx_date);
+	vtcp_log("accounthtreg_c.tx_time=[%ld]\n",ps->tx_time);
+	vtcp_log("accounthtreg_c.stat=[%s]\n",ps->stat);
+	vtcp_log("accounthtreg_c.tel=[%s]\n",ps->tel);
+	vtcp_log("accounthtreg_c.chk=[%s]\n",ps->chk);
+	vtcp_log("accounthtreg_c.pwd=[%s]\n",ps->pwd);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Accounthtreg_Sel(reply,accounthtreg_c,fmtstr,va_alist)
+char    *reply;
+struct  accounthtreg_c *accounthtreg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Accounthtreg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Accounthtreg_Fet_Sel( accounthtreg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Accounthtreg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Accounthtreg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,accounthtreg.* FROM accounthtreg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE accounthtreg_sel FROM :comm;
+	EXEC SQL DECLARE sel_accounthtreg CURSOR FOR accounthtreg_sel;
+
+	EXEC SQL OPEN sel_accounthtreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Accounthtreg_Fet_Sel ( struct accounthtreg_c *accounthtreg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_accounthtreg INTO :accounthtreg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch accounthtreg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch accounthtreg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(accounthtreg_c);
+
+	return 0;
+}
+
+int Accounthtreg_Clo_Sel (){
+	EXEC SQL CLOSE sel_accounthtreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Accounthtreg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,accounthtreg.* FROM accounthtreg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE accounthtreg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_accounthtreg CURSOR FOR accounthtreg_upd;
+
+	EXEC SQL OPEN upd_accounthtreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Accounthtreg_Fet_Upd( struct accounthtreg_c *accounthtreg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_accounthtreg INTO :accounthtreg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH accounthtreg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(accounthtreg_c);
+
+	return 0;
+}
+
+int Accounthtreg_Upd_Upd( struct accounthtreg_c accounthtreg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE accounthtreg SET br_no=:accounthtreg_c.br_no,
+			trace_no=:accounthtreg_c.trace_no,
+			seqno=:accounthtreg_c.seqno,
+			change_no=:accounthtreg_c.change_no,
+			br_ame=:accounthtreg_c.br_ame,
+			note_type=:accounthtreg_c.note_type,
+			note_no=:accounthtreg_c.note_no,
+			pay_ac_no=:accounthtreg_c.pay_ac_no,
+			pay_name=:accounthtreg_c.pay_name,
+			amt=:accounthtreg_c.amt,
+			cash_ac_no=:accounthtreg_c.cash_ac_no,
+			cash_name=:accounthtreg_c.cash_name,
+			cash_opn_br_no=:accounthtreg_c.cash_opn_br_no,
+			cash_chg_no=:accounthtreg_c.cash_chg_no,
+			cash_opn_name=:accounthtreg_c.cash_opn_name,
+			put_flag=:accounthtreg_c.put_flag,
+			tx_date=:accounthtreg_c.tx_date,
+			tx_time=:accounthtreg_c.tx_time,
+			stat=:accounthtreg_c.stat,
+			tel=:accounthtreg_c.tel,
+			chk=:accounthtreg_c.chk,
+			pwd=:accounthtreg_c.pwd
+	WHERE rowid=:accounthtreg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Accounthtreg_Del_Upd(struct accounthtreg_c accounthtreg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM accounthtreg WHERE rowid=:accounthtreg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Accounthtreg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_accounthtreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Accounthtreg_Ins( struct accounthtreg_c accounthtreg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO accounthtreg VALUES (:accounthtreg_c.br_no,
+			:accounthtreg_c.trace_no,
+			:accounthtreg_c.seqno,
+			:accounthtreg_c.change_no,
+			:accounthtreg_c.br_ame,
+			:accounthtreg_c.note_type,
+			:accounthtreg_c.note_no,
+			:accounthtreg_c.pay_ac_no,
+			:accounthtreg_c.pay_name,
+			:accounthtreg_c.amt,
+			:accounthtreg_c.cash_ac_no,
+			:accounthtreg_c.cash_name,
+			:accounthtreg_c.cash_opn_br_no,
+			:accounthtreg_c.cash_chg_no,
+			:accounthtreg_c.cash_opn_name,
+			:accounthtreg_c.put_flag,
+			:accounthtreg_c.tx_date,
+			:accounthtreg_c.tx_time,
+			:accounthtreg_c.stat,
+			:accounthtreg_c.tel,
+			:accounthtreg_c.chk,
+			:accounthtreg_c.pwd);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT accounthtreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

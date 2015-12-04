@@ -1,0 +1,638 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111211120000000000001120012" TITLE="1822 统一支付查询查复"
+  xmlns="http：//www.otd.org/MENU" xmlns：W3CNS="http：//www.w3c.org">
+<FIRSTWORK RERUN="TRUE">
+"{
+	 dim @tota as string;
+	 dim @file as string;
+	 initfd();
+	 commsend_001();
+	 $FD16='1001';
+	 $FD18='pbp';
+	 @tota=callagnpbp();
+	 if(@tota == '' or @tota == '1')
+	 {
+	 	@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	 }
+	 setsel(#SYSCODE,@tota,'v4o1t8o1');
+}"
+</FIRSTWORK>
+
+<COMMSEND>
+  "{
+	refresh();
+	initfd();
+	commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+  "{
+	commrecv_001();
+  }"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(1822                             查询查复 )"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1822)"/>
+	<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(统一支付查询查复)"/>
+	<ITEM LINE="5"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(系统  编号：)" />
+	<ITEM LINE="5"  COL="15" NAME="#SYSCODE" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(sxps)V(NB)">
+	</ITEM>
+	<ITEM LINE="6"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(查询  类型：)" />
+	<ITEM LINE="6"  COL="15" NAME="#CXLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="0.查询 " />
+			<OPTION VALUE ="2" TITLE="1.查复 " />
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#CXLX == '1')
+			{
+				showblock('BLOCK_CXZL2',false,true);
+				showblock('BLOCK_CXZL1',false,true);
+				showblock('BLOCK_CXZL3',false,true);
+				if(#SYSCODE == 'beps')
+				{
+					
+					showblock('BLOCK_CXZL1',true,true);
+				}
+				else if(#SYSCODE == 'nps')
+				{
+					showblock('BLOCK_CXZL2',true,true);
+				}
+				else if(#SYSCODE == 'sxps')
+				{
+					showblock('BLOCK_CXZL3',true,true);
+				}
+				showblock('BLOCK_YCXH',false,true);
+				showblock('BLOCK_ZFXH',true,true);
+			}
+			else if(#CXLX == '2')
+			{
+				showblock('BLOCK_CXZL1',false,true);
+				showblock('BLOCK_CXZL2',false,true);
+				showblock('BLOCK_CXZL3',false,true);
+				showblock('BLOCK_ZFXH',false,true);
+				showblock('BLOCK_YCXH',true,true);
+			}
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+<BLOCK NAME="BLOCK_CXZL1" LINE="0"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="6"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(查询  种类：)" />
+	<ITEM LINE="6"  COL="47" NAME="#KIND" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(QT00)">
+		<SELECT>
+			<OPTION VALUE ="QT00" TITLE="0.整包 " />
+			<OPTION VALUE ="QT01" TITLE="1.单笔 " />
+		</SELECT>
+	</ITEM>
+</BLOCK>
+
+<BLOCK NAME="BLOCK_CXZL3" LINE="0"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="6"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(交易  类型：)" />
+	<ITEM LINE="6"  COL="47" NAME="#TXTYPE" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+		<SELECT>
+			<OPTION VALUE ="0" TITLE="0.普通业务 " />
+			<OPTION VALUE ="1" TITLE="1.实时业务 " />
+			<OPTION VALUE ="2" TITLE="2.定期业务 " />
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if (#TXTYPE == '2')
+			{
+				#KIND = 'QTOO';
+			}			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+</BLOCK>
+
+<BLOCK NAME="BLOCK_ZFXH" LINE="7"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原交易序号：)" />
+	<ITEM LINE="0"  COL="15" NAME="#ZFXH" TYPE="%-16s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="0"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原交易日期：)" />
+	<ITEM LINE="0"  COL="47" NAME="#JYRQ" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()V(NB)D()" >
+	<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			
+			$FD16='1102';
+			$FD18='pbp';
+			$FD28=#SYSCODE;
+			$FD35=#CXLX;
+			$FD32=#ZFXH;
+			$FD46=#JYRQ;
+			$FD91=#KIND;
+			$FD65=#TXTYPE;
+			
+			callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#CXZL=delspace($FD78);
+			#CXXH=$FD80;
+			#YJYRQ=$FD87;
+			#CXSH=$FD81;
+			#JYZT=$FD79;
+			
+			
+			#TOTAL_MONEY=val($FD82,1);
+			#TOTAL_NUM=$FD86;
+			#RCV_MMBID=$FD83;
+			
+			
+			#FKRZH=$FD30;
+			#FKHQC=$FD27;
+			#SKRZH=$FD31;
+			#SKRQC=$FD113;
+			#Notetp = $FD50;
+			#PJHM=$FD37;
+			#DFFS=$FD42;
+			#CPRQ=$FD44;
+			#CDRQ=$FD45;
+			if (delspace($FD92) == '1')
+			{
+				#JDBZ='借';
+			}
+			else if (delspace($FD92) == '2')
+			{
+				#JDBZ='贷';
+			}
+			#CPJE=val($FD40,1);
+			#HBFH=itoa($FD48,'%d');
+			#CHLX=$FD49;
+			//#PJDQR=$FD46;
+			#CPRQC=$FD25;
+			
+			#YFQHHH=$FD58;
+			#JE=val($FD39,1);
+			if ($FD92 == '1')
+			{
+				#NHP_JDBZ='借';
+			}
+			else if ($FD92 == '2')
+			{
+				#NHP_JDBZ='贷';
+			}
+			#NHP_HBFH=itoa($FD48,'%d');
+			#NHP_CHLX=$FD49;
+			#NHP_FKRZH=$FD30;
+			#NHP_SKRZH=$FD31;
+			#FKRHM=$FD27;
+			#SKHHM=$FD113;
+			
+			#CDTRID=$FD31;
+			#CDTRNM=$FD113;
+			#DBTRID=$FD30;
+			#DBTRNM=$FD27;
+			
+			#CURNO=itoa($FD48,'%d');
+			#CASHTP=$FD49;
+			//#CASHTP=itoa($FD49,'%d');
+			if (delspace($FD92) == '1')
+			{				
+				#CDIND='借';
+			}
+			else if (delspace($FD92) == '2')
+			{
+				#CDIND='贷';
+			}
+
+			
+			enable(#CDTRID, false);
+			enable(#CDTRNM, false);
+			enable(#DBTRID, false);
+			enable(#DBTRNM, false);
+			enable(#CDIND, false);
+			enable(#CURNO, false);
+			enable(#CASHTP, false);
+			enable(#Notetp, false);
+			enable(#FKRZH, false);
+			enable(#FKHQC, false);
+			enable(#SKRZH, false);
+			enable(#SKRQC, false);
+			enable(#DFFS, false);
+			enable(#CPRQ, false);
+			enable(#CDRQ, false);
+			enable(#CPJE, false);
+			enable(#PJHM, false);
+			enable(#CHLX, false);
+			//enable(#PJDQR, false);
+			enable(#CPRQC, false);
+			
+			enable(#YFQHHH, false);
+			enable(#HBFH, false);
+			enable(#JE, false);
+			enable(#JDBZ, false);
+			enable(#NHP_JDBZ, false);
+			enable(#NHP_HBFH, false);
+			enable(#NHP_CHLX, false);
+			enable(#NHP_FKRZH, false);
+			enable(#NHP_SKRZH, false);
+			enable(#FKRHM, false);
+			enable(#SKHHM, false);
+			
+			enable(#TOTAL_MONEY, false);
+			enable(#TOTAL_NUM, false);
+			enable(#RCV_MMBID, false);
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+</BLOCK>
+<BLOCK NAME="BLOCK_YCXH" LINE="7"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原查询序号：)" />
+	<ITEM LINE="0"  COL="15" NAME="#YCXH" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="0"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原交易日期：)" />
+	<ITEM LINE="0"  COL="47" NAME="#CXHH" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()V(NB)" >
+	<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			
+			$FD16='1102';
+			$FD18='pbp';
+			$FD28=#SYSCODE;
+			$FD32=#YCXH;
+			$FD46=#CXHH;
+			$FD35=#CXLX;
+			
+			callagnpbp();
+			
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			showmsg('查询成功');
+			#CXZL  = $FD78;
+			#CXZL  = delspace(#CXZL);
+			#FKRZH = $FD30;
+			#FKHQC = $FD27;
+			#SKRZH = $FD31;
+			#SKRQC = $FD113;
+			#DFFS  = $FD42;
+			#CPRQ  = $FD44;
+			#CDRQ  = $FD45;
+			#CPJE  = val($FD40,1);
+			//#PJDQR = $FD46;
+			#CPRQC = $FD25;
+			#PJHM  = $FD37;
+			#Notetp = $FD50;
+			#YFQHHH = $FD58;
+			#HBFH = itoa($FD48,'%d');
+			#NHP_HBFH = itoa($FD48,'%d');
+			#JE = val($FD40,1);
+			if (delspace($FD92) == '1')
+			{
+				#NHP_JDBZ='借';
+				#JDBZ='借';
+			}
+			else if (delspace($FD92) == '2')
+			{
+				#NHP_JDBZ='贷';
+				#JDBZ='贷';
+			}
+			#NHP_FKRZH=$FD30;
+			#NHP_SKRZH=$FD31;
+			#FKRHM=$FD27;
+			#SKHHM=$FD113;
+			#CFCXNR=$FD95;
+			
+			enable(#PJHM, false);
+			enable(#FKRZH, false);
+			enable(#FKHQC, false);
+			enable(#SKRZH, false);
+			enable(#SKRQC, false);
+			enable(#DFFS, false);
+			enable(#CPRQ, false);
+			enable(#CDRQ, false);
+			enable(#CPJE, false);
+			//enable(#PJDQR, false);
+			enable(#CPRQC, false);
+			enable(#Notetp, false);
+			enable(#YFQHHH, false);
+			enable(#HBFH, false);
+			enable(#JE, false);
+			enable(#JDBZ, false);
+			enable(#NHP_FKRZH, false);
+			enable(#NHP_SKRZH, false);
+			enable(#FKRHM, false);
+			enable(#SKHHM, false);
+			enable(#CFCXNR, false);
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+</BLOCK>
+<BLOCK  NAME="BLOCK_ZB" LINE="8" VISABLE="FALSE">
+	<ITEM LINE="0" COL="3" TYPE="%-14s" FUNCTIONS="T(累计    金额:)"/>
+	<ITEM LINE="0" COL="17" NAME="#TOTAL_MONEY" TYPE="%-16.2f" DEVICE="KEYBOARD"  FUNCTIONS="V(000000000000000000000001,999999999999999999999999)"/>
+	
+	<ITEM LINE="1" COL="3" TYPE="%-14s" FUNCTIONS="T(累计    笔数:)"/>
+	<ITEM LINE="1" COL="17" NAME="#TOTAL_NUM" DEVICE="KEYBOARD" TYPE="%8d" FUNCTIONS="T()"/>
+	
+	<ITEM LINE="2" COL="3" TYPE="%-14s" FUNCTIONS="T(接收清算行号:)"/>
+	<ITEM LINE="2" COL="17" NAME="#RCV_MMBID"  DEVICE="KEYBOARD" TYPE="%-12s" FUNCTIONS="T()"/>
+</BLOCK>
+<BLOCK NAME="BLOCK_HP" LINE="7"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="1"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款账号：)" />
+	<ITEM LINE="1"  COL="15" NAME="#FKRZH" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="2"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款行名：)" />
+	<ITEM LINE="2"  COL="15" NAME="#FKHQC" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="3"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款账号：)" />
+	<ITEM LINE="3"  COL="15" NAME="#SKRZH" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="4"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款人名：)" />
+	<ITEM LINE="4"  COL="15" NAME="#SKRQC" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="5"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(出票人全称：)" />
+	<ITEM LINE="5"  COL="15" NAME="#CPRQC" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="6"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原出票金额：)" />
+	<ITEM LINE="6"  COL="15" NAME="#CPJE" TYPE="%-16.2f" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="6"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原出票日期：)" />
+	<ITEM LINE="6"  COL="47" NAME="#CPRQ" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="7"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原借贷标志：)" />
+	<ITEM LINE="7"  COL="15" NAME="#JDBZ" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="7"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原兑付方式：)" />
+	<ITEM LINE="7"  COL="47" NAME="#DFFS" TYPE="%-16s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="8"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原货币符号：)" />
+	<ITEM LINE="8"  COL="15" NAME="#HBFH" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="8"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原钞汇类型：)" />
+	<ITEM LINE="8"  COL="47" NAME="#CHLX" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="9"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原票据种类：)" />
+	<ITEM LINE="9"  COL="15" NAME="#Notetp" TYPE="%-16s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="9"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原承兑日期：)" />
+	<ITEM LINE="9"  COL="47" NAME="#CDRQ" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="10"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原票据号码：)" />
+	<ITEM LINE="10"  COL="15" NAME="#PJHM" TYPE="%-16s" INPUT="TEXT" FUNCTIONS="T()" />
+	<!--ITEM LINE="10"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(票据到期日：)" />
+	<ITEM LINE="10"  COL="15" NAME="#PJDQR" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()" /-->
+</BLOCK>
+<BLOCK NAME="BLOCK_NHP" LINE="7"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="1"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款账号：)" />
+	<ITEM LINE="1"  COL="15" NAME="#NHP_FKRZH" INPUT="TEXT" TYPE="%-32s" FUNCTIONS="T()" />
+	<ITEM LINE="2"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款人名：)" />
+	<ITEM LINE="2"  COL="15" NAME="#FKRHM" TYPE="%-60s" FUNCTIONS="T()" />
+	<ITEM LINE="3"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款账号：)" />
+	<ITEM LINE="3"  COL="15" NAME="#NHP_SKRZH" TYPE="%-32s" FUNCTIONS="T()" />
+	<ITEM LINE="4"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款人名：)" />
+	<ITEM LINE="4"  COL="15" NAME="#SKHHM" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="5"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原交易金额：)" />
+	<ITEM LINE="5"  COL="15" NAME="#JE" TYPE="%-16.2f" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="5"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原借贷标志：)" />
+	<ITEM LINE="5"  COL="47" NAME="#NHP_JDBZ" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="6"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原货币符号：)" />
+	<ITEM LINE="6"  COL="15" NAME="#NHP_HBFH" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="6"  COL="35"  TYPE="%-12s"  FUNCTIONS="T(原钞汇类型：)" />
+	<ITEM LINE="6"  COL="47" NAME="#NHP_CHLX" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+</BLOCK>
+<BLOCK NAME="BLOCK_TERM" LINE="10"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="1"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款账号：)" />
+	<ITEM LINE="1"  COL="15" NAME="#DBTRID" INPUT="TEXT" TYPE="%-32s" FUNCTIONS="T()" />
+	<ITEM LINE="2"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原付款人名：)" />
+	<ITEM LINE="2"  COL="15" NAME="#DBTRNM" TYPE="%-60s" FUNCTIONS="T()" />
+	<ITEM LINE="3"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款账号：)" />
+	<ITEM LINE="3"  COL="15" NAME="#CDTRID" TYPE="%-32s" FUNCTIONS="T()" />
+	<ITEM LINE="4"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原收款人名：)" />
+	<ITEM LINE="4"  COL="15" NAME="#CDTRNM" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="5"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原借贷标志：)" />
+	<ITEM LINE="5"  COL="15" NAME="#CDIND" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="6"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原货币符号：)" />
+	<ITEM LINE="6"  COL="15" NAME="#CURNO" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="7"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(原钞汇类型：)" />
+	<ITEM LINE="7"  COL="15" NAME="#CASHTP" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+</BLOCK>
+
+<BLOCK NAME="BLOCK_DEF" LINE="7"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="1"  COL="17" NAME="#YFQHHH" TYPE="%-32s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="1"  COL="17" NAME="#CXXH" TYPE="%-32s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="1"  COL="47" NAME="#YJYRQ" TYPE="%-32s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)"/>
+	<ITEM LINE="1"  COL="17" NAME="#CXSH" TYPE="%-32s" DEVICE="KEYBOARD" FUNCTIONS="T()" />
+	<ITEM LINE="1"  COL="47" NAME="#JYZT" TYPE="%-32s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)"/>
+	<ITEM LINE="1"  COL="47" NAME="#CXZL" TYPE="%-32s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)"/>
+</BLOCK>
+<ITEM NAME="#TMP_HX" TYPE="%1s"  FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			if(#CXLX == '1' and #ZFXH != '')
+			{
+				showblock('BLOCK_CFNR',false,true);
+				showblock('BLOCK_CF_CXNR',false,true);
+				if(#SYSCODE == 'beps')
+				{
+					if(#KIND == 'QT00')
+					{
+						showblock('BLOCK_HP',false,true);
+						showblock('BLOCK_NHP',false,true);
+						showblock('BLOCK_ZB',true,true);
+					}
+					else if(#KIND == 'QT01')
+					{
+						showblock('BLOCK_ZB',false,true);
+						if(#CXZL == 'QT00')
+						{	
+							showblock('BLOCK_NHP',false,true);
+							showblock('BLOCK_HP',true,true);
+						}
+						else if(#CXZL == 'QT01')
+						{	
+							showblock('BLOCK_HP',false,true);
+							showblock('BLOCK_NHP',true,true);
+						}
+					}
+				}
+				else if(#SYSCODE == 'sxps' and #TXTYPE == '2')
+				{
+					showblock('BLOCK_HP',false,true);
+					showblock('BLOCK_NHP',false,true);
+					showblock('BLOCK_TERM',true,true);
+					showblock('BLOCK_ZB',true,true);
+				}
+				else
+				{
+					showblock('BLOCK_ZB',false,true);
+					if(delspace(#CXZL) == 'QT00')
+					{	
+						showblock('BLOCK_NHP',false,true);
+						showblock('BLOCK_HP',true,true);
+					}
+					else if(delspace(#CXZL) == 'QT01')
+					{	
+						showblock('BLOCK_HP',false,true);
+						showblock('BLOCK_NHP',true,true);
+					}
+				}
+				showblock('BLOCK_CXNR',true,true);
+			}
+			else if(#CXLX == '2' and #YCXH != '')
+			{
+				showblock('BLOCK_CXNR',false,true);
+				
+				if(delspace(#CXZL) == 'QT00')
+				{
+					
+					showblock('BLOCK_NHP',false,true);
+					showblock('BLOCK_HP',true,true);
+				}
+				else if(delspace(#CXZL) == 'QT01')
+				{
+					showblock('BLOCK_HP',false,true);
+					showblock('BLOCK_NHP',true,true);
+				}
+				showblock('BLOCK_CF_CXNR',true,true);
+				showblock('BLOCK_CFNR',true,true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+<BLOCK NAME="BLOCK_CF_CXNR" LINE="17"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="1"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(查询内容：)" />
+	<ITEM LINE="1"  COL="12"  NAME="#CFCXNR" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="T()">
+	</ITEM>
+</BLOCK>
+
+<BLOCK NAME="BLOCK_CXNR" LINE="19"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(查询内容：)" />
+	<ITEM LINE="0"  COL="12"  NAME="#CXNR" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+	</ITEM>
+</BLOCK>
+<BLOCK NAME="BLOCK_CFNR" LINE="19"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(查复内容：)" />
+	<ITEM LINE="0"  COL="12"  NAME="#CFNR" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" />
+</BLOCK>
+<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>
+	  "{
+	  		dim @authinfo as string;
+			initfd();
+			commsend_001();
+			$FD16 = '1303';
+			$FD18 = 'pbp';
+			$FD28 = #SYSCODE;
+			$FD35 = #CXLX;
+			$FD65 = #TXTYPE;
+			
+			if('1' == #CXLX)
+			{
+				$FD32 = #ZFXH;
+				$FD46 = #JYRQ;
+				
+				$FD101 = #CXNR;
+			}
+			else
+			{
+				$FD32 = #YCXH;
+				$FD46 = #CXHH;			
+				$FD101 = #CFNR;
+			}
+			if(authcheckagnpbp())
+			{
+				@authinfo = getfiletxt('../tmp/auth'+$KINBR+$TTYNAME);
+				$FD64 = strfld(@authinfo, '|', 0);  //授权柜员号
+				showmsg($FD64);
+				showmsg('授权处理完成，请继续!');
+			}
+			else
+			{
+				return (false);
+			}
+			callagnpbp();
+			
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			
+			//生成核心流水-start
+			dim @bak_fd81 as string;
+			@bak_fd81=$FD81;
+			$FD81=#TXNAME;
+			gethxtraceno();
+			$FD81=@bak_fd81;
+			//生成核心流水-end
+			runoutput();
+			showall();
+			rerun();
+			refresh();
+
+	  }"
+	  </ONCLICK>
+</ITEM>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+		<PRINT>
+		"{
+			PrintTxHead();
+			if (#CXLX == '1')
+			{
+				print( 4,18, '查询类型: [16]',getseltitle(#CXLX,#CXLX));
+				print( 5,18, '交易序号：[32]', $FD32);
+				print( 6,18, '交易日期：[32]', $FD46);
+				print( 7,18, '查询书号：[32]', $FD80);
+				print( 8,18, '查询内容：[128]', #CXNR);
+				print( 9,18, '交易状态：[32]', $FD79);
+			}
+			else if (#CXLX == '2')
+			{
+				print( 4,18, '查询类型: [16]',getseltitle(#CXLX,#CXLX));
+				print( 5,18, '交易序号：[32]', $FD32);
+				print( 6,18, '交易日期：[32]', $FD46);
+				print( 7,18, '查询日期：[32]', $FD45);
+				print( 8,18, '查询书号：[32]', $FD80);
+				print( 9,18, '查复日期：[32]', $FD47);
+				print(10,18, '查复书号：[32]', $FD81);
+				print(11,18, '查询内容：[128]', #CFCXNR);
+				print(12,18, '查复内容：[128]', #CFNR);
+				print(13,18, '交易状态：[32]', $FD79);
+			}
+			PrintTxTail();
+		}"
+		</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+		<PRINT>
+		"{
+			//$KINDNO='00';
+			//dim @txtime as string;
+			//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			PrintTxHead();
+			//print( 3, 10,'机构名称:[30]',$BRNAME);
+			//print( 3, 0,'代码:1303');
+			//print( 3, 5,'交易:查询查复'); 	
+			if (#CXLX == '1')
+			{
+				print( 5,18, '查询类型: [16]',getseltitle(#CXLX,#CXLX));
+				print( 6,18, '交易序号：[32]', $FD32);
+				print( 7,18, '交易日期：[32]', $FD46);
+				print( 8,18, '查询书号：[32]', $FD80);
+				print( 9,18, '查询内容：[128]', #CXNR);
+				print( 10,18, '交易状态：[32]', $FD79);
+			}
+			else if (#CXLX == '2')
+			{
+				print( 5,18, '查询类型: [16]',getseltitle(#CXLX,#CXLX));
+				print( 6,18, '交易序号：[32]', $FD32);
+				print( 7,18, '交易日期：[32]', $FD46);
+				print( 8,18, '查询日期：[32]', $FD45);
+				print( 9,18, '查询书号：[32]', $FD80);
+				print( 10,18, '查复日期：[32]', $FD47);
+				print(11,18, '查复书号：[32]', $FD81);
+				print(12,18, '查询内容：[128]', #CFCXNR);
+				print(13,18, '查复内容：[128]', #CFNR);
+				print(14,18, '交易状态：[32]', $FD79);
+			}
+			PrintTxTail();
+		}"
+		</PRINT>
+</RESPONSE>
+</TRANSACTION>

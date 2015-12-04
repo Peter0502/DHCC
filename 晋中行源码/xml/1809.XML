@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1809       定期借记业务录入)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-42s" FUNCTIONS="T( 1809                    定期借记业务录入)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#HZJE"  TYPE="%16.2f" FUNCTIONS=""/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1809)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(定期借记业务录入)"/>
+	<ITEM LINE="5" COL="03" TYPE="%-11s" FUNCTIONS="T(项目  编号:)"/>
+	<ITEM LINE="5" COL="14" NAME="#YWXUHAO" TYPE="%-24s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+		"{
+			//调用短交易查询原录入信息
+			initfd();
+			commsend_001();
+			$FD16 = '1004';
+			$FD18 = 'pbp';
+			$FD81 = #YWXUHAO;
+			$FD71 = '1';//标识定期借记
+			callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#BusType=$FD34;          //业务类型
+			#BusKind=$FD64;         //业务种类
+			#PayeeAcct=$FD30;      //收款人账号
+			#PayeeName=$FD25;     //收款人名称
+			#HZJE=val($FD39,1);  //交易金额
+			//#HZJE1 = $FD32;
+			#PayeeAddr=$FD116;
+			#CurrCode=$FD89;       //币种
+			#CurrType = $FD68;
+			
+			show(#BusType,true);
+			show(#BusKind,true);
+			show(#PayeeAcct,true);
+			show(#PayeeName,true);
+			show(#PayeeAddr,true);
+			enable(#PayeeAcct,false);
+			enable(#PayeeName,false);
+			enable(#BusType,false);
+			enable(#BusKind,false);
+			enable(#PayeeAddr,false);
+			enable(#CurrCode,false);
+			enable(#CurrType,false);
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="03" TYPE="%-11s" FUNCTIONS="T(收款人账号:)"/>
+	<ITEM LINE="7" COL="14" NAME="#PayeeAcct" INPUT="TEXT" TYPE="%-32s" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			//initfd();
+			//commsend_001();
+			//$FD16 = '9101';
+			//$FD18 = 'pbp';
+			//$FD114 = #PayeeAcct;
+			//callagnpbp();
+			//if($FD12!='0000')
+			//{
+			//	showmsg(geterror());
+			//	return(false);
+			//}
+			//if (delspace($FD128) == '6' or delspace($FD128) == '8' or delspace($FD128) == '41'){
+			//	showmsg('挂账账号不允许做业务,请核对！');
+			//	return(false);
+			//}
+			//#PayeeName = $FD25;
+			//refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="8" COL="03" TYPE="%-11s" FUNCTIONS="T(收款人姓名:)"/>
+	<ITEM LINE="8" COL="14" NAME="#PayeeName" INPUT="TEXT" TYPE="%-60s" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="9" COL="03" TYPE="%-11s" FUNCTIONS="T(收款人地址:)"/>
+	<ITEM LINE="9" COL="14" NAME="#PayeeAddr" INPUT="TEXT" TYPE="%-60s" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			dim @val as number;
+			@val = call('chkhalf '+#PayeeAddr,1);
+			if(@val !=0 and #PayeeAddr!='')
+			{
+				showmsg('输入的字符中有非法汉字，请检查');
+				return (false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="10" COL="03" TYPE="%-11s" FUNCTIONS="T(货币  类型:)"/>
+	<ITEM LINE="10" COL="14" TYPE="%-3s" INPUT="SELECT" DEVICE="KEYBOARD" NAME="#CurrCode" FUNCTIONS="V(NB)T(01)">
+		<SELECT>
+			<OPTION VALUE="CNY" TITLE="0.人民币"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="10" COL="42" TYPE="%-11s" FUNCTIONS="T(交易  金额:)"/>
+	<ITEM LINE="10" COL="53" NAME="#txamt"  INPUT="TEXT"  TYPE="%16.2f"  FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			if(#txamt &gt; 500000000000)
+			{
+				if(msgbox('请检查是否金额输入错误,确认继续,取消重新输入','金额太大提示','ok|cancel') == 1)
+				{
+					return(false);
+				}
+			}
+			if(#txamt == 0 )
+			{
+				showmsg('交易金额要大于零!');
+				return(false);
+			}
+			//检查交易金额与项目维护时汇总金额是否一致
+			if(#txamt != #HZJE)
+			{
+				showmsg('交易金额与汇总金额不一致!');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="11" COL="03" TYPE="%-11s" FUNCTIONS="T(钞汇  类型:)"/>
+	<ITEM LINE="11" COL="14" NAME="#CurrType" TYPE="%1s"  DEVICE="KAYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="丙钞"/>
+			<OPTION VALUE="2" TITLE="甲汇"/>
+			<OPTION VALUE="3" TITLE="乙钞"/>
+			<OPTION VALUE="4" TITLE="乙汇"/>
+			<OPTION VALUE="6" TITLE="丙汇"/>
+		</SELECT>
+	</ITEM>
+		
+	<ITEM NAME="#YWZL"  TYPE="%5s" FUNCTIONS="T()"/>
+	<ITEM LINE="12" COL="03" TYPE="%-11s" FUNCTIONS="T(业务  类型:)"/>
+	<ITEM LINE="12" COL="14" NAME="#BusType" TYPE="%4s"  DEVICE="KAYBOARD" FUNCTIONS="T($FD34)V(NB)">
+		<SELECT>
+			<OPTION VALUE="F100" TITLE="普通定期借记业务" />
+			<OPTION VALUE="E102" TITLE="定期代收        "/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="12" COL="42" TYPE="%-11s" FUNCTIONS="T(业务  种类:)"/>
+	<ITEM LINE="12" COL="53" NAME="#BusKind" TYPE="%-5s" INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="T($FD64)V(NB)">
+		<SELECT>
+			<OPTION VALUE="09001" TITLE="其他" />
+			<OPTION VALUE="00100" TITLE="电费" />
+			<OPTION VALUE="00200" TITLE="水暖费" />
+			<OPTION VALUE="00300" TITLE="煤气费" />
+			<OPTION VALUE="00400" TITLE="电话费" />
+			<OPTION VALUE="00500" TITLE="通讯费" />
+			<OPTION VALUE="00600" TITLE="保险费" />
+			<OPTION VALUE="00700" TITLE="房屋管理费" />
+			<OPTION VALUE="00800" TITLE="代理服务费" />
+			<OPTION VALUE="00900" TITLE="学教费" />
+			<OPTION VALUE="01000" TITLE="有线电视费" />
+			<OPTION VALUE="01100" TITLE="企业管理费用" />
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="16" COL="03" TYPE="%-11s" FUNCTIONS="T(业务  附言:)"/>
+	<ITEM LINE="16" COL="14" NAME="#Ps"  TYPE="%-62s"  DEVICE="KEYBOARD" FUNCTIONS="T($FD96)">
+		<!--
+		<ONLOSTFOCUS>
+		"{
+			dim @val as number;
+			@val = call('chkhalf '+#Ps,1);
+			if(@val !=0 and #Ps!='')
+			{
+				showmsg('输入的字符中有非法汉字，请检查');
+				return (false);
+			}
+		}"
+		</ONLOSTFOCUS>
+		-->
+	</ITEM>
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @AMT as number;
+		dim @stramt as string;
+		dim @buffer as string;
+		dim @file as file;
+		dim @remit as string;
+
+		initfd();
+		commsend_001();
+		
+		//掉短交易1106确定汇路
+		$FD16='1106';
+		$FD18='pbp';
+		$FD34=#BusType;          //业务类型
+		$FD64=#BusKind;         //业务种类
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@remit=$FD28;
+		//掉短交易1106确定汇路
+		
+		initfd();
+		commsend_001();
+		
+		$FD16 = '1208';
+		$FD18 = 'pbp';
+		$FD34=#BusType;          //业务类型
+		$FD64=#BusKind;         //业务种类
+		$FD30=#PayeeAcct;      //收款人账号
+		$FD25=#PayeeName;     //收款人名称
+		$FD81=#YWXUHAO;       //项目编号
+		@AMT=#txamt * 100;
+		@stramt=itoa(@AMT, '%d');
+		$FD39=@stramt;      //交易金额	
+		$FD28=@remit;
+		$FD71='1'; //借贷标识
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+
+		runoutput();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+		<PRINT>
+		"{
+			print(3,25, '1208 定期借记业务录入');
+			print(6,25,'交易  日期:[8]',$FD46);
+			print(7,25,'交易  序号:[20]',$FD33);
+			print(8,25, '项目  编号:[32]', #YWXUHAO);
+			print(9,25, '收款人账号:[32]',#PayeeAcct);
+			print(10,25, '收款人名称:[60]',#PayeeName);
+			print(11,25, '交易  金额:[17]',itoa(#txamt,'%.2f'));
+		}"
+		</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5, 10,'机构名称:[30]',$BRNAME);
+		print( 5, 5,'代码:1208');
+		print( 5, 5,'交易:定期借记业务录入');
+		
+		//print(7,25,'交易支付序号:[16]',$FD43);
+		print(8,25, '收款人账号:[32]',#PayeeAcct);
+		print(9,25, '收款人名称:[60]',#PayeeName);
+		print(10,25, '交易  金额:[17]',itoa(#txamt,'%.2f'));
+		print(11,10,'交易  日期:[8]',$FD46);
+		print(12,10,'交易  序号:[8]',$FD33);
+		
+		print(22,10,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(22,5,'柜员:[8]',$FD7);
+		if (len($FD64) != 6)
+		{
+			$FD64 = space(6-(len($FD64)),'0') + $FD64;
+		}
+		//print(22,5,'柜员流水:[8]',$FD64);
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

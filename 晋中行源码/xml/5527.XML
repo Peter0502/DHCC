@@ -1,0 +1,205 @@
+<TRANSACTION  RIGHTS="11111111111100000000000000000000" TITLE="5527      国税包或交易状态查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+  commsend_001();
+      
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+  commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+ "T(5527                      国税包或交易状态查询)"/>
+  <ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+  "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"     FUNCTIONS="T($TXNO=5547)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="07"   COL="17" TYPE="%-14s"                                            FUNCTIONS="T(发 起  机 构:)"/>
+  <ITEM LINE="07"   COL="44" TYPE="%-32s" FUNCTIONS="T([征收机关代码或银行支付系统行号])"/>
+  <ITEM LINE="08"   COL="17" TYPE="%-14s"                                            FUNCTIONS="T(原报 文 编号:)"/>
+  <ITEM LINE="09"   COL="17" TYPE="%-14s"                                            FUNCTIONS="T(原委 托 日期:)"/>
+  <ITEM LINE="10"   COL="17" TYPE="%-14s"                                            FUNCTIONS="T(查 询  类 型:)"/>
+  <ITEM LINE="11"   COL="17" TYPE="%-14s" INPUT="LABEL" VISABLE="FALSE" NAME="#AAA"  FUNCTIONS="T(原交易流水号:)"/>
+  <ITEM LINE="12"   COL="17" TYPE="%-14s" INPUT="LABEL" VISABLE="FALSE" NAME="#BBB"  FUNCTIONS="T(原包 流 水号:)"/>
+  
+  <ITEM LINE="07" COL="31" NAME="#SENDCODE"   TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <HELP>发起机构代码、委托日期、验证撤消序号唯一标识一次验证撤消交易</HELP>
+  <ONLOSTFOCUS>
+  "{
+    dim @c as string;
+    dim @d as string;
+    dim @a as string;
+    dim @b as string;
+    dim @e as string;
+    dim @f as string;
+    dim @g as string;
+    dim @FullMsg as string;
+    dim @txno_bak as string;
+    dim @tota as string;
+    @FullMsg='';
+    initfd();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9410';
+    $FD61=#SENDCODE;
+    commsend_001();
+    calltips();
+    $TXNO=@baktxno;
+    //if($FD12!='0000'){
+    //  showmsg(geterror());
+    //  return (false);
+    //}ZHGF增加对支付系统行号的验证
+    if($FD12!='0000')
+    {
+      initfd();
+      @baktxno=$TXNO;
+      $TXNO='9411';
+      $FD33=#SENDCODE;
+      commsend_001();
+      calltips();
+      $TXNO=@baktxno;
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return (false);
+      }
+      @d = substr($FD95,12,60);
+      @c = substr($FD95,72,1);
+      @a = substr($FD95,73,12);
+      @FullMsg='行名:'+@d+chr(10)+'清算渠道:'+@c+chr(10)+'所属节点:'+@a;
+      showhelp(5,70,8,3,'付款开户行基本信息',@FullMsg);
+      
+    }
+    else
+    {
+    @d = substr($FD95,12,60);
+    @c =substr($FD95,72,1);
+    @a = substr($FD95,73,1);
+    @b = substr($FD95,74,1);
+   // @FullMsg='户名:'+@d+chr(10)+'类型:'+@c+chr(10)+'征收机关类型:'+@a+chr(10)+'机构级次:'+@b; rm by xijie 20090708
+   //以下add by xijie 20090708
+   if(@c=='1'){
+   @e='国税';
+    }else {
+   @e='地税';
+    }
+    //add by xijie20090708
+    if(@a=='1'){
+    @g='国家';
+    }else if(@a=='2'){
+    @g='省';
+    }else if(@a=='3'){
+    @g='市';
+    }else if(@a=='4'){
+    @g='县';
+    }else{
+    @g='乡';
+    }
+    @FullMsg ='户名:'+@d+chr(10)+'征收机关类型:'+@e+chr(10)+'机构级次:'+@g;//add end xijie
+    showhelp(6,70,8,3,'征收机关基本信息',@FullMsg);
+    
+	@txno_bak=$TXNO;
+	$TXNO='9633';
+	commsend_001();
+	@tota=calltips();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	$TXNO=@txno_bak;
+	setsel(#ORIMSGNO,@tota,'o5t30o1v4o2');
+    }
+    // TODO在这里callserver判断征收机关代码是否存在
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="08" COL="31" NAME="#ORIMSGNO"   TYPE="%-4s"  DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="V(NB)T(1001)">
+  <SELECT>
+           <OPTION VALUE ="1001"  TITLE="0.实时扣税(费)请求" />
+   </SELECT>
+  </ITEM>
+  <ITEM LINE="09" COL="31" NAME="#ORIENTDATE" TYPE="%-8s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)D()"/>
+    <ITEM LINE="10" COL="31" NAME="#CXFLAG" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(0)">
+  <SELECT LINE="10" COL="31">
+     <OPTION VALUE="0" TITLE="0.查询单笔"/>
+     <OPTION VALUE="1" TITLE="1.查询批量包"/>
+  </SELECT>
+    <ONLOSTFOCUS>
+  "{
+     if(#CXFLAG=='0')
+     {
+        show(#ORITRANO,true);
+        show(#AAA,true);
+        show(#BBB,false);
+        show(#ORIPACKNO,false);
+        
+        enable(#AAA,true);
+        enable(#BBB,false);
+        enable(#ORITRANO,true);
+        enable(#ORIPACKNO,false);
+     }
+     else if(#CXFLAG=='1')
+     {
+       show(#AAA,false);
+       show(#BBB,true);
+       show(#ORIPACKNO,true);
+       show(#ORITRANO,false);
+       
+       enable(#AAA,false);
+       enable(#BBB,true);
+       enable(#ORIPACKNO,true);
+       enable(#ORITRANO,false);
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11"   COL="31" INPUT="TEXT"  VISABLE="FALSE" NAME="#ORITRANO"  TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12"   COL="31" INPUT="TEXT"  VISABLE="FALSE" NAME="#ORIPACKNO" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  
+  
+
+  <ITEM NAME="#PASSWD"     TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  	<ONCLICK>
+  "{
+  dim @tota as string;
+	commsend_001();
+	$FD16='5547';
+  $FD34=#ORIMSGNO;  //原报文编号
+  $FD44=#ORIENTDATE;//原委托日期
+  $FD45=#ORIPACKNO; //原包流水号 
+  $FD46=#ORITRANO;  //原交易流水号
+  $FD52=#SENDCODE;  //发起行行号
+  $FD67=#CXFLAG;      //查询类型
+	@tota=calltips();
+	if($FD12!='0000'){
+	  showmsg(geterror());
+	  return(false);
+	}
+	if(autolist(@tota)){
+	   
+	   list_work();
+	
+	}
+	//runoutput();
+	//rerun();
+   }"	
+   </ONCLICK>  
+   </ITEM>
+
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+</RESPONSE>
+
+
+</TRANSACTION>

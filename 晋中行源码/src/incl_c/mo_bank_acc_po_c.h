@@ -1,0 +1,29 @@
+#ifndef __mo_bank_acc_po_CH__
+#define __mo_bank_acc_po_CH__
+struct mo_bank_acc_po_c{
+	char      rowid[20];
+	char      pact_no[21];
+	char      tx_br_no[6];
+	long      req_date;
+	char      payer_name[51];
+	char      payer_ac_no[25];
+	char      payer_br_no[6];
+	char      payer_br_name[41];
+	char      payee_name[51];
+	char      payee_ac_no[33];
+	char      payee_br_name[41];
+	double    sign_amt;
+	long      matr_date;
+	char      bail_ac_no[25];
+	double    bail_amt;
+	double    bail_amt_ratio;
+	char      pact_num[21];
+	double    tot_mort_amt;
+	double    advance_amt;
+	char      over_ac_no[25];
+	double    over_rate;
+	char      acc_po_sts[2];
+	char      acc_po_ind[2];
+	char      acc_type[2];
+};
+#endif 

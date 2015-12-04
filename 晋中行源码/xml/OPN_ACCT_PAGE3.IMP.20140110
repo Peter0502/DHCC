@@ -1,0 +1,257 @@
+  <PAGE NAME="PAGE3">
+  <ITEM TYPE="%-1s" NAME="#FIRSTINIT" >
+	<ONLOSTFOCUS>"{
+		if(#CASHCD=='2')
+		{	  
+			show(#SUBMIT_3,false);
+			show(#PAGETRAN,true);
+		}
+		else
+		{
+			show(#PAGETRAN,false);
+			show(#SUBMIT_3,true);
+		}
+		
+		
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#LPRODNO" INPUT="LABEL" LINE="6"  COL="11" TYPE="%-10s" FUNCTIONS="T(产品代码:!)" VISABLE="TRUE"/>
+  <ITEM LINE="6"  COL="21" TYPE="%-3s"  NAME="#PRODNO" INPUT="SELECT" FUNCTIONS="V(NB)" VISABLE="TRUE">
+	<ONLOSTFOCUS>"{
+		dim @custname as string;
+		dim @tota     as string;
+		@custname=#CUSTNAME;
+	    	initfd();
+		commsend_001();
+		$FD16='9844';
+		$FD103=#PRODNO;
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		commrecv_103();
+		
+		showblock('PRODINFO',true,true);
+		#CUSTNAME=@custname;
+		show(#INST,false);
+		show(#XDLL,false);
+		show(#S_ACNO,false);
+		show(#ACTNO,false);
+		if(#JZZL=='0000')  //对公活期,无单折
+		{
+		  setsel(#ACTLX,@tota,'o5t6o1v1o2');
+		  #ACTLX='2';
+		  show(#ACTLX,true);
+			#TXAMT=0;
+			show(#TXAMT,true);
+			enable(#CASHCD,false);
+			enable(#TXAMT,false);
+			show(#INST,false);
+		  show(#XDLL,false);
+		  show(#S_ACNO,false);
+		  show(#ACTNO,false);
+		}
+		else if(#JZZL=='0007')
+		{ //对公定期, 单位定期证实书
+		  setsel(#ACTLX,'1034|基本户|1||','o5t6o1v1o2');
+		  #ACTLX='1';
+		  show(#ACTLX,true);
+		  enable(#ACTLX,false);
+		  enable(#CASHCD,false);
+		  enable(#TXAMT,true);
+		  show(#INST,false);
+		  show(#XDLL,false);
+		  #CASHCD='2';
+		  //show(#S_ACNO,false);
+		  //show(#ACTNO,false);
+		  if(#PRODNO=='257' or #PRODNO=='258')
+		  {
+		  	show(#INST,true);
+		  	enable(#INST,true);
+		  	show(#XDLL,true);
+		  	show(#S_ACNO,true);
+		  	show(#ACTNO,true);
+		  	enable(#ACTNO,true);
+		  }
+		  else
+		  {
+		     show(#INST,false);
+		     show(#XDLL,false);
+		     show(#S_ACNO,false);
+		  	 show(#ACTNO,false);
+		  }
+		}
+		else if(#JZZL=='0008')
+		{ //对公定期, 单位定期存单
+		  setsel(#ACTLX,'1034|基本户|1||','o5t6o1v1o2');
+		  #ACTLX='1';
+		  show(#ACTLX,true);
+		  enable(#ACTLX,false);
+		  enable(#CASHCD,false);
+		  enable(#TXAMT,true);
+		  show(#INST,false);
+		  show(#XDLL,false);
+		  #CASHCD='2';
+		  //show(#S_ACNO,false);
+		  //show(#ACTNO,false);
+		  if(#PRODNO=='257' or #PRODNO=='258')
+		  {
+		  	show(#INST,true);
+		  	enable(#INST,true);
+		  	show(#XDLL,true);
+		  	show(#S_ACNO,true);
+		  	show(#ACTNO,true);
+		  	enable(#ACTNO,true);
+
+		  }
+		  else
+		  {
+		     show(#INST,false);
+		     show(#XDLL,false);
+		     show(#S_ACNO,false);
+		  	 show(#ACTNO,false);
+		  }
+		}
+		else{
+		  setsel(#ACTLX,@tota,'o5t10o1v1o2');
+		  #ACTLX='D';
+		  show(#ACTLX,true);
+                  enable(#ACTLX,false);
+		  enable(#CASHCD,true);
+		  enable(#TXAMT,true);
+		  show(#INST,false);
+		  show(#XDLL,false);
+		  show(#S_ACNO,false);
+		  show(#ACTNO,false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="8"   COL="11"  TYPE="%-20s" FUNCTIONS="T(【新开产品信息】)"  /> 
+  <ITEM LINE="9"   COL="11"  TYPE="%-61s" FUNCTIONS="T(-------------------------------------------------------------)"/>
+  
+  <BLOCK LINE="9"  COL="0" NAME="PRODINFO" VISABLE="FALSE">
+  
+  <ITEM LINE="3"  COL="11"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="4"  COL="11"  TYPE="%-10s" FUNCTIONS="T(账户类型:!)"/>
+  <ITEM LINE="5"  COL="11"  TYPE="%-10s" FUNCTIONS="T(计息类型:!)"/>
+  <ITEM LINE="6"  COL="11"  TYPE="%-10s" FUNCTIONS="T(开户方式:!)"/>
+  <ITEM LINE="7"  COL="11"  TYPE="%-10s" FUNCTIONS="T(金    额:)"/>
+  <ITEM NAME="#XDLL"  LINE="8"  COL="11" VISABLE="FALSE" TYPE="%-10s" FUNCTIONS="T(协定利率:)"/>
+  <ITEM NAME="#S_ACNO"LINE="9"  COL="07" VISABLE="FALSE" TYPE="%-14s" FUNCTIONS="T(对应活期账号: )"  INPUT="LABEL" />
+  <ITEM NAME="#CURCD" LINE="3"  COL="21" TYPE="%-2s"  DEVICE="KEYBOARD" INPUT="SELECT" ENABLE="FALSE"  FUNCTIONS="T(   )">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCUR"  TYPE="%-8s"        FUNCTIONS="S(#CURCD,#CURCD)"/><!---币种--->
+  <ITEM NAME="#ACTLX" LINE="4"  COL="21" TYPE="%-1s"  DEVICE="KEYBOARD" INPUT="SELECT"  FUNCTIONS="">
+  	<ONLOSTFOCUS>"{
+		//个人储蓄户不允许转帐开户,并且对公活期户也不允许转帐开
+		if(#ACTLX=='S' or #JZZL=='0000')
+		{
+			#CASHCD='1';
+			show(#CASHCD,true);
+			enable(#CASHCD,false);
+		}
+		else
+		{
+			show(#CASHCD,true);
+			enable(#CASHCD,true);
+		}
+	}"
+  	</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM NAME="#S_ACTLX" TYPE="%-10s" FUNCTIONS="S(#ACTLX,#ACTLX)"/>
+  <!---将计息方式加全  20060922--->
+  <ITEM NAME="#JXLX" LINE="5"  COL="21" TYPE="%-1s"  DEVICE="KEYBOARD" INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T( )">
+	<SELECT>
+	  	<OPTION VALUE="0" TITLE="不计息"/>
+	  	<OPTION VALUE="1" TITLE="利随本清"/>
+	  	<OPTION VALUE="2" TITLE="按日计息"/>
+	  	<OPTION VALUE="3" TITLE="按月计息"/>
+		<OPTION VALUE="4" TITLE="按季计息"/>
+		<OPTION VALUE="5" TITLE="按年计息"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#S_JXLX" TYPE="%-10s" FUNCTIONS="S(#JXLX,#JXLX)"/>
+  <ITEM NAME="#CASHCD" LINE="6"  COL="21" TYPE="%-1s"  DEVICE="KEYBOARD" INPUT="SELECT"  FUNCTIONS="T(2)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="现金"/>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+	    //TODO：个人添加获取填单数据脚本 20140109 
+	    //add 20140109 yaofuqiang
+	    if(#CASHCD=='1')
+	    {
+	      getkeydata('#TXAMT','1110','amt');
+	      #TXAMT='123123';
+	    }
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TXAMT" LINE="7" COL="21" INPUT="TEXT"  DEVICE="KEYBOARD" TYPE="%17.2f" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+  <ITEM NAME="#UTXAMT"         TYPE="%-40s"           FUNCTIONS="U(#TXAMT)"/><!---大写金额--->
+  <ITEM NAME="#INST"  LINE="8" COL="21" INPUT="TEXT"  DEVICE="KEYBOARD" TYPE="%8.5f" FUNCTIONS="V(0000000000000001,9999999999999999)" VISABLE="FALSE"/>
+  <ITEM NAME="#ACTNO" LINE="9" COL="21" INPUT="TEXT"  VISABLE="FALSE"   TYPE="%-24s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+   "{
+	initfd();
+	commsend_001();
+	$FD16='6700';
+	$FD30=#ACTNO;
+	$FD116=space(35)+#ZJLX+#ZJHM;
+	$FD67='1';
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	showhelp(3,70,8,3,'户名','户  名:'+$FD25);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CON2" TYPE="%-1s">
+  	<ONLOSTFOCUS>"{
+  		if(#CASHCD=='1')
+		{
+			show(#PAGETRAN,false);
+			show(#SUBMIT_3,true);
+			goitem(#SUBMIT_3,false);
+		}
+		else
+		{	  
+			show(#SUBMIT_3,false);
+			show(#PAGETRAN,true);
+			goitem(#PAGETRAN);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK>
+
+  <ITEM LINE="21" COL="49"  TYPE="%-6s"   FUNCTIONS="T(上一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+	loadpage('DEFAULT');
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"   NAME="#PAGETRAN"  FUNCTIONS="T(下一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+	loadpage('PAGE2');
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"   NAME="#SUBMIT_3"  FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </PAGE>

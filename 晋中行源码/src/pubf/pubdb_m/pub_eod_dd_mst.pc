@@ -1,0 +1,340 @@
+#include "find_debug.h" 
+#include<stdio.h>
+#include<varargs.h>
+#include "public.h"
+
+#define EXTERN
+
+
+EXEC SQL INCLUDE SQLCA;
+#include "dd_mst_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+static char str[3000];
+static char mystery[17];
+
+int dd_mst_con ( struct dd_mst_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct dd_mst_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->opn_br_no);
+	zip_tail(ps->prdt_no);
+	zip_tail(ps->cash_ind);
+	zip_tail(ps->sttl_type);
+	zip_tail(ps->ac_type);
+	zip_tail(ps->intst_type);
+	zip_tail(ps->odtt_ind);
+	zip_tail(ps->ac_sts);
+	zip_tail(ps->hold_sts);
+	zip_tail(ps->od_ind);
+	zip_tail(ps->draw_pwd);
+	zip_tail(ps->name);
+	zip_tail(ps->cal_code);
+	zip_tail(ps->mac);
+}
+/*****************************************************************************/
+/****                              查询函数部分                           ****/
+/*****************************************************************************/
+int Eod_Dd_mst_Sel(reply,dd_mst_c,fmtstr,va_alist)
+char    *reply;
+struct  dd_mst_c *dd_mst_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Eod_Dd_mst_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Eod_Dd_mst_Fet_Sel( dd_mst_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Eod_Dd_mst_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Eod_Dd_mst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,dd_mst.* FROM dd_mst WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE eod_dd_mst_sel FROM :comm;
+	if (sqlca.sqlcode){
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return CM_SQLCODE;
+	}
+	EXEC SQL DECLARE eod_sel_dd_mst CURSOR FOR eod_dd_mst_sel;
+
+	EXEC SQL OPEN eod_sel_dd_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Eod_Dd_mst_Fet_Sel ( struct dd_mst_c *dd_mst_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH eod_sel_dd_mst INTO :dd_mst_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch eod_dd_mst error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch eod_dd_mst finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(dd_mst_c);
+
+	return 0;
+}
+
+int Eod_Dd_mst_Clo_Sel (){
+	EXEC SQL CLOSE eod_sel_dd_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Eod_Dd_mst_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,dd_mst.* FROM dd_mst WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE eod_dd_mst_upd FROM :comm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return CM_SQLCODE;
+	}
+
+	EXEC SQL DECLARE eod_upd_dd_mst CURSOR FOR eod_dd_mst_upd;
+
+	EXEC SQL OPEN eod_upd_dd_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Eod_Dd_mst_Fet_Upd( struct dd_mst_c *dd_mst_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH eod_upd_dd_mst INTO :dd_mst_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH dd_mst finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(dd_mst_c);
+
+	return 0;
+}
+
+int Eod_Dd_mst_Upd_Upd( struct dd_mst_c dd_mst_c , char * reply){
+	int ret;
+
+	MEMSET_DEBUG( str, 0x0,sizeof(str) );
+	MEMSET_DEBUG( mystery, 0x0, sizeof(mystery) );
+	ret = dd_mst_con ( dd_mst_c, str );
+	ret = put_mystery( str, mystery );
+	strcpy(  dd_mst_c.mac, mystery ); 
+	EXEC SQL UPDATE dd_mst SET ac_id=:dd_mst_c.ac_id,
+			ac_seqn=:dd_mst_c.ac_seqn,
+			opn_br_no=:dd_mst_c.opn_br_no,
+			prdt_no=:dd_mst_c.prdt_no,
+			bal=:dd_mst_c.bal,
+			acbo_bal=:dd_mst_c.acbo_bal,
+			ys_bal=:dd_mst_c.ys_bal,
+			hst_bal=:dd_mst_c.hst_bal,
+			rate=:dd_mst_c.rate,
+			flt_ratio=:dd_mst_c.flt_ratio,
+			intst_acm=:dd_mst_c.intst_acm,
+			cash_ind=:dd_mst_c.cash_ind,
+			sttl_type=:dd_mst_c.sttl_type,
+			ac_type=:dd_mst_c.ac_type,
+			intst_type=:dd_mst_c.intst_type,
+			hst_cnt=:dd_mst_c.hst_cnt,
+			hst_pg=:dd_mst_c.hst_pg,
+			opn_date=:dd_mst_c.opn_date,
+			ic_date=:dd_mst_c.ic_date,
+			lst_date=:dd_mst_c.lst_date,
+			val_date=:dd_mst_c.val_date,
+			odtt_ind=:dd_mst_c.odtt_ind,
+			ac_sts=:dd_mst_c.ac_sts,
+			hold_sts=:dd_mst_c.hold_sts,
+			hold_amt=:dd_mst_c.hold_amt,
+			ctl_amt=:dd_mst_c.ctl_amt,
+			od_ind=:dd_mst_c.od_ind,
+			draw_pwd=:dd_mst_c.draw_pwd,
+			cif_no=:dd_mst_c.cif_no,
+			name=:dd_mst_c.name,
+			cal_code=:dd_mst_c.cal_code,
+			mac=:dd_mst_c.mac
+	WHERE rowid=:dd_mst_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 ){
+		sprintf(acErrMsg,"UPDATE dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 ){
+		sprintf(acErrMsg,"UPDATE dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D106" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Eod_Dd_mst_Del_Upd(struct dd_mst_c dd_mst_c , char * reply  ){
+
+	EXEC SQL DELETE FROM dd_mst WHERE rowid=:dd_mst_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Eod_Dd_mst_Clo_Upd( ){
+	EXEC SQL CLOSE eod_upd_dd_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Eod_Dd_mst_Ins( struct dd_mst_c dd_mst_c , char * reply ){
+	int ret;
+
+	MEMSET_DEBUG( str, 0x0,sizeof(str) );
+	MEMSET_DEBUG( mystery, 0x0, sizeof(mystery) );
+	ret = dd_mst_con ( dd_mst_c, str );
+	ret = put_mystery( str, mystery );
+	strcpy(  dd_mst_c.mac, mystery ); 
+	EXEC SQL INSERT INTO dd_mst VALUES (:dd_mst_c.ac_id,
+			:dd_mst_c.ac_seqn,
+			:dd_mst_c.opn_br_no,
+			:dd_mst_c.prdt_no,
+			:dd_mst_c.bal,
+			:dd_mst_c.acbo_bal,
+			:dd_mst_c.ys_bal,
+			:dd_mst_c.hst_bal,
+			:dd_mst_c.rate,
+			:dd_mst_c.flt_ratio,
+			:dd_mst_c.intst_acm,
+			:dd_mst_c.cash_ind,
+			:dd_mst_c.sttl_type,
+			:dd_mst_c.ac_type,
+			:dd_mst_c.intst_type,
+			:dd_mst_c.hst_cnt,
+			:dd_mst_c.hst_pg,
+			:dd_mst_c.opn_date,
+			:dd_mst_c.ic_date,
+			:dd_mst_c.lst_date,
+			:dd_mst_c.val_date,
+			:dd_mst_c.odtt_ind,
+			:dd_mst_c.ac_sts,
+			:dd_mst_c.hold_sts,
+			:dd_mst_c.hold_amt,
+			:dd_mst_c.ctl_amt,
+			:dd_mst_c.od_ind,
+			:dd_mst_c.draw_pwd,
+			:dd_mst_c.cif_no,
+			:dd_mst_c.name,
+			:dd_mst_c.cal_code,
+			:dd_mst_c.mac);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

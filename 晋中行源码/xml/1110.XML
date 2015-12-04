@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111000" TITLE="1110  交易流水传票打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{ commsend_001();
+     $MSGTYPE='03001';
+     $FD47=#DATE;
+     $FD91=#BRNO;
+     $FD79=#BRSRNO;
+   }" 
+</COMMSEND>
+<COMMRECV>
+  "{ commrecv_001();
+     runoutput();
+   }"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+	 "T(1110                          交易流水传票打印)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+	 "T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5599)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="10" COL="24" TYPE="%-10s" FUNCTIONS="T(传票日期:)"/>
+  <ITEM LINE="12" COL="24" TYPE="%-10s" FUNCTIONS="T(机构号码:)"/>
+  <ITEM LINE="14" COL="24" TYPE="%-10s" FUNCTIONS="T(流 水 号:)"/>
+  <ITEM NAME="#DATE" LINE="10" COL="34"  INPUT="TEXT" TYPE="%8s" FUNCTIONS="T($HDATE)V(NB)D()"/>
+  <ITEM NAME="#BRNO" LINE="12" COL="34" INPUT="TEXT" TYPE="%-5s" FUNCTIONS="T($KINBR)V(NB)">
+  <ONLOSTFOCUS>
+  "{
+     if($KINBR!='10001' and #BRNO!=$KINBR)
+     {
+         showmsg('非清算中心不能打印他行传票!');
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BRSRNO" LINE="14" COL="34" INPUT="TEXT" TYPE="%6d" FUNCTIONS=""/>
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错 --------------->
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="20" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+      	dim @tota as string;
+        dim @ch as string;
+        dim @f as string;
+        commsend_001();
+       	$FD47=#DATE;
+        $FD91=#BRNO;
+        $FD79=#BRSRNO;
+        @tota=callserver();
+        @f=openfile('../tmp/tmp'+$KINBR+$TTYNAME+'.tmp','w');
+        writeline(@f,@tota);
+        closefile(@f);
+      	if($FD12!='0000')
+      	{
+            showmsg(geterror());
+            return(false);	
+        }
+        else
+        {
+             showall();
+             @ch=showmsg('请选择打印方式：0:退出 1:主机 2:终端 ');
+             if(@ch == '0')
+             {
+               autolist(@tota);
+               list_work();
+               return(true);
+             }
+             else if(@ch == '1')
+             {
+                autolist(@tota);
+                list_work();
+                return(true);
+             }
+             else
+             {
+                 autolist(@tota);
+                 list_work();
+                 runoutput();
+             }
+        }
+   }"       
+  </ONCLICK>
+ </ITEM>
+  <!-- 用到的传送变量-->
+ <ITEM NAME="#TOTA" TYPE="%-5000s" FUNCTIONS=""/>
+ </VARIABLE>
+ <REQUEST>
+ </REQUEST>
+ <RESPONSE>
+ <PACKAGE DEVICE="PRINTER" DESC="网点汇总打印">
+  NOTHING
+ </PACKAGE>
+       
+ <PRINT>
+ "{
+    dim @cnt as string;
+    dim @cnt1 as number;
+    dim @flg1 as string;
+    dim @flg2 as string;
+    dim @brname as string;
+    dim @accno1 as string;
+    dim @accno2 as string;
+    dim @flg as string;
+    dim @txname as string;
+    dim @date as string;
+    dim @brno as string;
+    dim @txamt1 as string;
+    dim @txamt2 as string;
+    dim @brmxprint as string;
+    dim @tlrno as string;
+    dim @wssrno as string;
+    dim @tota as string;
+    dim @i as number;
+    dim @j as number;
+    dim @row as number;
+    dim @colnum as string;
+    dim @tmp as number;
+    dim @f as file;
+    dim @f1 as file;
+    @f='';
+    @f=openfile('../tmp/tmp'+$KINBR+$TTYNAME+'.tmp','r');
+    @tota=readline(@f);
+
+    @row=0;
+    @tmp=0;
+    
+    while (true)
+    {   
+        @tota=readline(@f);
+     	if(@tota=='')
+     	{
+     		closefile(@f);
+     		break;
+     	}
+     	@cnt    =strfld(@tota,'|' ,0);//总笔数
+      @txname =strfld(@tota,'|' ,1);
+      @brno   =strfld(@tota,'|' ,2);
+      @brname =strfld(@tota,'|' ,3);
+      @date   =strfld(@tota,'|' ,4);
+      @wssrno =strfld(@tota,'|' ,5);
+      @tlrno  =strfld(@tota,'|' ,6);  
+      @cnt1=atoi(@cnt);         
+      @i=0;
+      print (3+@row,5,'           支行[20]传票                                   ',@txname);
+      print (4+@row,5,' 机构号:[5]   机构名:[30]日期:[8]       ',@brno,@brname,@date);
+      print (5+@row,5,'┍━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━━━┑  ');
+      print (6+@row,5,'│流水号:[9]                      │ 操作员:[6]                          │  ',@wssrno,@tlrno);
+      print (7+@row,5,'┝━━━━━━━━━━━━━━━━━━━┿━━━━━━━━━━━━━━━━━━━━┥');
+      
+      while(@i &lt; @cnt1)
+      {
+        if(@cnt1==1)
+        {
+      	    @flg1  		=strfld(@tota,'|' ,7+@i*3);
+      	    @accno1		=strfld(@tota,'|' ,8+@i*3);
+      	    @txamt1  	=strfld(@tota,'|' ,9+@i*3);
+            print (8+@row+@i,5,'│[3  ][6     ]   金额:[21                   ]│                               　　　   │  ',@flg1,@accno1,@txamt1);
+            @i=@i+1;
+        }
+        else if(@cnt1==3 or @cnt1==5 or @cnt1==7 or @cnt1==9 or @cnt1==11 or @cnt1==13)
+        {
+            @flg1  		=strfld(@tota,'|' ,7+@i*3);
+      	    @accno1		=strfld(@tota,'|' ,8+@i*3);
+      	    @txamt1  	=strfld(@tota,'|' ,9+@i*3);
+      	    @flg2			=strfld(@tota,'|' ,10+@i*3);
+      	    @accno2		=strfld(@tota,'|' ,11+@i*3);
+      	    @txamt2		=strfld(@tota,'|' ,12+@i*3);
+            print (8+@row+@i/2,5,'│[3  ][6     ]   金额:[21                   ]│ [3  ][6     ]    金额:[21                   ]│  ',@flg1,@accno1,@txamt1,@flg2,@accno2,@txamt2);
+            @i=@i+2;
+            @j=@i+1;
+            if(@j==@cnt1)
+            {  
+               @flg1  		=strfld(@tota,'|' ,7+@i*3);
+      	       @accno1		=strfld(@tota,'|' ,8+@i*3);
+      	       @txamt1  	=strfld(@tota,'|' ,9+@i*3);
+               print (8+@row+@i/2,5,'│[3  ][6     ]   金额:[21                   ]│                                        │  ',@flg1,@accno1,@txamt1);
+               @i=@i+1;
+            }
+            
+        }
+        else
+        {
+            @flg1  		=strfld(@tota,'|' ,7+@i*3);
+      	    @accno1		=strfld(@tota,'|' ,8+@i*3);
+      	    @txamt1  	=strfld(@tota,'|' ,9+@i*3);
+      	    @flg2			=strfld(@tota,'|' ,10+@i*3);
+      	    @accno2		=strfld(@tota,'|' ,11+@i*3);
+      	    @txamt2		=strfld(@tota,'|' ,12+@i*3);
+            print (8+@row+@i/2,5,'│[3  ][6     ]   金额:[21                   ]│ [3  ][6     ]    金额:[21                   ]│  ',@flg1,@accno1,@txamt1,@flg2,@accno2,@txamt2);
+            @i=@i+2;
+        }
+      }
+      if(@i==1)
+      {
+      		print(9+@row+@i-1,5,'┕━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━┙  ');
+      		print(10+@row+@i-1,5,'                           复核:               经办:      ');
+      		@row=@tmp*12+12+@i;
+      		@tmp=@tmp+1;
+      		@brmxprint='';
+      		@colnum=0;
+      }
+      else if(@cnt1==3 or @cnt1==5 or @cnt1==7 or @cnt1==9 or @cnt1==11 or @cnt1==13)
+      {
+      		print(9+@row+@i-2,5,'┕━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━┙  ');
+      		print(10+@row+@i-2,5,'                           复核:               经办:      ');
+      		@row=@tmp*12+12+@i;
+      		@tmp=@tmp+1;
+      		@brmxprint='';
+      		@colnum=0;
+      }
+      else
+      {
+      		print(9+@row+@i/2 -1,5,'┕━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━┙  ');
+      		print(10+@row+@i/2 -1,5,'                           复核:               经办:      ');
+      		@row=@tmp*12+12+@i/2;
+      		@tmp=@tmp+1;
+      		
+      }
+    }
+ }"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>	    

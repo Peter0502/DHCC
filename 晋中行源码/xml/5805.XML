@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="5805 保证金利息划转关联"	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	initfd();
+	commsend_001();
+	$FD16 = '4376';
+	$FD67 = #Operation;    //操作码
+	$FD30 = #Bzj_ac_no;    //保证金账号
+	$FD31 = #Js_ac_no;     //结算账号
+	$FD81 = #Remark;       //备注
+	
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="-52s" FUNCTIONS=
+		"T(5805                 保证金利息划转关联)"/>
+	<ITEM LINE="4" COL="3" TYPE="-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4376)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+	<!--输入变量-->
+	<ITEM LINE="6" COL="5" TYPE="%-14s" FUNCTIONS= "T(操  作  码:)"/>
+  <ITEM NAME="#Operation" INPUT="SELECT" LINE="6" COL="17" TYPE="%-1s" FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+     <OPTION VALUE="0" TITLE="0.增加"/>
+     <OPTION VALUE="1" TITLE="1.删除"/>
+     <OPTION VALUE="2" TITLE="2.修改"/>
+  </SELECT>
+	</ITEM>
+  
+  <ITEM LINE="8"  COL="5"  TYPE="%-70s" FUNCTIONS="T(------------------------------------------------------------------)"/>
+	
+	<ITEM LINE="10" COL="5" TYPE="%-10s" FUNCTIONS="T(保证金账号:)"/>
+	<ITEM NAME="#Bzj_ac_no" INPUT="TEXT" LINE="10" COL="17"  TYPE="%-20s" FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+			"{
+		    initfd();
+		    commsend_001();
+		    $FD16='9741';
+		    $FD30=#Bzj_ac_no;
+		    callserver();
+		    if($FD12!='0000')
+		    {
+		    	showmsg(geterror());
+		    	return(false);
+		    }
+		    setitems('#Bzj_ac_no',$FD30);
+		    setitems('#Bzj_ac_seqn',$FD34);    	
+      }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="10"  COL="41" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>
+  <ITEM NAME="#Bzj_ac_seqn" INPUT="TEXT" LINE="10"  COL="51" TYPE="%-4s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  	"{
+		      enable(#Js_ac_no, true);
+		      enable(#Js_ac_seqn, true);
+          enable(#Js_user_name, true);
+          enable(#Remark, true);
+		      
+		      dim @prdt_no as string;
+		      initfd();
+		      commsend_001();
+		      $FD16='9740';
+		      $FD30=#Bzj_ac_no;
+		      $FD34=#Bzj_ac_seqn;
+		      callserver();
+		      if($FD12!='0000')
+		      {
+		      	showmsg(geterror());
+		      	return(false);
+		      } 
+		      //判断是否为保证金产品
+		      @prdt_no = delspace($FD23);
+		      if ( @prdt_no == '131' )
+		      {
+		         showmsg('此保证金账号不结息!, 请检查!');
+		         return(false);
+		      }
+		      if ( @prdt_no != '132' and  @prdt_no != '134' and 
+		           @prdt_no != '142' and  @prdt_no != '144')
+		      {
+		          showmsg('输入账号非保证金账号!, 请检查!');
+		          return(false);
+		      }
+		      
+		      setitems('#Bzj_user_name',delspace($FD26));  //户名
+		      enable(#Bzj_user_name, false);
+          setitems('#Bzj_user_no',delspace($FD28));  //客户号
+          
+          //如果操作为1-删除
+          if(#Operation == '1')
+          {
+              enable(#Js_ac_no, false);
+              enable(#Js_ac_seqn, false);
+              enable(#Js_user_name, false);
+              enable(#Remark, false);
+          }
+    }"
+   </ONLOSTFOCUS>
+  </ITEM> 
+	
+	<ITEM LINE="12" COL="5" TYPE="%-14s" FUNCTIONS="T(保证金户名:)"/>
+	<ITEM NAME="#Bzj_user_name" INPUT="TEXT" LINE="12" COL="17" TYPE="%-40s" FUNCTIONS=""/>
+	<ITEM NAME="#Bzj_user_no" TYPE="%-10s" FUNCTIONS="" />
+	
+	<ITEM LINE="14" COL="5" TYPE="%-14s" FUNCTIONS="T(结算  账号:)"/>
+	<ITEM NAME="#Js_ac_no" INPUT="TEXT" LINE="14" COL="17" TYPE="%-20s" FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+			"{
+		    initfd();
+		    commsend_001();
+		    $FD16='9741';
+		    $FD30=#Js_ac_no;
+		    callserver();
+		    if($FD12!='0000')
+		    {
+		    	showmsg(geterror());
+		    	return(false);
+		    }
+		    setitems('#Js_ac_no',$FD30);
+		    setitems('#Js_ac_seqn',$FD34);
+      }"
+    </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="14"  COL="41" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>
+  <ITEM NAME="#Js_ac_seqn" INPUT="TEXT" LINE="14"  COL="51" TYPE="%-4s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  	"{
+		      if( substr(#Js_ac_no,0,1) != '5' )
+		      {
+             showmsg('结算账号应为对公活期账号，请检查!');
+             return(false);
+          }
+          
+          dim @prdt_no as string;
+		      initfd();
+		      commsend_001();
+		      $FD16='9740';
+		      $FD30=#Js_ac_no;
+		      $FD34=#Js_ac_seqn;
+		      callserver();
+		      if($FD12!='0000')
+		      {
+		      	showmsg(geterror());
+		      	return(false);
+		      } 
+		      
+		      @prdt_no = delspace($FD23);
+		      if ( @prdt_no == '131' or @prdt_no == '132' or @prdt_no == '134' or
+		           @prdt_no == '142' or @prdt_no == '144')
+		      {
+		          showmsg('结算账号不能为保证金账号!, 请检查!');
+		          return(false);
+		      }
+		      
+		      setitems('#Js_user_name',delspace($FD26));  //户名
+		      enable(#Js_user_name, false);
+          if (#Js_user_name != #Bzj_user_name)
+          {
+             // showmsg('请检查用户名是否相同!'+'['+#Bzj_user_name+'] '+' ['+#Js_user_name+']');
+             // return(false);
+          }
+          setitems('#Js_user_no',delspace($FD28));  //客户号
+          if (#Js_user_name != #Bzj_user_name)
+          {
+             // showmsg('保证金账户与结算账户不是同一个客户!'+'['+#Bzj_user_no+'] '+' ['+#Js_user_no+']');
+             // return(false);
+          }
+         
+    }"
+   </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="16" COL="5" TYPE="%-14s" FUNCTIONS="T(结算帐户名:)"/>
+	<ITEM NAME="#Js_user_name" INPUT="TEXT" LINE="16" COL="17" TYPE="%-40s" />
+	<ITEM NAME="#Js_user_no" TYPE="%-10s" FUNCTIONS="" />
+	
+	<ITEM LINE="18" COL="5" TYPE="%-14s" FUNCTIONS="T(备      注:)"/>
+	<ITEM NAME="#Remark" INPUT="TEXT" LINE="18" COL="17" TYPE="%-40s" FUNCTIONS=""/>
+  
+	<!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+	<ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+	<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+	NOTHING
+</PACKAGE>
+<PRINT>
+"{
+     print( 6, 29,' 保证金利息划转关联成功!');
+     print( 8, 29,'请继续打印打印业务专用凭证');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+</PACKAGE>
+<PRINT>
+"{
+    dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:5805');
+		print( 5,13,'交易:保证金利息划转关联');
+    
+    if (#Operation == '0')
+    {
+    print( 7,20,'操      作: 增加关联');
+    }
+		else if (#Operation == '1')
+		{
+		print( 7,20,'操      作: 删除关联');
+		}
+		else
+		{
+		print( 7,20,'操      作: 修改关联');
+		}
+		print( 8,20,'保证金帐号:[20]            帐户序号:[4]',#Bzj_ac_no,#Bzj_ac_seqn);
+		print( 9,20,'保证金户名:[40]',#Bzj_user_name);
+		print(10,20,'结算  帐号:[20]            帐户序号:[4]',#Js_ac_no,#Js_ac_seqn);
+		print(11,20,'结算  户名:[40]',#Js_user_name);
+		print(12,20,'备      注:[40]',#Remark);
+		print_sq();
+		print(18,20,'备注:');
+		print(18,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(18,5,'柜员:[4]',$FD7);
+		print(18,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

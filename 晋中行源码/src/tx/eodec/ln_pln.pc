@@ -1,0 +1,189 @@
+/*************************************************
+* 文 件 名:  ln_pln.pc
+* 功能描述： 生成贷款放/还款计划
+*
+* 作    者:  lance
+* 完成日期： 
+*
+* 修改记录：
+* 日   期:
+* 修 改 人:
+* 修改内容:
+*************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#define EXTERN
+#include "public.h"
+#include "ln_pay_pln_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+ln_pln()
+{
+	 int ret=0,cnt=0,t=1;
+	struct ln_pay_pln_c ln_pay_pln_p;
+	struct ln_pay_pln_c ln_pay_pln_tmp;		
+  memset(&ln_pay_pln_p,0x00,sizeof(struct ln_pay_pln_c));
+  memset(&ln_pay_pln_tmp,0x00,sizeof(struct ln_pay_pln_c));
+  memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+  memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+  memset(&g_ln_parm,0x00,sizeof(struct ln_parm_c)); 
+	EXEC SQL drop table tmp_ln_pln;
+	if( sqlca.sqlcode && sqlca.sqlcode!=-942)
+	{
+		sprintf(acErrMsg,"vvvvvvvvvvv![%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL create table tmp_ln_pln(
+			ac_no varchar2(19),
+			pact_no varchar2(20),
+			ttl_amt number(16,2),
+			ttl_cnt number(6),
+			curr_cnt number(6),
+			curr_amt number(16,2),
+			curr_intst number(16,2),
+			end_date varchar2(8),
+			bal number(16,2)
+	    );
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"aaaaa![%d]",sqlca.sqlcode);
+		WRITEMSG
+				goto ErrExit;
+	}
+  ret=Ln_mst_Dec_Sel(g_pub_tx.reply,"repay_type in('3','4') and ac_sts!='*' and bal!=0");
+  ERR_DEAL
+	while(1)
+	{
+  memset(&ln_pay_pln_p,0x00,sizeof(struct ln_pay_pln_c));
+  memset(&ln_pay_pln_tmp,0x00,sizeof(struct ln_pay_pln_c));
+  memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+  memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+	    ret=Ln_mst_Fet_Sel(&g_ln_mst,g_pub_tx.reply);
+	    if(ret==100)break;
+	    ERR_DEAL
+			ret = Mdm_ac_rel_Sel( g_pub_tx.reply ,&g_mdm_ac_rel, "ac_id=%ld", g_ln_mst.ac_id );
+			if( ret==100 )
+			{
+				sprintf( acErrMsg,"凭证(介质)与账户关系表无此记录[%d][%d]",ret,g_ln_mst.ac_id);
+				WRITEMSG
+				strcpy( g_pub_tx.reply ,"O001" );
+				goto ErrExit;
+			} 
+			else if( ret )
+			{
+  		  sprintf( acErrMsg,"取凭证(介质)与账户关系表异常[%d][%d]",ret,g_ln_mst.ac_id);
+				WRITEMSG
+				strcpy( g_pub_tx.reply ,"D103" );
+				goto ErrExit;
+  		 }
+  		 	/* 取贷款参数信息 */
+			ret = Ln_parm_Sel(g_pub_tx.reply,&g_ln_parm ," prdt_no='%s' ",g_ln_mst.prdt_no );
+			if( ret==100 )
+			{
+				sprintf(acErrMsg,"贷款参数文件中无此记录 [%s][%d]",g_ln_mst.prdt_no,ret);
+				WRITEMSG
+				strcpy( g_pub_tx.reply ,"L001" );
+				goto ErrExit;
+			} 
+			else if( ret )
+			{
+  		 	sprintf( acErrMsg,"取贷款参数文件异常 [%s][%d]",g_ln_mst.prdt_no,ret);
+				WRITEMSG
+				strcpy( g_pub_tx.reply ,"L001" );
+				goto ErrExit;
+   		}
+		if ( g_ln_parm.ln_pay_type[0]=='3' || g_ln_parm.ln_pay_type[0]=='4' )
+		{			
+				/* 查询按揭欠款表中欠款期数 */
+				cnt = sql_count( "ln_lo" , "ac_id=%ld and ac_seqn=%d  and pay_type='0'" , g_ln_mst.ac_id,g_ln_mst.ac_seqn );	
+				ret = Ln_pay_pln_Sel( g_pub_tx.reply , &ln_pay_pln_p , " ac_id='%ld' and ac_seqn='%d' " , g_ln_mst.ac_id,g_ln_mst.ac_seqn );		
+				if( ret )
+				{
+					sprintf(acErrMsg,"读取还款计划表信息error");
+					WRITEMSG
+					strcpy( g_pub_tx.reply,"S049" );
+					goto ErrExit;
+				}
+				sprintf(acErrMsg,"读取还款计划表信息cnt[%d]ln_pay_pln_p.curr_cnt[%d]",cnt,ln_pay_pln_p.curr_cnt);
+				WRITEMSG		
+				/* 计算从哪期开始未还 */
+				if(!cnt)
+				{
+					TRACE
+					cnt = ln_pay_pln_p.curr_cnt;
+				}else
+				{
+					TRACE
+					cnt = ln_pay_pln_p.curr_cnt-cnt;
+				}
+				sprintf(acErrMsg,"cnt[%d]",cnt);
+				WRITEMSG
+				/* 生成全部还款计划 */
+				t=1;
+				double bal=0.00;
+				bal=g_ln_mst.bal;
+				while( t<=ln_pay_pln_p.ttl_cnt )
+				{
+				 TRACE
+				 	vtcp_log("------------------1\n");
+					memset(&ln_pay_pln_tmp,0x00,sizeof(struct ln_pay_pln_c));
+					ret = pub_ln_PayPlan(g_ln_mst ,g_ln_parm , t , &ln_pay_pln_tmp ,0);	
+					if (ret)
+					{
+						sprintf(acErrMsg,"调用函数pub_ln_PayPlan错误!");
+						WRITEMSG
+						goto ErrExit;
+					}
+					if( ln_pay_pln_tmp.curr_cnt<cnt )
+					{
+							strcpy( ln_pay_pln_tmp.pay_ind , "1" );			
+					}
+					
+				 vtcp_log("-----------------2\n");
+				 char insertstr[4096],curr_date[9];
+				 memset(insertstr,0x00,sizeof(insertstr));
+				 memset(curr_date,0x00,sizeof(curr_date));
+				 sprintf(curr_date,"%ld",ln_pay_pln_tmp.end_date);
+				 if(t==1)			 
+				 {
+			 			sprintf(insertstr,"insert into tmp_ln_pln values('%s','%s',%.2lf,%ld,%ld,%.2lf,%.2lf,'%s',%.2lf)",g_mdm_ac_rel.ac_no,g_ln_mst.pact_no,ln_pay_pln_tmp.ttl_amt,ln_pay_pln_tmp.ttl_cnt,ln_pay_pln_tmp.curr_cnt,ln_pay_pln_tmp.curr_amt,ln_pay_pln_tmp.curr_intst,curr_date,ln_pay_pln_tmp.ttl_amt-ln_pay_pln_tmp.curr_amt);
+					 	vtcp_log("----------[%s]-------3\n",insertstr);
+					 	ret=sql_execute2(insertstr);
+  			 		ERR_DEAL				 	
+				 }
+				 else if(t>1 && t<ln_pay_pln_p.ttl_cnt)
+				 {
+				 		sprintf(insertstr,"insert into tmp_ln_pln values('%s','%s',%.2lf,%ld,%ld,%.2lf,%.2lf,'%s',%.2lf)",g_mdm_ac_rel.ac_no,g_ln_mst.pact_no,ln_pay_pln_tmp.ttl_amt,ln_pay_pln_tmp.ttl_cnt,ln_pay_pln_tmp.curr_cnt,ln_pay_pln_tmp.curr_amt,ln_pay_pln_tmp.curr_intst,curr_date,bal-ln_pay_pln_tmp.curr_amt);
+				 		vtcp_log("----------[%s]-------3\n",insertstr);
+				 		ret=sql_execute2(insertstr);
+  			 		ERR_DEAL
+  			 		bal=bal-ln_pay_pln_tmp.curr_amt;
+  			 }
+  			 else if(t==ln_pay_pln_p.ttl_cnt)
+  			 {
+						sprintf(insertstr,"insert into tmp_ln_pln values('%s','%s',%.2lf,%ld,%ld,%.2lf,%.2lf,'%s',%.2lf)",g_mdm_ac_rel.ac_no,g_ln_mst.pact_no,ln_pay_pln_tmp.ttl_amt,ln_pay_pln_tmp.ttl_cnt,ln_pay_pln_tmp.curr_cnt,bal,ln_pay_pln_tmp.curr_intst,curr_date,bal-bal);
+				 		vtcp_log("----------[%s]-------3\n",insertstr);
+				 		ret=sql_execute2(insertstr);  			 
+  			 } 		
+			   t++;
+				}						
+  }
+}
+GoodExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

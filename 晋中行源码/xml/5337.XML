@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01010000" TITLE="5337      增加项目业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(5337                    增加项目业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+<!--屏幕输入内容 -->
+ 
+ <ITEM LINE="06"  	COL="7" TYPE="%-12s" 	FUNCTIONS="T(项目  编号: )"/>
+ <ITEM LINE="08"	COL="7" TYPE="%-12s"    FUNCTIONS="T(操作  类型:!)"/>
+ <ITEM LINE="10"  	COL="7" TYPE="%-12s" 	FUNCTIONS="T(项目  种类:!)"/>
+ <ITEM LINE="10"  	COL="39" TYPE="%-12s" 	FUNCTIONS="T(对方清算行: )"/> 
+ <ITEM LINE="12"  	COL="7" TYPE="%-12s" 	FUNCTIONS="T(帐      号: )"/>
+ <ITEM LINE="14"  	COL="7" TYPE="%-12s" 	FUNCTIONS="T(户      名: )"/>
+ <ITEM LINE="16"  	COL="7" TYPE="%-12s" 	FUNCTIONS="T(业务  描述: )"/>
+ <ITEM LINE="18" 	COL="7" TYPE="%-12s" 	FUNCTIONS="T(项目  状态:!)"/> 
+ <ITEM LINE="20" 	COL="7" TYPE="%-12s" 	FUNCTIONS="T(备      注: )"/> 
+ 
+ <!--控制输入内容 --> 
+ <ITEM LINE="06"   COL="19"  TYPE="%-60s"  NAME="#XMNO"  VISABLE="FALSE" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="08"  COL="19"  NAME="#OPTYPE" TYPE="%1d"  DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1|2)">
+       <SELECT LINE="6" COL="22">
+         <OPTION VALUE="0" TITLE="查询"/>
+         <OPTION VALUE="1" TITLE="增加"/>
+         <OPTION VALUE="2" TITLE="修改"/>
+       </SELECT>
+ </ITEM>
+ <ITEM	NAME="#JUMP1"	TYPE="%-1d"	FUNCTIONS="j(#OPTYPE=0,T{1}T{0})G(1,#OK)"/>
+ <ITEM NAME="#SPACE1"  TYPE="%1s" FUNCTIONS="T()"/>
+ <ITEM LINE="10"  COL="19"  NAME="#XMTYPE" TYPE="%1d"    DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1)">
+       <SELECT >
+         <OPTION VALUE="0" TITLE="贷记项目"/>
+         <OPTION VALUE="1" TITLE="借记项目"/>
+       </SELECT>
+ </ITEM>
+ <ITEM NAME="#SXMTYPE"       TYPE="%8s"    FUNCTIONS="S(#XMTYPE,#XMTYPE)"/> 
+ <ITEM LINE="10"   COL="51"  TYPE="%-12s"  NAME="#OQSBRNO"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+ <ONLOSTFOCUS>
+ "{
+	   dim @baktxno as string;
+	   @baktxno=$TXNO;
+	   $TXNO='9553';
+	   $FD32=#OQSBRNO;
+	   commsend_001();
+	   callserver();
+	   $TXNO=@baktxno;
+	   if($FD12!='0000'){
+	   showmsg(geterror());
+	   return(false);
+   }
+   showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#AC_NO"   TYPE="%-24s" FUNCTIONS=""/>
+ <ITEM NAME="#AC_SEQN"   TYPE="%-4s" FUNCTIONS=""/>
+ <ITEM  NAME="#ID_TYPE"     TYPE="%-1s"        FUNCTIONS=""/>
+ <ITEM LINE="12"   COL="19"  TYPE="%-19s"  NAME="#PAYACTNO"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+ <ONLOSTFOCUS>
+  "{
+        dim @baktxno as string;
+        dim @name as string;
+        dim @avbal as string;
+        dim @pwd_ind as string;
+        dim @actype as string;
+        dim @prdt_name as string;
+        @baktxno=$TXNO;
+        $TXNO='9731';
+        #AC_NO=substr(#PAYACTNO,0,24)+space(24-len(#PAYACTNO))+'';
+        $FD102=#AC_NO+#AC_SEQN;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        @name=substr($FD102,125,60);
+        @avbal=substr($FD102,185,16);
+        @pwd_ind=substr($FD102,48,1);
+        @actype=substr($FD102,207,1);
+        @prdt_name=rtrim(substr($FD102,313,30));
+        showhelp(4,68,5,10,'帐户信息','户名:'+@name+' 余额:'+itoa(val(@avbal,0.01),'%16.2f')+space(6)+' 产品名称:'+@prdt_name);
+        #ID_TYPE=substr($FD102,61,1);
+        //if(@pwd_ind=='Y')
+        //{
+        //    showmsg('需要检查密码');
+        //    #DRAW_PWD='';
+        //    show(#LDRAW_PWD,true);
+        //    show(#DRAW_PWD,true);
+        //}
+        //else
+        //{
+        //    show(#LDRAW_PWD,false);
+        //    show(#DRAW_PWD ,false);
+        //
+        //    if(@actype=='1')
+        //    {
+        //        showmsg(@prdt_name+'必需有密码才能办理大小额业务');
+        //        return(false);
+        //    }
+        //}
+        //if(#ID_TYPE=='Y')
+        //{
+        //  showmsg('该账户需要凭证件支取，需要输入证件');
+        //  show(#ID_TYPE,true);
+        //  show(#ID_NO,true);
+        //  show(#SHOW_ID_TYPE,true);
+        //  show(#SHOW_ID_NO,true);
+        //}else{
+        //  show(#ID_TYPE,false);
+        //  show(#ID_NO,false);
+        //  show(#SHOW_ID_TYPE,false);
+        //  show(#SHOW_ID_NO  ,false);
+        //} 
+        setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#CERTNO20#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+        #ID_NO=rtrim(#CERTNO20);// for test
+        #PAYACTNO=rtrim(#PAYACTNO);
+        #PAYNAME=@name;
+        if(len(#PAYACTNO)!=7 and len(#PAYACTNO)!=5 and len(#PAYACTNO)!=3 )
+        {
+            @baktxno=$TXNO;
+            $TXNO = '9405';
+            #PAYACTNO=substr(#PAYACTNO,0,24)+space(24-len(#PAYACTNO))+'';
+            $FD32=#PAYACTNO;
+            commsend_001();
+            callserver();
+            if($FD12!='0000')
+            {
+                showmsg(geterror());
+                return (false);
+            }
+            $TXNO=@baktxno;
+        }
+   }"
+   </ONLOSTFOCUS>
+   </ITEM>
+ <ITEM LINE="14"   COL="19"  TYPE="%-60s"  NAME="#PAYNAME"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="16"   COL="19"  TYPE="%-12s"  NAME="#YWTYPE"     DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM NAME="#SPACE2"  TYPE="%1s" FUNCTIONS="T()"/>
+ <ITEM LINE="18"  COL="19"  NAME="#YWSTS" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1)">
+      <SELECT LINE="16" COL="21">
+        <OPTION VALUE="0" TITLE="启用"/>
+        <OPTION VALUE="1" TITLE="停用"/>
+      </SELECT>
+</ITEM>
+ <ITEM NAME="#SYWSTS"       TYPE="%-4s"   FUNCTIONS="S(#YWSTS,#YWSTS)"/>
+
+ <ITEM LINE="20"  COL="19"  TYPE="%-60s"  NAME="#FILLER"    DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+ <!-- 102域变量 -->
+  <ITEM NAME="#ACTNO24"      TYPE="%-24s"       FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ"       TYPE="%-4s"        FUNCTIONS=""/>
+  <ITEM NAME="#VOCTYPE"      TYPE="%-3s"        FUNCTIONS=""/>
+  <ITEM NAME="#VOCNUM"       TYPE="%16d"        FUNCTIONS=""/>
+  <ITEM NAME="#FETCHFLAG"    TYPE="%1s"         FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG"      TYPE="%-1s"        FUNCTIONS=""/>
+  <ITEM NAME="#QUE_PWD"      TYPE="%6s"         FUNCTIONS=""/>
+
+  <ITEM NAME="#CERTFLAG"     TYPE="%-1s"        FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO20"     TYPE="%-20s"       FUNCTIONS=""/>
+  <ITEM NAME="#STAMPFLAG"    TYPE="%1s"         FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG2"     TYPE="%1s"         FUNCTIONS=""/>  
+  <ITEM NAME="#PWD16"        TYPE="%-16s"       FUNCTIONS=""/>
+  <ITEM NAME="#PRINTDATE"    TYPE="%-8s"        FUNCTIONS=""/>      
+  <ITEM NAME="#TXAMT15"      TYPE="%-16s"       FUNCTIONS=""/>
+  <ITEM NAME="#CERTTYPE"     TYPE="%-1s"        FUNCTIONS=""/>
+  <ITEM NAME="#CUSTNAME"     TYPE="%-50s"       FUNCTIONS=""/>
+  <ITEM NAME="#AVBAL"        TYPE="%17.2f"      FUNCTIONS=""/>
+  <ITEM NAME="#CURCD"        TYPE="%-2s"        FUNCTIONS=""/>
+  <ITEM NAME="#CT_IND"       TYPE="%-1s"        FUNCTIONS="T(2)"/>
+  <ITEM NAME="#DSCPT"        TYPE="%-3s"        FUNCTIONS=""/>
+  <ITEM NAME="#ACTTYPE"      TYPE="%-1s"        FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"     TYPE="%-4s"        FUNCTIONS=""/>
+  <ITEM NAME="#ACCOUNTFLAG"  TYPE="%-1s"        FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST1"    TYPE="%-16s"       FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST2"    TYPE="%-16s"       FUNCTIONS=""/>  
+  <ITEM NAME="#INTEREST3"    TYPE="%-16s"       FUNCTIONS=""/>
+  <ITEM NAME="#PAYAMOUNT"    TYPE="%-16s"       FUNCTIONS=""/>  
+  <ITEM NAME="#NEWVOCNUM"    TYPE="%-16d"       FUNCTIONS=""/>
+  <ITEM NAME="#SPEFLAG"      TYPE="%-20s"       FUNCTIONS=""/>    
+  <ITEM NAME="#PRODNAME"     TYPE="%-30s"       FUNCTIONS=""/>
+  <ITEM NAME="#ACTNO_24"     TYPE="%-24s"       FUNCTIONS=""/> 
+  <ITEM NAME="#EDUCREDIT"    TYPE="%1s"         FUNCTIONS=""/>   
+  <ITEM NAME="#DESC10"       TYPE="%-10s"       FUNCTIONS=""/>
+  <ITEM NAME="#ID_NO"        TYPE="%-20s"       FUNCTIONS=""/>
+  <ITEM NAME="#DRAW_PWD"     TYPE="%6d"         FUNCTIONS=""/>
+  <ITEM NAME="#ID_TYPE"      TYPE="%-1s"        FUNCTIONS=""/>
+ <!-- 返回变量 --> 
+
+
+<ITEM NAME="#SERVER"  TYPE="%-7s" FUNCTIONS="T($ORKINBR=#OPNBR)T($TTSKID=UP)"/>
+
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	commsend_001();
+	$FD16='5877';
+	$FD67=#OPTYPE;
+	$FD69=#XMTYPE;
+	$FD74=#XMNO;
+	$FD52=#OQSBRNO;
+	$FD33=#PAYACTNO;
+	$FD76=getitems('#PAYNAME#FILLER');
+	$FD27=#YWTYPE;
+	$FD68=#YWSTS;
+	callserver();
+		if($FD12!='0000'){
+	    showmsg(geterror());
+	    return(false);
+    }
+
+	setitems('#XMTYPE',$FD69);
+	setitems('#OQSBRNO',$FD52);
+	setitems('#PAYACTNO',$FD33);
+	setitems('#PAYNAME#FILLER',$FD76);
+	setitems('#YWTYPE',$FD61);
+	setitems('#YWSTS',$FD68);
+
+	show(#XMTYPE,true);
+	show(#OQSBRNO,true);
+	show(#PAYACTNO,true);
+	show(#PAYNAME,true);
+	show(#FILLER,true);
+	show(#YWTYPE,true);
+	show(#YWSTS,true);
+
+	if(#OPTYPE=='0'){
+		showmsg('查询完毕');
+		setitems('#OPTYPE','2');
+		show(#OPTYPE,true);
+	}else{
+		runoutput();
+	}
+ }"
+ </ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功" CHECK="#OPTYPE?0">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(5, 25,'小额项目号维护[4]成功',getseltitle(#OPTYPE,#OPTYPE));
+		print(7, 20,'项目号:[60]',#XMNO);
+		print(8, 20,'状  态:[4]',getseltitle(#YWSTS,#YWSTS));
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" CHECK="#OPTYPE?0" LINESPACE="24">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO = '00';
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:2101');
+		print( 5,13,'交易:建立客户ID');
+		print( 7,30,'小额项目号维护[4]成功',getseltitle(#OPTYPE,#OPTYPE));
+		print( 8,20,'项目种类:[8       ]              对方清算行:[12]',#SXMTYPE,#OQSBRNO);
+		print( 9,20,'帐    号:[19                 ]   户      名:[60]',#PAYACTNO,#PAYNAME);
+		print(10,20,'业务描述:[12          ]          项目  状态:[4]',#YWTYPE,#SYWSTS);
+		print(11,20,'备    注:[60]',#FILLER);
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

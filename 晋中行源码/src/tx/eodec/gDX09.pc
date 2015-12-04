@@ -1,0 +1,688 @@
+/*************************************************************
+* 文 件 名: gDX09.pc
+* 功能描述：短信收费批量扣款
+*
+* 作    者: zgf
+* 完成日期: 2013年9月10日
+*
+* 在每天的日终循环执行mob_acct_type表，在满足如下条件时，进行扣费。同时更新收费日期为当前日期
+	条件：收费状态为1，当前日期 = 收费日期 + 30
+	记账：贷方为51110科目，借方为签约账户扣款账户。
+	 
+		修改记录:修改了mob_fee_mx的表结构,所以需要修改部分程序，在账户余额不足时
+	       不进行扣费，超过50天欠费则置动户通知状态为2--暂停服务
+		   修改服务费的收入机构为存款开户机构和贷款的开户机构
+		   修改普通贷款在贷款结清之后，如最后一次费用能成功扣收，则自动解除短信签约,以防止贷款结清之后继续扣费
+		   将原扣费交易分开,存款与贷款不在同一天执行
+		   修改原扣费交易为多线程，修改控制原交易为对同一acid只进行一次扣费。
+* 日    期:20140612
+* 修 改 人:zgf
+* 修改内容:领导确定：每月20日扣收,每月定期跑一次
+* 程序实现：
+*	1、每月20号晚上跑批，循环查找 mob_acct_type表，条件为（对公户server_type='1002及贷款户server_type=1003
+* 收费标志SFBZ=1，状态为mob_sts=1）。
+* 2、收费日期lst_fee_date满足 (系统日期 大于等于 lst_fee_date )时进行收费，
+* 收费成功后更新lst_fee_date日期为lst+fee_date+实际天数
+* 3、若批量收费不成功（扣款账号余额不足时，）
+*
+*insert into com_eod_exec values(9002,'DX09','gDX09','短信日终批量收费','1111111111','0','0','00','00','2','Y','Y','N','2','Y'); 
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <math.h>  
+#include <stdlib.h>
+#include <string.h>
+#include <varargs.h>
+#define  EXTERN
+#include "public.h"
+#include "mob_acct_type_c.h"
+#include "ln_mst_c.h"
+#include "com_item_c.h"
+#include "mdm_ac_rel_c.h"
+#include "mob_server_type_c.h"
+#include "com_branch_c.h"
+#include "mob_fee_mx_c.h"
+EXEC SQL include sqlca;
+
+gDX09()
+{
+	long enddata = 0;
+	long stopdata = 0;
+	int  getFeeFlag=0;			/* 0--可以扣费 1--余额不足扣费但不需要置暂停标志 2-- 需要设置暂停服务标志 3--ac_id对应两个账号时的操作 */
+	int  autounsign=0;			/* 需要自动解约标志*/
+	double bal =0.0;
+	char in_br_no[5+1];		/*短信服务费的服务费收入机构*/
+	char wherelist[1024];  /**查询条件**/
+	char cStr[50];
+	int n1 = 0;
+	int n2 = 0;
+	int n3 = 0;
+	int n = 0; /*扣款次数*/
+	struct mob_acct_type_c sMob_acct_type,sMob_acct_type_tmp;
+	struct mob_acct_type_c sMob_acct_type_upd;
+	struct mdm_ac_rel_c sMdm_ac_rel;
+	struct mob_server_type_c sMob_server_type,sMobser;
+	struct mob_fee_mx_c sMob_fee;
+	struct mob_fee_mx_c sMob_fee_sel;
+	struct ln_mst_c st_ln_mst;
+
+	memset(&sMob_server_type,0x00,sizeof(sMob_server_type));
+	memset(&sMob_acct_type,0x00,sizeof(sMob_acct_type));
+	memset(&sMob_acct_type_tmp,0x00,sizeof(sMob_acct_type_tmp));
+	memset(&sMdm_ac_rel,0x00,sizeof(sMdm_ac_rel));
+	memset(&st_ln_mst,0x00,sizeof(st_ln_mst));
+	memset(&sMob_fee_sel,0x00,sizeof(sMob_fee_sel));
+	memset(&sMob_acct_type_upd,0x00,sizeof(sMob_acct_type_upd));
+	memset(in_br_no,0x00,sizeof(in_br_no));
+	memset(&sMob_fee,0x00,sizeof(sMob_fee));
+	memset(&sMobser,0x00,sizeof(sMobser));
+	memset(cStr,0x00,sizeof(cStr));
+	
+	/* 打开事务 */
+	g_reply_int = sql_begin();    
+	if (g_reply_int)
+	{
+	    sprintf(acErrMsg, "打开事务失败!!!");
+	    WRITEMSG
+	    goto ErrExit;
+	}
+  pub_base_sysinit();
+	if (pub_base_PubQlsh(&g_pub_tx.trace_no, g_pub_tx.reply))
+	{
+		sprintf(acErrMsg, "取主机流水号错 [%d]", g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}	
+	
+	g_reply_int=Mob_server_type_Dec_Sel(g_pub_tx.reply,"1=1");
+	strcat(cStr,"(");
+	while(1)
+	{
+		g_reply_int = Mob_server_type_Fet_Sel(&sMobser,g_pub_tx.reply);
+		if(g_reply_int == 100)
+		{
+				vtcp_log("检查是否收费，读取Mob_server_type完成");
+				break;
+		}
+		else if(g_reply_int)
+		{
+			sprintf(acErrMsg, "取短信收费签约记录失败 [%d][%s]", g_reply_int,g_pub_tx.reply);
+			WRITEMSG
+			goto ErrExit;
+		}
+		
+			if(pub_base_CompDblVal(sMobser.fee_standard , 0.00)>  0)
+			{
+				strcat(cStr,"'");
+				strcat(cStr,sMobser.server_type);
+				strcat(cStr,"',");
+			}
+	}
+	if(cStr[strlen(cStr)-1] == ',')		
+	cStr[strlen(cStr)-1] = ')';
+	else 
+	{
+		strcpy(cStr,"('')");
+	}
+	vtcp_log("cStr = %s",cStr);
+	
+	g_reply_int=Mob_acct_type_Dec_Sel1(g_pub_tx.reply, "server_type in %s and mob_sts in('1','2') and sfbz='1' order by ac_no",cStr);
+	if(g_reply_int)
+	{
+		sprintf(acErrMsg, "取声明游标错误Mob_acct_type [%d]", g_reply_int);
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		autounsign=0;
+		getFeeFlag=2;		/*初始设置为可以收费*/
+		
+		memset( &sMob_acct_type, 0x0, sizeof(sMob_acct_type) );
+		g_reply_int=Mob_acct_type_Fet_Sel1(&sMob_acct_type,g_pub_tx.reply);
+		if(g_reply_int==100)
+		{
+			vtcp_log("[%s][%d]收费成功结束,sqlcode=[%d]!!!",__FILE__,__LINE__,g_reply_int);
+			break;
+		}else if(g_reply_int)
+		{
+			sprintf(acErrMsg, "取短信收费签约记录失败 [%d][%s]", g_reply_int,g_pub_tx.reply);
+			WRITEMSG
+			goto ErrExit;
+		}
+		
+		/***获取收费金额***/
+		g_reply_int = Mob_server_type_Sel(g_pub_tx.reply,&sMob_server_type,"server_type='%s'",sMob_acct_type.server_type);  
+	  if (g_reply_int)
+	  {
+	     vtcp_log("[%s][%d]查询表_Sel错误[%d]",__FILE__,__LINE__,g_reply_int);
+	     strcpy(g_pub_tx.reply,"D104");
+	     goto ErrExit;
+	  }
+		if(pub_base_CompDblVal(sMob_server_type.fee_standard , 0.00)== 0)
+			continue;
+		
+		vtcp_log("收费账号=[%s]，收费手机号=[%s]",sMob_acct_type.ac_no,sMob_acct_type.mobile);
+		
+		/**满足扣费的条件***/
+		vtcp_log("上次收费日期=[%ld]",sMob_acct_type.lst_fee_date);
+		/*pub_base_deadlineD(sMob_acct_type.lst_fee_date,30,&enddata);*/
+		pub_base_deadlineM(sMob_acct_type.lst_fee_date,1,&enddata);
+		vtcp_log("现在收费日期=[%ld]",enddata);
+		vtcp_log("系统时间=[%ld]",g_pub_tx.tx_date);
+			
+		if( sMob_acct_type.lst_fee_date > g_pub_tx.tx_date )
+		{
+				vtcp_log("未到收费日期，退出本次循环，执行下次");
+				continue ;
+	  }
+		vtcp_log("满足收费日，下面执行收费操作");
+		
+		/**收费处理*/
+		/**活期户**/
+		if(sMob_acct_type.ac_type[0]=='1')
+		{
+			/**查活期账户余额**/
+			g_reply_int=Dd_mst_Sel(g_pub_tx.reply,&g_dd_mst,"ac_id=%ld",sMob_acct_type.ac_id);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "活期表错误Dd_mst [%d]", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			g_reply_int=Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_id=%ld",g_dd_mst.ac_id);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "查询mdm_ac_rel [%d]错误", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			memcpy(in_br_no,g_dd_mst.opn_br_no,5);
+		}
+		/**贷款户**/
+		if(sMob_acct_type.ac_type[0]=='3')
+		{
+			/**查贷款账户对应结算户ac_id**/
+			g_reply_int=Ln_mst_Sel(g_pub_tx.reply,&g_ln_mst,"pact_no like '%%%s%%' ",sMob_acct_type.ac_no);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "活期表错误Dd_mst [%d]", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			/**查结算户账户余额**/
+			g_reply_int=Dd_mst_Sel(g_pub_tx.reply,&g_dd_mst,"ac_id=%ld",g_ln_mst.repay_ac_id);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "活期表错误Dd_mst [%d]", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			g_reply_int=Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_id=%ld",g_dd_mst.ac_id);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "查询mdm_ac_rel [%d]错误", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			memcpy(in_br_no,g_dd_mst.opn_br_no,5);
+		}
+		
+		if(sMdm_ac_rel.note_sts[0]!='0')
+			continue;/**挂失**/
+		if(g_dd_mst.ac_sts[0]!='1')
+			continue;/**销户**/
+		if( (g_dd_mst.hold_sts[0]=='1')||(g_dd_mst.hold_sts[0]=='2'))
+		{
+			continue;/**冻结**/
+		}
+		/********/
+		bal=0.00;
+		if(g_dd_mst.hold_sts[0]=='3')
+		{
+			bal=g_dd_mst.bal-g_dd_mst.hold_amt-g_dd_mst.ctl_amt;
+		}
+		else
+			bal=g_dd_mst.bal-g_dd_mst.ctl_amt;
+		if(pub_base_CompDblVal(sMob_server_type.fee_standard , bal)>0)
+		{
+			getFeeFlag=1;
+			/****************************如果余额不足则不进行扣费只需要置标志位
+			*************************************/
+			vtcp_log("[%s][%d]进入余额不足分支getFeeFlag=[%d],sMob_server_type.fee_standard=[%f],bal=[%f]"\
+				,__FILE__,__LINE__,getFeeFlag,sMob_server_type.fee_standard,bal);
+			/**增加收费不成功时，日期进行比较，若超出3个月即三次扣费都未成功，置标志位为2，更新签约状态为暂停***/
+			/**签约在每月20号之前处理方法**/
+
+			/*pub_base_deadlineM(sMob_acct_type.lst_fee_date,2,&stopdata);
+
+			if( stopdata < g_pub_tx.tx_date )
+			{
+				getFeeFlag=2;
+				vtcp_log("三次扣款未成功，更新签约状态为暂停");
+	  	}*/
+	  	n3 = pub_base_CalMouths(sMob_acct_type.lst_fee_date,g_pub_tx.tx_date);
+	  	if(n3>2)
+	  	{
+				getFeeFlag=2;
+				vtcp_log("三次扣款未成功，更新签约状态为暂停");
+	  	}
+		}
+		else
+		{
+			getFeeFlag=0;
+			
+			/*add by lwb 20141209*/
+			n1 = bal/sMob_server_type.fee_standard;  /*能扣几次*/
+			n2 = pub_base_CalMouths(sMob_acct_type.lst_fee_date,g_pub_tx.tx_date);/*欠费几次*/
+			if(n2>3)
+			{
+					n2=3;  /*最多欠费3次*/
+			}	
+			vtcp_log("n1 = %d  n2 = %d",n1,n2);
+			if(n1<n2)
+		  {
+		  	/*sMob_server_type.fee_standard = sMob_server_type.fee_standard*n1;
+		  	pub_base_deadlineM(sMob_acct_type.lst_fee_date,n1,&enddata);*/
+		  	n = n1;
+		  	pub_base_deadlineM(g_pub_tx.tx_date,n1-n2,&enddata);
+		  }
+		  else
+		  {
+		  	/*sMob_server_type.fee_standard = sMob_server_type.fee_standard*n2;	
+		  	pub_base_deadlineM(sMob_acct_type.lst_fee_date,n2,&enddata);*/
+		  	n = n2;
+		  	enddata = g_pub_tx.tx_date;
+		  }
+			
+			/*if(sMob_acct_type.mob_sts[0] == '2')
+			{ /状态为暂停时  检查够扣几次的  如果够几次就扣几次 /
+				if(pub_base_CompDblVal(sMob_server_type.fee_standard*3 , bal)<=0)
+			  {
+			   sMob_server_type.fee_standard = 3*sMob_server_type.fee_standard;	
+			   
+			   pub_base_deadlineM(sMob_acct_type.lst_fee_date,3,&enddata);
+			  }
+			  else if(pub_base_CompDblVal(sMob_server_type.fee_standard*2 , bal)<=0)
+				{
+			   sMob_server_type.fee_standard = 2*sMob_server_type.fee_standard;	
+	       pub_base_deadlineM(sMob_acct_type.lst_fee_date,2,&enddata);
+			  }		
+			}
+			
+			else if(sMob_acct_type.mob_sts[0]=='1')
+			{
+				if(sMob_acct_type.lst_fee_date%100 <= 20)
+				{
+					pub_base_deadlineM(sMob_acct_type.lst_fee_date,1,&stopdata);
+				}
+				else 
+				{
+					pub_base_deadlineM(sMob_acct_type.lst_fee_date,1,&stopdata);
+				}
+				if( stopdata < g_pub_tx.tx_date )/两个月未扣/
+				{
+			    if(pub_base_CompDblVal(sMob_server_type.fee_standard*2 , bal)<0)
+				  {
+			      sMob_server_type.fee_standard = 2*sMob_server_type.fee_standard;	
+			      pub_base_deadlineM(sMob_acct_type.lst_fee_date,2,&enddata);
+			    }		
+		  	}	
+			}*/
+			/*add end*/
+			
+			vtcp_log("[%s][%d]进入可扣款分支getFeeFlag=[%d],sMob_server_type.fee_standard=[%f],bal=[%f]"\
+			,__FILE__,__LINE__,getFeeFlag,sMob_server_type.fee_standard,bal);
+		}
+		
+		if(pub_base_CompDblVal(sMob_server_type.fee_standard,0.00)<=0){
+			vtcp_log("[%s][%d]无扣费金额,continue!!getFeeFlag=[%d],sMob_server_type.fee_standard=[%f],bal=[%f]"\
+			,__FILE__,__LINE__,getFeeFlag,sMob_server_type.fee_standard,bal);
+			continue;
+		}
+		/**判断对公账户只收费一次操作***/
+		if(!strcmp(sMob_acct_type.ac_no,sMob_acct_type_tmp.ac_no))
+		{
+			
+		  if(getFeeFlag == 1 || getFeeFlag == 2)
+			{
+				vtcp_log("aaaaaaaaaaaaaa");
+
+				getFeeFlag = 3;
+				/*continue;*/
+			}
+			else{
+			vtcp_log("[%s][%d]此账户已收费，跳出本次循环..,sMob_acct_type.ac_no=[%s]--sMob_acct_type_tmp.ac_no=[%s]!!!",__FILE__,__LINE__,sMob_acct_type.ac_no,sMob_acct_type_tmp.ac_no);
+			getFeeFlag = 3;
+		  }
+		}
+		
+		if(!getFeeFlag)
+		{
+			while(n--)
+			{
+			
+			vtcp_log("[%s][%d]开始进行扣款ac_id[%ld]ac_no[%s]!!!",__FILE__,__LINE__,sMob_acct_type.ac_id,sMob_acct_type.ac_no);
+			/**下客户账*/
+			g_reply_int=sub_tran_acct1(sMdm_ac_rel.ac_no,sMob_server_type.fee_standard,"短信扣费",in_br_no,"2");
+			if(g_reply_int)
+			{
+				if(!memcmp(g_pub_tx.reply,"P105",4))
+				{
+					vtcp_log("[%s][%d]该笔扣款失败,P105,continue!!getFeeFlag=[%d],sMob_server_type.fee_standard=[%f],bal=[%f],ac_no=[%s],"\
+					,__FILE__,__LINE__,getFeeFlag,sMob_server_type.fee_standard,bal,sMdm_ac_rel.ac_no);
+					continue;
+				}else
+				{
+					vtcp_log("[%s][%d]该笔扣款失败,[%s],continue!!getFeeFlag=[%d],sMob_server_type.fee_standard=[%f],bal=[%f],ac_no=[%s],"\
+					,__FILE__,__LINE__,g_pub_tx.reply,getFeeFlag,sMob_server_type.fee_standard,bal,sMdm_ac_rel.ac_no);
+					continue;
+				}
+				goto ErrExit;
+			}
+			/**记科目账*/
+			g_reply_int=sub_cr_acct1("51110",sMob_server_type.fee_standard,"短信扣费",in_br_no,"2");
+			if(g_reply_int)
+			{
+				goto ErrExit;
+			}
+
+			/*登记短信银行流水表*/
+			memcpy(sMob_fee.tel,g_pub_tx.tel,6);
+			memcpy(sMob_fee.tx_code,g_pub_tx.tx_code,4);
+			memcpy(sMob_fee.ct_ind,"2",1);
+			memcpy(sMob_fee.br_no,g_dd_mst.opn_br_no,sizeof(sMob_fee.br_no)-1);
+
+			memcpy(sMob_fee.ac_no,sMdm_ac_rel.ac_no,sizeof(sMdm_ac_rel.ac_no));
+			if(sMob_acct_type.ac_type[0]=='1')
+			{
+				memcpy(sMob_fee.sign_ac_no,sMob_acct_type.ac_no,sizeof(sMob_acct_type.ac_no)-1);
+			}
+			else
+			{
+				memcpy(sMob_fee.sign_ac_no,sMob_acct_type.ac_no,sizeof(sMob_acct_type.ac_no)-1);
+			}
+			memcpy(sMob_fee.name,g_dd_mst.name,sizeof(g_dd_mst.name)-1);
+			memcpy(sMob_fee.server_type,sMob_acct_type.server_type,sizeof(sMob_fee.server_type)-1);
+			sMob_fee.amt_should=sMob_server_type.fee_standard;
+			sMob_fee.amt_fact=sMob_server_type.fee_standard;
+			sMob_fee.tx_date=g_pub_tx.tx_date;
+			sMob_fee.trace_no=g_pub_tx.trace_no;
+			sMob_fee.print_cnt=0;
+			sMob_fee.lst_fee_date=sMob_acct_type.lst_fee_date;
+			memcpy(sMob_fee.memo,"短信服务费扣费",20);
+			memcpy(sMob_fee.sts,"0",1);
+
+			g_reply_int=Mob_fee_mx_Ins(sMob_fee,g_pub_tx.reply);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "插入Mob_fee_Ins [%d]错误", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			vtcp_log("[%s][%d]扣款成功ac_no=[%s]金额=[%f]!!!",__FILE__,__LINE__,sMob_acct_type.ac_no,sMob_server_type.fee_standard);
+		}
+		}
+		else
+		{
+			vtcp_log("[%s][%d]无需扣款ac_id[%ld]ac_no[%s]!!!",__FILE__,__LINE__,sMob_acct_type.ac_id,sMob_acct_type.ac_no);
+		}
+		vtcp_log("[%s][%d]getFeeFlag=[%d]",__FILE__,__LINE__,getFeeFlag);
+
+		
+		/**	扣款成功更新签约表的收费日期为enddata	**/
+		/*if(getFeeFlag != 1)
+	  {*/
+			g_reply_int=Mob_acct_type_Dec_Upd(g_pub_tx.reply,"ac_no='%s' and ac_id=%ld and sfbz='1' and mob_sts in ('1','2') and br_no='%s' and mobile='%s' ",\
+				sMob_acct_type.ac_no,sMob_acct_type.ac_id,sMob_acct_type.br_no,sMob_acct_type.mobile);
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "声明更新游标错误Mob_acct_type [%d]", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+			g_reply_int=Mob_acct_type_Fet_Upd(&sMob_acct_type_upd,g_pub_tx.reply);
+			if(g_reply_int)
+			{
+			   /**错误处理**/
+				sprintf(acErrMsg, "取更新游标错误 [%d][%s]", g_reply_int,g_pub_tx.reply);
+				Mob_acct_type_Clo_Upd();
+				WRITEMSG
+				goto ErrExit;
+			}
+			vtcp_log("[%s][%d]扣款成功，更新扣费日期lst_fee_date=[%ld]金额=[%f]!!!",__FILE__,__LINE__,sMob_acct_type.lst_fee_date);
+	/*	}*/
+		vtcp_log("[%s][%d]aaaaaaaaaaaaaaaaaaa=[%d]!!!",__FILE__,__LINE__,getFeeFlag);
+		if(getFeeFlag == 2 )
+		{
+				/*进行签约表的暂停操作*/
+				g_reply_int=proc_mob_hst_modify(sMob_acct_type,"3","","",0.0);
+				if(g_reply_int)
+				{
+					sprintf(acErrMsg, "登记短信服务变更历史出错ret=[%d]!!!", g_reply_int);
+					WRITEMSG
+					goto ErrExit;
+				}
+				strcpy(g_pub_tx.tx_code,"DX09");
+				strcpy(g_pub_tx.sub_tx_code,"DX07");
+				pub_mob_sendmail("***","DX07",sMob_acct_type.ac_no,"0",sMob_server_type.fee_standard,bal );
+				memcpy(sMob_acct_type_upd.mob_sts,"2",1);		/*设置短信签约状态为暂停服务*/
+				if(autounsign==1)
+				{
+					vtcp_log("[%s][%d]本次扣费未成功,不进行自动解约!!!",__FILE__,__LINE__);
+				}
+		}
+		else if(getFeeFlag == 0) 
+		{
+				/*进行解约与自动扣费的处理*/
+				sMob_acct_type_upd.lst_fee_date=enddata;
+				if((n1>=n2) && sMob_acct_type.mob_sts[0]=='2')
+				{
+					g_reply_int=proc_mob_hst_modify(sMob_acct_type,"4","","",0.0);
+				  if(g_reply_int)
+				  {
+					 sprintf(acErrMsg, "登记短信服务变更历史出错ret=[%d]!!!", g_reply_int);
+					 WRITEMSG
+					 goto ErrExit;
+				  }
+				 	memcpy(sMob_acct_type_upd.mob_sts,"1",1);		/*设置短信签约状态为正常服务*/						
+			  }
+		}
+		else if(getFeeFlag == 3) 
+		{
+				/*由于为双账号,更新该账号上次扣费日,但是不进行收费*/
+				/*sMob_acct_type_upd.lst_fee_date=enddata;*/
+				sMob_acct_type_upd.mob_sts[0]=sMob_acct_type_tmp.mob_sts[0];
+		    sMob_acct_type_upd.lst_fee_date = sMob_acct_type_tmp.lst_fee_date;
+		}
+		else
+		{
+			vtcp_log("[%s][%d]不足扣费,但无需修改mob_acct_type表状态",__FILE__,__LINE__);
+			if(autounsign==1)
+			{
+				vtcp_log("[%s][%d]本次扣费未成功,不进行自动解约!!!",__FILE__,__LINE__);
+			}
+			strcpy(g_pub_tx.tx_code,"DX09");
+			strcpy(g_pub_tx.sub_tx_code,"DX08");
+			pub_mob_sendmail("***","DX08",sMob_acct_type.ac_no,"0",sMob_server_type.fee_standard,bal );
+
+		}
+
+		if(getFeeFlag != 1 )
+		{
+			/**修改mob_acct_type结构*/
+			g_reply_int=Mob_acct_type_Upd_Upd(sMob_acct_type_upd,g_pub_tx.reply);
+			if(g_reply_int)
+			{
+				Mob_acct_type_Clo_Upd();
+				sprintf(acErrMsg, "更新Mob_acct_type [%d]错误", g_reply_int);
+				WRITEMSG
+				Mob_acct_type_Clo_Upd();
+				goto ErrExit;
+			}
+			vtcp_log("[%s][%d]账号[%s]本次扣费成功,上一扣费日更新为[%ld]!!!",__FILE__,__LINE__,sMob_acct_type_upd.ac_no,sMob_acct_type_upd.lst_fee_date);
+			
+			g_reply_int=Mob_acct_type_Clo_Upd();
+			if(g_reply_int)
+			{
+				sprintf(acErrMsg, "关闭Mob_acct_type_Clo_Upd [%d]错误", g_reply_int);
+				WRITEMSG
+				goto ErrExit;
+			}
+		}
+		memset(&sMob_acct_type_tmp,0x00,sizeof(sMob_acct_type_tmp));
+		memcpy(sMob_acct_type_tmp.ac_no,sMob_acct_type.ac_no,sizeof(sMob_acct_type.ac_no)-1);
+    sMob_acct_type_tmp.mob_sts[0]=sMob_acct_type_upd.mob_sts[0];
+		sMob_acct_type_tmp.lst_fee_date = sMob_acct_type_upd.lst_fee_date;
+	}
+
+OkExit:
+	sql_commit();/*--事务提交--*/
+	Mob_acct_type_Clo_Sel1();
+	/*防止锁表,游标更新之后进行自动短信批量收费数据的删除*/
+	vtcp_log("[%s][%d]开始进行自动短信批量收费!",__FILE__,__LINE__);
+	g_reply_int = sql_execute("DELETE from mob_acct_type WHERE mob_sts='3' and filler in (select sign_ac_no from mob_fee_mx where tx_date=%ld and trace_no=%ld)",g_pub_tx.tx_date,g_pub_tx.trace_no);
+	if(g_reply_int)
+	{
+		vtcp_log("[%s][%d]删除协议出错[%d],自动短信批量收费失败,但不跳出程序!!",__FILE__,__LINE__,g_reply_int);
+	}else{
+		vtcp_log("[%s][%d]自动短信批量收费成功!!",__FILE__,__LINE__);
+	}
+	vtcp_log("短信扣费完成");
+	strcpy(g_pub_tx.reply, "0000");
+	set_zd_data("0120", g_pub_tx.reply);
+	return 0;
+ErrExit:
+	Mob_acct_type_Clo_Sel1();
+	sql_rollback();        /*--事务回滚--*/
+	vtcp_log("[%s][%d]短信扣费处理失败! tx_code=[DX09],prog_name=[gDX09]",__FILE__,__LINE__);
+	set_zd_data("0120", g_pub_tx.reply);
+	return g_reply_int;	
+}
+
+int sub_tran_acct1( char *dr_ac_no,double amt,char *brf,char * br_no,char * ct_ind)
+{
+	int ret=0;
+	vtcp_log("借方记帐科目[%s][%.2lf]",dr_ac_no,amt);
+	g_pub_tx.ac_id = 0;	 /*test clean */
+	g_pub_tx.ac_seqn = 0;
+	strcpy( g_pub_tx.tx_code, "DX09");
+	strcpy( g_pub_tx.ac_no, dr_ac_no );
+	memcpy(g_pub_tx.tx_br_no,br_no,5);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	g_pub_tx.tx_amt1 = amt;
+	if(dr_ac_no[0]=='9')
+	{
+			strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+			strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+			g_pub_tx.svc_ind=9001;
+			memset( g_pub_tx.sub_tx_code, 0x0, sizeof(g_pub_tx.sub_tx_code) );
+			strcpy( g_pub_tx.sub_tx_code, "A016" );
+			set_zd_data( DC_SUB_TX_CODE, g_pub_tx.sub_tx_code );
+			set_zd_data( "1204", "01" );
+			set_zd_data( "1205", "2" );
+			set_zd_double( "1208", g_pub_tx.tx_amt1 );
+	}
+	else
+	{
+			strcpy( g_pub_tx.ac_id_type,"1" ); /*账户类型为活期*/
+			strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+			g_pub_tx.svc_ind=1001;
+			memset( g_pub_tx.sub_tx_code, 0x0, sizeof(g_pub_tx.sub_tx_code) );
+			strcpy( g_pub_tx.sub_tx_code, "D003" );
+			set_zd_data( DC_SUB_TX_CODE, g_pub_tx.sub_tx_code );
+			strcpy( g_pub_tx.prt_ind, "0" );
+			set_zd_data( "102O", "0" );
+			set_zd_data( "102J", "01" );
+			set_zd_data( "102K", "2" );
+			set_zd_double( "102F", g_pub_tx.tx_amt1 );
+			set_zd_double( "102P", 0.00 );
+			set_zd_double( "102Q", 0.00 );
+			vtcp_log("11111111111111111");
+	}
+	strcpy( g_pub_tx.brf,"短信扣费" );
+	strcpy( g_pub_tx.no_show,"0" );
+	strcpy(g_pub_tx.add_ind,"0");
+vtcp_log("222222222222222222");
+	strcpy(g_pub_tx.ct_ind,"2");
+	strcpy(g_pub_tx.ac_wrk_ind,"000000101");
+	strcpy(g_pub_tx.hst_ind,"1");
+	vtcp_log("3333333333333333333333");
+	ret=pub_acct_trance();
+	if( ret ) goto ErrExit;
+  /* 进行会计记帐 */
+	ret = pubf_acct_proc(g_pub_tx.sub_tx_code );
+	if (ret != 0)
+	{
+			sprintf(acErrMsg,"会计记帐不成功!!");
+			WRITEMSG
+			goto ErrExit;
+	}
+	vtcp_log("4444444444444444444444");
+	set_zd_data("102O","" );
+	set_zd_data("102J","" );
+	set_zd_double("102F",0.00 );
+	set_zd_data("102K","" );
+	set_zd_double("102P",0.00 );
+	set_zd_double("102Q",0.00 );
+	set_zd_data( "1204", "" );
+	set_zd_data( "1205", "" );
+	set_zd_double( "1208", 0.00 );
+	strcpy( g_pub_tx.add_ind,"" );
+	return 0;
+ErrExit:
+	return 1;
+}
+int sub_cr_acct1(char * cr_ac_no,double amt,char *brf,char * br_no,char * ct_ind)
+{
+	int ret=0;
+	vtcp_log("贷方记帐科目[%s][%.2lf]",cr_ac_no,amt);
+	strcpy( g_pub_tx.tx_code, "DX09");
+	memcpy(g_pub_tx.tx_br_no,br_no,5);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+	strcpy(g_pub_tx.ac_wrk_ind,"001001001");
+	strcpy(g_pub_tx.hst_ind,"1");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,ct_ind );
+	strcpy( g_pub_tx.add_ind,"1" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,cr_ac_no );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	g_pub_tx.tx_amt1=amt;
+	strcpy(g_pub_tx.brf,brf);
+	strcpy( g_pub_tx.no_show,"0");
+	strcpy( g_pub_tx.sub_tx_code, "A017");
+
+	/*** 调用会计分录自动记 ***/
+	ret=pub_acct_trance();
+	if( ret ) goto ErrExit;
+	/* 进行会计记帐 */
+	set_zd_data("1214","01" );
+	set_zd_data("1215",ct_ind );
+	set_zd_double("1218",amt);
+	ret = pubf_acct_proc("A017");
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"会计记帐不成功!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_data("1204","" );
+	set_zd_data("1205","" );
+	set_zd_double("1208",0.00 );
+	set_zd_data("1214","" );
+	set_zd_data("1215","" );
+	set_zd_double("1218",0.00 );
+  strcpy( g_pub_tx.add_ind,"" );
+
+	return 0;
+ErrExit:
+	return 1;
+}

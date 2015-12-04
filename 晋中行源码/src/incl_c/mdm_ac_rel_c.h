@@ -1,0 +1,30 @@
+#ifndef __mdm_ac_rel_CH__
+#define __mdm_ac_rel_CH__
+struct mdm_ac_rel_c{
+	char      rowid[20];
+	char      opn_br_no[6];
+	char      ac_no[20];
+	long      ac_id;
+	long      ac_seqn;
+	char      mdm_code[5];
+	char      note_no[17];
+	char      note_sts[2];
+	char      coll_sts[2];
+	long      beg_date;
+	long      end_date;
+	char      draw_uncon_yn[2];
+	char      draw_pwd_chg[2];
+	char      draw_pwd_yn[2];
+	char      qry_pwd[7];
+	char      draw_pwd[7];
+	char      draw_id_yn[2];
+	char      id_type[2];
+	char      id_no[21];
+	char      draw_seal_yn[2];
+	char      pwd_mach_yn[2];
+	double    book_bal;
+	long      prt_line;
+	char      main_ind[2];
+	char      mac[17];
+};
+#endif 

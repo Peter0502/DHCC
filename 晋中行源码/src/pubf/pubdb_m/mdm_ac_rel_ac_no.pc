@@ -1,0 +1,314 @@
+#include "find_debug.h" 
+#include<stdio.h>
+#include<varargs.h>
+#include "public.h"
+
+#define EXTERN
+
+
+EXEC SQL INCLUDE SQLCA;
+#include "dd_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "acno_hst_log_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+static char str[3000];
+static char mystery[17];
+
+/****************
+dd_mst_ac_no
+dd_mst_c
+mdm_ac_rel_c
+*****************/
+static void zip_struct_dd_mst(struct dd_mst_c* ps1,struct mdm_ac_rel_c* ps2){
+	zip_tail(ps1->rowid);
+	zip_tail(ps1->opn_br_no);
+	zip_tail(ps1->prdt_no);
+	zip_tail(ps1->cash_ind);
+	zip_tail(ps1->sttl_type);
+	zip_tail(ps1->ac_type);
+	zip_tail(ps1->intst_type);
+	zip_tail(ps1->odtt_ind);
+	zip_tail(ps1->ac_sts);
+	zip_tail(ps1->hold_sts);
+	zip_tail(ps1->od_ind);
+	zip_tail(ps1->draw_pwd);
+	zip_tail(ps1->name);
+	zip_tail(ps1->cal_code);
+	zip_tail(ps1->mac);
+	zip_tail(ps2->rowid);
+	zip_tail(ps2->opn_br_no);
+	zip_tail(ps2->ac_no);
+	zip_tail(ps2->mdm_code);
+	zip_tail(ps2->note_no);
+	zip_tail(ps2->note_sts);
+	zip_tail(ps2->coll_sts);
+	zip_tail(ps2->draw_uncon_yn);
+	zip_tail(ps2->draw_pwd_chg);
+	zip_tail(ps2->draw_pwd_yn);
+	zip_tail(ps2->qry_pwd);
+	zip_tail(ps2->draw_pwd);
+	zip_tail(ps2->draw_id_yn);
+	zip_tail(ps2->id_type);
+	zip_tail(ps2->id_no);
+	zip_tail(ps2->draw_seal_yn);
+	zip_tail(ps2->pwd_mach_yn);
+	zip_tail(ps2->main_ind);
+	zip_tail(ps2->mac);
+}
+
+char *key_strcat(char *,char *);
+int Mdm_ac_rel_dd_mst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT dd_mst.rowid,dd_mst.*,mdm_ac_rel.rowid,mdm_ac_rel.* FROM dd_mst,mdm_ac_rel WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mdm_ac_rel_dd_mst_sel FROM :comm;
+	EXEC SQL DECLARE sel_mdm_ac_rel_dd_mst CURSOR FOR mdm_ac_rel_dd_mst_sel;
+
+	EXEC SQL OPEN sel_mdm_ac_rel_dd_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mdm_ac_rel_dd_mst_Fet_Sel ( struct dd_mst_c *dd_mst_c ,struct mdm_ac_rel_c * mdm_ac_rel_c,char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mdm_ac_rel_dd_mst INTO :dd_mst_c,:mdm_ac_rel_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch dd_mst error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch dd_mst finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct_dd_mst(dd_mst_c,mdm_ac_rel_c);
+
+	return 0;
+}
+
+int Mdm_ac_rel_dd_mst_Clo_Sel (){
+	EXEC SQL CLOSE sel_mdm_ac_rel_dd_mst;
+	return 0;
+}
+/****************
+acno_hst_ac_no
+acno_hst_log_c
+mdm_ac_rel_c
+*****************/
+static void zip_struct_acno_hst(struct acno_hst_log_c* ps1,struct mdm_ac_rel_c* ps2){
+	zip_tail(ps1->rowid);
+	zip_tail(ps1->ac_type);
+	zip_tail(ps1->br_no);
+	zip_tail(ps1->note_type);
+	zip_tail(ps1->note_no);
+	zip_tail(ps1->tel);
+	zip_tail(ps1->dc_ind);
+	zip_tail(ps1->print_flag);
+	zip_tail(ps1->brf);
+	zip_tail(ps1->filler);
+	zip_tail(ps1->filler2);
+	zip_tail(ps2->rowid);
+	zip_tail(ps2->opn_br_no);
+	zip_tail(ps2->ac_no);
+	zip_tail(ps2->mdm_code);
+	zip_tail(ps2->note_no);
+	zip_tail(ps2->note_sts);
+	zip_tail(ps2->coll_sts);
+	zip_tail(ps2->draw_uncon_yn);
+	zip_tail(ps2->draw_pwd_chg);
+	zip_tail(ps2->draw_pwd_yn);
+	zip_tail(ps2->qry_pwd);
+	zip_tail(ps2->draw_pwd);
+	zip_tail(ps2->draw_id_yn);
+	zip_tail(ps2->id_type);
+	zip_tail(ps2->id_no);
+	zip_tail(ps2->draw_seal_yn);
+	zip_tail(ps2->pwd_mach_yn);
+	zip_tail(ps2->main_ind);
+	zip_tail(ps2->mac);
+}
+
+char *key_strcat(char *,char *);
+int Mdm_ac_rel_acno_hst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT acno_hst_log.rowid,acno_hst_log.*,mdm_ac_rel.rowid,mdm_ac_rel.* FROM acno_hst_log,mdm_ac_rel WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mdm_ac_rel_acno_hst_sel FROM :comm;
+	EXEC SQL DECLARE sel_mdm_ac_rel_acno_hst CURSOR FOR mdm_ac_rel_acno_hst_sel;
+
+	EXEC SQL OPEN sel_mdm_ac_rel_acno_hst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN acno_hst_log error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mdm_ac_rel_acno_hst_Fet_Sel ( struct acno_hst_log_c *acno_hst_log_c ,struct mdm_ac_rel_c * mdm_ac_rel_c,char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mdm_ac_rel_acno_hst INTO :acno_hst_log_c,:mdm_ac_rel_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch acno_hst_log error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch acno_hst_log finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct_acno_hst(acno_hst_log_c,mdm_ac_rel_c);
+
+	return 0;
+}
+
+int Mdm_ac_rel_acno_hst_Clo_Sel (){
+	EXEC SQL CLOSE sel_mdm_ac_rel_acno_hst;
+	return 0;
+}
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mdm_ac_rel_acno_hst_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT acno_hst_log.rowid,acno_hst_log.*,mdm_ac_rel.rowid,mdm_ac_rel.* FROM acno_hst_log,mdm_ac_rel WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE acno_hst_log_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_acno_hst_log CURSOR FOR acno_hst_log_upd;
+
+	EXEC SQL OPEN upd_acno_hst_log;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open acno_hst_log error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mdm_ac_rel_acno_hst_Fet_Upd( struct acno_hst_log_c *acno_hst_log_c ,struct mdm_ac_rel_c * mdm_ac_rel_c, char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_acno_hst_log INTO :acno_hst_log_c,:mdm_ac_rel_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd acno_hst_log error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH acno_hst_log finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct_acno_hst(acno_hst_log_c,mdm_ac_rel_c);
+
+	return 0;
+}
+
+int Mdm_ac_rel_acno_hst_Upd_Upd( struct acno_hst_log_c acno_hst_log_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE acno_hst_log SET ac_type=:acno_hst_log_c.ac_type,
+			ac_id=:acno_hst_log_c.ac_id,
+			ac_seqn=:acno_hst_log_c.ac_seqn,
+			hst_cnt=:acno_hst_log_c.hst_cnt,
+			tx_date=:acno_hst_log_c.tx_date,
+			br_no=:acno_hst_log_c.br_no,
+			note_type=:acno_hst_log_c.note_type,
+			note_no=:acno_hst_log_c.note_no,
+			tel=:acno_hst_log_c.tel,
+			tx_amt=:acno_hst_log_c.tx_amt,
+			bal=:acno_hst_log_c.bal,
+			dc_ind=:acno_hst_log_c.dc_ind,
+			print_flag=:acno_hst_log_c.print_flag,
+			pagecnt=:acno_hst_log_c.pagecnt,
+			brf=:acno_hst_log_c.brf,
+			filler=:acno_hst_log_c.filler,
+			filler2=:acno_hst_log_c.filler2
+	WHERE rowid=:acno_hst_log_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE acno_hst_log error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mdm_ac_rel_acno_hst_Clo_Upd( ){
+	EXEC SQL CLOSE upd_acno_hst_log;
+	return 0;
+}

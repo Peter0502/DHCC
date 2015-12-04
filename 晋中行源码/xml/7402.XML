@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="7402 系统内拆出还款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+
+        initfd();
+        $FD25=#JGMC;
+        $FD39=getitems('#HKJE');
+        $FD47=#HTH;
+        $FD67='1';
+        $FD91=#CJJG;
+        commsend_001();
+        $FD16='5402';
+        $MSGTYPE='03001';
+
+	}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(7402                         系统内拆出还款  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5402)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="7"   COL="3" TYPE="%-18s" FUNCTIONS="T(合同号:)"/>
+  <ITEM LINE="9"   COL="3" TYPE="%-18s" FUNCTIONS="T(拆借机构:)"/>
+  <ITEM LINE="11"  COL="3" TYPE="%-14s" FUNCTIONS="T(拆借行名: )"/>
+  <ITEM LINE="13"  COL="3" TYPE="%-14s" FUNCTIONS="T(还款金额: )"/>
+ 
+  <ITEM NAME="#HTH"	LINE="7" COL="17" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+   <ONLOSTFOCUS>
+  "{
+		dim @txno as string;
+		@txno=$TXNO;
+		$TXNO='9862';
+		$FD47=#HTH;
+		$FD67='1';
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#HKJE=val($FD39,0.01);
+		#CJJG=$FD91;
+
+	//第2次callserver
+		initfd();
+		$MSGTYPE='03001';
+		$TXNO='9802';
+		$FD91=#CJJG;
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#JGMC=$FD25;
+		show(#CJJG,true);
+		show(#JGMC,true);
+		show(#HKJE,true);
+
+  }"
+  </ONLOSTFOCUS>
+
+  </ITEM>
+
+  <ITEM NAME="#CJJG" LINE="9"  COL="17" TYPE="%-5s"   INPUT="LABEL"     FUNCTIONS=""/>
+  <ITEM NAME="#JGMC" LINE="11" COL="17" TYPE="%-44s"  INPUT="LABEL"     FUNCTIONS=""/>
+  <ITEM NAME="#HKJE" LINE="13" COL="17" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+  <ITEM NAME="#XHKJE" TYPE="%-21s" FUNCTIONS="X(#HKJE)"/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+          print(5,36,'系统内拆出还款');
+          print(6,10,'合同号:[8]',#HTH);
+          print(7,10,'拆借机构:[5]',#CJJG);
+          print(8,10,'拆借行名:[44]',#JGMC);
+          print(9,10,'还款金额:[21]',#XHKJE); 
+}"
+</PRINT>
+</RESPONSE>
+<!--- 
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="12" DESC="打印系统内拆出还款">
+ NOTHING
+</PACKAGE>
+          <PRINT>
+          "{
+					$KINDNO='00';
+ 					dim @txtime  as string;
+					@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+					print( 7, 28,'[5]',$KINBR);
+					print( 7, 10,'[20]',$BRNAME);
+					print( 7, 5,'交易日期:[8  ]  [8]',$HDATE,@txtime);
+          print(10,36,'系统内拆出还款');
+          print(12,10,'合同号:[8]',#HTH);
+          print(14,10,'拆借机构:[5]',#CJJG);
+          print(14,10,'拆借行名:[44]',#JGMC);
+          print(16,10,'还款金额:[14]',#HKJE); 
+					print(18,10,'操作员号:[4]     流 水 号:[6]',$FD7,$FD4);
+          }"
+          </PRINT>
+</RESPONSE>
+--->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+ NOTHING
+</PACKAGE>
+          <PRINT>
+          "{
+		$KINDNO='00';
+ 		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5, 20,'机构名称:[30]',$BRNAME);
+                print( 5, 2,'代码:7402');
+                print( 5, 13,'交易: 系统内拆出还款');
+                print( 7, 20,'合同号:[8]',#HTH);
+                print( 8, 20,'拆借机构:[5    ]  拆借行名:[44]',#CJJG,#JGMC);
+                print( 9, 20,'还款金额:[21]',#XHKJE); 
+                printacdtl_1(); 
+	        print( 24,20,'备注:')
+                print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                print( 24,5,'柜员:[4]',$FD7);
+                print( 24,5,'流水号:[6]',$FD4);
+	         
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="25"  DESC="系统内拆出还款利息清单">
+LXQD|@ic_date|@end_date|@intst|@over_intst|@rate|@over_rate|@day1|@day2
+</PACKAGE>
+<PRINT>
+"{
+			print( 5, 40,'系统内拆出还款利息清单');
+			print( 6,10,'-----------------------------------------------------------------------------------------');
+			print( 7,15,'起 息 日:[8       ]             到 期 日:[8        ]',@ic_date,@end_date);
+			print( 8,15,'正常利息:[16            ]     正常利率:[4   ]‰  正常天数:[4   ]',ltrim(comma(@intst,16)),@rate,@day1);           
+			print( 9,15,'逾期利息:[16            ]     逾期利率:[4   ]‰  逾期天数:[4   ]',ltrim(comma(@over_intst,16)),@over_rate,@day2);
+			print(11,10,'-----------------------------------------------------------------------------------------');
+			print(12,15,'会    计:                 复    核:                           记    帐: [7]',$TLRNO);
+ 
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

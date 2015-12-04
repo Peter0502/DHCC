@@ -1,0 +1,305 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbfebillmsgreg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbfebillmsgreg_con ( struct mbfebillmsgreg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbfebillmsgreg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->msssno);
+	zip_tail(ps->sts);
+	zip_tail(ps->rdficode);
+	zip_tail(ps->payeropenaccbkcode);
+	zip_tail(ps->payeracc);
+	zip_tail(ps->payername);
+	zip_tail(ps->payeraddr);
+	zip_tail(ps->billcode);
+	zip_tail(ps->billofxchngseal);
+	zip_tail(ps->rdficenter);
+	zip_tail(ps->recipientopenaccbk);
+	zip_tail(ps->lastbillholderacc);
+	zip_tail(ps->lastbillholdername);
+	zip_tail(ps->strinfo);
+}
+int Mbfebillmsgreg_Debug(struct mbfebillmsgreg_c *ps){
+	vtcp_log("mbfebillmsgreg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbfebillmsgreg_c.msssno=[%s]\n",ps->msssno);
+	vtcp_log("mbfebillmsgreg_c.sts=[%s]\n",ps->sts);
+	vtcp_log("mbfebillmsgreg_c.consigndate=[%ld]\n",ps->consigndate);
+	vtcp_log("mbfebillmsgreg_c.rdficode=[%s]\n",ps->rdficode);
+	vtcp_log("mbfebillmsgreg_c.payeropenaccbkcode=[%s]\n",ps->payeropenaccbkcode);
+	vtcp_log("mbfebillmsgreg_c.payeracc=[%s]\n",ps->payeracc);
+	vtcp_log("mbfebillmsgreg_c.payername=[%s]\n",ps->payername);
+	vtcp_log("mbfebillmsgreg_c.payeraddr=[%s]\n",ps->payeraddr);
+	vtcp_log("mbfebillmsgreg_c.billdate=[%ld]\n",ps->billdate);
+	vtcp_log("mbfebillmsgreg_c.billcode=[%s]\n",ps->billcode);
+	vtcp_log("mbfebillmsgreg_c.billofxchngseal=[%s]\n",ps->billofxchngseal);
+	vtcp_log("mbfebillmsgreg_c.remittanceamnt=[%f]\n",ps->remittanceamnt);
+	vtcp_log("mbfebillmsgreg_c.repudiationamnt=[%f]\n",ps->repudiationamnt);
+	vtcp_log("mbfebillmsgreg_c.rdficenter=[%s]\n",ps->rdficenter);
+	vtcp_log("mbfebillmsgreg_c.recipientopenaccbk=[%s]\n",ps->recipientopenaccbk);
+	vtcp_log("mbfebillmsgreg_c.lastbillholderacc=[%s]\n",ps->lastbillholderacc);
+	vtcp_log("mbfebillmsgreg_c.lastbillholdername=[%s]\n",ps->lastbillholdername);
+	vtcp_log("mbfebillmsgreg_c.prmptpaydate=[%ld]\n",ps->prmptpaydate);
+	vtcp_log("mbfebillmsgreg_c.strinfo=[%s]\n",ps->strinfo);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbfebillmsgreg_Sel(reply,mbfebillmsgreg_c,fmtstr,va_alist)
+char    *reply;
+struct  mbfebillmsgreg_c *mbfebillmsgreg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbfebillmsgreg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbfebillmsgreg_Fet_Sel( mbfebillmsgreg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbfebillmsgreg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbfebillmsgreg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbfebillmsgreg.* FROM mbfebillmsgreg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfebillmsgreg_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbfebillmsgreg CURSOR FOR mbfebillmsgreg_sel;
+
+	EXEC SQL OPEN sel_mbfebillmsgreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfebillmsgreg_Fet_Sel ( struct mbfebillmsgreg_c *mbfebillmsgreg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbfebillmsgreg INTO :mbfebillmsgreg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbfebillmsgreg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbfebillmsgreg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfebillmsgreg_c);
+
+	return 0;
+}
+
+int Mbfebillmsgreg_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbfebillmsgreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbfebillmsgreg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbfebillmsgreg.* FROM mbfebillmsgreg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfebillmsgreg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbfebillmsgreg CURSOR FOR mbfebillmsgreg_upd;
+
+	EXEC SQL OPEN upd_mbfebillmsgreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfebillmsgreg_Fet_Upd( struct mbfebillmsgreg_c *mbfebillmsgreg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbfebillmsgreg INTO :mbfebillmsgreg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbfebillmsgreg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfebillmsgreg_c);
+
+	return 0;
+}
+
+int Mbfebillmsgreg_Upd_Upd( struct mbfebillmsgreg_c mbfebillmsgreg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbfebillmsgreg SET msssno=:mbfebillmsgreg_c.msssno,
+			sts=:mbfebillmsgreg_c.sts,
+			consigndate=:mbfebillmsgreg_c.consigndate,
+			rdficode=:mbfebillmsgreg_c.rdficode,
+			payeropenaccbkcode=:mbfebillmsgreg_c.payeropenaccbkcode,
+			payeracc=:mbfebillmsgreg_c.payeracc,
+			payername=:mbfebillmsgreg_c.payername,
+			payeraddr=:mbfebillmsgreg_c.payeraddr,
+			billdate=:mbfebillmsgreg_c.billdate,
+			billcode=:mbfebillmsgreg_c.billcode,
+			billofxchngseal=:mbfebillmsgreg_c.billofxchngseal,
+			remittanceamnt=:mbfebillmsgreg_c.remittanceamnt,
+			repudiationamnt=:mbfebillmsgreg_c.repudiationamnt,
+			rdficenter=:mbfebillmsgreg_c.rdficenter,
+			recipientopenaccbk=:mbfebillmsgreg_c.recipientopenaccbk,
+			lastbillholderacc=:mbfebillmsgreg_c.lastbillholderacc,
+			lastbillholdername=:mbfebillmsgreg_c.lastbillholdername,
+			prmptpaydate=:mbfebillmsgreg_c.prmptpaydate,
+			strinfo=:mbfebillmsgreg_c.strinfo
+	WHERE rowid=:mbfebillmsgreg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbfebillmsgreg_Del_Upd(struct mbfebillmsgreg_c mbfebillmsgreg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbfebillmsgreg WHERE rowid=:mbfebillmsgreg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfebillmsgreg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbfebillmsgreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbfebillmsgreg_Ins( struct mbfebillmsgreg_c mbfebillmsgreg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbfebillmsgreg VALUES (:mbfebillmsgreg_c.msssno,
+			:mbfebillmsgreg_c.sts,
+			:mbfebillmsgreg_c.consigndate,
+			:mbfebillmsgreg_c.rdficode,
+			:mbfebillmsgreg_c.payeropenaccbkcode,
+			:mbfebillmsgreg_c.payeracc,
+			:mbfebillmsgreg_c.payername,
+			:mbfebillmsgreg_c.payeraddr,
+			:mbfebillmsgreg_c.billdate,
+			:mbfebillmsgreg_c.billcode,
+			:mbfebillmsgreg_c.billofxchngseal,
+			:mbfebillmsgreg_c.remittanceamnt,
+			:mbfebillmsgreg_c.repudiationamnt,
+			:mbfebillmsgreg_c.rdficenter,
+			:mbfebillmsgreg_c.recipientopenaccbk,
+			:mbfebillmsgreg_c.lastbillholderacc,
+			:mbfebillmsgreg_c.lastbillholdername,
+			:mbfebillmsgreg_c.prmptpaydate,
+			:mbfebillmsgreg_c.strinfo);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfebillmsgreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

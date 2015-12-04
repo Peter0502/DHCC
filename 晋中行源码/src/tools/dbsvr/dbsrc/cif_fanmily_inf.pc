@@ -1,0 +1,236 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_fanmily_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_fanmily_inf_con ( struct cif_fanmily_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_fanmily_inf_c* ps){
+	zip_tail(ps->rowid);
+}
+int Cif_fanmily_inf_Debug(struct cif_fanmily_inf_c *ps){
+	vtcp_log("cif_fanmily_inf_c.rowid=[%s]\n",ps->rowid);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_fanmily_inf_Sel(reply,cif_fanmily_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_fanmily_inf_c *cif_fanmily_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_fanmily_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_fanmily_inf_Fet_Sel( cif_fanmily_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_fanmily_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_fanmily_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_fanmily_inf.* FROM cif_fanmily_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_fanmily_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_fanmily_inf CURSOR FOR cif_fanmily_inf_sel;
+
+	EXEC SQL OPEN sel_cif_fanmily_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_fanmily_inf_Fet_Sel ( struct cif_fanmily_inf_c *cif_fanmily_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_fanmily_inf INTO :cif_fanmily_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_fanmily_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_fanmily_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_fanmily_inf_c);
+
+	return 0;
+}
+
+int Cif_fanmily_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_fanmily_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_fanmily_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_fanmily_inf.* FROM cif_fanmily_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_fanmily_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_fanmily_inf CURSOR FOR cif_fanmily_inf_upd;
+
+	EXEC SQL OPEN upd_cif_fanmily_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_fanmily_inf_Fet_Upd( struct cif_fanmily_inf_c *cif_fanmily_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_fanmily_inf INTO :cif_fanmily_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_fanmily_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_fanmily_inf_c);
+
+	return 0;
+}
+
+int Cif_fanmily_inf_Upd_Upd( struct cif_fanmily_inf_c cif_fanmily_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_fanmily_inf SET 
+	WHERE rowid=:cif_fanmily_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_fanmily_inf_Del_Upd(struct cif_fanmily_inf_c cif_fanmily_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_fanmily_inf WHERE rowid=:cif_fanmily_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_fanmily_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_fanmily_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_fanmily_inf_Ins( struct cif_fanmily_inf_c cif_fanmily_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_fanmily_inf VALUES ();
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_fanmily_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

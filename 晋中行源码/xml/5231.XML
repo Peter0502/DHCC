@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="5231 中心提入手工录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	
+    	$FD16='4231';	
+    	
+
+      $FD30=getitems('#ACTNO24');      	
+      $FD31=getitems('#PAYEE_AC_NO')+space(6); 
+       
+      $FD39=getitems('#TXAMT');  
+
+     	$FD68=getitems('#BILL_TYPE');  
+      	
+     	$FD83=getitems('#PAYER_BR_NAME');       	
+     	$FD91=getitems('#PAYER_BR_NO');    
+     	
+
+	    
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(5231                          中心提入手工录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+    
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4231)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  
+  <ITEM NAME="#SPACE6"   TYPE="%-6s" FUNCTIONS=""/>  
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+
+ 
+   <ITEM LINE="6"  COL="5" TYPE="%-10s" FUNCTIONS="T(提入类型:!)"/>
+  <ITEM NAME="#BILL_TYPE" LINE="6"  COL="15" TYPE="%-1s"   INPUT="SELECT" FUNCTIONS="T(2)" >
+	<SELECT>
+	
+		<OPTION VALUE="1" TITLE="0.提入借方"/>
+		<OPTION VALUE="2" TITLE="1.提入贷方"/>	
+	</SELECT>
+  <ONLOSTFOCUS>"{
+
+    	showblock('ACTINFO',false,true);	
+ 	 
+  }"
+  </ONLOSTFOCUS>	
+  </ITEM>  
+ 
+  <ITEM LINE="8"  COL="5" TYPE="%-12s" FUNCTIONS="T(付款人账号:)"/>  
+  <ITEM NAME="#PAYER_AC_NO" INPUT="TEXT" LINE="8"  COL="17" TYPE="%-18s"  FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+      if(#BILL_TYPE == '1')
+      {
+          $FD68=getitems('#BILL_TYPE');  
+          $FD30=getitems('#PAYER_AC_NO'); 
+             	  	
+        	$FD2=$OPNBR;
+        	$FD3=$KINBR;
+        	$FD5=$HDATE;
+        	$FD7=$TLRNO;
+        	$FD10=$TTYNAME;
+        	$FD16='9886';    
+        	$FD79=#PASSWD;
+    	
+        	callserver();
+        	
+        	$TXNO=@baktxno;
+        	if($FD12!='0000'){
+        		showmsg(geterror());
+        		return(false);
+        	}
+  
+          setitems('#ACTNO24',$FD30); 
+        	setitems('#PAYER_BR_NAME',$FD83);  
+        	setitems('#PAYER_BR_NO',$FD91);     
+        	 	    	
+        	showblock('ACTINFO',true,true);	 	
+      }
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="10"  COL="5" TYPE="%-12s" FUNCTIONS="T(收款人账号:)"/>  
+  <ITEM NAME="#PAYEE_AC_NO" INPUT="TEXT" LINE="10"  COL="17" TYPE="%-18s"  FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+      if(#BILL_TYPE == '2')
+      {
+      
+          $FD68=getitems('#BILL_TYPE');  
+          $FD31=getitems('#PAYER_AC_NO'); 
+             	  	
+        	$FD2=$OPNBR;
+        	$FD3=$KINBR;
+        	$FD5=$HDATE;
+        	$FD7=$TLRNO;
+        	$FD10=$TTYNAME;
+        	$FD16='9886';    
+        	$FD79=#PASSWD;
+    	
+        	callserver();
+        	
+        	$TXNO=@baktxno;
+        	if($FD12!='0000'){
+        		showmsg(geterror());
+        		return(false);
+        	}
+  
+          setitems('#ACTNO24',$FD31);  
+        	setitems('#PAYER_BR_NAME',$FD83);  
+        	setitems('#PAYER_BR_NO',$FD91);  
+        	 
+        	showblock('ACTINFO',true,true);	
+      }
+ 	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+ 
+  <BLOCK NAME="ACTINFO" LINE="12" COL="0" VISABLE="FALSE" >  
+  
+  <ITEM LINE="0"  COL="5" TYPE="%-10s" FUNCTIONS="T(网点号码:)"/>  
+  <ITEM  LINE="0"  COL="15"  NAME="#PAYER_BR_NO" INPUT="TEXT" TYPE="%-5s" ENABLE="FALSE" FUNCTIONS=""/>
+     
+
+  <ITEM LINE="2"  COL="5" TYPE="%-10s" FUNCTIONS="T(网点名称:)"/>  
+  <ITEM  LINE="2"  COL="15"  NAME="#PAYER_BR_NAME" INPUT="TEXT" TYPE="%-50s" ENABLE="FALSE" FUNCTIONS=""/>
+ 
+  </BLOCK>   
+ 
+  <ITEM LINE="16"  COL="5" TYPE="%-10s" FUNCTIONS="T(金    额:)"/> 
+ 
+   <ITEM LINE="16"  COL="17" NAME="#TXAMT" INPUT="TEXT" TYPE="%17.2f" FUNCTIONS="0.00"/>
+
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+    
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+
+    
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="中心提入手工录入成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 22,'中 心 提 入 手 工 录 入 成 功 ！');
+
+				
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+
+</TRANSACTION>
+
+
+
+

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="1111001" TITLE="7623 打印自助机具柜员流水"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+	$FD92=#TLRNO;
+	$FD46=#JYRQ;
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+		"T(7623                         打印自助机具柜员流水)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s"    FUNCTIONS="T($TXNO=5610)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+	
+	<ITEM LINE="10" COL="20" TYPE="%-10s" FUNCTIONS="T(柜员编号:)"/>
+	<ITEM NAME="#TLRNO" INPUT="TEXT" LINE="10" COL="30" TYPE="%-4s" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			dim @tota as string;
+			initfd();
+			commsend_001();
+			$FD16='9598';
+			$FD123='select * from com_tel where tel='+chr(39)+#TLRNO+chr(39)+' ';
+			@tota=callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if(@tota=='')
+			{
+				showmsg('无此柜员，请确认!');
+				return(false);
+			}
+			if (delspace(strfld(@tota, '|', 4)) != '9')
+			{
+				showmsg('非自助机具柜员，不能查询!');
+				return(false);
+			}
+			if (delspace(strfld(@tota, '|', 1)) != $KINBR)
+			{
+				showmsg('非本机构自助机具柜员，不能查询!');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="12" COL="20"  TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+	<ITEM NAME="#JYRQ" LINE="12" COL="30" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T($HDATE)D()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+				dim @txday as date;
+				
+				@txday = substr($HDATE, 0, 4) + substr($HDATE, 4, 2) + substr($HDATE, 6, 2);
+				if (@txday &lt; #JYRQ)
+				{
+					showmsg('起始日期不能晚于当前日期!');
+					//return(false);
+				}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+
+</TRANSACTION>

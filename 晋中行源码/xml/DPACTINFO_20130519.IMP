@@ -1,0 +1,680 @@
+<!-----取款交易： 显示帐号信息的变量组合---------->
+  <PAGE NAME="DEFAULT">
+  <ITEM NAME="#LDQFS" LINE="5"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="5" COL="15" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO_CT,false);
+     enable(#ACTNO_IC,true);
+     show(#ACTNO_IC,true);
+     show(#ACTNO_CT,false);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO_IC,false);
+     enable(#ACTNO_CT,true);
+     show(#ACTNO_CT,true);
+     show(#ACTNO_IC,false); 
+     }
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  LINE="6"  COL="5"   TYPE="%-10s"   FUNCTIONS="T(账/卡号: )" INPUT="LABEL" VISABLE="TRUE"/>
+  <ITEM NAME="#LACTSEQ" LINE="6"  COL="45"  TYPE="%-10s"   FUNCTIONS="T(账户序号: )" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM  LINE="8"  COL="4"   TYPE="%-16s" VISABLE="TRUE" FUNCTIONS="T(【产品信息】)"/>
+  <ITEM  LINE="9" COL="5"   TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#ACTNO_CT"   DEVICE="MSR" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s"  FUNCTIONS="V(NB)M($MSR2,1)" /><!---DEVICE="FIXMSR"--->
+  <ITEM NAME="#ACTNO_IC" INPUT="TEXT" DEVICE="ICC" LINE="6"  COL="15" TYPE="%-19s"  FUNCTIONS="V(NB)M($MSR2,1)"/>
+  <ITEM NAME="#ACTNO" TYPE="%-19s"  FUNCTIONS="">
+  <ONGOTFOCUS>"{
+  	show(#ZHZT,false);
+  }"
+  </ONGOTFOCUS>
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	dim  @sdate1 as string;
+			dim  @sdate2 as string;
+    	dim @tota as string;// add by chenchao 2011-7-31 16:36:17
+    	if(#DQFS=='0')
+     {
+     #ACTNO=#ACTNO_CT; 
+     }
+     if(#DQFS=='1')
+     {
+     #ACTNO=#ACTNO_IC;
+     }
+     //if($MSR2 =='')
+    // {
+    // showmsg('读取二磁信息错误！');
+//		 return(false);
+ //   }
+     if(substr(#ACTNO,0,6) =='621780')
+			{
+			@sdate1=substr($MSR2,20,4)+'31';
+			@sdate2=substr($HDATE,2,6);
+			 if(atoi(@sdate2)>=atoi(@sdate1))
+			 {
+			 showmsg('卡已到期，不能做此交易！');
+			 return(false);
+			 }
+			}
+	initfd();
+	@baktxno=$TXNO;
+    	$TXNO='9952';
+    	$FD102=#ACTNO;
+    	commsend_001();
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	#ZFDBHWB='';
+	#ZQJEWB=0;
+   if((substr(#ACTNO,0,6)=='621223' or substr(#ACTNO,0,6)=='621780') and len(rtrim($MSR2))!=37)
+    {
+       showmsg('刷卡错误,请重试!');
+      // return(false);
+    }
+
+	#MSR2BAK=$MSR2;
+	#MSR3BAK=$MSR3;
+	$MSR2='';
+	$MSR3='';
+    	setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO20#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+
+	// 卡户的判断条件是: 101-1域长度为19并且101-E域不为空
+	if( atoi(substr($FD102,24,4))!=0 )
+	{
+	    #ACTSEQ=substr($FD102,24,4);
+	    show(#ACTSEQ,true);
+	    show(#LACTSEQ,true);
+
+	    // add by chenchao 2011-7-31 16:08:05 增加支取检查 begin
+	    initfd();
+	    commsend_001();
+	    $FD16='5580';
+	    $FD30=#ACTNO;
+	    $FD69='1';
+	    @tota=callserver();
+	    if($FD12!='0000')
+	    {
+	        showmsg(geterror());
+	        return(false);
+	    }
+	    savefiletxt('../tmp/'+$KINBR+$TLRNO+$HDATE+$TXNO+'.txt',@tota);
+	    if(@tota!='')
+	    {
+		opendlg('../xml/DRAW_LOAD.DLG'); //add by chenchao  2011-7-31 16:11:35
+	    }
+	    // add by chenchao 2011-7-31 16:08:05 增加支取检查 end
+
+	    return(true);
+	}else{
+	    show(#ACTSEQ,false);
+	    show(#LACTSEQ,false);
+	    #CASHFLAG='1';
+	    showblock('ACTINFO',true,true);
+	    show(#CASHFLAG,true);
+
+    	if(#PWDFLAG=='Y')
+    	{
+    		 #DRAW_PWD='';
+    		 show(#LDRAW_PWD,true);
+    		 show(#DRAW_PWD,true);
+    	}
+    	else
+    	{
+    		 show(#LDRAW_PWD,false);
+    		 show(#DRAW_PWD,false);
+    	}
+
+    	if(#CERTFLAG=='Y')
+    	{
+    		 show(#LCERTNO,true);
+    		 show(#CERTNO,true);
+    		 show(#LCERTTYPE,true);
+    		 show(#CERTTYPE,true);
+    	}
+    	else
+    	{
+    		 show(#LCERTNO,false);
+    		 show(#CERTNO,false);
+    		 show(#LCERTTYPE,false);
+    		 show(#CERTTYPE,false);
+    	}
+	 }
+	 // add by chenchao 2011-7-31 16:08:05 增加支取检查 begin
+	initfd();
+	commsend_001();
+	$FD16='5580';
+	$FD30=#ACTNO;
+	$FD69='1';
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	savefiletxt('../tmp/'+$KINBR+$TLRNO+$HDATE+$TXNO+'.txt',@tota);
+	if(@tota!='')
+	{
+		opendlg('../xml/DRAW_LOAD.DLG'); //add by chenchao  2011-7-31 16:11:35
+	}
+
+	// add by chenchao 2011-7-31 16:08:05 增加支取检查 end
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM TYPE="%-24s" NAME="#ZFDBHWB"   FUNCTIONS="" />
+  <ITEM NAME="#ZQJEWB" TYPE="%17.2f" FUNCTIONS="V(0000000000000000,9999999999999999)"/>
+  <!--added by liuyong 2009-9-1 显示图片信息 start-->
+  <ITEM LINE="7" COL="40" TYPE="%-9s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="7" COL="50" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @txnobak as string;
+      dim @tatl as string;
+      @txnobak = $TXNO;
+      $TXNO = '9664';
+      $FD30 = #ACTNO;
+      $FD72 = '1';
+      commsend_001();
+      @tatl = callserver();
+      if($FD12 !='0000')
+      {
+
+      }
+      $TXNO = @txnobak;
+      setpicture(#PIC,1,0);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-1 显示图片信息 end-->
+  <ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="6"  COL="55" TYPE="%-4s" VISABLE="FALSE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+    	$TXNO='9925';
+    	$FD102=#ACTNO24+#ACTSEQ+space(350);
+    	commsend_001();
+    	$MSGTYPE='03001';
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+
+    	setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO20#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+    	#CASHFLAG='1';
+    	showblock('ACTINFO',true,true);
+			show(#CASHFLAG,true);
+			//show(#ACCOUNTFLAG,true);
+			//show(#ZHZT,true);
+
+    	if(#PWDFLAG=='Y')
+    	{
+    		 #DRAW_PWD='';
+    		 show(#LDRAW_PWD,true);
+    		 show(#DRAW_PWD,true);
+    	}
+    	else
+    	{
+    		 show(#LDRAW_PWD,false);
+    		 show(#DRAW_PWD,false);
+    	}
+
+    	if(#CERTFLAG=='Y')
+    	{
+    		 show(#LCERTNO,true);
+    		 show(#CERTNO,true);
+    		 show(#LCERTTYPE,true);
+    		 show(#CERTTYPE,true);
+    	}
+    	else
+    	{
+    		 show(#LCERTNO,false);
+    		 show(#CERTNO,false);
+    		 show(#LCERTTYPE,false);
+    		 show(#CERTTYPE,false);
+    	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+  <!-- #VOCTYPE   -->
+  <!-- #VOCNUM   -->
+  <ITEM NAME="#FETCHFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <!-- #PWDFLAG   -->
+  <ITEM NAME="#QUE_PWD" TYPE="%6s" FUNCTIONS=""/>
+  <!-- #DRAW_PWD   -->
+
+   <!-- #CERTFLAG   -->
+   <!-- #CERTNO   -->
+  <ITEM NAME="#STAMPFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG2" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWD16"  TYPE="%-16s" FUNCTIONS=""/>
+
+  <ITEM NAME="#PRINTDATE" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#TXAMT15"   TYPE="%-16s" FUNCTIONS=""/>
+
+  <!-- #CERTTYPE   -->
+  <!-- #CUSTNAME   -->
+  <!-- #AVBAL   -->
+  <!-- #CURCD   -->
+  <!-- #CASHFLAG   -->
+  <ITEM NAME="#DSCPT"     TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#ACTTYPE"   TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"  TYPE="%-4s" FUNCTIONS=""/>
+  <!--ITEM NAME="#ACCOUNTFLAG" TYPE="%-1s" FUNCTIONS=""/-->
+  <ITEM NAME="#INTEREST1" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST2" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST3" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#PAYAMOUNT" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#NEWVOCNUM" TYPE="%-16d" FUNCTIONS=""/>
+  <ITEM NAME="#SPEFLAG" TYPE="%-20s" FUNCTIONS=""/>
+  <!-- #PRODNAME   -->
+  <ITEM NAME="#ACTNO_24"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#EDUCREDIT" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#DESC10"    TYPE="%-10s" FUNCTIONS=""/>
+
+
+  <BLOCK NAME="ACTINFO" LINE="9" COL="5" VISABLE="FALSE">
+
+  <ITEM LINE="1"  COL="0" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="2"  COL="0" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="2"  COL="29" NAME = "#ZHZT" TYPE="%-10s" FUNCTIONS="T(帐户状态:)" VISABLE = "FALSE"/>
+  <ITEM LINE="3"  COL="0" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="4"  COL="0" TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+
+  <ITEM LINE="5"   COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="5"   COL="40" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="6"   COL="0"  TYPE="%-10s" FUNCTIONS="T(密码支取:!)"/>
+  <ITEM LINE="6"   COL="20" TYPE="%-10s" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(输入密码:)"  NAME="#LDRAW_PWD" />
+  <ITEM LINE="6"   COL="40" TYPE="%-10s" FUNCTIONS="T(证件支取:!)"/>
+  <ITEM LINE="7"   COL="40" TYPE="%-10s" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(证件类型:!)" NAME="#LCERTTYPE"/>
+  <ITEM LINE="8"   COL="40" TYPE="%-10s" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(证件号码:)"  NAME="#LCERTNO" />
+  <ITEM LINE="7"   COL="0"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="8"   COL="0"  TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+
+  <ITEM NAME="#CERTNO20"    TYPE="%-20s" FUNCTIONS=""/>
+
+  <!---------------------------------------------------->
+  <ITEM LINE="1"  COL="10" NAME="#CUSTNAME" TYPE="%-60s" FUNCTIONS="J(#CUSTNAME30)"/>
+  <ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+
+  <ITEM NAME="#CURCD" LINE="2"  COL="10" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM LINE="3"  COL="10" NAME="#LAVBAL" TYPE="%-16s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>
+
+  <ITEM NAME="#PRODNAME" LINE="4"  COL="10" TYPE="%-30s" FUNCTIONS=""/>
+
+  <ITEM LINE="2"  COL="40" NAME="#ACCOUNTFLAG" TYPE="%-1s"  INPUT = "SELECT" FUNCTIONS="" VISABLE="FALSE" ENABLE = "FALSE">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="正常"/>
+		<OPTION VALUE="1" TITLE="全部冻结"/>
+		<OPTION VALUE="2" TITLE="只进不出"/>
+		<OPTION VALUE="3" TITLE="部分冻结"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="5"  COL="10" NAME="#VOCTYPE" TYPE="%-3s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="010" TITLE="0.储蓄活期存折"/>
+		<OPTION VALUE="020" TITLE="0.储蓄卡      "/>
+		<OPTION VALUE="024" TITLE="0.金融IC卡    "/>
+	</SELECT>
+  </ITEM>
+  <ITEM  NAME="#SVOCTYPE" TYPE="%-30s"  FUNCTIONS="S(#VOCTYPE,#VOCTYPE)"/>
+
+  <ITEM NAME="#VOCNUM" LINE="5"  COL="50" TYPE="%16d" FUNCTIONS=""/>
+
+  <ITEM LINE="6"  COL="10" NAME="#PWDFLAG" TYPE="%-1s" FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="Y" TITLE="Y.是"/>
+		<OPTION VALUE="N" TITLE="N.否"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#DRAW_PWD"  LINE="6"  COL="30" TYPE="%6d"  DEVICE="PINPAD" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V(NB)i()">
+  <ONLOSTFOCUS>
+ "{
+    // 直接在这里校验密码了
+    // 9317 密码检查
+    if(substr(#ACTNO,0,6)!='621223' and substr(#ACTNO,0,6)!='621780')
+    {
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9317';
+    commsend_001();
+    $FD30=#ACTNO;
+    $FD79=getitems('#DRAW_PWD');
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    }
+    else if(substr(#ACTNO,0,6) == '621223' or substr(#ACTNO,0,6)=='621780')  //add by hxc 091121
+    {
+		initfd();
+		commsend_001();
+		$FD16='7007';
+		$FD30=#ACTNO;
+		$FD68='4';   //#OPTION ='04'
+		$FD79=#DRAW_PWD;
+		callagn();
+		if( $FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+	}
+ }"
+ </ONLOSTFOCUS>
+</ITEM>
+
+  <ITEM LINE="6"  COL="50" NAME="#CERTFLAG" TYPE="%-1s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="Y" TITLE="Y.是"/>
+		<OPTION VALUE="N" TITLE="N.否"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#CASHFLAG" LINE="7"  COL="10" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.现金"/>
+		<OPTION VALUE="2" TITLE="1.转帐"/>
+		<!--
+		<OPTION VALUE="3" TITLE="2.同城"/>
+		<OPTION VALUE="4" TITLE="3.大额"/>
+		-->
+	</SELECT>
+	<!--add by gong 2011/9/19 10:35:32 晋中商行 当为支付申请的时候只能是转账-->
+	<ONLOSTFOCUS>
+	"{
+		if(#ZFDBHWB!='' and #CASHFLAG=='1')
+		{
+			showmsg('支付申请时必须做转账交易！！！');
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SCASHFLAG"  TYPE="%-4s"   FUNCTIONS="S(#CASHFLAG,#CASHFLAG)"/>
+  <!---为了使取款大于五万时输入证件,将金额这一行放在这里--->
+  <ITEM NAME="#TXAMT" LINE="8"  COL="10" TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)J(#LTXAMT)">
+  <ONLOSTFOCUS>
+  "{
+//mod by zyl 七天乐主账户取款时.取款金额可大于主账户账面余额.
+
+  	 if(#TXAMT &gt; #AVBAL)
+    	{
+        //mod by zyl 20110516 检查是否是七天乐签约账户.
+        dim @xxzt   as string;
+        dim @totbal as number;
+        initfd();
+        commsend_001();
+        $FD16='1537';
+        $FD30=#ACTNO;
+        callserver();
+        @xxzt = delspace($FD69);
+        @totbal = val($FD40,0.01);
+        //showmsg(itoa(val(@totbal,0.01),'%-17.2f'));
+        //showmsg(itoa(val($FD40,0.01),'%-17.2f'));
+        //showmsg(@xxzt);
+        if(@xxzt == '1' or @xxzt == '2' or @xxzt == 'P')//七天乐签约账户.总金额与交易金额比较.
+        {
+          
+          if( #TXAMT &gt; @totbal )
+          {
+    	     showmsg('取款金额不允许大于余额');
+    	     return (false);  
+          }
+        }
+        else //非七天乐签约账户.
+        {
+    	   showmsg('取款金额不允许大于余额');
+    	   return (false);        
+        }
+    	}
+  		//五万以上输入证件号码
+    	if(#TXAMT &gt; 50000 or #CERTFLAG=='Y')
+    	{
+    		 show(#LCERTNO,true);
+    		 show(#CERTNO,true);
+    		 show(#LCERTTYPE,true);
+    		 show(#CERTTYPE,true);
+    	}
+    	else
+    	{
+    		 show(#LCERTNO,false);
+    		 show(#CERTNO,false);
+    		 show(#LCERTTYPE,false);
+    		 show(#CERTTYPE,false);
+    	}
+    	//改为不控制金额
+    	if(#TXAMT &gt;= 0)
+    	{
+    		show(#S_SELFYN,true);
+    		show(#SELFYN,true);
+    		enable(#SELFYN,true);
+    	}
+    	else
+    	{
+    		show(#S_SELFYN,false);
+    		show(#SELFYN,false);
+    		enable(#SELFYN,false);
+    	}
+    	//showmsg(#ZFDBHWB);
+    	if((#ZFDBHWB!='') and (#TXAMT!=#ZQJEWB) )
+	{
+		showmsg('支取金额与贷款支付通知单的金额不符');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <ITEM NAME="#CERTTYPE" LINE="7"  COL="50" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="V(NB)" VISABLE="FALSE">
+	<SELECT>
+			<OPTION VALUE="1" TITLE="身份证"/>
+			<OPTION VALUE="2" TITLE="户口薄"/>
+			<OPTION VALUE="3" TITLE="护照  "/>
+			<OPTION VALUE="4" TITLE="军官证"/>
+			<OPTION VALUE="5" TITLE="回乡证"/>
+			<OPTION VALUE="6" TITLE="士兵证"/>
+			<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+			<OPTION VALUE="E" TITLE="临时身份证"/>
+			<OPTION VALUE="F" TITLE="外国人居留证"/>
+			<OPTION VALUE="G" TITLE="警官证"/>
+			<OPTION VALUE="H" TITLE="其他证件"/>
+			<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#CERTNO" LINE="8"  COL="50"  TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	initfd();
+    	commsend_001();
+    	$FD16='9961';
+	$FD30=#ACTNO;
+	callserver();
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+	#C_CERTNO=delspace($FD62);
+	#C_CERTTYPE=$FD67;
+	if(#C_CERTNO != delspace(#CERTNO))
+	{
+	    showmsg('输入的证件号与帐户不匹配');
+	    return(false);
+	}
+	if(#C_CERTTYPE != #CERTTYPE)
+	{
+	    showmsg('输入的证件类型与帐户不匹配');
+	    return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!----增加代理人信息,用于打印 begin---->
+  <ITEM LINE="9" COL="0"  TYPE="%-10s" FUNCTIONS="T(是否本人:!)" NAME="#S_SELFYN"    INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="9" COL="40" TYPE="%-10s" FUNCTIONS="T(代理人名:)"  NAME="#S_AGENTER"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="10" COL="0"  TYPE="%-10s" FUNCTIONS="T(证件类型:!)" NAME="#S_ATCETYPE"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="10" COL="40" TYPE="%-10s" FUNCTIONS="T(证件号码:)"  NAME="#S_ATCENUM"   INPUT="LABEL" VISABLE="FALSE"/>
+
+
+  <ITEM NAME="#SELFYN"   LINE="9"  COL="10" TYPE="%-1s"    INPUT="SELECT" FUNCTIONS="T(1)"  VISABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="否"/>
+		<OPTION VALUE="1" TITLE="是"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	  "{
+		if(#SELFYN == '0')
+		{
+			show(#S_AGENTER,true);
+			show(#AGENTNAME,true);
+			enable(#AGENTNAME,true);
+			show(#S_ATCETYPE,true);
+			show(#ATCETYPE,true);
+			enable(#ATCETYPE,true);
+			show(#S_ATCENUM,true);
+			show(#ATCENUM,true);
+			enable(#ATCENUM,true);
+		}else{
+			show(#S_AGENTER,false);
+			show(#AGENTNAME,false);
+			enable(#AGENTNAME,false);
+			show(#S_ATCETYPE,false);
+			show(#ATCETYPE,false);
+			enable(#ATCETYPE,false);
+			show(#S_ATCENUM,false);
+			show(#ATCENUM,false);
+			enable(#ATCENUM,false);
+		}
+	  }"
+	  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#AGENTNAME"  LINE="9"  COL="50" TYPE="%-20s" INPUT="TEXT"   VISABLE="FALSE" FUNCTIONS="T()V(NB)" />
+
+
+  <ITEM NAME="#ATCETYPE"   LINE="10" COL="10" TYPE="%-1s"  INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="T(1)"  >
+      <SELECT>
+            <OPTION VALUE="1" TITLE="身份证"/>
+            <OPTION VALUE="2" TITLE="户口簿"/>
+            <OPTION VALUE="3" TITLE="护照"/>
+            <OPTION VALUE="4" TITLE="军官证"/>
+            <OPTION VALUE="5" TITLE="回乡证"/>
+            <OPTION VALUE="8" TITLE="企业代码证"/>
+            <OPTION VALUE="9" TITLE="组织机构号"/>
+            <OPTION VALUE="A" TITLE="营业执照"/>
+            <OPTION VALUE="B" TITLE="经营许可证"/>
+            <OPTION VALUE="C" TITLE="事业法人证书"/>
+      </SELECT>
+  </ITEM>
+  <ITEM NAME="#SATCETYPE" TYPE="%-20s"      FUNCTIONS="S(#ATCETYPE,#ATCETYPE)"/><!----代理人证件类型---->
+  <ITEM NAME="#ATCENUM" LINE="10"  COL="50" TYPE="%-20s"    INPUT="TEXT" FUNCTIONS="V(NB)"  VISABLE="FALSE">
+  <ONLOSTFOCUS>
+  "{
+	dim @l as number;
+	@l = len(#ATCENUM);
+	if('1' == #ATCETYPE){
+    if(@l != 15 and  @l != 18)
+			{
+			  	showmsg('身份证号码位数错误');
+        		return(false);
+			}
+    	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!----增加代理人信息,用于打印  end---->
+    </BLOCK>
+
+  <ITEM NAME="#C_CERTNO" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#C_CERTTYPE" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#LTXAMT" TYPE="%-16s" FUNCTIONS="X(#TXAMT)">
+  <ONLOSTFOCUS>
+  "{
+  		if(#CASHFLAG=='2')
+  		{
+  		  show(#COMP,false);
+  			show(#NT_PAGE,true);
+  		}else{
+  		  show(#NT_PAGE,false);
+  		  show(#COMP,true);
+  		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON" NAME="#NT_PAGE" VISABLE="FALSE">
+  <ONCLICK>"{
+    loadpage('PAGE2');
+  }"
+  </ONCLICK>
+  </ITEM>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" NAME="#COMP"    VISABLE="TRUE"/>
+</PAGE>
+
+  <!-- 定义 FD102 取款交易结构  Added by chenming 2006-6-21  -->
+<!--
+#ACTNO24           24         	账号
+#ACTSEQ            4	         账户序号
+#VOCTYPE           3	         凭证种类
+#VOCNUM            16         	凭证号
+#FETCHFLAG         1	         是否任意支取
+#PASSWDFLAG        1	         是否凭密
+#QUE_PWD           6	         查询密码
+#DRAW_PWD          6	          支取密码
+#CERTFLAG          1	         是否凭证件支取
+#CERTNO           20  	       证件号码
+#STAMPFLAG         1	          是否凭印鉴支取
+#PASSWDFLAG        1	        是否支付密码器
+#PASSWD            16         	支付密码
+#PRINTDATE          8	         出票日期
+#TXAMT15             16         	金额
+#CERTTYPE            1	       证件类型
+#CUSTNAME          50         	户名
+#AVBAL             16         	余额
+#CURCD             2	         币种
+#CASHFLAG          1	         现转标志
+#DSCPT             3	         摘要选项
+#ACTTYPE           1	         帐户类型
+#ACTSEQ_2          4	         账户序号2
+#ACCOUNTFLAG       1	         打折标志
+#INTEREST1        16  	       应付利息
+#INTEREST2        16  	       利息税
+#INTEREST3        16  	       保值利息
+#PAYAMOUNT        16  	       应付总额
+#NEWVOCNUM          16         	新凭证号
+#SPEFLAG          20  	       特殊标志
+#PRODNAME          30         	产品名称
+#ACTNO24           24         	账号
+#EDUCREDIT   				1	         教育证明
+#DESC10            20         	摘要
+-->

@@ -1,0 +1,385 @@
+/********************************************************************************************
+*程序名:  spJ406.pc
+* 功 能:  代收付业务查询,
+*               
+*
+*编写日期:20061212
+*作者   : Jarod
+**********************************************************************************************/
+#include <string.h>
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "lv_pldfr_c.h"
+#include "lv_pldsr_c.h"
+#include "lv_pldscx_c.h"
+#include "lv_pldsfqugx_c.h"
+#include "hv_brno_orno_c.h"
+#include "lv_category_c.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char cBrno    [13];/**本交易处理行的行号**/
+  long lWt_date;    /**包委托日期**/
+  char cPackid  [9]; /**包序号**/
+  char cOrderno [9]; /**交易序号**/
+  char cTx_type [2]; /**交易类型**/
+  char cSts     [3]; /**交易状态**/
+EXEC SQL END DECLARE SECTION;
+
+  char cNum     [5]; /***笔数**/
+  char cKinbr   [6];
+  char cOr_br_no[13];
+  char filename [100];
+  char cTx_name [10];
+  char sts [16];
+  char cTableName[20];
+  char cYw_type [6];
+  int   iRecord_num;  /***笔数**/
+  
+  long lDate;
+  struct hv_brno_orno_c sHv_brno_orno;
+  struct lv_pldfr_c      lv_pldfr;
+  struct lv_pldsr_c      lv_pldsr;
+  struct lv_pldscx_c     lv_pldscx;
+  struct lv_pldsfqugx_c  lv_pldsfqugx;
+  struct lv_category_c   lv_category; 
+  
+int spJ406()
+{
+  FILE *fp;
+  int ret=0;
+  int line_cnt=0;
+  lDate = 0;
+  char type [2];
+  lWt_date=0;
+  /**初始化变量**/
+  memset(cKinbr   , 0x00, sizeof(cKinbr));
+  memset(cOr_br_no, 0x00, sizeof(cOr_br_no));
+  memset(cBrno    , 0x00, sizeof(cBrno));
+  memset(cYw_type , 0x00, sizeof(cYw_type));
+  memset(cPackid  , 0x00, sizeof(cPackid));
+  memset(cOrderno , 0x00, sizeof(cOrderno));
+  memset(cTx_type , 0x00, sizeof(cTx_type));
+  memset(cSts     , 0x00, sizeof(cSts));
+  memset(sts     , 0x00, sizeof(sts));
+  memset(filename , 0x00, sizeof(filename));
+  memset(cTx_name , 0x00, sizeof(cTx_name));
+  memset(type     , 0x00, sizeof(type));
+  
+  memset(&lv_pldfr     , 0, sizeof(struct lv_pldfr_c));
+  memset(&lv_pldsr     , 0, sizeof(struct lv_pldsr_c));
+  memset(&lv_pldscx    , 0, sizeof(struct lv_pldscx_c));
+  memset(&lv_pldsfqugx , 0, sizeof(struct lv_pldsfqugx_c));
+  memset(&sHv_brno_orno, 0, sizeof(struct hv_brno_orno_c));
+	memset(&lv_category  , 0, sizeof(struct lv_category_c));
+  
+  pub_base_sysinit();
+  
+  get_zd_data("0910", cKinbr);
+  get_zd_long("0440", &lDate);
+  get_zd_data("0500", type);
+
+  vtcp_log("[%s][%d]br_no=[%s]", __FILE__,__LINE__, cKinbr);
+  vtcp_log("[%s][%d]date=[%ld]", __FILE__,__LINE__, lDate);
+  vtcp_log("[%s][%d]type=[%s]", __FILE__,__LINE__, type);
+
+  ret = Hv_brno_orno_Sel(g_pub_tx.reply, &sHv_brno_orno," br_no = '%s'", cKinbr);
+  if(ret)
+  {
+      sprintf(acErrMsg, "查询hv_brno_orno表出错!![%d]", ret);
+      strcpy(g_pub_tx.reply, "S047");
+      WRITEMSG
+      goto ErrExit;
+  }
+  memcpy(cOr_br_no, sHv_brno_orno.or_br_no, sizeof(sHv_brno_orno.or_br_no));
+  vtcp_log("[%s][%d]cOr_br_no=[%s] wt_date=[%d]",__FILE__,__LINE__,cOr_br_no,lDate);  
+  /**声明游标**/
+  EXEC SQL DECLARE MQUERY_CUR CURSOR FOR
+      select br_no,wt_date,packid,orderno,yw_type,sts,'0' from lv_pldfr \
+             where br_no=:cOr_br_no and wt_date=:lDate and tx_mx_no='00000000' \
+      union \
+      select br_no,wt_date,packid,orderno,yw_type,sts,'1' from lv_pldsr \
+             where br_no=:cOr_br_no and wt_date=:lDate and tx_mx_no='00000000' \
+      union \
+      select br_no,wt_date,packid,orderno,o_yw_type,sts,'2' from lv_pldscx \
+             where br_no=:cOr_br_no and wt_date=:lDate \
+      union \
+      select br_no,wt_date,packid,orderno,ch_ind,sts,'3' from lv_pldsfqugx \
+             where br_no=:cOr_br_no and wt_date=:lDate;
+
+
+  if(sqlca.sqlcode)
+  {
+      sprintf(acErrMsg,"[%s][%d]声明游标出错[%d] ", __FILE__,__LINE__,sqlca.sqlcode);
+      strcpy(g_pub_tx.reply, "S047");
+      WRITEMSG
+      goto ErrExit;
+  }
+  vtcp_log("[%s][%d]准备打开游标AAAAAAAAAAAAAAAA[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+  vtcp_log("[%s][%d]准备打开游标****AAAAAAAAAAAAAAAA[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+  EXEC SQL OPEN MQUERY_CUR;
+  if(sqlca.sqlcode)
+  {
+      sprintf(acErrMsg,"[%s][%d]打开游标出错[%d] ", __FILE__,__LINE__,sqlca.sqlcode);
+      strcpy(g_pub_tx.reply, "S047");
+      WRITEMSG
+      goto ErrExit;
+  }
+  line_cnt=0;
+  vtcp_log("[%s][%d],1+++++++++++++\n",__FILE__,__LINE__);
+  vtcp_log("[%s][%d],2+++++++++++++\n",__FILE__,__LINE__);
+  vtcp_log("[%s][%d],3+++++++++++++\n",__FILE__,__LINE__);
+  while(1)
+  {
+      memset(cBrno   , 0x00, sizeof(cBrno));
+      memset(cPackid , 0x00, sizeof(cPackid));
+      memset(cOrderno, 0x00, sizeof(cOrderno));
+      memset(cSts    , 0x00, sizeof(cSts));
+      memset(cTx_name, 0x00, sizeof(cTx_name));
+      memset(cYw_type, 0x00, sizeof(cYw_type));
+      EXEC SQL FETCH MQUERY_CUR INTO
+          :cBrno, 
+          :lWt_date, 
+          :cPackid, 
+          :cOrderno, 
+          :cYw_type,
+          :cSts,
+          :cTx_type;
+      vtcp_log("[%s][%d],123+++++++++++[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+      if(sqlca.sqlcode == 1403 ) 
+      {
+          vtcp_log("[%s][%d],break+++++++++++[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+          break;
+      }
+      else if(sqlca.sqlcode)
+      {
+          sprintf(acErrMsg,"[%s][%d]FETCH出错[%d]", __FILE__,__LINE__,sqlca.sqlcode);
+          strcpy(g_pub_tx.reply, "S047");
+          WRITEMSG
+          goto ErrExit;
+      }
+      vtcp_log("[%s][%d],223+++++++++++[%s]\n",__FILE__,__LINE__,line_cnt);
+      if(!line_cnt)
+      {
+          vtcp_log("[%s][%d],223+++++++++++\n",__FILE__,__LINE__);
+          pub_base_AllDwnFilName(filename);
+          vtcp_log("[%s][%d],323+++++++++++\n",__FILE__,__LINE__);
+          fp = fopen(filename, "w");
+          if(fp == NULL)
+          {
+              sprintf(acErrMsg, "[%s][%d] open file [%s] error ",__FILE__,__LINE__,filename );
+              WRITEMSG
+              strcpy(g_pub_tx.reply, "S047");
+              goto ErrExit;
+          }
+          fprintf(fp, "~行号|日期|包号|交易序号|交易类型|交易状态|总笔数|交易类型|\n");
+      }
+      switch(cTx_type[0])
+      {
+          case '0':
+            strcpy(cTx_name, "代付");
+            break;
+          case '1':
+            strcpy(cTx_name, "代收");
+            break;
+          case '2':
+            strcpy(cTx_name, "撤销");
+            break;
+          case '3':
+            strcpy(cTx_name, "合同变更");
+            break;
+      }
+      /****获取到某个包中一共的笔数***/
+      memset(cTableName, 0x00, sizeof(cTableName));
+      switch(cTx_type[0])
+      {
+        case '0':  /*代付*/
+            memcpy(cTableName, "lv_pldfr", 8);
+            break;
+        case '1':  /*代收*/
+            memcpy(cTableName, "lv_pldsr", 8);
+            break;
+        case '2':  /*撤销*/
+            memcpy(cTableName, "lv_pldscx", 9);
+            break;
+        case '3':  /*合同变更*/
+            memcpy(cTableName, "lv_pldsfqugx", 12);
+            break;
+        default:
+            vtcp_log("[%s][%d]错误的业务类型!\n", __FILE__,__LINE__);
+            sprintf(acErrMsg, " 业务类型 [%c] error ",cTx_type[0]);
+            WRITEMSG
+            strcpy(g_pub_tx.reply, "S047");
+            goto ErrExit;
+      }
+      vtcp_log("[%s][%d]tablename===[%s]\n", __FILE__,__LINE__, cTableName);
+      if(cTx_type[0]=='0' || cTx_type[0]=='1')
+      {
+          iRecord_num = sql_count(cTableName,"br_no='%s' and wt_date=%ld and packid='%8s' and orderno='%8s' and tx_mx_no<>'00000000'", cBrno, lWt_date, cPackid, cOrderno);
+      }
+      else if(cTx_type[0]=='2' || cTx_type[0]=='3')
+      {
+          iRecord_num = sql_count(cTableName, "br_no='%s' and wt_date=%ld and packid='%8s' and orderno='%8s'", cBrno, lWt_date, cPackid, cOrderno);
+      }
+      sprintf(cNum, "%04d", iRecord_num);
+      
+      zip_space(cYw_type);
+     
+      if(memcmp(cSts,"0A",2)==0)
+      {
+            memcpy(sts,"来账接收",16);     
+      }
+      else if(memcmp(cSts,"1B",2)==0)
+      {
+            memcpy(sts,"来账拒绝",16);     
+      }
+       else if(memcmp(cSts,"0C",2)==0)
+      {
+            memcpy(sts,"来账撤销",16);     
+      }
+       else if(memcmp(cSts,"0D",2)==0)
+      {
+            memcpy(sts,"成功回执40506",16);     
+      }
+       else if(memcmp(cSts,"1E",2)==0)
+      {
+            memcpy(sts,"失败回执40506",16);     
+      }
+       else if(memcmp(cSts,"0F",2)==0)
+      {
+            memcpy(sts,"成功回执40503/4",16);     
+      }
+       else if(memcmp(cSts,"0G",2)==0)
+      {
+            memcpy(sts,"失败回执40503/4",16);     
+      }
+       else if(memcmp(cSts,"0H",2)==0)
+      {
+            memcpy(sts,"往账发送",16);     
+      }
+       else if(memcmp(cSts,"1I",2)==0)
+      {
+            memcpy(sts,"往账拒绝",16);     
+      }
+       else if(memcmp(cSts,"0J",2)==0)
+      {
+            memcpy(sts,"往账清算",16);     
+      }
+       else if(memcmp(cSts,"1K",2)==0)
+      {
+            memcpy(sts,"往账失败",16);     
+      }
+      else
+      	 {
+             vtcp_log("[%s][%d]没有这种业务类型",__FILE__,__LINE__);
+             sprintf(acErrMsg, " 没有这种业务类型 [%s] error ",cSts);
+             WRITEMSG
+             strcpy(g_pub_tx.reply, "S047");
+             goto ErrExit;
+      	 }
+      if(strlen(cYw_type)==1 && cTx_type[0] =='3')
+      {
+      	 if(cYw_type[0]=='0')
+      	 {
+      	 	   memcpy(cYw_type,"新增",4);   
+      	 }
+      	 else if(cYw_type[0]=='1')
+      	 {
+      	 	   memcpy(cYw_type,"修改",4);   
+      	 }
+      	 else if(cYw_type[0]=='2')
+      	 {
+      	 	   memcpy(cYw_type,"删除",4);   
+      	 }
+      	 else
+      	 {
+             vtcp_log("[%s][%d]没有这种操作方式",__FILE__,__LINE__);
+             sprintf(acErrMsg, " 没有这种操作方式 [%s] error ",cYw_type);
+             WRITEMSG
+             strcpy(g_pub_tx.reply, "S047");
+             goto ErrExit;
+      	 }
+      }
+      /**del by CGX 2010-5-11 衡水
+      else 
+      	{
+      ret = Lv_category_Sel( g_pub_tx.reply , &lv_category , " code='%s' " , cYw_type);
+      	if( ret==100 )
+         	{
+            	 sprintf(acErrMsg,"该业务类型没有登记![%s]",g_pub_tx.reply);
+            	 goto ErrExit;
+          	}
+      	else if( ret )
+        	 {
+            	 sprintf(acErrMsg,"取业务类型信息异常![%s]",g_pub_tx.reply);
+             	 goto ErrExit;
+          	}
+        	}
+      del by CGX 2010-5-11 衡水**/
+      switch(type[0])
+      {
+      	case '1':  /*代付*/
+        	if(cTx_type[0]=='0')
+        	{
+            fprintf(fp, "%s|%ld|%s|%s|%s|%s|%s|%c|\n", cBrno, lWt_date, cPackid, cOrderno, cTx_name,sts, cNum,cTx_type[0]);
+      			vtcp_log("[%s][%d]br_no=[%s], wt_date=[%ld], cPackid=[%s], cOrderno=[%s], cTx_type=[%s], sts=[%s]\n", __FILE__,__LINE__, cBrno, lWt_date, cPackid, cOrderno, cTx_type, sts);
+      			line_cnt++;
+            }
+          break;
+        case '2':  /*代付*/
+        	if(cTx_type[0]=='1')
+        	{
+            fprintf(fp, "%s|%ld|%s|%s|%s|%s|%s|%c|\n", cBrno, lWt_date, cPackid, cOrderno, cTx_name,sts, cNum,cTx_type[0]);
+      			vtcp_log("[%s][%d]br_no=[%s], wt_date=[%ld], cPackid=[%s], cOrderno=[%s], cTx_type=[%s], sts=[%s]\n", __FILE__,__LINE__, cBrno, lWt_date, cPackid, cOrderno, cTx_type, sts);
+      			line_cnt++;
+            }
+          break;
+        case '3':  /*代付*/
+        	if(cTx_type[0]=='2')
+        	{
+            fprintf(fp, "%s|%ld|%s|%s|%s|%s|%s|%c|\n", cBrno, lWt_date, cPackid, cOrderno, cTx_name,sts, cNum,cTx_type[0]);
+      			vtcp_log("[%s][%d]br_no=[%s], wt_date=[%ld], cPackid=[%s], cOrderno=[%s], cTx_type=[%s], sts=[%s]\n", __FILE__,__LINE__, cBrno, lWt_date, cPackid, cOrderno, cTx_type, sts);
+      			line_cnt++;
+            }
+           break;
+        case '4':  /*代付*/
+        	if(cTx_type[0]=='3')
+        	{
+            fprintf(fp, "%s|%ld|%s|%s|%s|%s|%s|%c|\n", cBrno, lWt_date, cPackid, cOrderno, cTx_name,sts, cNum,cTx_type[0]);
+      			vtcp_log("[%s][%d]br_no=[%s], wt_date=[%ld], cPackid=[%s], cOrderno=[%s], cTx_type=[%s], sts=[%s]\n", __FILE__,__LINE__, cBrno, lWt_date, cPackid, cOrderno, cTx_type, sts);
+      			line_cnt++;
+            }
+           break;
+         default:
+            fprintf(fp, "%s|%ld|%s|%s|%s|%s|%s|%c|\n", cBrno, lWt_date, cPackid, cOrderno, cTx_name,sts, cNum,cTx_type[0]);
+      			vtcp_log("[%s][%d]br_no=[%s], wt_date=[%ld], cPackid=[%s], cOrderno=[%s], cTx_type=[%s], sts=[%s]\n", __FILE__,__LINE__, cBrno, lWt_date, cPackid, cOrderno, cTx_type, sts);
+      			line_cnt++;
+       }   
+  }
+  EXEC SQL CLOSE MQUERY_CUR;
+  if(!line_cnt)
+  {
+      vtcp_log("[%s][%d] here is wrong!!!",__FILE__,__LINE__);
+      strcpy(g_pub_tx.reply, "S049");
+      goto ErrExit;
+  }
+  else
+  {
+      fclose(fp);
+      set_zd_data(DC_FILE_SND, "1");
+  }  
+
+OkExit:
+  strcpy(g_pub_tx.reply, "0000");
+  sprintf(acErrMsg, "success!!  reply is:[%s]", g_pub_tx.reply);
+  WRITEMSG
+  set_zd_data(DC_REPLY, g_pub_tx.reply);
+  return 0;
+ErrExit:
+  sprintf(acErrMsg, "fail!! reply is:[%s]", g_pub_tx.reply);
+  WRITEMSG
+  set_zd_data(DC_REPLY, g_pub_tx.reply);
+  return 1;
+}

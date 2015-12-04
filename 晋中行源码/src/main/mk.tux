@@ -1,0 +1,144 @@
+
+# ident "@(#)apsvr:sa/si.mak"
+
+# Thunder Bird
+
+# inputs
+
+APP		=	$(HOME)
+FLG		=	-DDEBUG -DBAL_DEBUG -g
+ 
+# commands
+ 
+SHELL	=	sh
+
+CC		=	cc $(Q64)
+EC		=	esql 
+BS		=	buildserver
+BC		=	buildclient
+LD		=	ld
+AR		=	ar ruc
+
+RM		=	@rm -f
+MV		=	@mv
+CP		=	@cp
+ECHO	=	@echo
+
+# TUXEDO specific
+
+RSM		=	Oracle_XA
+BSTUB	=	_balmain
+
+# paths and flags
+ 
+BIN		= 	$(APP)/bin
+LIB		=	$(APP)/lib
+INC		=	$(APP)/src/incl
+
+DEF		=	-DNOWHAT=1
+ 
+CFLAG	=	$(FLG) $(DEF)
+EFLAG	=	$(FLG) $(DEF)
+LFLAG	=	$(FLG) -shared
+ 
+CM_LIB	=	/usr/ucblib
+
+AP_INC	=	$(APP)/incl
+AP_LIB	=	$(APP)/lib
+ 
+TX_INC	=	$(TUXDIR)/include
+TX_LIB	=	$(TUXDIR)/lib
+
+DB_LIB	=	$(INFORMIXDIR)/lib
+EC_INC	=	$(INFORMIXDIR)/incl/esql
+EC_LIB	=	$(INFORMIXDIR)/lib/esql
+ 
+C_INCP	=	-I$(EC_INC) -I$(TX_INC) -I$(AP_INC) -I$(INC) -I.
+
+#added by ymh 2002/09/26 编译提示缺少_terrno定义,添加 libifasf.so
+
+#C_LIBP	=	-L$(TX_LIB) -L$(CM_LIB) -L$(LIB) -L.
+#C_LIBP  =   -L$(TX_LIB) -L$(CM_LIB) -L$(LIB) -L. -L$(DB_LIB) -lifasf
+C_LIBP  =   -L$(TX_LIB) -L$(CM_LIB) -L$(LIB) -L. -L$(DB_LIB)  -L$(ORACLE_HOME)/lib
+
+CFLAGS	=	$(CFLAG) $(C_INCP) $(C_LIBP)  \
+			-I$(HOME)/src/pubf/bal/tuxe/incl \
+			-I$(HOME)/src/incl_pub \
+			-I$(HOME)/src/incl_c 
+	
+EFLAGS	=	$(CFLAG) $(C_INCP) $(C_LIBP)
+LFLAGS	=	$(LFLAG)
+ 
+# libraries and targets
+
+LIBUCB	=
+LIBNET	=	$(DB_LIB)/netlib.a
+LIBAPL  = -lacct -lcomm -lln -lbase -leod -lpubdb -lpubdb_m -lcom -lde  \
+	-lcif -lc -lm -lagent -lcard -lod  -lass -lrpt -lrept -lhv -lbal3y -llv -llv -lcis -lpthread
+
+SQLLIBS	=	-lsql $(LIBNET) -los -lgen -lsocket -lnsl -lclntsh
+DEPS    =   $(AP_LIB)/libbal3y.so
+
+BALLIBS	=	$(LIBBAL) $(LIBAPL)
+
+LIBS	=	$(LIBBAL) $(LIBUCB) $(BALLIBS)
+
+OBJS	=	u_servmain.o mobmqlib.o
+
+
+TARGET	= $(BIN)/u_servmain
+
+all: Mstart $(TARGET) Mcomplete  
+ 
+Mstart:
+	$(ECHO)
+	$(ECHO) "MAKE apsvr:$(TARGET) ..."
+	$(ECHO)
+
+Mcomplete:
+	$(ECHO)
+	$(ECHO) "MAKE apsvr:$(TARGET) completed."
+	$(ECHO)
+ 
+$(TARGET):	$(OBJS)
+	TUXDIR="$(TUXDIR)" \
+	CFLAGS="$(CFLAGS)" \
+	$(BS) -f " -q64 -g" -o $@ \
+		-f "-brtl $(OBJS) " \
+		-v -s $(BSTUB) \
+		-f "$(LIBS)" \
+		-r $(RSM) 
+
+# implicit
+ 
+.SUFFIXES: .o .c .ec
+ 
+.ec.o:
+	$(EC) $(EFLAGS) -c $*.ec
+#	$(CC) -o $@ $(CFLAGS) -c $(*F).c
+	$(RM) $(*F).c
+ 
+.c.o:
+	$(CC) -o $@ $(CFLAGS) -c $*.c 
+ 
+.c:
+	$(CC) -o $@ $(CFLAGS) $*.c $(LIBS)
+ 
+# default
+ 
+#.DEFAULT:
+	$(CC) -o $@ $(CFLAGS) $(@F).c $(LIBS)
+ 
+# clearing object codes
+ 
+clean: cleanup
+	$(ECHO)
+	$(ECHO) "CLEAR apsvr:$(TARGET) completed."
+	$(ECHO)
+	#$(RM) $(TARGET)
+ 
+cleanup:
+	$(RM) $(OBJS)
+ 
+# dependencies
+

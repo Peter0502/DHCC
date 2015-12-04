@@ -1,0 +1,749 @@
+/*************************************************************
+* 文 件 名: gD0281.c
+* 功能描述：汇总凭证情况
+*
+*************************************************************/
+#define MYSQLERR if(sqlca.sqlcode&&sqlca.sqlcode!=1403) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_note_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "note_mst_c.h"
+
+#include "com_sys_parm_c.h"
+/**JYW #include "com_branch_c.h" **/
+
+EXEC SQL BEGIN DECLARE SECTION;
+	struct	gl_note_c		gl_note;
+	double d_amt,c_amt;
+	char tot_br_no[10];
+EXEC SQL  END  DECLARE SECTION;
+	struct com_sys_parm_c com_sys_parm_c;
+
+struct gl_note_noid{
+	char      br_no[6];
+	char      note_type[4];
+	long      date;
+	double    cr_bal;
+	double    lcd_bal;
+	long      rdd_cnt;
+	long      rcd_cnt;
+	double    rdd_amt;
+	double    rcd_amt;
+	double    tdcr_bal;
+	long      tddr_cnt;
+	long      tdcr_cnt;
+	double    tddr_amt;
+	double    tdcr_amt;
+	double    mcr_bal;
+	long      mdr_cnt;
+	long      mcr_cnt;
+	double    mdr_amt;
+	double    mcr_amt;
+	double    qcr_bal;
+	long      qdr_cnt;
+	long      qcr_cnt;
+	double    qdr_amt;
+	double    qcr_amt;
+	double    ycr_bal;
+	long      ydr_cnt;
+	long      ycr_cnt;
+	double    ydr_amt;
+	double    ycr_amt;
+}gl_note_area;
+gD0281( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &com_sys_parm_c );
+	MYRETERR
+
+	g_pub_tx.tx_date=com_sys_parm_c.lst_date;
+
+	EXEC SQL update dc_log_bk set cur_no='01' where cur_no is null;
+	MYSQLERR
+
+	ret=do_qs();
+	if( ret ) goto ErrExit;
+
+	ret=do_note();
+	if( ret ) goto ErrExit;
+
+	ret=sum_dc();
+	if( ret ) goto ErrExit;
+	
+	ret=do_up_br_no();
+	if( ret ) goto ErrExit;
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+/*----------------------------------------------------------*/
+/***汇总分户***/
+do_note()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct note_mst_c vr;
+	struct gl_note_c vgl_note;
+	int z1;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+
+	EXEC SQL declare cur_note cursor for
+		select br_no,note_type,sum(cnt) 
+		from note_mst
+		where sts in('0','1','2')
+		group by br_no,note_type
+		order by br_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_note ;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&vr,0,sizeof(vr));
+		EXEC SQL fetch cur_note into :vr.br_no,:vr.note_type,:vr.cnt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**	if( z1 ) vr.cnt=0;**/
+		if( vr.cnt==0 ) continue;
+
+		vtcp_log("brno[%s]cnt[%d]",
+			vr.br_no, vr.cnt  );
+
+			memset( &vgl_note,0,sizeof(vgl_note) );
+			strcpy( vgl_note.br_no,vr.br_no );
+			strcpy( vgl_note.note_type,vr.note_type );
+			vgl_note.cr_bal=vr.cnt;
+		ret=sub_do_acc_and_up( vgl_note,vr.note_type,10 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_note;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+int sum_dc()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_note_c vgl_note;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+
+	EXEC SQL declare cur_1_dc cursor for
+		select tx_tx_br_no,note_type,dc_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		and acc_hrt='70200'
+		group by tx_tx_br_no,note_type,dc_ind
+		order by 1,2,3;
+	MYSQLERR
+
+	EXEC SQL open cur_1_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		memset(&d_k,'\0',sizeof(d_k));
+		EXEC SQL fetch cur_1_dc 
+			into :d_k.tx_tx_br_no,:d_k.note_type,:d_k.dc_ind,:d_k.amt, :d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**
+		if( z1 ) d_k.amt=0.00;
+		if( z2 ) d_k.trace_no=0;
+		**/
+
+			memset( &vgl_note,0,sizeof(vgl_note) );
+			strcpy( vgl_note.br_no,d_k.tx_tx_br_no );
+			strcpy( vgl_note.note_type,d_k.note_type );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_note.rdd_cnt=d_k.trace_no;
+				vgl_note.rdd_amt=d_k.amt;
+			}
+			else
+			{
+				vgl_note.rcd_cnt=d_k.trace_no;
+				vgl_note.rcd_amt=d_k.amt;
+			}
+		ret=sub_do_acc_and_up( vgl_note,d_k.note_type,10 );
+		MYRETERR
+	}
+	EXEC SQL close cur_1_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/**增加科目记录及其上级**/
+sub_do_acc_and_up( p_gl_note,code,mode )
+ struct gl_note_c p_gl_note;
+ char *code;
+ int mode;
+{
+ 	struct gl_note_c gl_note;
+	int ret=0;
+	char data_code[5];
+	memset(&gl_note,'\0',sizeof(gl_note));
+	memcpy( &gl_note,&p_gl_note,sizeof(gl_note) );
+
+		strcpy( gl_note.note_type,code );
+
+		ret=sub_add_do( gl_note );
+		MYRETERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+/***期初数处理***/
+do_qs()
+{
+	struct gl_note_c gl_note_tmp;
+	struct gl_note_c gl_note_o;
+	struct com_branch_c com_branch;
+	int ret;
+
+	memset( &gl_note_o,0,sizeof(gl_note_o) );
+
+    ret=Gl_note_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYSQLERR
+
+	while(1)
+	{
+		memset( &gl_note_tmp,0,sizeof(gl_note_tmp) );
+     	ret = Gl_note_Fet_Upd(&gl_note_tmp,g_pub_tx.reply);
+		if( ret==100 ) break;
+		MYSQLERR
+
+		/**处理期初数**/
+		sub_begin_do( &gl_note_tmp );
+
+       	ret = Gl_note_Upd_Upd(gl_note_tmp, g_pub_tx.reply);
+		MYSQLERR
+
+		memcpy( &gl_note_o,&gl_note_tmp,sizeof(gl_note_tmp) );
+	}
+    Gl_note_Clo_Upd();
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+sub_begin_do( struct gl_note_c *p_gl_note_c )
+{
+	struct gl_note_c gl_note_c;
+	int ret;
+
+	memcpy( &gl_note_c,p_gl_note_c,sizeof(gl_note_c) );
+
+        gl_note_c.date = com_sys_parm_c.lst_date; 
+        gl_note_c.lcd_bal = gl_note_c.cr_bal;
+		gl_note_c.rdd_cnt=0;
+		gl_note_c.rcd_cnt=0;
+		gl_note_c.rdd_amt=0.00;
+		gl_note_c.rcd_amt=0.00;
+
+        ret = pub_base_day_xun(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 旬初 */
+            gl_note_c.tdcr_bal = gl_note_c.cr_bal;    /* 旬初贷方余额 */
+            gl_note_c.tddr_cnt = 0;
+            gl_note_c.tdcr_cnt = 0;
+            gl_note_c.tddr_amt = 0.00;
+            gl_note_c.tdcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_month(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 月初 */
+            gl_note_c.mcr_bal = gl_note_c.cr_bal;
+            gl_note_c.mdr_cnt = 0;
+            gl_note_c.mcr_cnt = 0;
+            gl_note_c.mdr_amt = 0.00;
+            gl_note_c.mcr_amt = 0.00;
+        }
+        
+        ret = pub_base_day_quarter(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 季初 */
+            gl_note_c.qcr_bal = gl_note_c.cr_bal;
+            gl_note_c.qdr_cnt = 0;
+            gl_note_c.qcr_cnt = 0;
+            gl_note_c.qdr_amt = 0.00;
+            gl_note_c.qcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_year(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 年初 */
+            gl_note_c.ycr_bal = gl_note_c.cr_bal;
+            gl_note_c.ydr_cnt = 0;
+            gl_note_c.ycr_cnt = 0;
+            gl_note_c.ydr_amt = 0.00;
+            gl_note_c.ycr_amt = 0.00;
+        }
+		gl_note_c.cr_bal=0.00;
+
+	memcpy( p_gl_note_c , &gl_note_c ,sizeof(gl_note_c) );
+}
+sub_add_do( a_gl_note )
+ struct gl_note_c a_gl_note;
+{
+	struct gl_note_c gl_note_c;
+	int ret=0;
+
+	ret=Gl_note_Dec_Upd( g_pub_tx.reply,
+		"br_no='%s' and note_type='%s'",
+		a_gl_note.br_no,a_gl_note.note_type );
+	MYRETERR
+	memset(&gl_note_c,'\0',sizeof(gl_note_c));
+	ret=Gl_note_Fet_Upd( &gl_note_c , g_pub_tx.reply );
+	if( ret==100 )
+	{
+		memset( &gl_note_c,0,sizeof(gl_note_c) );
+		strcpy( gl_note_c.br_no,a_gl_note.br_no );
+		strcpy( gl_note_c.note_type,a_gl_note.note_type );
+		gl_note_c.date=g_pub_tx.tx_date;
+
+		sub_add( &gl_note_c,a_gl_note );
+
+		ret=Gl_note_Ins( gl_note_c,g_pub_tx.reply );
+		MYSQLERR
+	}
+	else
+	{
+		MYRETERR
+		sub_add( &gl_note_c,a_gl_note );
+		ret=Gl_note_Upd_Upd( gl_note_c,g_pub_tx.reply  );
+		MYRETERR
+	}
+
+	Gl_note_Clo_Upd();
+
+    return 0;
+ErrExit:
+	return 1;
+}
+sub_add( p_gl_note_c,glamt )
+ struct gl_note_c *p_gl_note_c;
+ struct gl_note_c glamt;
+{
+	struct gl_note_c gl_note_c;
+	int ret;
+
+	memset( &gl_note_c,'\0',sizeof(gl_note_c) );
+	memcpy( &gl_note_c,p_gl_note_c,sizeof(gl_note_c) );
+
+		gl_note_c.cr_bal+=glamt.cr_bal;
+
+		gl_note_c.rdd_cnt+=glamt.rdd_cnt;
+		gl_note_c.rcd_cnt+=glamt.rcd_cnt;
+		gl_note_c.rdd_amt+=glamt.rdd_amt;
+		gl_note_c.rcd_amt+=glamt.rcd_amt;
+
+            gl_note_c.tddr_cnt+=glamt.rdd_cnt;
+            gl_note_c.tdcr_cnt+=glamt.rcd_cnt;
+            gl_note_c.tddr_amt+=glamt.rdd_amt;
+            gl_note_c.tdcr_amt+=glamt.rcd_amt;
+
+            gl_note_c.mdr_cnt+=glamt.rdd_cnt;
+            gl_note_c.mcr_cnt+=glamt.rcd_cnt;
+            gl_note_c.mdr_amt+=glamt.rdd_amt;
+            gl_note_c.mcr_amt+=glamt.rcd_amt;
+
+            gl_note_c.qdr_cnt+=glamt.rdd_cnt;
+            gl_note_c.qcr_cnt+=glamt.rcd_cnt;
+            gl_note_c.qdr_amt+=glamt.rdd_amt;
+            gl_note_c.qcr_amt+=glamt.rcd_amt;
+
+            gl_note_c.ydr_cnt+=glamt.rdd_cnt;
+            gl_note_c.ycr_cnt+=glamt.rcd_cnt;
+            gl_note_c.ydr_amt+=glamt.rdd_amt;
+            gl_note_c.ycr_amt+=glamt.rcd_amt;
+
+	memcpy( p_gl_note_c , &gl_note_c ,sizeof(gl_note_c) );
+}
+int do_up_br_no()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_note_c r;
+		struct gl_note_c v;
+		long date;
+	EXEC SQL END DECLARE SECTION;
+
+	date=g_pub_tx.tx_date;
+	EXEC SQL truncate table gl_note_sum ;
+	MYSQLERR
+
+	memset(tot_br_no,'\0',sizeof(tot_br_no));
+	strcpy(tot_br_no,TOT_BR_NO);
+	EXEC SQL declare cur_upsub cursor for 
+		select up_br_no,note_type,"date",
+		sum(cr_bal),
+		sum(lcd_bal),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(tdcr_bal),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(mcr_bal),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(qcr_bal),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(ycr_bal),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt)
+	from gl_note a,com_branch b
+	where a.br_no=b.br_no and b.up_br_no!=:tot_br_no
+	group by up_br_no,note_type,"date"
+	order by 1,2,3 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&r,'\0',sizeof(r));
+		EXEC SQL fetch cur_upsub
+	into 
+		:r.br_no,:r.note_type,:r.date,
+		:r.cr_bal,
+		:r.lcd_bal,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.tdcr_bal,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.mcr_bal,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.qcr_bal,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.ycr_bal,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt;
+
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		EXEC SQL declare cur_sum1 cursor for
+			select rowid,gl_note.*
+			from gl_note_sum
+			where br_no=:r.br_no and note_type=:r.note_type
+			and "date"=:r.date for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum1;
+		MYSQLERR
+
+		memset(&v,'\0',sizeof(v));
+		EXEC SQL fetch cur_sum1
+				into :v ;
+		if( sqlca.sqlcode==1403 )
+		{
+			if(Gl_note_sum_Ins(r,g_pub_tx.reply))
+				MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+				sub_add_all( &r,v ) ;
+			/**
+			EXEC SQL update gl_note_sum set *=(:r)
+				where current of cur_sum1;
+			**/
+			Gl_note_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum1;
+	}
+	EXEC SQL close cur_upsub;
+
+	EXEC SQL declare cur_upsub2 cursor for 
+		select br_no,note_type,"date",
+		sum(cr_bal),
+		sum(lcd_bal),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(tdcr_bal),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(mcr_bal),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(qcr_bal),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(ycr_bal),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt)
+	from gl_note
+	where br_no in(select up_br_no from com_branch )
+	and br_no!=:tot_br_no
+	group by br_no,note_type,"date"
+	order by 1,2,3 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub2;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_upsub2
+	into 
+		:r.br_no,:r.note_type,:r.date,
+		:r.cr_bal,
+		:r.lcd_bal,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.tdcr_bal,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.mcr_bal,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.qcr_bal,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.ycr_bal,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		EXEC SQL declare cur_sum2 cursor for
+			select rowid,gl_note_sum.* 
+			from gl_note_sum
+			where br_no=:r.br_no and note_type=:r.note_type
+			and "date"=:r.date for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum2 ;
+		MYSQLERR
+
+		EXEC SQL fetch cur_sum2 into :v;
+		if( sqlca.sqlcode==1403 )
+		{
+			if(Gl_note_sum_Ins(r,g_pub_tx.reply))
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+				sub_add_all( &r,v ) ;
+
+			/**
+			EXEC SQL update gl_note_sum set *=(:r)
+				where current of cur_sum2;
+			**/
+			Gl_note_sum_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum2;
+	}
+	EXEC SQL close cur_upsub2;
+
+	EXEC SQL declare cur_upsub3 cursor for 
+		select :tot_br_no br_no,note_type,"date",
+		sum(cr_bal),
+		sum(lcd_bal),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(tdcr_bal),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(mcr_bal),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(qcr_bal),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(ycr_bal),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt)
+	from gl_note
+	group by br_no,note_type,"date"
+	order by 1,2,3 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub3;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&r,'\0',sizeof(r));
+		EXEC SQL fetch cur_upsub3
+	into 
+		:r.br_no,:r.note_type,:r.date,
+		:r.cr_bal,
+		:r.lcd_bal,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.tdcr_bal,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.mcr_bal,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.qcr_bal,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.ycr_bal,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		sprintf(acErrMsg,"++++++++++++++++++++++[%d][%d]",__LINE__,sqlca.sqlcode); 
+        WRITEMSG
+
+		EXEC SQL declare cur_sum3 cursor for
+			select rowid,gl_note_sum.*
+			from gl_note_sum
+			where br_no=:r.br_no 
+            and note_type=:r.note_type
+			and "date"=:r.date ;
+		MYSQLERR
+		sprintf(acErrMsg,"++++++++++++++++++++++[%d][%d]",__LINE__,sqlca.sqlcode); 
+        WRITEMSG
+
+		EXEC SQL open cur_sum3;
+
+		MYSQLERR
+
+		sprintf(acErrMsg,"++++++++++++++++++++++[%d][%d]",__LINE__,sqlca.sqlcode); 
+        WRITEMSG
+
+		memset(&v,'\0',sizeof(v));
+		EXEC SQL fetch cur_sum3 into :v;
+		if( sqlca.sqlcode==1403 )
+		{
+			if(Gl_note_sum_Ins(r,g_pub_tx.reply))
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+				sub_add_all( &r,v ) ;
+
+			/**
+			EXEC SQL update gl_note_sum set *=(:r)
+				where current of cur_sum2;
+			**/
+			Gl_note_sum_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+		EXEC SQL close cur_sum3;
+	}
+	EXEC SQL close cur_upsub3;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+sub_add_all( p_gl_note_c,glnote )
+ struct gl_note_c *p_gl_note_c;
+ struct gl_note_c glnote;
+{
+	struct gl_note_c gl_note_c;
+	int ret;
+
+	memcpy( &gl_note_c,p_gl_note_c,sizeof(gl_note_c) );
+
+		gl_note_c.cr_bal+=glnote.cr_bal;
+
+		gl_note_c.lcd_bal+=glnote.lcd_bal;
+
+		gl_note_c.rdd_cnt+=glnote.rdd_cnt;
+		gl_note_c.rcd_cnt+=glnote.rcd_cnt;
+		gl_note_c.rdd_amt+=glnote.rdd_amt;
+		gl_note_c.rcd_amt+=glnote.rcd_amt;
+
+		gl_note_c.tdcr_bal+=glnote.tdcr_bal;
+
+            gl_note_c.tddr_cnt+=glnote.tddr_cnt;
+            gl_note_c.tdcr_cnt+=glnote.tdcr_cnt;
+            gl_note_c.tddr_amt+=glnote.tddr_amt;
+            gl_note_c.tdcr_amt+=glnote.tdcr_amt;
+
+		gl_note_c.mcr_bal+=glnote.mcr_bal;
+
+            gl_note_c.mdr_cnt+=glnote.mdr_cnt;
+            gl_note_c.mcr_cnt+=glnote.mcr_cnt;
+            gl_note_c.mdr_amt+=glnote.mdr_amt;
+            gl_note_c.mcr_amt+=glnote.mcr_amt;
+
+		gl_note_c.qcr_bal+=glnote.qcr_bal;
+
+            gl_note_c.qdr_cnt+=glnote.qdr_cnt;
+            gl_note_c.qcr_cnt+=glnote.qcr_cnt;
+            gl_note_c.qdr_amt+=glnote.qdr_amt;
+            gl_note_c.qcr_amt+=glnote.qcr_amt;
+
+		gl_note_c.ycr_bal+=glnote.ycr_bal;
+
+            gl_note_c.ydr_cnt+=glnote.ydr_cnt;
+            gl_note_c.ycr_cnt+=glnote.ycr_cnt;
+            gl_note_c.ydr_amt+=glnote.ydr_amt;
+            gl_note_c.ycr_amt+=glnote.ycr_amt;
+
+	memcpy( p_gl_note_c , &gl_note_c ,sizeof(gl_note_c) );
+}

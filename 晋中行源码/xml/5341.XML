@@ -1,0 +1,428 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="5341 大额交易历史查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+
+	$FD67 = #LW_IND;
+	$FD28  = #TX_BRNO;
+	$FD44 = #TX_DATE;
+	$FD68 = #ZF_TYPE;
+	$FD23 = #TX_TYPE;
+	$FD69 = #TX_STS;
+
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+"T(5341                        大额交易历史查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+
+<ITEM NAME="#MSGTYPE"   TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM NAME="#TXNO"      TYPE="%-4s"    FUNCTIONS="T($TXNO=5881)"/>
+
+
+<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	dim @selid as number;
+	dim @ldxml as string;
+	dim @filename as string;
+	dim @tota as string;
+	
+	dim @CMTNO as string;
+	if(#DOLIST !='')
+	{
+	@selid =list_work();
+	if(@selid &lt; 0)
+	{
+		list_del();
+		return(true);
+	}
+	@selid=list_getselid();
+	if(@selid &lt; 0)
+	{
+		list_del();
+		return(true);
+	}
+	initfd();
+	commsend_001();
+	@CMTNO = rtrim(list_gettext(@selid,0));
+	switch(@CMTNO)
+	{
+		case '100':
+		case '101':
+		case '102':
+		case '103':
+		case '105':
+		case '109':
+		case '108':
+		case '121':
+		case '122':
+		case '123':
+		case '124':
+			$FD16 = '9561';
+			#CMTNO = rtrim(list_gettext(@selid,0));
+					#ORDERNO = rtrim(list_gettext(@selid,3));
+					#WT_DAY = rtrim(list_gettext(@selid,4));
+					$FD44 = #WT_DAY;
+					#OR_BR_NO=rtrim(list_gettext(@selid,6));
+					commsend_123();
+					callserver();
+					if($FD12!='0000')
+					{
+						showmsg(geterror());	
+						return (false);
+					}
+					$BUFFER = $FD123;
+					break;
+			case '301':
+			case '302':
+			case '303':
+			case '311':
+			case '313':
+			case '314':
+			case '407':
+			case '408':
+			case '721':
+			case '724':
+			case '725':
+					$FD16 = '9563';
+					#CMTNO = rtrim(list_gettext(@selid,0));
+					#ORDERNO = rtrim(list_gettext(@selid,3));
+					#WT_DAY = rtrim(list_gettext(@selid,4));
+					$FD44 = #WT_DAY;
+					$FD68 = '1';
+					$FD67 = #LW_IND;
+					#OR_BR_NO=rtrim(list_gettext(@selid,6));
+					commsend_123();
+					callserver();
+					//showmsg('1='+$FD41);
+					if($FD12!='0000')
+					{
+						showmsg(geterror());	
+						return (false);
+					}
+					$BUFFER = $FD123;
+						break;
+					//showmsg('2='+$FD41);
+			}
+
+			switch(@CMTNO)
+			{
+				case '100':
+					@filename = 'HVQ1.XML';
+					break;
+				case '101':
+					@filename = 'HVQ2.XML';
+					@filename = 'HVQ1.XML';
+					break;
+				case '102':
+					@filename = 'HVQ4.XML';
+					@filename = 'HVQ1.XML';
+				case '103':
+					@filename = 'HVQ4.XML';
+					@filename = 'HVQ1.XML';	
+					break;
+				case '105':
+					@filename = 'HVQ3.XML';
+					@filename = 'HVQ1.XML';
+					break;
+				case '109':
+					@filename = 'HVQ5.XML';
+					@filename = 'HVQ1.XML';
+					break;
+				case '108':
+					@filename = 'HVQ6.XML';
+					@filename = 'HVQ1.XML';
+					break;
+				case '313':
+					@filename = 'HVQ7.XML';
+					break;
+				case '314':
+					@filename = 'HVQ8.XML';
+					break;
+				case '301':
+					@filename = 'HVQ9.XML';
+					break;
+				case '302':
+					@filename = 'HVQA.XML';
+					break;
+				case '303':
+					@filename = 'HVQB.XML';
+					break;
+				case '311':
+					@filename = 'HVQC.XML';
+					break;
+				case '407':
+					@filename = 'HVQD.XML';
+					@filename = 'HVQ9.XML';
+					break;
+				case '408':
+					@filename = 'HVQE.XML';
+					@filename = 'HVQ9.XML';
+					break;
+				case '121':
+					@filename = 'HVQG.XML';
+					break;
+				case '122':
+					@filename = 'HV122.XML';
+					break;
+				case '123':
+					@filename = 'HV123.XML';
+					break;
+				case '124':
+					@filename = 'HV124.XML';
+					break;
+				case '721':
+					@filename = 'HV721.XML';
+					break;
+				case '724':
+					@filename = 'HV724.XML';
+					break;
+				case '725':
+					@filename = 'HV725.XML';
+					break;
+				//showmsg('3='+$FD41);
+			}
+			//showmsg(@CMTNO);
+			//showmsg('4='+$FD41);
+			if(@CMTNO!='725')
+				open(@filename,'#TX_DATE='+$FD44+';#TMP_TXAMT='+$FD39+';#OWTDATE='+$FD45+';');
+			//showmsg('5='+$FD41);
+			if(@CMTNO=='725')
+			{
+				//showmsg($FD46);
+				//showmsg($FD40)
+				//showmsg($FD41);
+				//showmsg(substr($BUFFER,800,10));
+				//showmsg(substr($BUFFER,801,100));
+			//showmsg('6fd44='+$FD44);
+			//showmsg('6fd39='+$FD39);
+			//showmsg('6fd45='+$FD41);
+			//showmsg('6fd40='+$FD41);
+			//showmsg('6='+$FD41);
+				open(@filename,'#TX_DATE='+$FD44+';#TMP_TXAMT='+$FD39+';#OWTDATE='+$FD45+';#PO_DATE='+$FD46+';#PO_BAL='+$FD40+';#PO_REAL='+$FD41+';');
+			}
+			//break;
+			return (true);
+//		}
+	}
+//	list_del();
+	#DOLIST='';
+}"
+</ONLOSTFOCUS>
+</ITEM>	
+<ITEM NAME="#DOLIST1" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<!---输入要素--->
+<ITEM LINE="6"  COL="26" TYPE="%-14s"  FUNCTIONS="T(数据来源:)"/>
+<ITEM LINE="8"  COL="26" TYPE="%-14s"  FUNCTIONS="T(交易行号:)"/>
+<ITEM LINE="10"  COL="26"  TYPE="%-14s" FUNCTIONS="T(交易日期:)"/>
+<ITEM LINE="12" COL="26" TYPE="%-14s"  FUNCTIONS="T(支付标志:!)"/>
+<ITEM LINE="14" COL="26" TYPE="%-14s"  FUNCTIONS="T(交易类型:)"/>
+<ITEM LINE="16" COL="26" TYPE="%-14s" FUNCTIONS="T(交易状态:!)"/>
+
+<!---输入项定义--->
+<ITEM NAME="#LW_IND"  LINE="6"  COL="36" TYPE="%-1s"  INPUT="SELECT"   FUNCTIONS="T(1)">
+	<SELECT LINE="06" COL="41">
+		<OPTION VALUE="1 往帐"     TITLE="1.本行系统(往帐)"/>
+		<OPTION VALUE="2 来帐"    TITLE="2.它行系统(来帐)"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#TX_BRNO" LINE="8"  COL="36" TYPE="%-5s"  INPUT="TEXT"   FUNCTIONS="T($KINBR)"/>
+
+<ITEM NAME="#TX_DATE"  LINE="10" COL="36" TYPE="%-8s"  INPUT="TEXT"   FUNCTIONS="T($HDATE)D()"/>
+
+<ITEM NAME="#ZF_TYPE"  LINE="12" COL="36" TYPE="%-1s"  INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+	<SELECT LINE="11" COL="41">
+		<OPTION VALUE="0 支付类"      TITLE="0.支付类"/>
+		<OPTION VALUE="1 非支付类"    TITLE="1.非支付类"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		dim @tota_txtype as string;
+		dim @tota_txstat as string;
+		if(#ZF_TYPE=='0')
+		{
+	@tota_txtype = '0000|全部类型        |888|*0000|大额汇兑        |100|*0000|委托收款        |101|*0000|同业拆借        |105|*0000|托收承付        |102|*0000|国库资金汇划    |103|*0000|支付退汇        |108|*0000|汇票资金移存    |121|*0000|汇票未用退回    |124|*0000|清算银行汇票资金|122|*0000|汇票多余资金划回|123|*'; 
+			
+			if(#LW_IND=='1')
+			{
+		@tota_txstat = '0000|全部状态        |Z|*0000|往帐录入        |C|*0000|往帐复核        |0|*0000|往帐发送        |1|*0000|往帐记帐清算    |2|*0000|往帐退回记帐    |3|*0000|往帐退回等待    |4|*0000|往帐拒绝        |5|*0000|往帐撤销记帐    |6|*0000|往帐撤销等待    |7|*0000|往帐登记取消    |A|*0000|往帐复核取消    |D|*0000|往帐排队        |J|*0000|*';   
+			}
+			else if(#LW_IND=='2')
+			{
+		@tota_txstat = '0000|全部状态        |Z|*0000|来帐登记        |E|*0000|来帐退回        |B|*0000|地方押错        |F|*0000|全国押错        |G|*0000|中心挂帐        |H|*0000|支行挂帐        |I|*0000|来帐清算            |9|*';
+				
+			}
+		}
+		else if(#ZF_TYPE=='1')
+		{
+	@tota_txtype = '0000|全部类型        |888|*0000|大额查询        |301|*0000|大额查复        |302|*0000|大额自由格式    |303|*0000|退回申请        |313|*0000|退回应答        |314|*0000|申请撤销        |311|*0000|撤销应答        |312|*0000|汇票兑付        |721|*0000|汇票申请退回    |724|*0000|汇票全额兑付通知|725|*';
+			if(#LW_IND=='1')
+			{
+				@tota_txstat = '0000|全部状态        |Z|*0000|往帐录入        |C|*0000|往帐发送        |2|*0000|往帐排队        |9|*';
+			}
+			else if(#LW_IND=='2')
+			{
+				@tota_txstat = '0000|全部状态        |Z|*0000|来帐已应答      |B|*0000|地方押错        |F|*0000|全国押错        |G|*';
+			}
+		}
+	
+		setsel(#TX_TYPE,@tota_txtype,'o5t16o1v3o2');
+		setsel(#TX_STS,@tota_txstat,'o5t16o1v1o2');
+	}"
+	</ONLOSTFOCUS>
+
+</ITEM>
+
+<ITEM NAME="#TX_TYPE"  LINE="14" COL="36" TYPE="%-3s" INPUT="SELECT"  FUNCTIONS="T(888)V(NB)">
+	<SELECT LINE="14" COL="37">
+		<OPTION VALUE="888 全部类型"      TITLE="E.全部类型"/>
+	</SELECT>
+</ITEM>
+
+
+
+<ITEM NAME="#TX_STS" LINE="16" COL="36" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="V(NB)T(Z)">
+	<SELECT LINE="16" COL="37">
+		<OPTION VALUE="Z 全    部" TITLE="0.全    部"/>
+	</SELECT>
+</ITEM>
+
+<ITEM NAME="#WT_DAY"            TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#ORDERNO" 		TYPE="%8d"  	  FUNCTIONS=""/>
+<ITEM NAME="#IORDERNO"  	TYPE="%-6s"	  FUNCTIONS=""/>
+<ITEM NAME="#OTYPE"     	TYPE="%-1s"  	  FUNCTIONS="T(1)"/>
+<ITEM NAME="#CMTNO"             TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#O_CMTNO"           TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#PAY_QS_NO"         TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#OR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#SENDCO"            TYPE="%-4s"       FUNCTIONS=""/>
+<ITEM NAME="#PAY_OPN_BR_NO"     TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_AC_NO"         TYPE="%-32s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_NAME"          TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_ADDR"          TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_QS_NO"        TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#AC_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#RECECO"            TYPE="%-4s"       FUNCTIONS=""/>
+<ITEM NAME="#CASH_OPN_BR_NO"    TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_AC_NO"        TYPE="%-32s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_NAME"         TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_ADDR"         TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#YW_TYPE"           TYPE="%-2s"       FUNCTIONS=""/>
+<ITEM NAME="#CONTENT"           TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#RATE"              TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+<ITEM NAME="#RATEDATE"          TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+<ITEM NAME="#OORDERNO"          TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+<!--<ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+<ITEM NAME="#NOTPAY_CONTENT"    TYPE="%-255s"     FUNCTIONS=""/>
+<ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#RESP1"             TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#OPCD"              TYPE="%-2s"       FUNCTIONS="T()"/>
+<ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#PACKID"            TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#O_PACKID"          TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PACK_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#O_PACK_DATE"       TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#TXNUM"             TYPE="%-5s"       FUNCTIONS=""/>
+<ITEM NAME="#O_TXNUM"           TYPE="%-5s"       FUNCTIONS=""/>
+<ITEM NAME="#LV_YW_IND"         TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#RESP_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#RCP_STS"           TYPE="%-2s"       FUNCTIONS=""/>
+<ITEM NAME="#RESP2"             TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#RETCODE"           TYPE="%-2s"       FUNCTIONS=""/>
+<ITEM NAME="#YW_DTL_ID"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#ACC_IND"           TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#REQ_TYPE"          TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#DF_FREEAMT"        TYPE="%-16s"      FUNCTIONS=""/>
+<ITEM NAME="#PROTNO"            TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#PO_NO"             TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PO_TYPE"           TYPE="%-1s"       FUNCTIONS=""/>
+<!--<ITEM NAME="#OTYPE"             TYPE="%-1s"       FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+<ITEM NAME="#VTYPE"             TYPE="%3d"        FUNCTIONS="" />
+<ITEM NAME="#VOCNUM"            TYPE="%16d"       FUNCTIONS="" />
+<ITEM NAME="#TXDAY"             TYPE="%-8s"       FUNCTIONS="T($HDATE)"/>
+<ITEM NAME="#NEXTORDERNO"       TYPE="%8s"        FUNCTIONS=""/>
+<ITEM NAME="#NEXTVOCNUM"        TYPE="%16d"       FUNCTIONS=""/>
+<ITEM NAME="#TXAMT"             TYPE="%17.2f"     FUNCTIONS="J(#UTXAMT)J(#XTXAMT)"/>
+<ITEM NAME="#XTXAMT"            TYPE="%-21s"      FUNCTIONS="X(#TXAMT)"/>
+<ITEM NAME="#UTXAMT"            TYPE="%-40s"      FUNCTIONS="U(#TXAMT)"/>
+
+<ITEM LINE="21"  COL="65" NAME="#BUTTON" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+<ONCLICK>"{
+	dim @tota as string;
+	dim @offset as number;
+	dim @cnt as number;
+	dim @packlen as number;
+	dim @flag as string;
+	dim @id as number;
+	list_init(17,78,5,1);
+	list_setcolcnt(6);
+	list_setcol(0,'交易行',9);
+	list_setcol(1,'顺序号',8);
+	list_setcol(2,'交   易   金   额',20);
+	list_setcol(3,'开户行( 付 )',14);
+	list_setcol(4,'开户行( 收 )',14);
+	list_setcol(5,'状    态',8);
+	initfd();
+
+	commsend_001();
+	$FD67 = #LW_IND;
+	$FD28  = #TX_BRNO;
+	$FD44 = #TX_DATE;
+	$FD68 = #ZF_TYPE;
+	$FD23 = #TX_TYPE;
+	$FD69 = #TX_STS;
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if(substr(@tota,36,1)=='E')
+	{
+		showmsg(substr(@tota,36,5) +'  '+substr(@tota,44,40))
+		list_del();
+		return(true);
+	}
+	if(autolist(@tota))
+	{
+		//list_work();
+	}
+
+	#DOLIST='1';
+	}"
+</ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>
+

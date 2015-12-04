@@ -1,0 +1,212 @@
+<BLOCK LINE="9" COL="4" NAME="IC_QCKH_INFO" VISABLE="FALSE">
+	<ITEM LINE="1" COL="1"  TYPE="%-13s" FUNCTIONS="T(户        名:)" />
+	<ITEM LINE="1" COL="15" TYPE="%-20s" NAME="#KH_NAME" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM LINE="2" COL="1"  TYPE="%-13s" FUNCTIONS="T(证 件  类 型:)" />
+	<ITEM NAME="#TMP"       TYPE="%-21s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @tota as string;
+			initfd();
+			commsend_001();
+			$FD16='9799';
+			$FD67='1';
+			@tota=callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			setsel(#ZJZL,@tota,'o5t20o1v1o2');
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  TYPE="%-1s" NAME="#ZJZL1" FUNCTIONS="T()"/><!--做校验密码使用-->
+	<ITEM  TYPE="%-20s" NAME="#KH_NAME1"  FUNCTIONS="T()"/><!--做校验密码使用-->
+	<ITEM  TYPE="%-19s"  NAME="#KH_ZJHM1" FUNCTIONS="T()"/><!--做校验密码使用-->	
+	<ITEM LINE="2" COL="15" TYPE="%-1s" NAME="#ZJZL" FUNCTIONS="V(NB)T(1)" INPUT="SELECT">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="身份证"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="3" COL="1"  TYPE="%-13s"  FUNCTIONS="T(证 件  号 码:)" />
+	<ITEM LINE="3" COL="15" TYPE="%-19s"  NAME="#KH_ZJHM"    INPUT="TEXT"  FUNCTIONS="T()" />	
+	<ITEM LINE="4" COL="1"  TYPE="%-13s"  FUNCTIONS="T(电子现金余额:)"/>
+	<ITEM LINE="4" COL="15" TYPE="%17.2f" NAME="#ICLAVBAL"  INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)" />
+	<ITEM LINE="6" COL="1"  TYPE="%-16s"  FUNCTIONS="T(【交易信息】)" VISABLE="true" />
+	<ITEM LINE="7" COL="1"  TYPE="%-70s"  FUNCTIONS=
+		"T(----------------------------------------------------------------------)"/>
+	<ITEM LINE="8" COL="1"  NAME="#L_QCLX"  TYPE="%-10s"   FUNCTIONS="T(圈存类型:)/>           <!--圈存类型-->
+	<ITEM LINE="8" COL="11" TYPE="%-1s"  NAME="#QCLX" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="指定账户圈存"/>
+			<OPTION VALUE="1" TITLE="非指定IC卡账户圈存"/>
+			<OPTION VALUE="2" TITLE="非指定磁条卡账户圈存"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#QCLX=='0')
+			{
+			showmsg('指定账户圈存，请不要拔卡.....');
+			show(#CARD_NO_IN,true);
+			}
+			if(#QCLX=='1')
+			{
+			show(#CARD_NO_IN,  true);
+			showmsg('请拿出现有卡，插入您要转出的IC卡.....');
+			}
+			if(#QCLX=='2')
+			{
+				//show(#CARD_NO_IN_CT,  true);
+				showmsg('请刷您要转出的磁条卡.....');
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="9" COL="1"  TYPE="%-10s"  NAME="#L_CARD_NO_IN"  FUNCTIONS="T(圈存卡号:)"  />
+	<ITEM LINE="9" COL="11" TYPE="%-19s"  NAME="#CARD_NO_IN" VISABLE="false" INPUT="TEXT"  DEVICE="ICC"    FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+		"{
+			if(len(rtrim(#CARD_NO))!=19)
+			{
+				showmsg('卡号长度不正确，请重新输入!');
+				return(false); 
+			}
+			if(substr(#CARD_NO,0,6) != #CARDBIN1 and substr(#CARD_NO,0,6) != #CARDBIN2)
+			{
+				showmsg('卡号的前6位必须为'+#CARDBIN1 +'或'+#CARDBIN2);
+				return(false);
+			}
+			initfd();
+			commsend_001();
+			show(#L_AC_BAL,  true);
+			show(#AC_BAL,    true);
+			show(#L_PASSWORD,  true);
+			show(#PASSWORD,    true);
+			if(#QCLX=='1')
+			{
+				show(#L_ZR_NAME, true);
+				show(#ZR_NAME,   true);
+			}
+			$FD32=rtrim(#CARD_NO_IN);
+			$FD16='9405' ;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#ZR_NAME = $FD25 ;//户名
+			enable(#ZR_NAME,false);
+			#AC_BAL = val(delspace($FD39),0.01);//账户余额
+			enable(#AC_BAL,false);
+			initfd();
+			commsend_001();
+			$FD62=rtrim(#CARD_NO_IN);
+			$FD16='1717' ;//查询账户信息
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#KH_NAME1 = $FD26;//户名
+			#ZJZL1 = $FD20; //证件类型
+			#KH_ZJHM1 = $FD32 ;//证件号码
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<!--
+	<ITEM LINE="9" COL="11" TYPE="%-19s"  NAME="#CARD_NO_IN_CT" VISABLE="false" INPUT="TEXT"   FUNCTIONS="V(NB)M($MSR2,1)">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			show(#L_ZR_NAME, true);
+			show(#ZR_NAME,   true);
+			show(#L_AC_BAL,  true);
+			show(#AC_BAL,    true);
+			show(#L_PASSWORD,  true);
+			show(#PASSWORD,    true);
+			$FD32=rtrim(#CARD_NO_IN_CT);
+			$FD16='9405' ;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#ZR_NAME = $FD25 ;//户名
+			enable(#ZR_NAME,false);
+			#AC_BAL = val(delspace($FD39),0.01);//账户余额
+			enable(#AC_BAL,false);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>-->
+	<ITEM LINE="8"  COL="39" TYPE="%-10s"  NAME="#L_ZR_NAME" VISABLE="false" FUNCTIONS="T(圈存户名:)"  />
+	<ITEM LINE="8"  COL="49" TYPE="%-20s"  NAME="#ZR_NAME"   VISABLE="false" INPUT="TEXT"   FUNCTIONS="T()"/>
+	<ITEM LINE="9"  COL="39"  TYPE="%-10s"  NAME="#L_AC_BAL"  VISABLE="false" FUNCTIONS="T(账户余额:)" /> 
+	<ITEM LINE="9"  COL="49" TYPE="%17.2f" NAME="#AC_BAL"    VISABLE="false" INPUT="TEXT"  FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#L_PASSWORD" LINE="10" COL="1" TYPE="%-10s" VISABLE="false"  FUNCTIONS="T(密    码:)"/> 
+	<ITEM NAME="#PASSWORD"   LINE="10" COL="11" TYPE="%6d"  VISABLE="false"  INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='7007'; 
+			if((#QCLX=='0') or (#QCLX=='1'))
+			{
+				$FD30=#CARD_NO_IN;
+			}
+			if(#QCLX=='2')
+			{
+				$FD30=#CARD_NO_IN_CT;
+			}
+			$FD79=#PASSWORD;
+			$FD67=#ZJZL1;
+			$FD62=#KH_ZJHM1;
+			$FD75=$MSR2; //二磁
+			$FD76=$MSR3;
+			$FD68='4';
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			showmsg('密码校验成功！');
+			<!--
+			initfd();
+			commsend_001();
+			$FD16='9317';
+			$FD30=#CARD_NO_IN;
+			$FD79=getitems('#PASSWORD');
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			} -->
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="10" COL="39"  TYPE="%-10s"  FUNCTIONS="T(圈存金额:)"/>
+	<ITEM LINE="10" COL="49" TYPE="%17.2f" NAME="#AMT"      INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#LTXAMT1"    TYPE="%17.2f" FUNCTIONS="E(#AMT+#ICLAVBAL)">
+		<ONLOSTFOCUS>
+		"{
+			showmsg(itoa(#LTXAMT1,'%17.2f'));
+			if(#AC_BAL &lt; #AMT)
+			{
+				showmsg('账户余额不足!');
+				return(false);
+			}
+			if(#LTXAMT1 &gt; 1000)
+			{
+				showmsg('IC卡电子金额总数不能超过1000元，请重新输入!');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+</BLOCK>

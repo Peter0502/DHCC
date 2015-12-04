@@ -1,0 +1,306 @@
+/*************************************************************
+* 文 件 名: gD0252.c
+* 功能描述：试结反翻盘处理程序
+**************************************************************/
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+EXEC SQL INCLUDE SQLCA;
+gD0252()
+{
+    int ret=0;
+	double d_amt=0.00, c_amt=0.00;
+    struct com_sys_parm_c com_sys_parm_c;
+
+    sprintf(acErrMsg,"反翻盘开始!!!!");
+    WRITEMSG
+
+	ret=sql_begin(); /*打开事务*/
+	MYRETERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+    /* 修改系统日期、状态、初始化流水、更改网点状态 */
+    ret = Com_sys_parm_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYRETERR
+
+    ret = Com_sys_parm_Fet_Upd(&com_sys_parm_c,g_pub_tx.reply);
+	MYRETERR
+
+    com_sys_parm_c.sys_sts = 0;
+    com_sys_parm_c.sys_date=com_sys_parm_c.lst_date;
+	pub_base_deadlineD(com_sys_parm_c.sys_date,-1,&com_sys_parm_c.lst_date);
+ 
+    ret = Com_sys_parm_Upd_Upd(com_sys_parm_c,g_pub_tx.reply);
+	MYRETERR
+
+    Com_sys_parm_Clo_Upd();
+
+    /* 更改网点状态 */
+    ret = sql_execute("update com_branch set wrk_sts='2' where wrk_sts!='*' and br_type not in('0') ");
+	MYRETERR
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"反翻盘成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	if (strcmp(g_pub_tx.reply,"0000") == 0)
+		strcpy(g_pub_tx.reply,"G108");
+	sprintf(acErrMsg,"反翻盘失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+int pub_tmp_delcretable()
+{
+		sprintf(acErrMsg,"备份数据开始");
+		WRITEMSG
+
+    /* 删除备份表,并建立备份表 */
+    EXEC SQL drop table dc_log_bk;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	if( pub_pubdb_recrttab("dc_log","dc_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL insert into DC_LOG_BK 
+		select *
+		from DC_LOG
+		where sts='0' ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+	/*----------------------------------------------------------------*/
+
+	if( pub_pubdb_droptab("trace_log_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+	if( pub_pubdb_recrttab("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into TRACE_LOG_BK select * from TRACE_LOG;
+    if (sqlca.sqlcode != 0)
+    {
+        sprintf(acErrMsg,"INSERT TRACE_LOG_BK ERROR@ !![%d]",sqlca.sqlcode);
+        WRITEMSG
+        return 1;
+    }
+
+	if( pub_pubdb_recrtidx("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+
+	if( pub_pubdb_droptab("dd_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table dd_mst_bk
+    (
+        opn_br_no      varchar2(5),
+        prdt_no        varchar2(3),
+        bal             number(16,2),
+		cnt				number(12)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into DD_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from DD_MST
+		where ac_sts!='*'
+		group by opn_br_no,prdt_no;    
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index dd_mst_bk_1 on dd_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("td_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table td_mst_bk
+    (
+        opn_br_no      varchar2(5),
+        prdt_no        varchar2(3),
+        bal             number(16,2),
+		cnt				number(12)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into TD_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from TD_MST
+		where ac_sts!='*'
+		group by opn_br_no,prdt_no; 
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index td_mst_bk_1 on td_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("ln_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table ln_mst_bk
+    (
+        opn_br_no      varchar2(5),
+        prdt_no        varchar2(3),
+        bal             number(16,2),
+        in_lo_intst     number(16,2),
+        out_lo_intst    number(16,2),
+        cmpd_lo_intst   number(16,2),
+        gage_amt        number(16,2),
+		cnt				number(12)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into LN_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),sum(in_lo_intst),
+			sum(out_lo_intst),sum(cmpd_lo_intst),sum(gage_amt),count(*)
+		from LN_MST
+		group by opn_br_no,prdt_no; 
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index ln_mst_bk_1 on ln_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("in_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table in_mst_bk
+    (
+        opn_br_no      varchar2(5),
+        prdt_no        varchar2(3),
+        bal             number(16,2),
+		cnt				number(12)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into IN_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from IN_MST
+		group by opn_br_no,prdt_no; 
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index in_mst_bk_1 on in_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+
+    return 0;
+ErrExit:
+	return 1;
+}

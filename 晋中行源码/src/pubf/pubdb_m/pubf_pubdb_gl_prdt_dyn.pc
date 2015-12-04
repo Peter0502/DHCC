@@ -1,0 +1,125 @@
+#include "find_debug.h" 
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+EXEC SQL INCLUDE gl_prdt_dyn_c.h;
+EXEC SQL INCLUDE trace_log_bk_c.h;
+EXEC SQL INCLUDE mo_opn_cls_c.h;
+EXEC SQL INCLUDE sqlca.h;
+
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode); \
+	WRITEMSG \
+	strcpy( g_pub_tx.reply,"D103" ); \
+	goto ErrExit; \
+	}
+
+/*******************************************************************
+汇总流水
+*******************************************************************/
+pub_gl_prdt_dyn_sum_Dec()
+{
+	EXEC SQL declare sum_trace_cur  cursor for
+		select opn_br_no,prdt_no,add_ind,ct_ind,sum(amt),count(*)
+		from trace_log_bk
+		where prdt_no is not null and sts='0'
+		group by opn_br_no,prdt_no,add_ind,ct_ind
+	order by 1,2,3,4;
+	MYSQLERR
+
+	EXEC SQL open sum_trace_cur;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+pub_gl_prdt_dyn_sum_Fet( struct trace_log_bk_c *trace_log_bk_c )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct trace_log_bk_c vtrace_log_bk;
+		short z1,z2;
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL fetch sum_trace_cur
+		into :vtrace_log_bk.opn_br_no,:vtrace_log_bk.prdt_no,
+			:vtrace_log_bk.add_ind,:vtrace_log_bk.ct_ind,
+			:vtrace_log_bk.amt:z1,:vtrace_log_bk.ac_id:z2;
+	if( sqlca.sqlcode ) 
+	{
+		sprintf( acErrMsg,"sqlca.sqlcode [%d]",sqlca.sqlcode );
+		WRITEMSG
+		return sqlca.sqlcode;
+	}
+	if( z1 ) vtrace_log_bk.amt=0.00;
+	if( z2 ) vtrace_log_bk.ac_id=0;
+
+	MEMCPY_DEBUG( trace_log_bk_c,&vtrace_log_bk,sizeof(vtrace_log_bk) );
+
+	return 0;
+ErrExit:
+	return 1;
+}
+pub_gl_prdt_dyn_sum_Clo()
+{
+	EXEC SQL close sum_trace_cur;
+/***	EXEC SQL free sum_trace_cur; ***/
+}
+/*******************************************************************
+汇总开销户
+*******************************************************************/
+pub_gl_prdt_dyn_opncls_Dec( )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		long date;
+	EXEC SQL END DECLARE SECTION;
+
+	date=g_pub_tx.tx_date;
+
+	EXEC SQL declare sum_opncls_cur cursor for
+		select opn_br_no,prdt_no,wrk_sts,count(*)
+		from mo_opn_cls
+		where tx_date=:date and wrk_sts in('1','2')
+		group by opn_br_no,prdt_no,wrk_sts
+	order by 1,2,3;
+	MYSQLERR
+
+	EXEC SQL open sum_opncls_cur;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+pub_gl_prdt_dyn_opncls_Fet( struct mo_open_cls_c *mo_opn_cls_c )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct mo_opn_cls_c vmo_opn_cls;
+		short z1;
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL fetch sum_opncls_cur 
+		into :vmo_opn_cls.opn_br_no,:vmo_opn_cls.prdt_no,
+			:vmo_opn_cls.wrk_sts,:vmo_opn_cls.ac_id:z1;
+	if( sqlca.sqlcode ) 
+	{
+		sprintf( acErrMsg,"sqlca.sqlcode [%d]",sqlca.sqlcode );
+		WRITEMSG
+		return sqlca.sqlcode;
+	}
+
+	if( z1 ) vmo_opn_cls.ac_id=0;
+	MEMCPY_DEBUG( mo_opn_cls_c,&vmo_opn_cls,sizeof(vmo_opn_cls) );
+
+	return 0;
+ErrExit:
+	return 1;
+}
+pub_gl_prdt_dyn_opncls_Clo()
+{
+	EXEC SQL close sum_opncls_cur;
+/**	EXEC SQL free sum_opncls_cur; ***/
+}

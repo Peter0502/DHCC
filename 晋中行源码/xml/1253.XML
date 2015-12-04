@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100000000000000000000000000" TITLE="1253  支付凭证批量清算确认"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{ 
+}"
+</COMMSEND>
+<COMMRECV>"{
+  commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+  "T(1253                       支付凭证批量清算确认)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5625)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-12s" FUNCTIONS="T(支付凭证批量清算确认)"/><!---交易名称--->
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(5625)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <BLOCK LINE="2" COL="10" >
+  <ITEM LINE="6" COL="8" TYPE="%-14s" FUNCTIONS="T(银 行  编 码: )"/>
+  <ITEM LINE="6" COL="22" TYPE="%-16s" NAME="#BR_NO" INPUT="TEXT" FUNCTIONS="T(007)"/>
+  
+  <ITEM LINE="7" COL="8" TYPE="%-14s"  FUNCTIONS="T(财 政  编 码: )"/>
+  <ITEM LINE="7" COL="22" TYPE="%-16s" NAME="#FIN_CODE" INPUT="TEXT" FUNCTIONS=""/>
+  
+  <ITEM LINE="8" COL="8" TYPE="%-14s" FUNCTIONS="T(单 据  类 型: )"/>
+  <ITEM LINE="8" COL="22" TYPE="%-1s" NAME="#PAY_NOTE_TYPE" INPUT="SELECT" FUNCTIONS="">
+    <SELECT>
+      <OPTION VALUE="1"  TITLE="1.直接支付" />
+      <OPTION VALUE="2"  TITLE="2.授权支付" />
+      <OPTION VALUE="3"  TITLE="3.公务卡" />
+    </SELECT>
+  </ITEM>
+  
+  <ITEM LINE="9" COL="8" TYPE="%-14s" FUNCTIONS="T(划款凭证编号: )"/>
+  <ITEM LINE="9" COL="22" TYPE="%-20s" NAME="#VOU_NO" INPUT="TEXT" FUNCTIONS="" />
+  <ITEM LINE="10" COL="8" TYPE="%-14s" FUNCTIONS="T(凭   证   号: )"/>
+  <ITEM LINE="10" COL="22" TYPE="%-16s" NAME="#NOTE_NO" INPUT="TEXT" FUNCTIONS="" />
+   <ITEM LINE="11" COL="8" TYPE="%-14s" FUNCTIONS="T(确 认  类 型: )"/>
+  <ITEM LINE="11" COL="22" TYPE="%-2s" NAME="#PAY_STS" INPUT="SELECT" FUNCTIONS="V(NB)T(04)">
+    <SELECT>
+      <OPTION VALUE="04"  TITLE="清算确认" />
+    </SELECT>
+   </ITEM>
+  <ITEM LINE="12" COL="8" TYPE="%-14s" FUNCTIONS="T(预 算  类 型: )"/>
+  <ITEM LINE="12" COL="22" TYPE="%-2s" NAME="#YS_TYPE" INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+    <SELECT>
+      <OPTION VALUE="1"  TITLE="预算内" />
+      <OPTION VALUE="2"  TITLE="预算外" />
+    </SELECT>
+   </ITEM>
+  </BLOCK>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+ 
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+    "{
+        dim @tota as string; 
+        dim @filename as string; 
+        dim @msg as string;
+        dim @a as number;
+        dim @Num_ok as string;
+        dim @Num_fail as string;
+
+        initfd();
+        commsend_001();
+        $FD16=$TXNO;
+        $FD21=#PAY_STS;
+        $FD58=#BR_NO;
+        $FD59=#FIN_CODE;
+        $FD68=#PAY_NOTE_TYPE;
+        $FD61=#NOTE_NO;
+        $FD63=#VOU_NO;
+        $FD67=#YS_TYPE;
+        
+        if(len(#NOTE_NO)==0)
+        {
+           @msg='该交易可能包含多个支付凭证！确认本机构符合上述条件的支付凭证都已清算到账？';
+           @a=msgbox(@msg,'警告','cancel|ok');
+           if(@a!=1){
+            return(false);
+           }
+        }
+        if(#YS_TYPE=='2')
+        {
+           @msg='预算外资金需要在财政一体化系统完成清算过程！确认本机构符合上述条件的支付凭证都已清算到账？';
+           @a=msgbox(@msg,'警告','cancel|ok');
+           if(@a!=1){
+            return(false);
+           }
+        }
+        
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+       
+        //showmsg('成功确认'+$FD53+'笔，失败'+$FD54+'笔!');
+        @Num_ok=itoa(atoi($FD53),'%10d');
+        @Num_fail=itoa(atoi($FD54),'%10d');
+        showmsg('成功确认'+@Num_ok+'笔，失败'+@Num_fail+'笔!');
+        //显示凭证
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        call('fview '+@filename); 
+    }"
+  </ONCLICK> 
+   </ITEM> 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+    NOTHING
+  </PACKAGE>
+    <PRINT>
+    "{
+      
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印保单凭证" LINESPACE="24" >
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+  
+
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

@@ -1,0 +1,251 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_mger_rel_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_mger_rel_con ( struct cif_mger_rel_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_mger_rel_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->mang);
+	zip_tail(ps->mang_type);
+}
+int Cif_mger_rel_Debug(struct cif_mger_rel_c *ps){
+	vtcp_log("cif_mger_rel_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_mger_rel_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_mger_rel_c.mang=[%s]\n",ps->mang);
+	vtcp_log("cif_mger_rel_c.mang_type=[%s]\n",ps->mang_type);
+	vtcp_log("cif_mger_rel_c.crt_date=[%ld]\n",ps->crt_date);
+	vtcp_log("cif_mger_rel_c.canl_date=[%ld]\n",ps->canl_date);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_mger_rel_Sel(reply,cif_mger_rel_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_mger_rel_c *cif_mger_rel_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_mger_rel_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_mger_rel_Fet_Sel( cif_mger_rel_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_mger_rel_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_mger_rel_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_mger_rel.* FROM cif_mger_rel WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_mger_rel_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_mger_rel CURSOR FOR cif_mger_rel_sel;
+
+	EXEC SQL OPEN sel_cif_mger_rel;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_mger_rel_Fet_Sel ( struct cif_mger_rel_c *cif_mger_rel_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_mger_rel INTO :cif_mger_rel_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_mger_rel error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_mger_rel finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_mger_rel_c);
+
+	return 0;
+}
+
+int Cif_mger_rel_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_mger_rel;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_mger_rel_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_mger_rel.* FROM cif_mger_rel WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_mger_rel_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_mger_rel CURSOR FOR cif_mger_rel_upd;
+
+	EXEC SQL OPEN upd_cif_mger_rel;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_mger_rel_Fet_Upd( struct cif_mger_rel_c *cif_mger_rel_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_mger_rel INTO :cif_mger_rel_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_mger_rel finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_mger_rel_c);
+
+	return 0;
+}
+
+int Cif_mger_rel_Upd_Upd( struct cif_mger_rel_c cif_mger_rel_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_mger_rel SET cif_no=:cif_mger_rel_c.cif_no,
+			mang=:cif_mger_rel_c.mang,
+			mang_type=:cif_mger_rel_c.mang_type,
+			crt_date=:cif_mger_rel_c.crt_date,
+			canl_date=:cif_mger_rel_c.canl_date
+	WHERE rowid=:cif_mger_rel_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_mger_rel_Del_Upd(struct cif_mger_rel_c cif_mger_rel_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_mger_rel WHERE rowid=:cif_mger_rel_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_mger_rel_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_mger_rel;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_mger_rel_Ins( struct cif_mger_rel_c cif_mger_rel_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_mger_rel VALUES (:cif_mger_rel_c.cif_no,
+			:cif_mger_rel_c.mang,
+			:cif_mger_rel_c.mang_type,
+			:cif_mger_rel_c.crt_date,
+			:cif_mger_rel_c.canl_date);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_mger_rel error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

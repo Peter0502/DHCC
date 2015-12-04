@@ -1,0 +1,149 @@
+/*************************************************************
+* 文 件 名: gD0251.c
+* 功能描述：试结翻盘处理,生成dc_log_bk,trace_log_bk数据,删除gl_mst_hst里当天的数据
+**************************************************************/
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+EXEC SQL INCLUDE SQLCA;
+gD0251()
+{
+    int ret=0;
+	double d_amt=0.00, c_amt=0.00;
+    struct com_sys_parm_c com_sys_parm_c;
+
+    sprintf(acErrMsg,"翻盘开始!!!!");
+    WRITEMSG
+
+	ret=sql_begin(); /*打开事务*/
+	MYRETERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+    /* 删除临时表 */
+    ret = pub_tmp_delcretable();
+	MYRETERR
+
+    /* 修改系统日期、状态、初始化流水、更改网点状态 */
+    ret = Com_sys_parm_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYRETERR
+
+    ret = Com_sys_parm_Fet_Upd(&com_sys_parm_c,g_pub_tx.reply);
+	MYRETERR
+
+    /*试结不可提前迁到 com_sys_parm_c.sys_sts = 0; */
+    com_sys_parm_c.lst_date=com_sys_parm_c.sys_date;
+	pub_base_deadlineD(com_sys_parm_c.lst_date,1,&com_sys_parm_c.sys_date);
+   
+    ret = Com_sys_parm_Upd_Upd(com_sys_parm_c,g_pub_tx.reply);
+	MYRETERR
+
+    Com_sys_parm_Clo_Upd();
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"试翻盘成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	if (strcmp(g_pub_tx.reply,"0000") == 0)
+		strcpy(g_pub_tx.reply,"G108");
+	sprintf(acErrMsg,"试翻盘失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+int pub_tmp_delcretable()
+{
+	sprintf(acErrMsg,"试结备份数据开始");
+	WRITEMSG
+
+    /* 删除备份表,并建立备份表 */
+    EXEC SQL drop table dc_log_bk;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	if( pub_pubdb_recrttab("dc_log","dc_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL insert into DC_LOG_BK 
+		select *
+		from DC_LOG
+		where sts='0' ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+	/*----------------------------------------------------------------*/
+
+	if( pub_pubdb_droptab("trace_log_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+	if( pub_pubdb_recrttab("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into TRACE_LOG_BK select * from TRACE_LOG;
+    if (sqlca.sqlcode != 0)
+    {
+        sprintf(acErrMsg,"INSERT TRACE_LOG_BK ERROR@ !![%d]",sqlca.sqlcode);
+        WRITEMSG
+        return 1;
+    }
+
+	if( pub_pubdb_recrtidx("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+    EXEC SQL delete from gl_mst_hst where "date"=(select sys_date from com_sys_parm);
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+    {
+        sprintf(acErrMsg,"删除历史总帐中备份数据错误!! [%d]",sqlca.sqlcode);
+        WRITEMSG
+	goto ErrExit;
+    }
+
+    return 0;
+ErrExit:
+	return 1;
+}

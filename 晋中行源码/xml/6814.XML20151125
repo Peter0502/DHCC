@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="6814 买断式转贴现转出记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	$FD25=#NAME;
+//    $FD15=space(4)+#KM;    /*科目*/
+    $FD30=#ACNO;
+    $FD31=#ACNO;  /*帐号*/
+    $FD89=#PZLX;  /*凭证类型*/
+    $FD58=#PZH;   /*凭证号*/
+    $FD40=getitems('#AMT'); /*金额*/ 
+    $FD93=#XZ;    /*现转标志*/
+    $FD33=#CD33;
+    $FD45=#MDATE;
+    $FD60=#PNNO;
+    $FD67=#ACTYPE;  /*1科目或内部帐号 2 对公活期*/
+    $FD68=#LIND;
+    $FD85=getitems('#PINT');
+    $FD90=#NOTYPE;
+    $FD100=getitems('#TINT#AMT');
+	commsend_001();
+	$FD16='4932';
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(6814                        买断式转贴现转出记账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4932)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="6"  COL="5" TYPE="%-10s" FUNCTIONS="T(还款帐号:!)"/>
+  <ITEM LINE="7"  COL="5" TYPE="%-10s" FUNCTIONS="T(户    名: )"/>
+  <ITEM LINE="8"  COL="5" TYPE="%-10s" FUNCTIONS="T(余    额: )"/>
+  <ITEM LINE="9"  COL="5" TYPE="%-10s" FUNCTIONS="T(凭证类型: )"/>
+  <ITEM LINE="9"  COL="40" TYPE="%-10s" FUNCTIONS="T(凭证 号: )"/>
+  <ITEM LINE="10"  COL="5" TYPE="%-10s" FUNCTIONS="T(票据类型:!)"/>
+  <ITEM LINE="10"  COL="40" TYPE="%-10s" FUNCTIONS="T(票 据 号:)"/>
+  
+  <ITEM LINE="11"  COL="3" TYPE="%-74s" FUNCTIONS=
+  "T(-----------------------------【回显信息】----------------------------------)"/>
+
+  <ITEM LINE="13"  COL="5" TYPE="%-12s" FUNCTIONS="T(对方行名称:)"/>
+  <ITEM LINE="14"  COL="5" TYPE="%-14s" FUNCTIONS="T(异地同城标志!)"/>
+  <ITEM LINE="14"  COL="40" TYPE="%-10s" FUNCTIONS="T(贴 现 率:)"/>
+  <ITEM LINE="14"  COL="58" TYPE="%-2s" FUNCTIONS="T(‰)"/>
+  <ITEM LINE="15"  COL="5" TYPE="%-12s" FUNCTIONS="T(转贴现利息:)"/>
+  <ITEM LINE="15"  COL="40" TYPE="%-10s" FUNCTIONS="T(汇票金额:)"/>
+  <ITEM LINE="18"  COL="40" TYPE="%-12s" FUNCTIONS="T(汇票到期日:)"/>
+  <ITEM NAME="#NACNO" LINE="20"  COL="5" TYPE="%-12s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(转贴现账号:)"/>
+  
+  <!--输入变量-->
+  <ITEM NAME="#ACTYPE" TYPE="%-1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#KM"     TYPE="%-5s" FUNCTIONS="T()"/>
+  <ITEM NAME="#XZ"     TYPE="%-1s" FUNCTIONS="T(2)"/>
+  <ITEM NAME="#ACNO"   LINE="6"  COL="15" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+  "{
+      initfd();
+      commsend_001();
+      $FD16='9731';
+      $FD102=#ACNO;
+      callserver();
+      if($FD12 != '0000')
+      {
+           showmsg(geterror());
+           return(false);
+      } 
+      #ACTYPE=$FD69;
+      #HM=$FD25;
+      #YUE=val($FD39,0.01);
+      show(#HM,true);
+      show(#YUE,true);
+      if(#ACTYPE == '0')
+      {
+           #ACTYPE = '1';
+           #KM=substr(#ACNO,0,5);
+      }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#HM"     LINE="7"  COL="15" TYPE="%-30s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#YUE"    LINE="8"  COL="15" TYPE="%16.2f" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/> 
+  <ITEM NAME="#PZLX"   LINE="9"  COL="15" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="T(299)">
+        <SELECT>
+                 <OPTION VALUE="001" TITLE="现金支票"/>
+                 <OPTION VALUE="299" TITLE="其他凭证"/>
+        </SELECT>
+  </ITEM>
+  <ITEM NAME="#PZH"    LINE="9"  COL="50" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="T()"/>
+ 
+  <ITEM NAME="#NOTYPE" LINE="10" COL="15" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="V(NB)">
+  <SELECT>
+		<OPTION VALUE="111" TITLE="银行承兑汇票"/>
+		<OPTION VALUE="112" TITLE="商业承兑汇票"/>
+	</SELECT>
+	</ITEM>
+    <ITEM NAME="#FLAGNOTYPE" TYPE="%12s" FUNCTIONS="S(#NOTYPE,#NOTYPE)"/>
+  <ITEM NAME="#PNNO" LINE="10" COL="50" TYPE="%-16s"  INPUT="TEXT" FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+ "{
+    initfd();
+    commsend_001();
+ 		$FD16='9934';
+		$FD60=#PNNO;
+		$FD90=#NOTYPE;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#NAME=$FD25;
+		#CD33=$FD33;
+		#MDATE=$FD45;
+		#LIND=$FD68;
+		setitems('#PINT',$FD85);
+		setitems('#TINT#AMT',$FD100);
+		show(#NAME,true);
+		show(#MDATE,true);
+		show(#LIND,true);
+		show(#PINT,true);
+		show(#TINT,true);
+		show(#AMT,true);
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#NAME" LINE="13" COL="15" TYPE="%-50s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+
+  <ITEM NAME="#LIND" LINE="14" COL="15" TYPE="%-1s" ENABLE="FALSE" INPUT="SELECT" FUNCTIONS="">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="本地"/>
+		<OPTION VALUE="1" TITLE="异地"/>
+	</SELECT>
+	</ITEM>
+  <ITEM NAME="#PINT" LINE="14" COL="50" TYPE="%9.6f" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#TINT" LINE="15" COL="15" TYPE="%17.2f" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#AMT" LINE="15" COL="50" TYPE="%17.2f" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+  
+  <ITEM NAME="#MDATE" LINE="18" COL="50" TYPE="%-8s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="D()"/>
+  <!-- <ITEM NAME="#ACNO" LINE="20" COL="17" TYPE="%-24s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T()"/> -->
+  <!--同名ITEM liangq注-->
+  
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#CD33" TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="买断式转贴现转出记账!">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	  print( 4, 30,'买断式转贴现转出');
+      print( 7, 20,'票 据类 型: [12]',#FLAGNOTYPE);
+      print( 8, 20,'票  据  号: [16]',#PNNO);
+      print( 9, 20,'流  水  号: [6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  DESC="打印买断式转贴现转出普通凭条">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:6814');
+	print( 5, 13,'交易:买断式转贴现转出记账');
+	
+	print(07,10,'票 据类 型: [12]',#FLAGNOTYPE);
+	print(08,10,'票  据  号: [16]',#PNNO);
+	print(09,10,'还款帐号:[20]',#ACNO);
+	print(10,10,'凭证类型:[3]',#PZLX);
+	print(11,10,'凭 证 号:[20]',#PZH);
+	printacdtl_1();
+	
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);         
+}"
+  </PRINT>
+</RESPONSE> 
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

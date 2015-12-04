@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="3905       修改金额"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();       
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS= "T(3905                        修改金额)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+   
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=3905)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   
+   <ITEM NAME="#QUERYAMT" TYPE="%1s" FUNCTIONS="">
+   	<ONLOSTFOCUS>
+   		"{
+			 	 	initfd();
+					commsend_001();   			
+					
+					$FD16='3905';
+					$FD18='CBS';
+					$FD66='1';
+					
+					callagn_cnaps2();
+			 		if($FD12 != '0000')
+					{
+							showmsg(geterror());
+							return(false);
+					}
+					
+					showmsg($FD40);
+					
+					#TXAMT=$FD40;				
+					
+											
+   		}"
+   		</ONLOSTFOCUS>
+   	</ITEM>
+   <!-- 
+   cbs16域	交易码3905
+cbs18域	CBS
+cbs40域	金额（修改的时候传）
+cbs66域	操作标志  1 查询  2 修改	
+   -->
+   
+<!--屏幕输入内容 --> 
+ <ITEM LINE="06"      COL="7" TYPE="%-13s"     FUNCTIONS="T(金  额:!)"/> 
+ 
+ <ITEM LINE="6"  COL="15" TYPE="%17.2f" NAME="#TXAMT"  INPUT="TEXT" FUNCTIONS="V(0000000000000001,0000099999999999)">
+ 	<ONLOSTFOCUS>
+ 		"{
+ 			if(#TXAMT &lt; 50000)
+ 			{
+ 				showmsg('修改金额需大于50000.00');
+ 				return(false);
+ 			}
+ 		
+ 		}"
+ 		</ONLOSTFOCUS>
+ 	</ITEM>
+ 
+
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+  	
+		  	  initfd();
+		      commsend_001();
+		      $FD16='3369';                   //授权
+		      callserver();
+		      if($FD12 !='0000')
+		      {
+		        showmsg(geterror());
+		        return(false);
+		      }
+
+			 	 	initfd();
+					commsend_001();
+					
+					$FD16='3905';
+					$FD18='CBS';
+					$FD40=#TXAMT;
+					$FD66='2';
+					
+					callagn_cnaps2();
+			 		if($FD12 != '0000')
+					{
+							showmsg(geterror());
+							return(false);
+					}
+					runoutput();
+					close();
+
+ }"
+ </ONCLICK>
+</ITEM>
+
+
+</VARIABLE>
+<!--发送信息包-->
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,25,'修改成功');
+		print(10,15,'金  额 :[30  ]',#TXAMT);
+	
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+
+
+</TRANSACTION>
+	

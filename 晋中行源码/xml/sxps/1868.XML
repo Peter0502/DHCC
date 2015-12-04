@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1868         挂账手工入账)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3" COL="3"  TYPE="%-60s"  FUNCTIONS=
+		"T(1868                            挂账手工入账)"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s"  FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1868)"/>
+	<ITEM NAME="#TXNAME"    TYPE="%-30s"  FUNCTIONS="T(挂账手工入账)"/>
+	<ITEM NAME="#Hangacno" TYPE="%-32s" FUNCTIONS="T()"/>
+
+	<ITEM LINE="6" COL="3"  TYPE="%-12s" FUNCTIONS="T(原交易序号:)"/>
+	<ITEM LINE="6" COL="15" NAME="#Txno"  TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="6" COL="35"  TYPE="%-12s" FUNCTIONS="T(原交易日期:)"/>
+	<ITEM LINE="6" COL="47" NAME="#Txdate"  TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T($HDATE)V(NB)D()">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+
+			dim @tota as string;
+			dim @column as string;
+			dim @where as string;
+			@column='dbtr_id,cdtr_id,snd_pty,rcv_pty,dbtr_nm,cdtr_nm,tx_amt,hang_flag,hang_acno';
+			@where = 'tx_no='+'|'+#Txno+'|'+' and ' + 'tx_date='+'|'+#Txdate+'|';
+			$FD16='1114';
+			$FD18='pbp';
+			$FD28='sxps';
+			$FD96=@column;
+			$FD76=@where;
+			$FD81='pbp_payment';
+			$FD101='32|32|32|32|60|60|16|4|32';
+			callagnpbp();
+			if($FD12 !='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			
+			@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			@tota=delspace(@tota);
+			#Dbtrid=strfld(@tota,'|',0);
+			#Cdtrid =strfld(@tota,'|',1);
+			#Instgpty =strfld(@tota,'|',2);
+			#Instdpty =strfld(@tota,'|',3);
+			#Dbtrnm = strfld(@tota, '|',4);
+			#Cdtrnm = strfld(@tota, '|',5);
+			#Txamt = strfld(@tota, '|',6);
+			#Hangflag = strfld(@tota, '|',7);
+			#Hangacno = strfld(@tota, '|',8);
+			
+			enable(#Dbtrid, false);
+			enable(#Cdtrid, false);
+			enable(#Instgpty, false);
+			enable(#Instdpty, false);
+			enable(#Dbtrnm, false);
+			enable(#Cdtrnm, false);
+			enable(#Txamt, false);
+			enable(#Hangflag, false);
+			showmsg(#Hangacno);
+			
+			if (delspace(#Hangflag) != '1')
+			{
+				showmsg('该交易不是挂账交易，请确认!');
+				return(false);
+			}
+			if (delspace(#Hangacno) == '')
+			{
+				showmsg('挂账账号为空不可入账，请做退汇');
+				return(false);
+			}
+			showall();
+			refresh();			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="3"  TYPE="%-12s"      FUNCTIONS="T(付款人账号:)"/>
+	<ITEM LINE="7" COL="15"  NAME="#Dbtrid"    TYPE="%-32s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="8" COL="3"   TYPE="%-12s"      FUNCTIONS="T(付款人姓名:)"/>
+	<ITEM LINE="8" COL="15"  NAME="#Dbtrnm"  TYPE="%-60s"  INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="9" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人账号:)"/>
+	<ITEM LINE="9" COL="15"  NAME="#Cdtrid" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="10" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人姓名:)"/>
+	<ITEM LINE="10" COL="15"  NAME="#Cdtrnm" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="11" COL="3"  TYPE="%-12s" FUNCTIONS="T(发起行行号:)"/>
+	<ITEM LINE="11" COL="15"  NAME="#Instgpty" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="12" COL="3"  TYPE="%-12s" FUNCTIONS="T(接收行行号:)"/>
+	<ITEM LINE="12" COL="15"  NAME="#Instdpty" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="13" COL="3"  TYPE="%-12s" FUNCTIONS="T(  交易金额:)"/>
+	<ITEM LINE="13" COL="15"  NAME="#Txamt" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="14" COL="3"  TYPE="%-12s" FUNCTIONS="T(  挂账标志:)"/>
+	<ITEM LINE="14" COL="15"  NAME="#Hangflag" TYPE="%-1s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="已挂账"/>
+			<OPTION VALUE="2" TITLE="已退汇"/>
+			<OPTION VALUE="3" TITLE="已入账"/>
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="17" COL="3"  TYPE="%-12s" FUNCTIONS="T(  入账账号:)"/>
+	<ITEM LINE="17" COL="15"  NAME="#InAcct" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+			"{
+				initfd();
+		       		commsend_001();
+				$FD16='1404';
+				$FD18='pbp';
+				$FD30=#InAcct;
+				$FD73='00001000';
+				callagnpbp();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				if ($KINBR != $FD2)
+				{
+					showmsg('只能入本机构账号,该账号对应机构为:'+$FD2);
+					return(false);
+				}
+				#InName=$FD25;
+				show(#InName,true);
+				enable(#InName,false);
+				refresh();
+			}"	
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="18" COL="3"  TYPE="%-12s" FUNCTIONS="T(  入账户名:)"/>
+	<ITEM LINE="18" COL="15"  NAME="#InName" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+
+	<ITEM LINE="21"  COL="59"  NAME="#OK" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+	"{
+		initfd();
+		commsend_001();
+		
+		$FD16='2401';
+		$FD18='pbp';
+		$FD28='sxps';
+		
+		$FD29=#Txno;
+		$FD44=#Txdate;
+		$FD30=#InAcct;
+		$FD25=#InName;
+		$FD31=#Hangacno;
+		$FD39=itoa(#Txamt*100, '%16.0f');
+		callagnpbp();
+		
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		runoutput();
+		showall();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();
+			 		 	
+ 		print( 3, 20,'手工入账成功');
+ 		print( 5, 10,'入账机构:[30]',$KINBR);
+ 		print( 6, 10,'入账账号:[30]',#InAcct);
+ 		print( 7, 10,'入账户名:[60]',#InName);
+ 		print( 8, 10,'入账金额:[20]',ltrim(itoa(#Txamt,'%.2f')));
+ 		
+ 		print( 11, 10,'原付款人账号:[30]',#Dbtrid);
+ 		print( 12, 10,'原收款人姓名:[60]',#Dbtrnm);
+ 		print( 13, 10,'原收款人账号:[30]',#Cdtrid);
+ 		print( 14, 10,'原收款人姓名:[60]',#Cdtrnm);
+ 		
+		PrintTxTail();		
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		//$KINDNO='00';
+		//dim @txtime as string;
+		//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		//print( 3, 10,'机构名称:[30]',$BRNAME);
+		//print( 3, 0,'代码:2401');
+		//print( 3, 5,'交易:挂账手工入账');
+		
+		PrintTxHead();		 	
+ 
+ 		print( 7, 10,'入账机构:[30]',$KINBR);
+ 		print( 8, 10,'入账账号:[30]',#InAcct);
+ 		print( 9, 10,'入账户名:[60]',#InName);
+ 		print( 10, 10,'入账金额:[20]',ltrim(itoa(#Txamt,'%.2f')));
+ 		
+ 		print( 12, 10,'原付款人账号:[30]',#Dbtrid);
+ 		print( 13, 10,'原收款人姓名:[60]',#Dbtrnm);
+ 		print( 14, 10,'原收款人账号:[30]',#Cdtrid);
+ 		print( 15, 10,'原收款人姓名:[60]',#Cdtrnm);
+ 		
+		PrintTxTail();		
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

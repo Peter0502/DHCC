@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111101" TITLE="8315  金太阳卡利息试算"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+		commrecv_001();
+		
+	}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+		"T(8315                          金太阳卡利息试算)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2315)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+        <ITEM LINE="5" COL="10" TYPE="%-14s" FUNCTIONS="T(操作类型:)" />
+	<ITEM LINE="5" COL="20" TYPE="%-24s"  FUNCTIONS="T(2)" NAME="#CZLX" INPUT="SELECT" >
+	<SELECT>
+		<OPTION VALUE="0" TITLE="查询统计"/>
+		<OPTION VALUE="1" TITLE="解约利息试算"/>
+		<OPTION VALUE="2" TITLE="签约利息试算"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+		"{
+		    if('0' == #CZLX)
+		    {
+		        showblock('SSLX',false);
+		        showblock('LXSS',false);
+		        showblock('QURY',true);
+		    }
+		    if('1' == #CZLX)
+		    {
+		        showblock('QURY',false);
+		        showblock('LXSS',false);
+		        showblock('SSLX',true);
+		    }
+		    if('2' == #CZLX)
+		    {
+		        showblock('QURY',false);
+		        showblock('SSLX',false);
+		        showblock('LXSS',true);
+		    }
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+        <BLOCK NAME="QURY" LINE="0" COL="0" VISABLE="FALSE">>
+        <ITEM LINE="7" COL="10" TYPE="%-14s" FUNCTIONS="T(开户机构:)" />
+        <ITEM LINE="7" COL="20" TYPE="%-5s"  FUNCTIONS="T($KINBR)" NAME="#BRNO" INPUT="TEXT" >
+        <ONLOSTFOCUS>
+        "{
+            if( $KINBR != '50001' )
+            {
+                if( (#BRNO != $KINBR) )
+                {
+                    showmsg('非本机构不能查询');
+                    #BRNO=$KINBR;
+                    return(false);
+                }
+            }
+        }"      
+        </ONLOSTFOCUS>
+        </ITEM>
+	<ITEM LINE="9" COL="10" TYPE="%-14s" FUNCTIONS="T(查询日期:)" />
+	<ITEM LINE="9" COL="20" TYPE="%-8s"  FUNCTIONS="D()V(NB)" NAME="#KSRQ" INPUT="TEXT" />
+	<ITEM LINE="9" COL="28" TYPE="%-3s"  FUNCTIONS="T( → )" />
+	<ITEM LINE="9" COL="32" TYPE="%-8s"  FUNCTIONS="D()" NAME="#JSRQ" INPUT="TEXT" >
+	<ONLOSTFOCUS>
+	"{
+	    if(#KSRQ &gt; #JSRQ and #JSRQ != '')
+	    {
+	        showmsg('开始日期不能大于结束日期');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="11" COL="10" TYPE="%-14s" FUNCTIONS="T(查询余额:)" />
+	<ITEM LINE="11" COL="20" TYPE="%17.2f"  FUNCTIONS="" NAME="#QSJE" INPUT="TEXT" />
+	<ITEM LINE="11" COL="35" TYPE="%-3s"  FUNCTIONS="T( → )" />
+	<ITEM LINE="11" COL="40" TYPE="%17.2f"  FUNCTIONS="" NAME="#JSJE" INPUT="TEXT" >
+	<ONLOSTFOCUS>
+	"{
+	    if(#QSJE &gt; #JSJE and #JSJE != 0.00)
+	    {
+	        showmsg('起始金额不能大于结束金额');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="13" COL="10" TYPE="%-10s" FUNCTIONS="T(状 态:)" />
+	<ITEM LINE="13" COL="20" TYPE="%-24s"  FUNCTIONS="T(1)" NAME="#QYZT" INPUT="SELECT" >
+	<SELECT>
+		<OPTION VALUE="1" TITLE="已签约"/>
+		<OPTION VALUE="*" TITLE="已解约"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+	    if(#QYZT == '*')
+	    {
+	        #QSJE = 0;
+	        #JSJE = 0;
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	</BLOCK>
+	
+	<!--<ITEM NAME="#BAL" TYPE="%17.2f"  FUNCTIONS="" />-->
+	
+	<BLOCK NAME="SSLX" LINE="0" COL="0" VISABLE="FALSE">
+	<ITEM LINE="7" COL="10" TYPE="%-10s" 	INPUT="LABEL" FUNCTIONS="T(读取方式:)"/>
+	<ITEM LINE="7" COL="20" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取芯片方式"/>
+				<OPTION VALUE="1" TITLE="读取磁条方式"/>
+			</SELECT>
+		  <ONLOSTFOCUS>"{
+		     if(#DQFS=='0')
+		     {
+			     enable(#ACNO_CT,false);
+			     enable(#ACNO_IC,true);
+			     show(#ACNO_IC,true);
+			     show(#ACNO_CT,false);
+		     }
+		     if(#CHILD_DQFS=='1')
+		     {
+			     enable(#ACNO_IC,false);
+			     enable(#ACNO_CT,true);
+			     show(#ACNO_CT,true);
+			     show(#ACNO_IC,false); 
+		     }
+		   }"
+		  </ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="8"  COL="10" TYPE="%-14s" FUNCTIONS="T(账   号:)" />
+	<ITEM LINE="8"  COL="20" NAME="#ACNO_CT"  TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	<ITEM LINE="8"  COL="20" NAME="#ACNO_IC"  TYPE="%-19s" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	<ITEM NAME="#ACNO" TYPE="%-19s"  FUNCTIONS="">
+		<ONLOSTFOCUS>
+       "{
+       	if(#DQFS=='0')
+				{
+					#ACNO=#ACNO_IC;
+				}
+				if(#DQFS=='1')
+				{
+					#ACNO=#ACNO_CT;
+				}
+       
+         if(len(#ACNO) != 0)
+         {
+             initfd();
+             commsend_001();
+             $FD31=#ACNO;
+             $FD16='9958';
+             callserver();
+             if($FD12 != '0000')
+             {
+                 showmsg(geterror());
+                 return(false);
+             }
+             #ACNO=delspace($FD31);
+             
+             initfd();
+             commsend_001();
+             $FD16='9331';
+             $FD102=getitems('#ACNO');
+             callserver();
+             if($FD12 != '0000')
+             {
+                 showmsg(geterror());
+                 return(false);
+             }
+             #Name=delspace($FD25);
+             
+             initfd();
+             commsend_001();
+             $FD16='2315';
+             $FD30=#ACNO;
+             $FD68='2';
+             callserver();
+             if($FD69 == '0')
+             {
+                 showmsg('当前账户未签约');
+                 return(false);
+             }
+             showmsg('BAL='+$FD40);
+             #SSJE=val($FD40,0.01);
+             if($FD12 != '0000')
+             {
+                 showmsg(geterror());
+                 return(false);
+             }
+         }
+        }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="43" TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(客户名称:)"/>
+  <ITEM LINE="8" COL="53" NAME="#Name" INPUT="LABEL" TYPE="%-60s" FUNCTIONS=""/>
+	<ITEM LINE="10" COL="10" TYPE="%-14s" FUNCTIONS="T(解约日期:)" />
+	<ITEM LINE="10" COL="20" TYPE="%-8s"  FUNCTIONS="D()T($HDATE)V(NB)" NAME="#SSRQ" INPUT="TEXT" >
+	<ONLOSTFOCUS>
+	"{
+	    if(#SSRQ &lt; $HDATE)
+	    {
+	        showmsg('解约日期不能小于当天日期!');
+	        return(false);
+	    }
+	    //目前先限制在20500101年，若有变化再改动
+	    if(#SSRQ &gt; '20500101')
+	    {
+	        showmsg('解约日期不能大于20500101');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<!--<ITEM LINE="9" COL="35" TYPE="%-14s" FUNCTIONS="T(释放金额:)" />
+	<ITEM LINE="9" COL="45" TYPE="%17.2f"  FUNCTIONS="T(#SSJE)" NAME="#SSJE" INPUT="TEXT" >
+	<ONLOSTFOCUS>
+	"{
+	    dim @tamt as number;
+	    if(val($FD40,0.01) &lt; #SSJE)
+	    {
+	        showmsg('释放金额超额');
+	        return(false);
+	    }
+	    @tamt=itoa(#SSJE/1000,'%.0f');
+	    @tamt=@tamt*1000;
+	    if( (@tamt-#SSJE) != 0 )
+	    {
+	        showmsg('释放金额必须是1000的整数倍!');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>-->
+	</BLOCK>
+	
+	<BLOCK NAME="LXSS" LINE="0" COL="0" VISABLE="FALSE">
+	<ITEM LINE="7" COL="10" TYPE="%-10s" FUNCTIONS="T(存入金额:)" />
+	<ITEM LINE="7" COL="20" TYPE="%17.2f"  FUNCTIONS="T(#CRJE)" NAME="#CRJE" INPUT="TEXT" >	
+	<ONLOSTFOCUS>
+	"{
+	    if( #CRJE == 0 )
+	    {
+	        showmsg('存入金额不能为零');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="37" TYPE="%-10s" FUNCTIONS="T(支取日期:)" />
+	<ITEM LINE="7" COL="47" TYPE="%-8s"  FUNCTIONS="D()V(NB)" NAME="#ZQRQ" INPUT="TEXT" >
+	<ONLOSTFOCUS>
+	"{
+	    if(#ZQRQ &lt; $HDATE)
+	    {
+	        showmsg('支取日期不能小于当天日期!');
+	        return(false);
+	    }
+	    //目前先限制在20500101年，若有变化再改动
+	    if(#ZQRQ &gt; '20500101')
+	    {
+	        showmsg('支取日期不能大于20500101');
+	        return(false);
+	    }
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>	
+	</BLOCK>
+	
+	<ITEM LINE="21" COL="59" TYPE="%-6s" INPUT="BUTTON" FUNCTIONS="T(确定)" >
+	<ONLOSTFOCUS>
+	"{
+		dim @f as string;
+		initfd();
+		commsend_001();
+		$FD16='2315';
+		
+		if('0' == #CZLX)
+		{
+		    $FD68='1';
+		    $FD44=#KSRQ;
+		    $FD45=#JSRQ;
+		    $FD41=#QSJE;
+		    $FD42=#JSJE;
+		    $FD67=#QYZT;
+		    $FD91=#BRNO;
+		}
+		if('1' == #CZLX)
+		{
+		    $FD30=#ACNO;
+		    $FD68='3';
+		    //$FD40=#SSJE;
+		    $FD46=#SSRQ;     
+		}
+		if('2' == #CZLX)
+		{
+		    $FD68='4';
+		    $FD44=#ZQRQ;
+		    $FD41=#CRJE;
+		}
+		@f=callserver();
+		if($FD12!='0000')
+		{
+		    showmsg(geterror());
+		    return(false);
+		}
+		if(len($FD13) != 0)
+		{
+		    showmsg($FD13);
+		}
+		$TXNO='2315';
+
+	        if(autolist(@f))
+		{
+		    list_work();
+		    refresh();
+		}
+	  
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+
+</TRANSACTION>

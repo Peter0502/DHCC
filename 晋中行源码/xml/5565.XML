@@ -1,0 +1,128 @@
+<TRANSACTION RIGHTS="01111001"  TITLE="5565    大额业务对帐数据查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+  initfd();
+  commsend_001();
+  $FD38=#PAYBKCODE;
+  $FD52=#RECKONTRECODE;
+  $FD44=#CHKDATE;
+  $FD12=#CHKACCTORD;
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+  commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE  UPLOOP="TRUE">
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+"T(5565                 为大额业务准备对帐已平数据查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=5583)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @selid         as number;
+	    dim @paybkcode     as string;
+	    dim @reckontrecode as string;
+	    dim @chkdate       as string;
+	    dim @chkacctord    as string;
+	    dim @cmtno         as string;
+	    dim @succamt       as string;
+	    dim @succcnt       as string;
+	 
+	
+		
+	    if(#DOLIST == '1')
+	    {
+	            @selid=list_work();
+	            if(@selid &lt; 0)
+	            {
+	    	         list_del();
+	    	         rerun();
+	    	         return(true);
+	            }
+              @selid=list_getselid();
+              if(@selid &lt; 0)
+              {
+                 list_del();
+                 rerun();
+                 return(true);
+              }
+      
+	            @paybkcode=rtrim(list_gettext(@selid,0));
+	            @reckontrecode=rtrim(list_gettext(@selid,1));
+	            @chkdate=rtrim(list_gettext(@selid,2));
+	            @chkacctord=rtrim(list_gettext(@selid,3));
+	            @cmtno=rtrim(list_gettext(@selid,4));
+	            @succamt=rtrim(list_gettext(@selid,5));
+	            @succcnt=rtrim(list_gettext(@selid,6));
+	         
+         
+	           
+	           //为大额业务准备对帐已平数据查询信息
+	           open('5565_1.XML','#PAYBKCODE='+@paybkcode+';#RECKONTRECODE='+@reckontrecode+';#CHKDATE='+@chkdate+';#CHKACCTORD='+@chkacctord+';#CMTNO='+@cmtno+';#SUCCAMT='+@succamt+';#SUCCCNT='+@succcnt+';'); 
+             
+	    	     showfooter();
+	    	     return(true);
+	    }
+	    list_del();
+	    #DOLIST='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="7"  COL="23" TYPE="%-13s" FUNCTIONS="T(付款 行 行号:)"/>
+<ITEM LINE="9"  COL="23" TYPE="%-13s" FUNCTIONS="T(清算国库行号:)"/>
+<ITEM LINE="11" COL="23" TYPE="%-13s"  FUNCTIONS="T(对 账  日 期:)"/>
+<ITEM LINE="13" COL="23" TYPE="%-13s"  FUNCTIONS="T(对 账  批 次:)"/>
+  
+<ITEM LINE="7"  COL="36"  NAME="#PAYBKCODE"      TYPE="%-12s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+<ITEM LINE="9"  COL="36"  NAME="#RECKONTRECODE"  TYPE="%-12s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+<ITEM LINE="11" COL="36"  NAME="#CHKDATE"        TYPE="%-8d"  INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()D()V(NB)"/>
+<ITEM LINE="13" COL="36"  NAME="#CHKACCTORD"     TYPE="%-4s"  INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+<ITEM LINE="20" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+	dim @tota as string;
+	initfd();
+	commsend_001();
+	$FD16='5583';
+  $FD38=#PAYBKCODE;
+  $FD52=#RECKONTRECODE;
+  $FD44=#CHKDATE;
+  $FD12=#CHKACCTORD;
+  //@tota=callserver();   chengbo  20090619  HS
+  @tota=calltips();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+
+	autolist(@tota);	
+	#DOLIST='1';
+}"
+</ONCLICK>
+</ITEM>     
+</VARIABLE>
+
+<REQUEST>        
+</REQUEST>      
+<RESPONSE>       
+<PACKAGE>        
+</PACKAGE>          
+</RESPONSE>      
+</TRANSACTION>   

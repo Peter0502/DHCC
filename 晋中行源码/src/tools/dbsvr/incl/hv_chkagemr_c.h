@@ -1,0 +1,54 @@
+#ifndef __hv_chkagemr_CH__
+#define __hv_chkagemr_CH__
+struct hv_chkagemr_c{
+	char      rowid[20];
+	char      orderno[9];
+	char      pay_qs_no[13];
+	char      br_no[8];
+	long      tx_date;
+	char      cmtno[4];
+	char      o_cmtno[4];
+	long      tx_time;
+	char      cur_no[4];
+	double    tx_amt;
+	double    other_amt;
+	double    jf_amt;
+	char      or_br_no[13];
+	char      pay_no[13];
+	char      pay_ac_no[33];
+	char      payname[61];
+	char      payaddress[61];
+	char      cashqsactno[13];
+	char      acbrno[13];
+	char      cashno[13];
+	char      cash_ac_no[33];
+	char      cash_name[61];
+	char      cash_addr[61];
+	char      yw_type[3];
+	char      sendco[5];
+	char      receco[5];
+	char      operlevel[2];
+	char      obrno[13];
+	char      voctype[3];
+	char      vocnum[13];
+	long      p_date;
+	char      p_num[9];
+	char      hp_type[2];
+	char      pass_wd[11];
+	double    inst_rate;
+	long      term;
+	char      o_tx_date[9];
+	char      ou_tx_date[9];
+	char      o_orderno_hv[9];
+	char      o_tx_type[2];
+	char      p_orderno_hv[9];
+	char      dc[2];
+	long      pay_date;
+	double    intst;
+	char      reason[61];
+	char      repson[2];
+	char      chk_flg[2];
+	char      brf1[31];
+	char      brf2[31];
+};
+#endif 

@@ -1,0 +1,107 @@
+#include "bal.h"
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL INCLUDE sqlglobal.h;
+
+int bal_set_lockwaittime();
+int bal_get_date();
+
+int bal_set_lockwaittime()
+{
+	return CSuccess;
+}
+
+int bal_get_date()
+{
+	EXEC SQL declare DateCur cursor for
+		select cdate_holidy, 
+			   cdate_weekdy, 
+			   cdate_tbsdy, 
+			   cdate_nbsdy, 
+			   cdate_nnbsdy,
+			   cdate_lbsdy,
+			   cdate_lmndy,
+			   cdate_tmndy,
+			   cdate_fnbsdy,
+			   cdate_ndycnt,
+			   cdate_nndycnt,
+			   cdate_ldycnt,
+			   cdate_jday
+		from cdate
+		where cdate_tbsdy >= :Global.tbsdy
+		order by cdate_tbsdy;
+	if ( 0 != sqlca.sqlcode )
+	{
+		userlog("ERROR: cursor declaration failed(%d)!", sqlca.sqlcode);
+		balerrno = EBALREQGLOBAL;
+		return CFailure;
+	}
+
+	EXEC SQL open DateCur;
+	if ( 0 != sqlca.sqlcode )
+	{
+		userlog("ERROR: cursor open failed(%d)!", sqlca.sqlcode);
+		balerrno = EBALREQGLOBAL;
+		return CFailure;
+	}
+
+	EXEC SQL fetch DateCur into 
+		:TodayDate.d_holidy,
+		:TodayDate.d_weekdy,
+		:TodayDate.d_tbsdy,
+		:TodayDate.d_nbsdy,
+		:TodayDate.d_nnbsdy,
+		:TodayDate.d_lbsdy,
+		:TodayDate.d_lmndy,
+		:TodayDate.d_tmndy,
+		:TodayDate.d_fnbsdy,
+		:TodayDate.d_ndycnt,
+		:TodayDate.d_nndycnt,
+		:TodayDate.d_ldycnt,
+		:TodayDate.d_jday;
+	if ( 0 != sqlca.sqlcode )
+	{
+		userlog("ERROR: cursor fetch failed(%d)!", sqlca.sqlcode);
+		balerrno = EBALREQGLOBAL;
+		EXEC SQL close DateCur;
+		return CFailure;
+	}
+
+	strcpy( g_date.tbday, TodayDate.d_tbsdy );
+	strcpy( g_date.nbday, TodayDate.d_nbsdy );
+	strcpy( g_date.lbday, TodayDate.d_lbsdy );
+	strcpy( g_date.tmeday, TodayDate.d_tmndy );
+	strcpy( g_date.lmeday, TodayDate.d_lmndy );
+	g_date.weekday     = TodayDate.d_weekdy[0];
+	g_date.isholiday   = TodayDate.d_holidy[0];
+	g_date.seqno = TodayDate.d_jday;
+	g_date.lbgap = TodayDate.d_ldycnt;
+	g_date.nbgap = TodayDate.d_ndycnt;
+
+	EXEC SQL fetch DateCur into
+		:TodayDate.d_holidy,
+		:TodayDate.d_weekdy,
+		:TodayDate.d_tbsdy,
+		:TodayDate.d_nbsdy,
+		:TodayDate.d_nnbsdy,
+		:TodayDate.d_lbsdy,
+		:TodayDate.d_lmndy,
+		:TodayDate.d_tmndy,
+		:TodayDate.d_fnbsdy,
+		:TodayDate.d_ndycnt,
+		:TodayDate.d_nndycnt,
+		:TodayDate.d_ldycnt,
+		:TodayDate.d_jday;
+	if ( 0 != sqlca.sqlcode )
+	{
+		userlog("ERROR: cursor fetch failed(%d)!", sqlca.sqlcode);
+		balerrno = EBALREQGLOBAL;
+		EXEC SQL close DateCur;
+		return CFailure;
+	}
+	memcpy( g_date.nrday, TodayDate.d_tbsdy, sizeof(g_date.nrday) );
+
+	EXEC SQL close DateCur;
+
+	return CSuccess;
+}

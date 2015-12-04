@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4304 表外记帐"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD16='2506';
+	$FD21   = #BZ;
+	$FD22   = #ZYDM;
+	$FD25   = #HM;
+	$FD30   = #ZH;
+	$FD41   = getitems('#FSE');
+	$FD58   = #PZH; 
+	$FD66   = #SFBZ;
+	$FD88 = #ZY;     //摘要值
+	$FD89   = #PZLX;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(4304                            表外记帐)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2506)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+   <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(表外记帐)"/><!---交易名称--->
+
+   <!--输入变量-->
+  <ITEM LINE="6"   COL="7" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+
+  <ITEM LINE="7"   COL="7" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="8"   COL="7" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+
+  <ITEM LINE="9"   COL="7" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="11"  COL="7" TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"/>
+
+  <ITEM LINE="11"  COL="45" TYPE="%-10s" FUNCTIONS="T(凭 证 号:)"/>
+  <ITEM LINE="14"  COL="3"  TYPE="%-70s" FUNCTIONS="T(--------------------------------------------------------------------)"/>
+
+  <ITEM LINE="15"   COL="7"  TYPE="%-10s" FUNCTIONS="T(收付标志:!)"/>
+  <ITEM LINE="15"   COL="45" TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+  <ITEM LINE="17"   COL="7"  TYPE="%-10s" FUNCTIONS="T(摘要代码:)"/>
+
+     <ITEM NAME="#ZH"	 LINE="6" COL="17" TYPE="%-10s" INPUT="TEXT"	FUNCTIONS="T()V(NB)">
+	 <ONLOSTFOCUS>
+	   "{
+		dim @txno as string;
+
+		if(substr(#ZH,0,3)=='407' or substr(#ZH,0,3)=='416'){
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+		if(substr(#ZH,0,3)=='408'){
+			if($KINBR!='10001'){
+				showmsg('不可以记此科目的帐务!');
+				return(false);
+			}
+		}
+
+		@txno=$TXNO;
+		$FD30=#ZH;
+		$TXNO='9705';
+		commsend_001();
+
+		callserver();
+		$TXNO=@txno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#BZ=$FD21;
+		#HM=$FD25;
+		#YEJD=$FD22;
+		#YE=val($FD41, 0.01);
+
+		enable(#BZ, false);
+		enable(#HM, false);
+		enable(#YEJD, false);
+		enable(#YE, false);
+	}"
+	</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM NAME="#BZ" INPUT="SELECT" LINE="7"  COL="17" TYPE="%-2s" 	FUNCTIONS="T(01)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="01" TITLE="01人民币"/>
+  	</SELECT>
+</ITEM>
+
+   <ITEM NAME="#HM"	 LINE="8" COL="17" TYPE="%-50s" INPUT="TEXT"    FUNCTIONS="T()V(NB)">
+
+   </ITEM>
+   <ITEM NAME="#YEJD" LINE="9" COL="17" TYPE="%-2s"   INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+   <ITEM NAME="#YE"	  LINE="9" COL="21" TYPE="%17.2f" INPUT="TEXT"	FUNCTIONS="T()V(NB)"/>
+
+   <ITEM NAME="#PZLX" INPUT="SELECT" LINE="11"  COL="17" TYPE="%-3s" FUNCTIONS="T(121)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="121" TITLE="121特种转帐传票 "/>
+  		<OPTION VALUE="122" TITLE="122转帐借方传票 "/>
+  		<OPTION VALUE="123" TITLE="123转帐贷方传票 "/>
+  	</SELECT>
+</ITEM>
+ <ITEM NAME="#SPZLX" TYPE="%-20s" FUNCTIONS="S(#PZLX,#PZLX)"/>
+
+<ITEM NAME="#PZH"	 LINE="11" COL="55" TYPE="%16d" INPUT="TEXT"	FUNCTIONS="T()"/>
+   <ITEM NAME="#SFBZ" INPUT="SELECT" LINE="15"  COL="17" TYPE="%-1s" 	FUNCTIONS="T(1)V(NB)">
+  	<SELECT>
+		<OPTION VALUE="0" TITLE="1 收入"/>
+		<OPTION VALUE="1" TITLE="2 付出"/>
+  	</SELECT>
+</ITEM>
+ <ITEM NAME="#SSFBZ" TYPE="%-21s" FUNCTIONS="S(#SFBZ,#SFBZ)"/>
+
+ <ITEM NAME="#FSE" LINE="15" COL="55" TYPE="%17.2f" INPUT="TEXT"	FUNCTIONS="T()V(NB)"/>
+ <ITEM NAME="#XFSE"  TYPE="%-21s" FUNCTIONS="X(#FSE)"/>
+
+ <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="j(#SFBZ=1,E{#YE+#FSE})j(#SFBZ=2,E{#YE-#FSE})"/><!---交易后余额--->
+ <ITEM NAME="#XAVBAL" TYPE="%-21s" FUNCTIONS="X(#AVBAL)"/>
+
+   <ITEM NAME="#ZYDM" INPUT="SELECT" LINE="17"  COL="17" TYPE="%-2s" 	FUNCTIONS="T(01)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="01" TITLE="01工资，奖金  "/>
+  		<OPTION VALUE="02" TITLE="02差费        "/>
+  		<OPTION VALUE="03" TITLE="03劳务费      "/>
+  		<OPTION VALUE="04" TITLE="04运费        "/>
+  		<OPTION VALUE="07" TITLE="07农副产品采购"/>
+  		<OPTION VALUE="08" TITLE="08备用金      "/>
+  		<OPTION VALUE="09" TITLE="09管理费用    "/>
+  		<OPTION VALUE="10" TITLE="10电话费      "/>
+  		<OPTION VALUE="11" TITLE="11还借款      "/>
+  		<OPTION VALUE="12" TITLE="12还贷款      "/>
+  		<OPTION VALUE="13" TITLE="13材料款      "/>
+  		<OPTION VALUE="14" TITLE="14工程款      "/>
+  		<OPTION VALUE="15" TITLE="15电水费      "/>
+  		<OPTION VALUE="16" TITLE="16营业收入    "/>
+  		<OPTION VALUE="18" TITLE="18汇兑手续费  "/>
+  		<OPTION VALUE="19" TITLE="19还贷款息    "/>
+  		<OPTION VALUE="20" TITLE="20货款        "/>
+  		<OPTION VALUE="21" TITLE="21行政罚款    "/>
+  		<OPTION VALUE="22" TITLE="22调款        "/>
+  		<OPTION VALUE="23" TITLE="23交款        "/>
+  		<OPTION VALUE="24" TITLE="24生活费      "/>
+  		<OPTION VALUE="26" TITLE="26保险费      "/>
+  		<OPTION VALUE="27" TITLE="27修理费      "/>
+  		<OPTION VALUE="28" TITLE="28房款        "/>
+  		<OPTION VALUE="29" TITLE="29工本费      "/>
+  		<OPTION VALUE="30" TITLE="30手续费      "/>
+  		<OPTION VALUE="31" TITLE="31其它        "/>
+  		<OPTION VALUE="32" TITLE="32邮电费      "/>
+  		<OPTION VALUE="33" TITLE="33贷款息      "/>
+  		<OPTION VALUE="34" TITLE="34股金        "/>
+  		<OPTION VALUE="35" TITLE="35房租费      "/>
+  		<OPTION VALUE="36" TITLE="36餐费        "/>
+  		<OPTION VALUE="37" TITLE="37押金        "/>
+  		<OPTION VALUE="38" TITLE="38税款        "/>
+  		<OPTION VALUE="39" TITLE="39案款        "/>
+  		<OPTION VALUE="61" TITLE="61自输摘要    "/>
+								
+  	</SELECT>					 
+	</ITEM>						 
+
+<ITEM NAME="#ZYDMS" TYPE="%-20s" FUNCTIONS="S(#ZYDM, #ZYDM)">
+<ONLOSTFOCUS>
+"{
+enable(#ZY, true);
+//#ZY='';
+	if('61' != #ZYDM){
+		#ZY = #ZYDMS;
+		enable(#ZY, false);
+	}
+	else
+	{
+		#ZY = '';
+		enable(#ZY,true);
+	}
+	$FD23=#ZYDM;
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ZY" LINE="17" COL="20" TYPE="%-20s" INPUT="TEXT"	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#FD" TYPE="%-1s"/>
+
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+ 
+    </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SGREEN" DESC="表外记帐">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 3,30,'表外记帐');
+		print( 4,22,'帐    号:[10]',#ZH);
+		print( 5,22,'户    名:[50]',#HM);
+		print( 6,22,'发 生 额:[21]',#XFSE);
+		print( 7,22,'收付标志:[ 4]',#SSFBZ);
+		print( 8,22,'凭证种类:[20]',#SPZLX);
+		print( 9,22,'凭证号码:[16]',#PZH);
+		print(10,22,'摘    要:[20]',#ZY);
+		print(11,22,'流 水 号:[ 6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO = '00';
+
+		print( 4,26,'[7      ]   [20]                        操作员:[4]',$KINBR,substr($BRNAME,0,20),$TLRNO);
+		print( 4,16,'[6     ]                           [10        ]                      [8       ]  [8]',$FD4,#TXNAME,$HDATE,@txtime);
+		printacdtl_1();
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="27">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO = '00';
+
+		//print( 3,30,'[5   ]     [20                 ]       交易日期:[8       ]  [8]',$KINBR,substr($BRNAME,0,20),@txtime);
+		print( 3,30,'[5   ]     [20                 ]       交易日期:[8       ]  [8]',$KINBR,substr($BRNAME,0,20),$HDATE,@txtime);
+		print( 4,30,'[10]',#TXNAME);
+		print( 5,15,'表外帐号:[10]',#ZH);
+		print( 6,15,'户    名:[50]',#HM);
+		print( 7,15,'收付标志:[ 4]',#SSFBZ);
+		print( 8,15,'凭证种类:[20]',#SPZLX);
+		print( 9,15,'凭证号码:[20]                         流水号:[6]',#PZH,$FD4);
+		print(10,15,'摘    要:[20]                         操作员:[4]',#ZY,$TLRNO);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,490 @@
+/*************************************************************
+* 文 件 名: ln001.c
+* 功能描述：修改贷款的利息并冲正多余的利息
+*           
+*            
+************************************************************/
+#define MYSQLERR if(sqlca.sqlcode ) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d][%d]",sqlca.sqlcode,__LINE__); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]line[%d]",ret,__LINE__); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "ln_mst_c.h"
+#include "ln_acm_reg_c.h"
+#include "ln_expand_c.h"
+ln001( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+  struct ln_acm_reg_c tmp_ln_acm_reg;
+  struct ln_acm_reg_c tmp_ln_acm_reg1;
+  struct ln_acm_reg_c tmp_ln_acm_reg2;
+  struct ln_acm_reg_c ln_acm_reg;
+  struct ln_expand_c ln_expand;
+  struct ln_mst_c ln_mst;
+  long ac_id=0;
+  long beg_date=0;
+  long end_date=0;
+  double rate=0.00;
+  double exp_rate=0.00;
+  double intst_acm=0.00;
+  double part_intst_acm=0.00;
+  double intst=0.00;
+  long mtr_date=0;
+  long rgst_date=0;
+  long days=0;
+  long days1=0;
+  long days2=0;
+  double amt=0.00;
+  char filename1[128];
+  FILE *fp1;
+  int ret=0;
+	EXEC SQL  END  DECLARE SECTION;
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+  /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+	/**得到那些错误贷款的ac_id**/
+	memset(filename1,0x0,sizeof(filename1));
+	sprintf(filename1,"%s/%s.txt",getenv("FILDIR"),"ln_lx");
+	fp1 = fopen( filename1,"w" );	/*该文件用来记录正确处理结果*/
+	if( fp1==NULL )
+	{
+		sprintf(acErrMsg," open file [%s] error ",filename1 );
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"S047" );
+		goto ErrExit;
+	}
+	fprintf( fp1, "                                     需要冲帐利息记录\n");
+  EXEC SQL declare cur1 cursor for
+  select distinct a.ac_id from ln_acm_reg a,ln_mst b, ln_expand c where a.ac_id=b.ac_id and b.ac_id=c.ac_id and b.mtr_date>20061103 and b.exp_ind!='0' and c.rgst_date<b.mtr_date and b. ac_sts!='*' order by a.ac_id;
+	MYSQLERR
+	EXEC SQL open cur1;
+	MYSQLERR
+	while(1)
+	{
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+  	long ac_id=0;
+  	long beg_date=0;
+  	long end_date=0;
+  	double rate=0.00;
+  	double exp_rate=0.00;
+  	double intst_acm=0.00;
+  	double part_intst_acm=0.00;
+  	double intst=0.00;
+  	long mtr_date=0;
+  	long rgst_date=0;
+    long days=0;
+    long days1=0;
+    long days2=0;
+    double amt=0.00;
+	  memset(&ln_acm_reg,0x00,sizeof(struct ln_acm_reg_c));
+	  memset(&tmp_ln_acm_reg,0x00,sizeof(struct ln_acm_reg_c));
+	  memset(&tmp_ln_acm_reg1,0x00,sizeof(struct ln_acm_reg_c));
+	  memset(&tmp_ln_acm_reg2,0x00,sizeof(struct ln_acm_reg_c));
+	  memset(&ln_mst,0x00,sizeof(struct ln_mst_c));
+	  memset(&ln_expand,0x00,sizeof(struct ln_expand_c));	  
+  	EXEC SQL fetch cur1 
+		into :ac_id;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+		vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+		ret=Ln_mst_Sel(g_pub_tx.reply,&ln_mst,"ac_id=%ld",ac_id);/**得到贷款的相应的信息**/
+    MYSQLERR
+		vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+    ret=Ln_expand_Sel(g_pub_tx.reply,&ln_expand,"ac_id=%ld",ac_id);/**得到贷款户的展期登记日**/
+		MYSQLERR
+		vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+		if(ln_mst.mtr_date>20070121)
+	  {
+	  	continue;/**暂时不处理这种情况因为记录少于4条**/
+	  }
+	  
+	  /**先算出本金***/
+	  ret=Ln_acm_reg_Sel(g_pub_tx.reply,&tmp_ln_acm_reg2,"ac_id=%ld and beg_date=20061021",ac_id);
+    if(ret==100)
+    {
+    	continue;/**当beg_date=0时 跳过**/
+    }
+    MYSQLERR
+	  vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+    ret=pub_base_CalDays(tmp_ln_acm_reg2.beg_date ,tmp_ln_acm_reg2.end_date,"0",&days);
+    MYRETERR
+ 	  vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+    amt=tmp_ln_acm_reg2.intst_acm/days;
+    ret=Ln_acm_reg_Sel(g_pub_tx.reply,&ln_acm_reg,"ac_id=%ld and beg_date=%ld",ac_id,ln_mst.mtr_date);
+ 	  vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+    if(ret==0)
+    {
+    	/**如果有的到期日记录的话,更新基数及利息**/
+      ret=pub_base_CalDays(ln_acm_reg.beg_date ,ln_acm_reg.end_date,"0",&days1);
+      MYRETERR
+			vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+      double tmp_intst_acm=0.00;/**更新积数**/
+      double tmp_intst=0.00;/**更新利息**/
+      double cz_intst=0.00;/**冲正利息**/
+      double src_intst_acm=0.00;/**冲正积数**/
+      tmp_intst_acm=days1*amt;
+    	tmp_intst=tmp_intst_acm*ln_acm_reg.rate/30000;
+    	cz_intst=ln_acm_reg.intst-tmp_intst;
+    	src_intst_acm=ln_acm_reg.intst_acm;
+    	ln_acm_reg.intst_acm=tmp_intst_acm;
+    	ln_acm_reg.part_intst_acm=tmp_intst_acm;
+    	ln_acm_reg.intst=tmp_intst;
+    	ret=Ln_acm_reg_Upd_Upd(ln_acm_reg,g_pub_tx.reply);
+      MYRETERR
+	    vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+	      memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+				ret = Mdm_ac_rel_Sel( g_pub_tx.reply ,&g_mdm_ac_rel, "ac_id=%ld", ac_id );
+				if( ret==100 )
+				{
+						sprintf( acErrMsg,"凭证(介质)与账户关系表无此记录[%d][%d]",ret,ac_id);
+						WRITEMSG
+						strcpy( g_pub_tx.reply ,"O001" );
+						goto ErrExit;
+				} 
+				else if( ret )
+				{
+    				sprintf( acErrMsg,"取凭证(介质)与账户关系表异常[%d][%d]",ret,ac_id);
+							WRITEMSG
+						strcpy( g_pub_tx.reply ,"D103" );
+						goto ErrExit;
+   			}
+	    fprintf( fp1, "│%5s│%20s│%ld│%.2f│\n",ln_mst.opn_br_no,g_mdm_ac_rel.ac_no,ac_id,cz_intst); 
+    	/**调用冲正补给函数**
+    	ret=cbfunctions(ac_id,"1","1",cz_intst,src_intst_acm-ln_acm_reg.intst_acm);
+ 	    vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);  *******/ 	
+    }
+    if(ret==100)
+    {
+      /**如果到期日记录没有的话,插一条记录，更新展期登记日的那条记录**/      
+      struct ln_acm_reg_c tmp_ln_acm_reg;
+      memset(&tmp_ln_acm_reg,0x00,sizeof(struct ln_acm_reg_c));      
+      tmp_ln_acm_reg.ac_id=ac_id;
+      tmp_ln_acm_reg.ac_seqn=0;
+      tmp_ln_acm_reg.intst_type[0]='1';
+			tmp_ln_acm_reg.trace_no=tmp_ln_acm_reg2.trace_no;
+			tmp_ln_acm_reg.type[0]='1';
+      tmp_ln_acm_reg.beg_date=ln_expand.rgst_date;
+ 			tmp_ln_acm_reg.end_date=ln_mst.mtr_date;  
+ 			tmp_ln_acm_reg.rate=ln_mst.rate;
+      ret=pub_base_CalDays(tmp_ln_acm_reg.beg_date ,tmp_ln_acm_reg.end_date,"0",&days1);
+      MYRETERR      
+			vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+ 			tmp_ln_acm_reg.intst_acm=days1*amt;
+ 			tmp_ln_acm_reg.part_intst_acm=days1*amt;  
+ 			tmp_ln_acm_reg.intst=tmp_ln_acm_reg.intst_acm*tmp_ln_acm_reg.rate/30000;
+ 			ret=Ln_acm_reg_Ins(tmp_ln_acm_reg,g_pub_tx.reply);
+      MYRETERR
+      /**更新展期登记日到结息的利息**/
+    	ret=Ln_acm_reg_Sel(g_pub_tx.reply,&tmp_ln_acm_reg1,"ac_id=%ld and beg_date=%ld",ac_id,ln_expand.rgst_date);
+      MYRETERR
+ 			vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+      tmp_ln_acm_reg1.beg_date=ln_mst.mtr_date;
+      ret=pub_base_CalDays(tmp_ln_acm_reg1.beg_date ,tmp_ln_acm_reg1.end_date,"0",&days2);
+      MYRETERR
+			vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+      double srcintst_acm=0.00;
+      srcintst_acm=tmp_ln_acm_reg1.intst_acm;   
+			tmp_ln_acm_reg1.intst_acm=days2*amt;
+			tmp_ln_acm_reg1.part_intst_acm=days2*amt;
+			double srcintst=0.00;
+			srcintst=tmp_ln_acm_reg1.intst;
+			tmp_ln_acm_reg1.intst=tmp_ln_acm_reg1.intst_acm*tmp_ln_acm_reg1.rate/30000;
+			srcintst-tmp_ln_acm_reg1.intst-tmp_ln_acm_reg.intst;
+			ret=Ln_acm_reg_Upd_Upd(tmp_ln_acm_reg1,g_pub_tx.reply);
+      MYRETERR      
+			vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+			/**冲掉这块利息**/
+	      memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+				ret = Mdm_ac_rel_Sel( g_pub_tx.reply ,&g_mdm_ac_rel, "ac_id=%ld", ac_id );
+				if( ret==100 )
+				{
+						sprintf( acErrMsg,"凭证(介质)与账户关系表无此记录[%d][%d]",ret,ac_id);
+						WRITEMSG
+						strcpy( g_pub_tx.reply ,"O001" );
+						goto ErrExit;
+				} 
+				else if( ret )
+				{
+    				sprintf( acErrMsg,"取凭证(介质)与账户关系表异常[%d][%d]",ret,ac_id);
+							WRITEMSG
+						strcpy( g_pub_tx.reply ,"D103" );
+						goto ErrExit;
+   			}
+	    fprintf( fp1, "│%5s│%20s│%ld│%.2f│\n",ln_mst.opn_br_no,g_mdm_ac_rel.ac_no,ac_id,srcintst-tmp_ln_acm_reg1.intst-tmp_ln_acm_reg.intst); 
+    			
+    	/**调用冲正补给函数**
+			ret=cbfunctions(ac_id,"1","1",srcintst-tmp_ln_acm_reg1.intst-tmp_ln_acm_reg.intst,srcintst_acm-tmp_ln_acm_reg1.intst_acm);
+			**完毕**/
+			
+			
+		}
+    MYRETERR
+	}
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+/***dcflag 借贷标志   1借 0 贷    cbflag 冲正标志 1 冲正 2 补记***/
+int cbfunctions(long ac_id,char * dcflag,char *cbflag,double amt,double acm)
+{
+  int ret=0;
+  memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+  memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+  memset(&g_ln_parm,0x00,sizeof(struct ln_parm_c));
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+	ret = Mdm_ac_rel_Sel( g_pub_tx.reply ,&g_mdm_ac_rel, "ac_id=%ld", ac_id );
+	if( ret==100 )
+	{
+		sprintf( acErrMsg,"凭证(介质)与账户关系表无此记录[%d][%d]",ret,ac_id);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"O001" );
+		goto ErrExit;
+	} 
+	else if( ret )
+	{
+    sprintf( acErrMsg,"取凭证(介质)与账户关系表异常[%d][%d]",ret,ac_id);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"D103" );
+		goto ErrExit;
+   }
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+   /* 取贷款主文件信息 */
+	ret = Ln_mst_Sel(g_pub_tx.reply,&g_ln_mst , "ac_id=%ld and ac_seqn=%d" ,g_mdm_ac_rel.ac_id,g_mdm_ac_rel.ac_seqn );
+	if( ret==100 )
+	{
+		sprintf( acErrMsg,"贷款主文件表中无此记录 erro code=[%d]",ret);
+		WRITEMSG
+		sprintf( acErrMsg,"mdm_ac_rel->ac_id=[%ld]ac_seqn=[%d]",g_mdm_ac_rel.ac_id,g_mdm_ac_rel.ac_seqn);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"L002" );
+		goto ErrExit;
+	}
+	else if( ret )
+	{
+   	sprintf( acErrMsg,"取贷款主文件异常 erro code=[%d]",ret);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"D103" );
+		goto ErrExit;
+   	}
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+
+   	/* 取贷款参数信息 */
+	ret = Ln_parm_Sel(g_pub_tx.reply,&g_ln_parm , " prdt_no='%s' " ,
+				        g_ln_mst.prdt_no );
+	if( ret==100 )
+	{
+		sprintf(acErrMsg,"贷款参数文件中无此记录 [%s][%d]",g_ln_mst.prdt_no,ret);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"L001" );
+		goto ErrExit;
+	} 
+	else if( ret )
+	{
+   	sprintf( acErrMsg,"取贷款参数文件异常 [%s][%d]",g_ln_mst.prdt_no,ret);
+		WRITEMSG
+		strcpy( g_pub_tx.reply ,"L001" );
+		goto ErrExit;
+   	}
+	vtcp_log("[%s],[%d]===start===\n",__FILE__,__LINE__);
+   	
+	set_zd_data("0210","01");	/* 币种 */
+	strcpy ( g_pub_tx.ac_get_ind,"111" );  /*已经读取了mdm_ac_rel, g_ln_mst*/
+	if( cbflag[0]=='1' )	/* 冲正 */
+	{
+			g_pub_tx.tx_amt1 = -amt ;			
+	}
+	if( cbflag[0]=='2' )	/* 补记 */
+	{
+			g_pub_tx.tx_amt1 = amt ;
+	}	
+	set_zd_double( "1084" , g_pub_tx.tx_amt1 );
+	set_zd_data( "0210" , "01" );	
+	g_pub_tx.add_ind[0]=dcflag[0];	
+	if(g_pub_tx.add_ind[0]=='0' )	/* 增(冲补----贷款放款) 原为 1*/
+	{
+		set_zd_data( "0660" , "2" ); /* 借 原为1*/
+		g_pub_tx.svc_ind = 3091 ;/*3091*/
+	}
+	if( g_pub_tx.add_ind[0]=='1' )	/* 减(冲补----贷款还本)原为0 */
+	{
+		set_zd_data( "0660" , "1" ); /* 贷 原为2*/;
+		g_pub_tx.svc_ind = 3091	;	/*3019*/	
+	}
+
+	/* 冲补积数 */
+	ret = ln_acm_modify( cbflag , g_pub_tx.add_ind , "1" , acm );
+	if( ret ) 	goto ErrExit;
+	g_pub_tx.ac_id = g_ln_mst.ac_id;		/* 账户ID */
+	g_pub_tx.ac_seqn = g_ln_mst.ac_seqn;	/* 账户序号 */
+	strcpy ( g_pub_tx.ac_id_type , "3" );	/* 账号类型 3-贷款 */
+	strcpy ( g_pub_tx.ac_get_ind,"111" );  /*已经读取了mdm_ac_rel, g_ln_mst*/
+	strcpy ( g_pub_tx.intst_type , g_ln_mst.intst_type );	/* 计息类型 */	
+	strcpy ( g_pub_tx.ct_ind , "2" );		/* 现转:1现2转 */	
+	/* 是否打印存折(有折无折标志):1是0否 */
+	strcpy ( g_pub_tx.prt_ind , "1" );	
+	/* 入明细帐标志:1日间入2日终单笔入3日终汇总入 */
+	strcpy ( g_pub_tx.hst_ind , "1" );
+	strcpy( g_pub_tx.ac_wrk_ind , "0000000" );	
+	if( cbflag[0]=='1')
+	{
+		strcpy ( g_pub_tx.brf,"贷款本金冲正" );
+	}
+	else if( cbflag[0]=='2')
+	{
+		strcpy ( g_pub_tx.brf,"贷款本金补记" );
+	}			
+	sprintf(acErrMsg,"Pub_tx结构赋值 PASS!");
+	WRITEMSG
+	sprintf(acErrMsg,"后(本金积数)PASS为 [%lf]",g_ln_mst.intst_acm );
+	WRITEMSG	
+	/*** 登记交易流水 ***/
+	memcpy(g_pub_tx.tx_br_no ,g_ln_mst.opn_br_no,5);
+	memcpy(g_pub_tx.opn_br_no,g_ln_mst.opn_br_no,5);
+	
+	if( pub_acct_trance() )
+	{
+		sprintf(acErrMsg,"登记交易流水错误!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_double( "1084" , g_pub_tx.tx_amt1 );
+	set_zd_data( "0210" , "01" );		
+	ret = pubf_acct_proc("L315");
+        if (ret != 0)
+        {
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return 1;
+       	}
+	sprintf(acErrMsg,"登记交易流水 PASS!");
+	WRITEMSG
+	sprintf(acErrMsg,"后(本金积数)PASS为 [%lf]",g_ln_mst.intst_acm );
+	WRITEMSG
+	g_pub_tx.tx_amt1 = 0.00;
+	g_pub_tx.tx_amt2 = 0.00;
+	g_pub_tx.tx_amt3 = 0.00;
+	g_pub_tx.tx_amt4 = 0.00;
+	TRACE
+  sprintf(acErrMsg,"2标志－－cb_flag[%s]",cbflag);
+  WRITEMSG
+	ret = ln_reg_modify( cbflag , g_pub_tx.add_ind , "1" , amt );
+	if( ret ) 	goto ErrExit;
+	TRACE
+OkExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int ln_reg_modify( char *cb_flag_tmp , char *add_ind , char *type , double pamt )
+{
+	int ret=0;
+	long date_tmp;
+	char cb_flag_ind[2];	
+	date_tmp = g_pub_tx.tx_date ;
+	g_pub_tx.tx_date = g_pub_tx.erro_date ;
+	
+	if( cb_flag_tmp[0]=='1')	/* 冲正 */
+	{
+			strcpy( cb_flag_ind , "0" );/*0*/
+		
+	}
+	if( cb_flag_tmp[0]=='2')	/* 补记 */
+	{
+			strcpy( cb_flag_ind , "1" );/*0*/
+		
+	}
+	                           
+	if( strcmp(cb_flag_ind , add_ind ) )	/* 补记 减 或 冲正 增*/
+	{
+		TRACE
+		ret = pub_ln_Udp_LnReg ( g_ln_mst.ac_id , g_ln_mst.ac_seqn , type , pamt );
+		if(ret) return 1;
+		TRACE
+	}
+	if( strcmp(cb_flag_ind , add_ind )==0 )	/* 补记 增 或 冲正 减*/
+	{
+		TRACE
+		ret = pub_ln_Ins_ln_reg( g_ln_mst , g_ln_parm , type , pamt , 0.00 ,"0" );
+		if(ret) return 1;
+		TRACE
+	}
+	
+	g_pub_tx.tx_date = date_tmp ;
+	return 0;
+}
+int ln_acm_modify( char *cb_flag_tmp , char *add_ind , char *type , double acm )
+{
+	int ret=0;
+	char cb_flag_ind[2];
+
+	if( cb_flag_tmp[0]=='1')	/* 冲正 */
+	{
+		strcpy( cb_flag_ind , "0" );
+	}
+	if( cb_flag_tmp[0]=='2')	/* 补记 */
+	{
+		strcpy( cb_flag_ind , "1" );
+	}	
+	
+	if( strcmp(cb_flag_ind , add_ind ) )	/* 补记 减 或 冲正 增*/
+	{
+		/* 积数减少 */
+		TRACE
+		if( type[0]=='1' )
+		{
+			g_ln_mst.intst_acm = g_ln_mst.intst_acm - acm;
+		}else if( type[0]=='2' ){
+			g_ln_mst.in_lo_acm = g_ln_mst.in_lo_acm - acm;
+		}else if( type[0]=='3' ){
+			g_ln_mst.out_lo_acm = g_ln_mst.out_lo_acm - acm;
+		}else if( type[0]=='4' ){
+			g_ln_mst.cmpd_lo_acm = g_ln_mst.cmpd_lo_acm - acm;
+		}
+		TRACE
+	}
+	if( strcmp(cb_flag_ind , add_ind )==0 )	/* 补记 增 或 冲正 减*/
+	{
+		/* 积数增加 */
+		TRACE
+		if( type[0]=='1' )
+		{
+			g_ln_mst.intst_acm = g_ln_mst.intst_acm + acm;
+		}else if( type[0]=='2' ){
+			g_ln_mst.in_lo_acm = g_ln_mst.in_lo_acm + acm;
+		}else if( type[0]=='3' ){
+			g_ln_mst.out_lo_acm = g_ln_mst.out_lo_acm + acm;
+		}else if( type[0]=='4' ){
+			g_ln_mst.cmpd_lo_acm = g_ln_mst.cmpd_lo_acm + acm;
+		}
+		TRACE
+	}
+	
+	return 0;
+}
+
+

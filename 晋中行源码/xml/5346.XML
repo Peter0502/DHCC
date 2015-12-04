@@ -1,0 +1,939 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5346 大额来账查询与打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org"> 
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+if($FD12 == '0000')
+{
+   showmsg('交易成功!');
+}
+}"
+</COMMRECV>
+<VARIABLE>
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+  	dim @selid as number;
+  	dim @prtflg as string;
+  	dim @cnt as number;
+  	dim @cmtnobak as string;
+  	dim @tmpcmtno as string;
+  	@cmtnobak =#CMTNO;
+  	@prtflg='';
+  	if(#DOLIST!='')
+  	{
+  	
+  		while(true){
+  			@selid=list_getselid();
+  			if(@selid &lt; 0){
+  				break;
+  			}
+	  	#OR_BR_NO=list_gettext(@selid,4);
+	  	@tmpcmtno=delspace(list_gettext(@selid,7));
+                //showmsg('111'+@tmpcmtno);
+                $FD25=#OR_BR_NO;
+                #CNO=@tmpcmtno;
+  		if(#ZF_TYPE=='0' and @tmpcmtno!='802')
+  		{
+  			show(#BOX1,true);
+		  	show(#BOX2,true);
+		  	show(#BOX3,true);
+		  	show(#BOX4,true);
+		  	show(#BOX5,true);
+		  	show(#BOX6,true);
+		  	show(#BOX7,true);
+		  	show(#BOX8,true);
+		  	show(#BVTYPE,true);
+		  	show(#BVOCNUM,true);
+		  	goitem(#BVOCNUM,false);
+	  		return(true);
+	  	}
+	  	else
+	  	{
+	  		
+	  	#TXDAY=delspace(list_gettext(@selid,1));
+	  	#NEXTORDERNO=list_gettext(@selid,2);
+	  	@tmpcmtno=list_gettext(@selid,7);
+	  	
+	  	#NEXTVOCNUM=#VOCNUM;
+ 	  	list_show();
+	  	while(true)
+	  	{
+	  		@prtflg=delspace(list_gettext(@selid,8));
+	  		#OR_BR_NO=list_gettext(@selid,4);
+			//showmsg('222'+#OR_BR_NO);
+	  		if(@prtflg=='已打印')
+	  		{
+	  		    	if(msgbox('此笔交易已打印!确定重新打印吗!'+chr(10)+
+	  			'    交易序号:'+#NEXTORDERNO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        		   break;
+	       			}
+	       			#CPRTFLAG='重复打印';
+	       			#CPRTNUM=2;
+	  		}else{
+				#CPRTFLAG='首次打印';
+				#CPRTNUM=1;
+				if(msgbox('打印此笔交易吗?'+chr(10)+
+	  			'    交易序号:'+#NEXTORDERNO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        			break;
+	       			}
+	  		}
+	  		#TXAMT=0;
+	       		initfd();
+	       		commsend_001();
+	       	 	$FD44=#TXDAY;
+	        	$FD29=#NEXTORDERNO;
+	        	#CMTNO=@cmtnobak;
+	        	$FD24=#CMTNO;
+	        	$FD23=@tmpcmtno;
+	        	$FD67=#CPRTNUM;
+						$FD69=#TXSTAT;
+						$FD72=#ZF_TYPE;
+						$FD90=#VTYPE;
+						$FD25=#OR_BR_NO;
+	        	$FD60=#NEXTVOCNUM;
+	        	$FD16='9090';
+	        	//showmsg(#NEXTORDERNO);
+			callserver();
+		if($FD12!='0000')
+		{
+		showmsg(geterror());
+		goitem('#DOLIST',false);
+		return(true);			
+		}
+	        	//setitems('#CMTNO#O_CMTNO#PAY_QS_NO#OR_BR_NO#SENDCO#PAY_OPN_BR_NO#PAY_AC_NO#PAY_NAME#PAY_ADDR#CASH_QS_NO#AC_BR_NO#RECECO#CASH_OPN_BR_NO#CASH_AC_NO#CASH_NAME#CASH_ADDR#YW_TYPE#ORDERNO#CONTENT#RATE#RATEDATE#OORDERNO#PROCODE#CR_DATE#CR_BR_NO#CR_TX_NUM#QR_BR_NO#QR_TX_NUM#TX_TYPE#NOTPAY_CONTENT#NOTPAY_ORDERNO#O_NOTPAY_ORDERNO#RESP1#OPERLEVEL#PROC_STS#OPCD#LW_IND#HP_ADD_PWD#PACKID#PACK_DATE#O_PACK_DATE#TXNUM#O_TXNUM#LV_YW_IND#RESP_DATE#RCP_STS#RESP2#RETCODE#YW_DTL_ID#ACC_IND#REQ_TYPE#DF_FREEAMT#PROTNO#PO_NO#PO_TYPE#OTYPE',$FD123);
+	        	commrecv_v123();
+	        	setitems('#TXAMT',delspace($FD39));
+						setitems('#TAGDATA3#TAGDATA4#TAGDATA1#TAGDATA2#PROC_STS',$FD96);
+						setitems('#TAGDATA3',$FD45);
+						//showmsg(delspace(#TAGDATA4));
+						//showmsg(delspace(#TAGDATA1));
+						//showmsg(delspace(#TAGDATA2));
+	        	#NEXTVOCNUM=delspace(substr($FD96,0,60));
+            setitems('#NOTE_TYPE',delspace($FD89));
+            setitems('#NOTE_NO',delspace($FD58));
+            setitems('#TRACE_NO',delspace($FD45));
+	        	runoutput();
+	        	list_rmitem(@selid);	        	        	        
+	        	list_show();
+	      		@selid=list_getselid();
+	      		@cnt=list_getrowcnt();
+	      		if(@cnt==0)
+	      		{
+	        		msgbox('    来账打印完毕    '+chr(10)+'─────────────');
+	        		break;
+	        	}
+	  			#TXDAY=delspace(list_gettext(@selid,1));
+	  			#NEXTORDERNO=list_gettext(@selid,2);
+	  			//showmsg(#NEXTORDERNO);
+	    	} 
+	    	list_del();
+	  	#DOLIST='0';
+	  	return(true);
+	  	}
+  		}
+  		list_del();
+  		#DOLIST='';
+  	}
+  
+  };"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#DOLIST1" TYPE="%-1s" FUNCTIONS="">
+   <ONLOSTFOCUS>"{
+ 	showall();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CMTNAME"  TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM LINE="8"  COL="17" NAME="#BOX1" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(┌─────────────────────┐)"/>
+  <ITEM LINE="9"  COL="17" NAME="#BOX2" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│                                          │)"/>
+  <ITEM LINE="10" COL="17" NAME="#BOX3" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│  凭 证 类 型!:                           │)"/>
+  <ITEM LINE="11" COL="17" NAME="#BOX4" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│                                          │)"/>
+  <ITEM LINE="12" COL="17" NAME="#BOX5" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│                                          │)"/>
+  <ITEM LINE="13" COL="17" NAME="#BOX6" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│  凭 证 号 码 :                           │)"/>
+  <ITEM LINE="14" COL="17" NAME="#BOX7" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(│                                          │)"/>
+  <ITEM LINE="15" COL="17" NAME="#BOX8" INPUT="LABEL" VISABLE="FALSE" TYPE="%-50s" FUNCTIONS="T(└─────────────────────┘)"/>
+  
+  <ITEM LINE="10" COL="35" NAME="#BVTYPE" TYPE="%3d" INPUT="SELECT" VISABLE="FALSE"  ENABLE="FALSE" FUNCTIONS="T(109)" >
+     <SELECT LINE="10" COL="36">
+    	<OPTION VALUE="109"   TITLE="大额来账凭证"/>
+     </SELECT> 
+  </ITEM>
+   
+  <ITEM LINE="13"   COL="35" NAME="#BVOCNUM"  TYPE="%16d"   INPUT="TEXT" VISABLE="FALSE"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+  		dim @selid as number;
+  		dim @tota as string;
+  		dim @prtflg as string;
+  		dim @cnt as number;
+  		dim @tmpcmtno as string;
+  		
+  		@prtflg='';
+	  	show(#BOX1,false);
+	  	show(#BOX2,false);
+	  	show(#BOX3,false);
+	  	show(#BOX4,false);
+	  	show(#BOX5,false);
+	  	show(#BOX6,false);
+	  	show(#BOX7,false);
+	  	show(#BOX8,false);
+	  	#VTYPE=#BVTYPE;
+	  	#VOCNUM=#BVOCNUM;
+	  	initfd();
+      commsend_001();
+	  	$FD89=#VTYPE;
+	  	$FD59=#VOCNUM;
+	  	$FD16='0110';
+		  callserver();
+		  if($FD12!='0000')
+    	{
+			  showmsg(geterror());
+		  	return(false);			
+    	}
+    	if(len(delspace($FD13))!=0)
+    	{
+    	  //showmsg($FD13);
+    	  show(#BOX1,true);
+	  		show(#BOX2,true);
+	  		show(#BOX3,true);
+	  		show(#BOX4,true);
+	  		show(#BOX5,true);
+	  		show(#BOX6,true);
+	  		show(#BOX7,true);
+	  		show(#BOX8,true);
+    	  show(#BVTYPE,true);
+	  	  show(#BVOCNUM,true);
+		  	return(false);	
+    	}
+ 
+	  	@selid=list_getselid();
+	  	#TXDAY=delspace(list_gettext(@selid,1));
+	  	#NEXTORDERNO=list_gettext(@selid,2);
+	  	#OR_BR_NO=list_gettext(@selid,4);
+      //showmsg('333 '+#OR_BR_NO);
+		$FD25=#OR_BR_NO;
+	  	#NEXTVOCNUM=#VOCNUM;
+ 	  	list_show();
+	  	while(true)
+	  	{
+	  		@prtflg=delspace(list_gettext(@selid,8));
+	  		@tmpcmtno=delspace(list_gettext(@selid,7));
+                //showmsg('111'+@tmpcmtno);
+                #CNO=@tmpcmtno;
+	  		if(@prtflg=='已打印')
+	  		{
+	  		    	if(msgbox('此笔交易已打印!确定重新打印吗!'+chr(10)+
+	  			'    交易序号:'+#NEXTORDERNO+chr(10)+
+	  			'    凭证号码:'+#NEXTVOCNUM+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        		   break;
+	       			}
+	       			#CPRTFLAG='重复打印';
+	       			#CPRTNUM=2;
+	  		}else{
+				#CPRTFLAG='首次打印';
+				#CPRTNUM=1;
+				if(msgbox('打印此笔交易吗?'+chr(10)+
+	  			'    交易序号:'+#NEXTORDERNO+chr(10)+
+	  			'    凭证号码:'+#NEXTVOCNUM+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        			break;
+	       			}
+	  		}
+	  		#TXAMT=0;
+	  		if(#NEXTVOCNUM=='0000000000000000')
+	  		{
+	  		   	msgbox('    大额来账凭证已用完    '+chr(10)+'─────────────');
+	  		   	break;
+	  		}
+	       		initfd();
+	       		commsend_001();
+		        $FD25=#OR_BR_NO;
+	       	 	$FD44=#TXDAY;
+	        	$FD29=#NEXTORDERNO;
+	        	$FD24=#CMTNO;
+	        	$FD23=#CNO;
+	        	//showmsg('#CNO='+#CNO);
+	        	$FD67=#CPRTNUM;
+     				$FD69=#TXSTAT;
+     				$FD72=#ZF_TYPE;
+     				$FD90=#VTYPE;
+	        	$FD60=#NEXTVOCNUM;
+	        	$FD16='9090';
+	        	//showmsg(#NEXTORDERNO);
+						callserver();
+			      if($FD12!='0000')
+    	      {
+				        showmsg(geterror());
+				        goitem('#DOLIST',false);
+		  		      return(true);			
+    	      }
+	        	setitems('#CMTNO#O_CMTNO#PAY_QS_NO#OR_BR_NO#SENDCO#PAY_OPN_BR_NO#PAY_AC_NO#PAY_NAME#PAY_ADDR#CASH_QS_NO#AC_BR_NO#RECECO#CASH_OPN_BR_NO#CASH_AC_NO#CASH_NAME#CASH_ADDR#YW_TYPE#ORDERNO#CONTENT#RATE#RATEDATE#OORDERNO#PROCODE#CR_DATE#CR_BR_NO#CR_TX_NUM#QR_BR_NO#QR_TX_NUM#TX_TYPE#NOTPAY_CONTENT#NOTPAY_ORDERNO#O_NOTPAY_ORDERNO#RESP1#OPERLEVEL#PROC_STS#OPCD#LW_IND#HP_ADD_PWD#PACKID#PACK_DATE#O_PACK_DATE#TXNUM#O_TXNUM#LV_YW_IND#RESP_DATE#RCP_STS#RESP2#RETCODE#YW_DTL_ID#ACC_IND#REQ_TYPE#DF_FREEAMT#PROTNO#PO_NO#PO_TYPE#OTYPE',$FD123);
+	        	commrecv_123();
+			//showmsg('汇票号码:'+#PO_NO);
+			//showmsg('汇票日期:'+#O_PACK_DATE);
+			if(#CMTNO=='122' or #CMTNO=='123' or #CMTNO=='124'){
+				#CSIGN_DATE='汇票签发日期:'+#O_PACK_DATE;
+				#CPO_NO='汇票号码:'+#PO_NO;
+			}
+	        	setitems('#TXAMT',delspace($FD39));
+	        	#NEXTVOCNUM=delspace(substr($FD96,0,60));
+            setitems('#NOTE_TYPE',delspace($FD89));
+            setitems('#NOTE_NO',delspace($FD58));
+            setitems('#TRACE_NO',delspace($FD45));
+	        	runoutput();
+	        	list_rmitem(@selid);	        	        	        
+	        	list_show();
+	      		@selid=list_getselid();
+	      		@cnt=list_getrowcnt();
+	      		if(@cnt==0)
+	      		{
+	        		msgbox('    来账凭证打印完毕    '+chr(10)+'─────────────');
+	        		break;
+	        	}
+	  			#TXDAY=delspace(list_gettext(@selid,1));
+	  			#NEXTORDERNO=list_gettext(@selid,2);
+	  			#OR_BR_NO=list_gettext(@selid,4);
+	  			//showmsg(#NEXTORDERNO);
+	    	} 
+	    	list_del();
+	  	#DOLIST='0';
+	  	return(true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  
+  
+  
+  <ITEM NAME="#START"  TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+ 	showall();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(5346                       大额来账查询与打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5886)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+ 
+  <ITEM LINE="8"  COL="15" TYPE="%-10s" FUNCTIONS="T(交易行号:)"/>
+  <ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+  <ITEM LINE="12" COL="15" TYPE="%-10s" FUNCTIONS="T(打印标志:!)"/>
+  <ITEM LINE="14" COL="15" TYPE="%-10s" FUNCTIONS="T(支付标志:!)"/>
+  <ITEM LINE="16" COL="15" TYPE="%-10s" FUNCTIONS="T(CMT 编号:!)"/>
+  <ITEM LINE="18" COL="15" TYPE="%-10s" FUNCTIONS="T(交易状态:!)"/>
+
+  <ITEM LINE="8"  COL="25" NAME="#BRNO"    TYPE="%-5s"     DEVICE="KEYBOARD" FUNCTIONS="T($KINBR)"/>
+  <ITEM LINE="10" COL="25" NAME="#TXDATE"  TYPE="%-8s"     DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="12" COL="25" NAME="#PRTFLAG" TYPE="%-1s"     DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0,2)">
+       <SELECT>
+            <OPTION VALUE="0 未打印"  TITLE="未打印"/>
+            <OPTION VALUE="1 已打印"  TITLE="已打印"/>
+            <OPTION VALUE="2 全  部 " TITLE="全  部"/>
+       </SELECT>
+  </ITEM>        
+  <ITEM NAME="#ZF_TYPE"  LINE="14" COL="25" TYPE="%-1s"  INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+	<SELECT LINE="11" COL="41">
+		<OPTION VALUE="0 支付类"      TITLE="0.支付类"/>
+		<OPTION VALUE="1 非支付类"    TITLE="1.非支付类"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		dim @tota_txtype as string;
+		dim @tota_txstat as string;
+		if(#ZF_TYPE=='0')
+		{
+			@tota_txtype = '0000|全部类型        |000|*0000|大额汇兑        |100|*0000|委托收款        |101|*0000|同业拆借        |105|*0000|托收承付        |102|*0000|国库资金汇划    |103|*0000|支付退汇        |108|*0000|汇票清算接受报文|122|*0000|汇票多余资金划回|123|*0000|汇票未用退回    |124|*'; 
+			@tota_txstat = '0000|全部状态        |W|*0000|来帐登记        |E|*0000|来帐退回        |B|*0000|地方押错        |F|*0000|全国押错        |G|*0000|中心挂帐        |H|*0000|支行挂帐        |I|*0000|来帐清算            |9|*';
+		}
+		else if(#ZF_TYPE=='1')
+		{
+			@tota_txtype = '0000|大额查询        |301|*0000|大额查复        |302|*0000|大额自由格式    |303|*0000|退回申请        |313|*0000|退回应答        |314|*0000|申请撤销        |311|*0000|撤销应答        |312|*0000|全额兑付通知    |725|*';
+			@tota_txstat = '0000|全部状态        |W|*0000|来帐已应答      |B|*0000|地方押错        |F|*0000|全国押错        |G|*';
+		}	
+		setsel(#CMTNO,@tota_txtype,'o5t16o1v3o2');
+		setsel(#TXSTAT,@tota_txstat,'o5t16o1v1o2');
+	}"
+	</ONLOSTFOCUS>
+
+</ITEM>
+   <ITEM LINE="16" COL="25" NAME="#CMTNO" TYPE="%-3s" DEVICE="KEYBOARD" FUNCTIONS="T(000)V(NB)">
+     <SELECT LINE="13" COL="30">
+	     <OPTION VALUE="000 全部类型"            TITLE="000.全部类型"/>     
+     </SELECT>
+  </ITEM>
+   <ITEM LINE="18" COL="25" NAME="#TXSTAT" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(W)">
+     <SELECT LINE="16" COL="30">
+	     <OPTION VALUE="W 全    部" TITLE="0.全    部"/>
+     </SELECT>
+   </ITEM>
+   <ITEM NAME="#PRTF" TYPE="%-6s" FUNCTIONS=""/>
+   <ITEM NAME="#CPRTFLAG" TYPE="%-10s" FUNCTIONS=""/>
+   <ITEM NAME="#CPRTNUM"  TYPE="%1d"   FUNCTIONS=""/>
+ <ITEM LINE="21"  COL="65" TYPE="%-6s" NAME="#SUREDO" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+        dim @pkgcnt  as number;
+        dim @recdcnt as number;
+        dim @step   as number;
+        dim @tota   as string;
+        dim @relapos as number;
+        dim @pkgcntpos as number; 
+        dim @tmptxamt as string;
+        dim @txamt as string;
+        list_init(18,78,4,1);
+        list_setcolcnt(9);
+        list_setcol(0, '交易行',7 );
+        list_setcol(1, '交易日期',9);
+        list_setcol(2, '顺序号', 7);
+        list_setcol(3, '交 易 金 额',20);
+        list_setcol(4, '开户行( 付 )',14);
+        list_setcol(5, '开户行( 收 )',14);
+        list_setcol(6, '状    态',9);
+        list_setcol(7, '报文编号',9);
+        list_setcol(8, '打印标志', 8);
+        initfd();
+        commsend_001();
+		$FD25=#OR_BR_NO;
+     		$FD23=#CMTNO;
+     		$FD44=#TXDATE;
+     		$FD67=#PRTFLAG;
+     		$FD72=#ZF_TYPE;
+     		$FD69=#TXSTAT;
+     		@tota=callserver();
+     		if($FD12!='0000')
+    	 {
+					showmsg(geterror());
+					return(false);
+    	 }
+    	 
+    	 if(autolist(@tota))
+    	 {
+	    list_work();
+	 }
+         #DOLIST='1';
+  }"
+ </ONCLICK>
+  </ITEM>
+  <!--<ITEM NAME="#CMTNO"             TYPE="%-3s"       FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+  <ITEM NAME="#CNO"               TYPE="%-3s"       FUNCTIONS=""/>
+  <ITEM NAME="#O_CMTNO"           TYPE="%-3s"       FUNCTIONS=""/>
+  <ITEM NAME="#PAY_QS_NO"         TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#OR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#SENDCO"            TYPE="%-4s"       FUNCTIONS=""/>
+  <ITEM NAME="#PAY_OPN_BR_NO"     TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#PAY_AC_NO"         TYPE="%-32s"      FUNCTIONS=""/>
+  <ITEM NAME="#PAY_NAME"          TYPE="%-60s"      FUNCTIONS=""/>
+  <ITEM NAME="#PAY_ADDR"          TYPE="%-60s"      FUNCTIONS=""/>
+  <ITEM NAME="#CASH_QS_NO"        TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#AC_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#RECECO"            TYPE="%-4s"       FUNCTIONS=""/>
+  <ITEM NAME="#CASH_OPN_BR_NO"    TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#CASH_AC_NO"        TYPE="%-32s"      FUNCTIONS=""/>
+  <ITEM NAME="#CASH_NAME"         TYPE="%-60s"      FUNCTIONS=""/>
+  <ITEM NAME="#CASH_ADDR"         TYPE="%-60s"      FUNCTIONS=""/>
+  <ITEM NAME="#YW_TYPE"           TYPE="%-2s"       FUNCTIONS=""/>
+  <ITEM NAME="#ORDERNO"           TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#CONTENT"           TYPE="%-60s" 	    FUNCTIONS=""/>
+  <ITEM NAME="#RATE"              TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+  <ITEM NAME="#RATEDATE"          TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+  <ITEM NAME="#OORDERNO"          TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#NOTPAY_CONTENT"    TYPE="%-255s"     FUNCTIONS=""/>
+  <ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/>
+  <ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/>
+  <ITEM NAME="#RESP1"             TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/> 
+  <ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#OPCD"              TYPE="%-2s"       FUNCTIONS=""/>
+  <ITEM NAME="#LW_IND"            TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#PACKID"            TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#O_PACKID"          TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#PACK_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#O_PACK_DATE"       TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#TXNUM"             TYPE="%-5s"       FUNCTIONS=""/>
+  <ITEM NAME="#O_TXNUM"           TYPE="%-5s"       FUNCTIONS=""/>
+  <ITEM NAME="#LV_YW_IND"         TYPE="%-12s"      FUNCTIONS=""/>
+  <ITEM NAME="#RESP_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#RCP_STS"           TYPE="%-2s"       FUNCTIONS=""/>
+  <ITEM NAME="#RESP2"             TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#RETCODE"           TYPE="%-2s"       FUNCTIONS=""/>
+  <ITEM NAME="#YW_DTL_ID"         TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#ACC_IND"           TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#REQ_TYPE"          TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#DF_FREEAMT"        TYPE="%-16s"      FUNCTIONS=""/>
+  <ITEM NAME="#PROTNO"            TYPE="%-60s"      FUNCTIONS=""/>
+  <ITEM NAME="#PO_NO"             TYPE="%-8s"       FUNCTIONS=""/>
+  <ITEM NAME="#PO_TYPE"           TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#OTYPE"             TYPE="%-1s"       FUNCTIONS=""/>
+  <ITEM NAME="#VTYPE"    TYPE="%3d" FUNCTIONS="" />
+  <ITEM NAME="#VOCNUM"   TYPE="%16d"   FUNCTIONS="" />
+  <ITEM NAME="#TXDAY"    TYPE="%-8s"  FUNCTIONS="T($HDATE)"/>
+  <ITEM NAME="#NEXTORDERNO"  TYPE="%8s"   FUNCTIONS=""/>
+  <ITEM NAME="#NEXTVOCNUM"  TYPE="%16d"   FUNCTIONS=""/>
+  <ITEM NAME="#TXAMT"    TYPE="%17.2f"    FUNCTIONS="J(#UTXAMT)J(#XTXAMT)"/> 
+  <ITEM NAME="#XTXAMT"   TYPE="%-21s"    FUNCTIONS="X(#TXAMT)"/>
+  <ITEM NAME="#UTXAMT"   TYPE="%-40s"    FUNCTIONS="U(#TXAMT)"/>
+  <ITEM NAME="#NOTE_TYPE" TYPE="%-3s"     FUNCTIONS=""/>
+  <ITEM NAME="#NOTE_NO"   TYPE="%-16s"    FUNCTIONS=""/>
+ 	<ITEM NAME="#MAC"       TYPE="%-10s"   FUNCTIONS=""/>
+ 	<ITEM NAME="#YWSRC"     TYPE="%-20s"   FUNCTIONS=""/>
+ 	<ITEM NAME="#TRACE_NO"  TYPE="%-8s"    FUNCTIONS=""/>
+ 	<ITEM NAME="#OPERLEVELNAME" TYPE="%-10s" FUNCTIONS=""/>
+ 	<ITEM NAME="#PROC_NAME" TYPE="%-16s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA1" TYPE="%-60s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA2" TYPE="%-60s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA3" TYPE="%-60s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA4" TYPE="%-60s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA5" TYPE="%-1s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA6" TYPE="%-1s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA7" TYPE="%-1s" FUNCTIONS=""/>
+ 	<ITEM NAME="#TAGDATA8" TYPE="%-1s" FUNCTIONS=""/>
+ 	<ITEM NAME="#CMT124_NAME" TYPE="%-60s" FUNCTIONS="T(上海汇票清算中心)"/>
+ 	<ITEM NAME="#CSIGN_DATE" TYPE="%-21s" FUNCTIONS=""/>
+ 	<ITEM NAME="#CPO_NO" TYPE="%-17s" FUNCTIONS=""/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="凭证打印!">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+            dim @pkgno as number;
+            @pkgno='';
+   					switch(#PROC_STS)
+          	{
+          	 case '2':
+             					#PROC_NAME='查询已被查复';
+                      break;
+             case '8':
+             					#PROC_NAME='来账拒绝';
+                      break;
+             case '9':
+             					#PROC_NAME='来账接收/清算';
+                      break;
+             case 'B':
+             					#PROC_NAME='来账退回';
+											break;		             
+         		 case	'F':
+             					#PROC_NAME='来账核地方押错';
+         		 					break;
+         		 case	'G':
+             					#PROC_NAME='来账核全国押错';
+         		 					break;
+	       		 case	'H':
+             					#PROC_NAME='来账内容不符';
+         		 					break;
+         		 case	'I':
+             					#PROC_NAME='来账户名不符';
+											break;         		 
+         		 case	'K':
+             					#PROC_NAME='核对清算记帐';
+											break;
+						 default :
+						          #PROC_NAME='未知状态';
+						 					break;
+          }
+          @pkgno=atoi(#CMTNO);
+
+	  	    switch(@pkgno)
+	  	    {
+	  	        case 100:
+	  	              #CMTNAME='大额汇兑';
+	  	              break;
+	  	        case 101:    
+	  	              #CMTNAME='委托收款';
+	  	              break;
+	  	        case  105:  
+	  	              #CMTNAME='同业拆借';
+	  	              break;
+	  	        case 102:   
+	  	              #CMTNAME='托收承付';
+	  	              break;
+	  	        case 103:   
+	  	              #CMTNAME='国库资金汇划';
+	  	              break;
+	  	        case 108:
+	  	              #CMTNAME='支付退汇';
+	  	              break;
+	  	        case 122:
+	  	              #CMTNAME='汇票清算接受报文';
+	  	              break;
+	  	        case 123:   
+	  	              #CMTNAME='汇票多余资金划回';
+	  	              break;
+	  	        case 124:    
+	  	              if(#ACC_IND=='1'){
+	  	              #CMTNAME='汇票逾期未用退回';
+	  	              }else{    
+	  	              #CMTNAME='汇票未用退回';
+	  	             }
+	  	              break;
+	  	        case 301:
+                    #CMTNAME='大额查询';
+                    break;
+              case 302:
+                    #CMTNAME='大额查复';
+                    break;
+              case 303:
+                    #CMTNAME='大额自由格式';
+                    break;
+              case 313:
+                    #CMTNAME='退回申请';   
+                    break;
+              case 314:
+                    #CMTNAME='退回应答';
+                    break;
+              case 311:
+                    #CMTNAME='申请撤销';
+                    break;
+              case 312:
+                    #CMTNAME='撤销应答';
+                    break;
+              case 725:
+                    #CMTNAME='全额兑付通知';
+                    break; 
+              case 802:
+                    #CMTNAME='收费通知';
+                    break;   
+	  	        default :
+			    	        #CMTNAME='未知状态';
+			    	  	     break;    
+	  	    }
+         if(#ZF_TYPE=='0')
+         {
+          		print( 2,  24,'交易名称:凭证打印');
+          		
+          		print( 4,  5,' 交易序号: [8]',#ORDERNO);
+          		print( 4,  40,'[8]',#CPRTFLAG);          
+	  					print( 5,  5,'┃付┃发起行行号: [12]',#OR_BR_NO);  
+	  					print( 6,  5,'┃款┃付款人帐号: [32]',#PAY_AC_NO);
+	  					print( 7,  5,'┃人┃付款人名称: [60]',#PAY_NAME);
+	  					print( 8,  5,'┃收┃接收行行号: [12]',#AC_BR_NO);                             
+	  					print( 9,  5,'┃款┃收款人帐号: [32]',#CASH_AC_NO);
+	  					print( 10, 5,'┃人┃收款人名称: [60]',#CASH_NAME);
+	  					print(11,  5,' 附言:[60]',#CONTENT);
+	  					print(12,  5,' 业务种类:[2 ]  优先级别:[1] 货币种类:人民币',#YW_TYPE,#OPERLEVEL);
+	  					print(13,  5,' 汇款金额:人民币(大写):[40]',#UTXAMT);
+	  					print(14,  5,' 汇款金额:人民币(小写):[21]',#XTXAMT);	  
+	  					print(15,  5,' 操 作 员:[4]   流 水 号:[6]',$FD7,$FD4); 
+	  			}
+	  			 else if(#CMTNO=='725')
+	  			{
+	  			print( 2,  24,'交易名称:[12]凭证打印',#CMTNAME);
+          		        print( 4,   5,'交易  序号: [8 ]',#ORDERNO);
+          		        print( 4,  15,'解付 日期: [8 ]',#TXDAY);
+          		        print( 4,  25,'[8]',#CPRTFLAG);
+          		        print( 5,   5,'发起  行号: [12]',#OR_BR_NO);
+       				print( 6,   5,'接受  行号: [12]',#AC_BR_NO);
+       				print( 7,   5,'持票人帐号: [32]',delspace(#TAGDATA1));
+       				print( 8,   5,'持票人姓名: [60]',#TAGDATA2);
+				print( 9,   5,'出票  金额: [21]',#XTXAMT);
+				print(10,   5,'票据  日期: [8 ]',delspace(#TAGDATA3));
+                                print(11,   5,'汇票  号码: [8 ]',delspace(#TAGDATA4));
+                                print(12,   5,'应答  状态: [16]',#PROC_NAME);
+	  			}
+	  			 else
+	  			{
+	  					print( 2,  24,'交易名称:[12]凭证打印',#CMTNAME);
+          		print( 4,  8,'解付日期: [8 ]',#TXDAY);
+          		print( 4,  12,'[8]',#CPRTFLAG);
+          		print( 5,   5,'发起      行号: [12]',#OR_BR_NO);
+          		print( 6,   5,'付款清算行行号: [12]',#PAY_QS_NO);
+	  					print( 7,   5,'发报 中心 代码: [4]',#SENDCO);
+	  					print( 8,   5,'接受 清算 行号: [12]',#CASH_QS_NO);                             
+	  					print( 9,   5,'接受      行号: [12]',#AC_BR_NO);
+	  					print( 10,  5,'原支付交易序号: [12]',#OORDERNO);
+              if(#CMTNO=='314' or #CMTNO=='302' or #CMTNO=='312')
+              {
+									print( 11,   5,'应答      内容: [80]',substr(#NOTPAY_CONTENT,0,80));
+              		print( 12,  21,'[80]',substr(#NOTPAY_CONTENT,80,80));
+              		print( 13,  21,'[100]',substr(#NOTPAY_CONTENT,160,95));
+              }
+              else
+              {
+									print( 11,   5,'应答      内容: [80]',substr(#NOTPAY_CONTENT,0,80));
+              		print( 12,  21,'[80]',substr(#NOTPAY_CONTENT,80,80));
+              		print( 13,  21,'[100]',substr(#NOTPAY_CONTENT,160,95));    
+              }
+              print( 14,  5,'应答      行号: [12]',#CR_BR_NO);
+              print( 15,  5,'应答      日期: [8 ]',#CR_DATE);
+              print( 16,  5,'原  交易  金额: [21 ]',#XTXAMT);
+	  			}
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请插入打印凭条">
+ NOTHING
+ </PACKAGE>
+ <!--
+  <PRINT>"{
+        if(#ZF_TYPE=='0')
+        {  
+          print( 2,  24,'交易名称:来账打印');
+          
+          print( 4,  5,' 交易序号:[8]',#ORDERNO);
+          print( 4,  40,'[8]',#CPRTFLAG);          
+	  			print( 5,  5,'┃付┃发起行行号: [12]',#OR_BR_NO);  
+	  			print( 6,  5,'┃款┃付款人帐号: [32]',#PAY_AC_NO);
+	  			print( 7,  5,'┃人┃付款人名称: [60]',#PAY_NAME);
+	  			print( 8,  5,'┃收┃接收行行号: [12]',#AC_BR_NO);                             
+	  			print( 9,  5,'┃款┃收款人帐号: [32]',#CASH_AC_NO);
+	  			print( 10, 5,'┃人┃收款人名称: [60]',#CASH_NAME);
+	  			print(11,  5,' 附言:[60]',#CONTENT);
+	  			print(12,  5,' 业务种类:[2 ]  优先级别:[1] 货币种类:人民币',#YW_TYPE,#OPERLEVEL);
+	  			print(13,  5,' 汇款金额:人民币(大写):[40]',#UTXAMT);
+	  			print(14,  5,' 汇款金额:人民币(小写):[21]',#XTXAMT);	  
+	  			print(15,  5,' 操 作 员:[4]   流 水 号:[6]',$FD7,$FD4);
+	     }
+	     else
+	     {
+	     				print( 2,  24,'交易名称:凭证打印');
+          		print( 4,   5,'交易     序号:[8]',#ORDERNO);
+          		print( 4,  40,'[8]',#CPRTFLAG);
+          		print( 5,   5,'发起      行号: [12]',#OR_BR_NO);
+          		print( 6,   5,'付款清算行行号: [12]',#PAY_QS_NO);
+	  					print( 7,   5,'发报 中心 代码: [4]',#SENDCO);
+	  					print( 8,   5,'接受 清算 行号: [12]',#CASH_QS_NO);                             
+	  					print( 9,   5,'接受      行号: [12]',#AC_BR_NO);
+	  					print( 10,  5,'原支付交易序号: [12]',#OORDERNO);
+             // print( 11,  5,'应答      状态: [1 ]',#PROC_STS);
+              if(#CMTNO=='314' or #CMTNO=='302' or #CMTNO=='312')
+              {
+              		print( 12,  5,'应答      内容: [255]',#NOTPAY_CONTENT);
+              }
+              else
+              {
+              		print(12,   5,'申请      内容: [255]',#NOTPAY_CONTENT);
+              }
+              print( 13,  5,'应答      行号: [12]',#CR_BR_NO);
+              print( 14,  5,'应答      日期: [8 ]',#CR_DATE);
+              print( 15,  5,'原  交易  金额: [21 ]',#XTXAMT);
+	     }
+	}"
+</PRINT>
+--->
+  <PRINT>"{
+          dim @pkgno as number;
+          @pkgno='';
+          if(#OPERLEVEL=='0')
+          {
+          #OPERLEVELNAME='一般业务';
+          }
+          else if(#OPERLEVEL=='1')
+          {
+          #OPERLEVELNAME='紧急业务';
+          }
+          else
+          {
+          #OPERLEVELNAME='特急业务';
+          }
+          switch(#PROC_STS)
+          {
+             case '2':
+             					#PROC_NAME='查询已被查复';
+                      break;
+             case '8':
+             					#PROC_NAME='来账拒绝';
+                      break;
+             case '9':
+             					#PROC_NAME='来账接收/清算';
+                      break;
+             case 'B':
+             					#PROC_NAME='来账退回';
+											break;		             
+         		 case	'F':
+             					#PROC_NAME='来账核地方押错';
+         		 					break;
+         		 case	'G':
+             					#PROC_NAME='来账核全国押错';
+         		 					break;
+	       		 case	'H':
+             					#PROC_NAME='来账内容不符';
+         		 					break;
+         		 case	'I':
+             					#PROC_NAME='来账户名不符';
+											break;         		 
+         		 case	'K':
+             					#PROC_NAME='核对清算记帐';
+											break;
+						 default :
+						          #PROC_NAME='未知状态';
+						 					break;
+          }
+          @pkgno=atoi(#CMTNO);
+
+	  	    switch(@pkgno)
+	  	    {
+	  	        case 100:
+	  	              #CMTNAME='大额汇兑';
+	  	              break;
+	  	        case 101:    
+	  	              #CMTNAME='委托收款';
+	  	              break;
+	  	        case  105:  
+	  	              #CMTNAME='同业拆借';
+	  	              break;
+	  	        case 102:   
+	  	              #CMTNAME='托收承付';
+	  	              break;
+	  	        case 103:   
+	  	              #CMTNAME='国库资金汇划';
+	  	              break;
+	  	        case 108:
+	  	              #CMTNAME='支付退汇';
+	  	              break;
+	  	        case 122:
+	  	              #CMTNAME='汇票清算接受报文';
+	  	              break;
+	  	        case 123:   
+	  	              #CMTNAME='汇票多余资金划回';
+	  	              break;
+	  	        case 124:    
+	  	              if(#ACC_IND=='1'){
+	  	        			#CMTNAME='汇票逾期未用退回';
+	  	        		 }else{    
+	  	              #CMTNAME='汇票未用退回';
+	  	             }
+	  	              break;
+	  	        case 301:
+                    #CMTNAME='大额查询';
+                    break;
+              case 302:
+                    #CMTNAME='大额查复';
+                    break;
+              case 303:
+                    #CMTNAME='大额自由格式';
+                    break;
+              case 313:
+                    #CMTNAME='退回申请';   
+                    break;
+              case 314:
+                    #CMTNAME='退回应答';
+                    break;
+              case 311:
+                    #CMTNAME='申请撤销';
+                    break;
+              case 312:
+                    #CMTNAME='撤销应答';
+                    break;
+              case 725:
+                    #CMTNAME='全额兑付通知';
+                    break;    
+	  	        default :
+			    	        #CMTNAME='未知状态';
+			    	  	     break;    
+	  	    }
+          if(#ZF_TYPE=='0')
+          {
+					    print(0,5,'@3v1');
+					    print(2, 5,'    支付交易序号[8       ]             交易种类:  大额来账         发报日期:[8       ]  流水号: [6      ] CMT号:[12          ]',#ORDERNO,#TXDAY,$FD4,#CMTNAME);  
+							print(3, 5,'┏━┯━━━━┯━━━━━━━━━━━━━━━━━━━━━┯━┯━━━━┯━━━━━━━━━━━━━━━━━━━━━┓');
+						if(#CMTNO=='124'  or #CMTNO=='123')
+						{
+							print(4, 5,'┃  │账    号│[32                       ]          │  │账    号│[32                          ]          ┃',#CASH_AC_NO,#PAY_AC_NO);
+							print(5, 5,'┃  ├────┼─────────────────────┤  ├────┼─────────────────────┨');
+							print(6, 5,'┃发│名    称│[40                                      ]  │接│名    称│[40                                      ]  ┃',#CMT124_NAME,#PAY_NAME);
+							print(7, 5,'┃  ├────┼───────┬────┬────────┤  ├────┼───────┬────┬────────┨');
+							print(8, 5,'┃起│发起行号│[12          ]  │发报中心│[4   ]            │收│接受行号│[12          ]  │接收中心│[4   ]            ┃',#OR_BR_NO,#SENDCO,#AC_BR_NO,#RECECO);
+							print(9, 5,'┃  ├────┼───────┼────┼────────┤  ├────┼───────┼────┼────────┨');
+	            print(10,5,'┃人│开户行号│[12          ]  │清算行号│[12          ]    │人│开户行号│[12          ]  │清算行号│[12          ]    ┃',#CASH_OPN_BR_NO,#PAY_QS_NO,#PAY_OPN_BR_NO,#CASH_QS_NO);							
+						}
+						else
+						{
+							print(4, 5,'┃  │账    号│[32                       ]          │  │账    号│[32                          ]          ┃',#PAY_AC_NO,#CASH_AC_NO);
+							print(5, 5,'┃  ├────┼─────────────────────┤  ├────┼─────────────────────┨');
+							print(6, 5,'┃发│名    称│[40                                      ]  │接│名    称│[40                                      ]  ┃',#PAY_NAME,#CASH_NAME);
+							print(7, 5,'┃  ├────┼───────┬────┬────────┤  ├────┼───────┬────┬────────┨');
+							print(8, 5,'┃起│发起行号│[12          ]  │发报中心│[4   ]            │收│接受行号│[12          ]  │接收中心│[4   ]            ┃',#OR_BR_NO,#SENDCO,#AC_BR_NO,#RECECO);
+							print(9, 5,'┃  ├────┼───────┼────┼────────┤  ├────┼───────┼────┼────────┨');
+	            print(10,5,'┃人│开户行号│[12          ]  │清算行号│[12          ]    │人│开户行号│[12          ]  │清算行号│[12          ]    ┃',#PAY_OPN_BR_NO,#PAY_QS_NO,#CASH_OPN_BR_NO,#CASH_QS_NO);
+						}
+							print(11,5,'┠─┴────┴───────┴────┴────────┴─┴────┴───────┴────┴────────┨');
+							print(12,5,'┃      金    额: RMB [21                  ]                       原凭证日期:[8       ]                               ┃',#XTXAMT,#TXDAY);
+							print(13,5,'┠─────────────────────────────────────────────────────────┨');
+							print(14,5,'┃      金    额:人民币(大写)[40]                                               ┃',#UTXAMT);
+							print(15,5,'┠─────────────────────────────────────────────────────────┨');
+							print(16,5,'┃      附    言:[80                                                                              ]                   ┃',substr(#CONTENT,0,80));
+							print(17,5,'┃               [80                                                                              ]                   ┃',substr(#CONTENT,80,80));
+							print(18,5,'┠─────────────────────────────────────────────────────────┨');
+							print(19,5,'┃      业务来源:[20                  ]              处理状态:[16                  ]             优先级别:[10          ]        ┃',#YWSRC,#PROC_NAME,#OPERLEVELNAME);
+							print(20,5,'┠─────────────────────────────────────────────────────────┨');
+							print(21,5,'┃      接收时间:[20                  ]              转发时间:[20                  ]         状态时间:[12          ]      ┃',#TXDAY,#TXDAY,#TXDAY);
+							print(22,5,'┠─────────────────────────────────────────────────────────┨');
+							print(23,5,'┃      密    押:[10          ]                        交易机构:[5     ]-[4   ]                   打印状态:[10        ]        ┃',#MAC,$FD3,$FD7,#CPRTFLAG);
+							print(24,5,'┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+	       }
+	       else if (#CMTNO=='725')
+	       {
+	       			print( 2,  24,'交易名称:[12]凭证打印',#CMTNAME);
+          		print( 4,   5,'交易  序号: [8]',#ORDERNO);
+          		print( 4,  8,'解付日期: [8 ]',#TXDAY);
+          		print( 4,  12,'[8]',#CPRTFLAG);
+          		print( 5,   5,'发起  行号: [12]',#OR_BR_NO);
+       				print( 6,   5,'接受  行号: [12]',#AC_BR_NO);
+       				print( 7,   5,'持票人帐号: [32]',delspace(#TAGDATA1));
+       				print( 8,   5,'持票人姓名: [60]',#TAGDATA2);
+							print( 9,   5,'出票  金额: [21]',#XTXAMT);
+							print(10,   5,'票据  日期: [8 ]',delspace(#TAGDATA3));
+              print(11,   5,'汇票  号码: [8 ]',delspace(#TAGDATA4));
+              print(12,   5,'应答  状态: [16]',#PROC_NAME);
+	       }
+	     	 else
+	      {
+	     				print( 2,  24,'交易名称:[12]凭证打印',#CMTNAME);
+          		print( 4,   5,'交易     序号:[8]',#ORDERNO);
+          		print( 4,  40,'[8]',#CPRTFLAG);
+          		print( 5,   5,'发起      行号: [12]',#OR_BR_NO);
+          		print( 6,   5,'付款清算行行号: [12]',#PAY_QS_NO);
+	  					print( 7,   5,'发报 中心 代码: [4]',#SENDCO);
+	  					print( 8,   5,'接受 清算 行号: [12]',#CASH_QS_NO);                             
+	  					print( 9,   5,'接受      行号: [12]',#AC_BR_NO);
+	  					print( 10,  5,'原支付交易序号: [12]',#OORDERNO);
+              if(#CMTNO=='314' or #CMTNO=='302' or #CMTNO=='312')
+              {
+              		print( 11,   5,'应答      内容: [80]',substr(#NOTPAY_CONTENT,0,80));
+              		print( 12,  21,'[80]',substr(#NOTPAY_CONTENT,80,80));
+              		print( 13,  21,'[100]',substr(#NOTPAY_CONTENT,160,95));              		
+              }
+              else
+              {
+									print( 11,   5,'应答      内容: [80]',substr(#NOTPAY_CONTENT,0,80));
+              		print( 12,  21,'[80]',substr(#NOTPAY_CONTENT,80,80));
+              		print( 13,  21,'[100]',substr(#NOTPAY_CONTENT,160,95));     
+               }         
+              print( 14,  5,'应答      行号: [12]',#CR_BR_NO);
+              print( 15,  5,'应答      日期: [8 ]',#CR_DATE);
+              print( 16,  5,'原  交易  金额: [21 ]',#XTXAMT);
+              print( 17,  5,'应答      状态: [16]',#PROC_NAME);
+	     }
+	}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>   

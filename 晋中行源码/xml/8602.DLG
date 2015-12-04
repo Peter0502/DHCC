@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="00111111" TITLE="业务名称：批量代发工资"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<INIT>"{
+	list_init(17,78,5,1);
+	list_setcolcnt(8);
+	list_setcol(0,'编号',5);
+	list_setcol(1,'客户姓名',20);
+	list_setcol(2,'代发金额',17);
+	list_setcol(3,'客户帐号',20);
+	list_setcol(4,'单位编号',8);
+	//list_setcol(5,'证件号码',20);
+	//list_setcol(6,'证件类型',8);
+	list_setcol(5,'证件类型',8);
+	list_setcol(6,'证件号码',20);
+	list_setcol(7,'代收付次数',10);
+	list_sumcol(2,16,2);
+}"
+</INIT>
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+	      strfld(@fline,'|',1)+'|'+
+	      strfld(@fline,'|',2)+'|'+
+	      strfld(@fline,'|',3)+'|'+
+	      strfld(@fline,'|',4)+'|'+
+	      strfld(@fline,'|',5)+'|'+
+	      strfld(@fline,'|',6)+'|'+
+		    strfld(@fline,'|',7)+'|';
+}"
+</LOAD>
+<SHOW>"{
+		
+	#DFID=strfld(@line,'|',0);
+	#KHNAME=strfld(@line,'|',1);	
+	#AVBAL=val(strfld(@line,'|',2));	
+	//#CIRTIFNUM=strfld(@line,'|',5);
+	#CIRTIFNUM=strfld(@line,'|',6);
+	#DWID=strfld(@line,'|',4);
+	#KHACTNO=strfld(@line,'|',3);
+	//#CIRTIFTYPE=strfld(@line,'|',6);
+	#CIRTIFTYPE=strfld(@line,'|',5);
+	#CNT       =strfld(@line,'|',7);
+}"
+</SHOW>
+<UPDATE>"{
+	//@line=#DFID+'|'+#KHNAME+'|'+itoa(#AVBAL,'%.2f')+'|'+#KHACTNO+'|'+#DWID+'|'+#CIRTIFNUM+'|'+#CIRTIFTYPE+'|'+#CNT;
+	@line=#DFID+'|'+#KHNAME+'|'+itoa(#AVBAL,'%.2f')+'|'+#KHACTNO+'|'+#DWID+'|'+#CIRTIFTYPE+'|'+#CIRTIFNUM+'|'+#CNT;
+}"
+</UPDATE>
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+	       strfld(@line,'|',1)+'|'+
+	       strfld(@line,'|',2)+'|'+
+	       strfld(@line,'|',3)+'|'+
+	       strfld(@line,'|',4)+'|'+
+	       strfld(@line,'|',5)+'|'+
+	       strfld(@line,'|',6)+'|'+
+	       strfld(@line,'|',7)+'|';
+}"
+</SAVE>
+<VARIABLE>
+
+  <ITEM LINE="1"  COL="3" TYPE="%-40s" FUNCTIONS=
+    "T(                      批量代发工资)"/>
+  <ITEM LINE="5" COL="5"  TYPE="%-10s" NAME="#L1" FUNCTIONS="T(单位编号:)"/>
+  <ITEM LINE="5" COL="25" TYPE="%-10s" NAME="#L2" FUNCTIONS="T(代发编号:)"/>
+  <ITEM LINE="6" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="7" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(帐[卡]号:)"/>
+  <ITEM LINE="7" COL="40" TYPE="%-10s" NAME="#L2" FUNCTIONS="T(金    额:)"/>
+  <ITEM LINE="8" COL="5"  TYPE="%-12s" NAME="#L2" FUNCTIONS="T(证件类型:)"/>  
+  <ITEM LINE="9" COL="5"  TYPE="%-12s" NAME="#L2" FUNCTIONS="T(证件号码:)"/>
+  <ITEM LINE="10" COL="5" TYPE="%-12s" NAME="#L2" FUNCTIONS="T(代收付次数:)"/>
+	<ITEM TYPE="%-4s"  NAME="#FDWID" >
+	<ONLOSTFOCUS>
+	"{
+		if(len(#DWID)==0)
+		{
+			#DWID=substr($BUFFER,0,4);
+			enable(#DWID,true);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM LINE="5" COL="15" TYPE="%-4s"  NAME="#DWID"   DEVICE="KEYBOARD" ISKEY="TRUE"/>	
+  <ITEM LINE="5" COL="35" TYPE="%-24s" NAME="#DFID"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9906';
+				$FD33=#DFID;
+				$FD92=#DWID;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+			#KHNAME=$FD26;
+			#KHACTNO=$FD37;
+			#CIRTIFTYPE=$FD20;
+			#CIRTIFNUM=$FD62;
+			show(#KHNAME,true);
+			show(#KHACTNO,true);
+			show(#CIRTIFTYPE,true);
+			show(#CIRTIFNUM,true);
+    	enable(#KHNAME,false);
+			enable(#KHACTNO,false);
+			enable(#CIRTIFTYPE,false);
+			enable(#CIRTIFNUM,false);
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6" COL="15" TYPE="%-50s" NAME="#KHNAME"   INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="7" COL="15" TYPE="%-24s" NAME="#KHACTNO"  INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="7" COL="50" TYPE="%17.2f" NAME="#AVBAL"   INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="8" COL="15" TYPE="%-1s"   NAME="#CIRTIFTYPE"  INPUT="SELECT" FUNCTIONS="V(NB)">
+   <SELECT>
+					<OPTION VALUE="1" TITLE="1.身份证"/>
+					<OPTION VALUE="2" TITLE="2.户口薄"/>
+					<OPTION VALUE="3" TITLE="3.护照"/>
+					<OPTION VALUE="4" TITLE="4.军官证"/>
+					<OPTION VALUE="5" TITLE="5.回乡证"/>
+					<OPTION VALUE="6" TITLE="6.士兵证"/>
+					<OPTION VALUE="7" TITLE="7.港澳居民来往通行证"/>
+					<OPTION VALUE="E" TITLE="E.临时身份证"/>
+					<OPTION VALUE="F" TITLE="F.外国人居留证"/>
+					<OPTION VALUE="G" TITLE="G.警官证"/>
+					<OPTION VALUE="H" TITLE="H.其他证件"/>
+					<OPTION VALUE="I" TITLE="I.台湾同胞来往通行证"/>
+
+   </SELECT>
+  </ITEM>
+  <ITEM LINE="9" COL="15" TYPE="%-20s" NAME="#CIRTIFNUM"INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="17" TYPE="%-2s" NAME="#CNT" INPUT="TEXT" FUNCTIONS="T(01)"/>
+  <ITEM LINE="15" COL="65" NAME="#RAM_NAME"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+</TRANSACTION>

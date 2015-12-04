@@ -1,0 +1,176 @@
+ <PAGE NAME="DEFAULT">
+  <ITEM LINE="5"  COL="05" TYPE="%-10s" FUNCTIONS="T(接收行号:)"/>
+  <ITEM LINE="7"  COL="05" TYPE="%-10s" FUNCTIONS="T(业务类型:!)"/>
+  <ITEM LINE="8"  COL="05" TYPE="%-10s" FUNCTIONS="T(查询类型:!)"/>
+  <ITEM LINE="9"  COL="05" TYPE="%-10s" FUNCTIONS="T(帐号类型:!)"/>
+  <ITEM LINE="10" COL="05" TYPE="%-10s" FUNCTIONS="T(帐    号:)"/>
+  <ITEM LINE="12" COL="05" TYPE="%-10s" FUNCTIONS="T(密码类型:!)"/>
+  <ITEM LINE="13" COL="05" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="14" COL="05" TYPE="%-12s" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="15" COL="05" TYPE="%-10s" FUNCTIONS="T(查询附言:)"/>
+
+  <ITEM   NAME="#NOTPAY_DATE"  TYPE="%8d"   FUNCTIONS="T($HDATE)"/>    <!----查询日期--->
+  <ITEM   NAME="#CMTNO"        TYPE="%-3s"  FUNCTIONS="T(013)"/>       <!----CMTNO--->
+  <ITEM   NAME="#OPCD"         TYPE="%-2s"  FUNCTIONS="T(10)"/>        <!----交易处理码--->
+  <ITEM   NAME="#LW_IND"       TYPE="%-1s"  FUNCTIONS="T(1)"/>         <!---来往标识 1往,2来--->
+  <ITEM   NAME="#OTYPE"        TYPE="%-1s"  FUNCTIONS="T(2)"/>         <!---大小额标志 1大额，2小额--->
+
+  <ITEM LINE="5"   COL="15" NAME="#AC_BR_NO"  TYPE="%-12s"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+        dim @baktxno1 as string;
+        @baktxno1='';
+        $FD96='';
+        @baktxno1=$TXNO;
+        $FD32=#AC_BR_NO;
+        $TXNO='9553';
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno1;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"   COL="15" NAME="#TXNUM"   TYPE="%-5s" DEVICE="KEYBOARD" FUNCTIONS="T(30502)">
+  <SELECT LINE="7" COL="16" >
+           <OPTION VALUE="30502 "      TITLE="1.帐户查询业务"/>
+           <OPTION VALUE="30503 "      TITLE="1.帐户查询应答"/>
+           <OPTION VALUE="30501 "      TITLE="1.支票圈存业务"/>
+           <OPTION VALUE="30504 "      TITLE="1.支票圈存回应"/>
+           <OPTION VALUE="30505 "      TITLE="1.CFCA证书查询"/>
+           <OPTION VALUE="30506 "      TITLE="1.CFCA查询应答"/>
+   </SELECT>
+  </ITEM>
+  <ITEM NAME="#GO1"   TYPE="%-1s" FUNCTIONS="j(#TXNUM=30502,T{1}T{0})G(0,#ADDIT)"/>
+  <ITEM LINE="8"   COL="15" NAME="#QTYPE"   TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+  <SELECT LINE="9" COL="17" >
+           <OPTION VALUE="1 查询余额"      TITLE="1.查询余额"/>
+           <OPTION VALUE="2 查询帐户"      TITLE="2.查询帐户"/>
+   </SELECT>
+   </ITEM>
+   <ITEM NAME="#QTYPE2"      TYPE="%-8s"     FUNCTIONS="j(#QTYPE=1,T{查询余额}T{查询帐户})"/>
+  <ITEM LINE="9"   COL="15" NAME="#ACTTYPE"   TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+  <SELECT LINE="9" COL="16" >
+           <OPTION VALUE="0 银行帐号"      TITLE="0.银行帐号"/>
+           <OPTION VALUE="1 贷记卡"        TITLE="1.贷记卡"/>
+           <OPTION VALUE="2 信用卡"        TITLE="2.信用卡"/>
+           <OPTION VALUE="9 其  他"        TITLE="3.其  他"/>
+   </SELECT>
+   </ITEM>
+   <ITEM LINE="10"   COL="15" NAME="#ACTNO1"   TYPE="%-32s"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+   <ITEM LINE="12"   COL="15" NAME="#PSWDCD"  TYPE="%-1s"   DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+   <SELECT LINE="12" COL="16" >
+           <OPTION VALUE="0 帐户密码"        TITLE="0.帐户密码"/>
+           <OPTION VALUE="1 卡 密 码"        TITLE="1.卡 密 码"/>
+           <OPTION VALUE="3 交易密码"        TITLE="2.交易密码"/>
+           <OPTION VALUE="4 查询密码"        TITLE="3.查询密码"/>
+           <OPTION VALUE="9 其他密码"        TITLE="4.其他密码"/>
+   </SELECT>
+   </ITEM>
+   <ITEM LINE="13"   COL="15" NAME="#NAME"        TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM NAME="#NAME1"        TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM LINE="14"   COL="15" NAME="#PASSWD1"     TYPE="%-8s"  DEVICE="PINPAD" FUNCTIONS="i()I()V(NB)"/>
+   <ITEM LINE="15"   COL="15" NAME="#QCONTENT"    TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM NAME="#BRF"    TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <!-----占位字段--------------->
+  <ITEM NAME="#O_CMTNO"       TYPE="%-3s"       FUNCTIONS=""/><!--原cmt编号-->
+  <ITEM NAME="#PAY_QS_NO"     TYPE="%-12s"      FUNCTIONS=""/><!--(原)发起清算行行号-->
+  <ITEM NAME="#OR_BR_NO"      TYPE="%-12s"      FUNCTIONS=""/><!--(原)发起行号,申请撤销行号 退回行号-->
+  <ITEM NAME="#SENDCO"        TYPE="%-4s"       FUNCTIONS=""/><!--发报中心代码-->
+  <ITEM NAME="#PAY_OPN_BR_NO" TYPE="%-12s"      FUNCTIONS=""/><!--付款人开户行-->
+  <ITEM NAME="#PAY_AC_NO"     TYPE="%-32s"      FUNCTIONS=""/><!--付款人帐号(原收款人帐号)-->
+  <ITEM NAME="#PAY_NAME"      TYPE="%-60s"      FUNCTIONS=""/><!--付款人名称(原收款人名称)-->
+  <ITEM NAME="#PAY_ADDR"      TYPE="%-60s"      FUNCTIONS=""/><!--付款人地址(原收款人地址)-->
+
+  <ITEM NAME="#CASH_QS_NO"    TYPE="%-12s"      FUNCTIONS=""/><!--接受清算行号-->
+  <ITEM NAME="#RECECO"        TYPE="%-4s"       FUNCTIONS=""/><!--发报中心代码-->
+  <ITEM NAME="#CASH_OPN_BR_NO" TYPE="%-12s"     FUNCTIONS=""/><!--收款人开户行号-->
+  <ITEM NAME="#CASH_AC_NO"    TYPE="%-32s"      FUNCTIONS=""/><!--收款人帐号,原付款人帐号-->
+  <ITEM NAME="#CASH_NAME"     TYPE="%-60s"      FUNCTIONS=""/><!--收款人姓名,原付款人姓名-->
+  <ITEM NAME="#CASH_ADDR"     TYPE="%-60s"      FUNCTIONS=""/><!--收款人地址-->
+
+  <ITEM NAME="#YW_TYPE"       TYPE="%-2s"       FUNCTIONS=""/><!--业务种类-->
+  <ITEM NAME="#ORDERNO"       TYPE="%-8s"       FUNCTIONS=""/><!--支付交易序号   撤销支付交易序号-->
+  <ITEM NAME="#CONTENT"       TYPE="%-60s"      FUNCTIONS=""/><!--附言-->
+  <ITEM NAME="#RATE"          TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+  <ITEM NAME="#RATEDATE"      TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+  <ITEM NAME="#OORDERNO"      TYPE="%-8s"       FUNCTIONS=""/><!--原支付交易序号-->
+
+  <ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/><!--处理码-->
+  <ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/><!--查复日期-->
+  <ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查复行号-->
+  <ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--查复书号-->
+  <ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查询行号  原查询行号-->
+  <ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--原查询书号 查询书号-->
+  <ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/><!--原交易种类-->
+  <ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/><!--撤销申请号   退回申请号-->
+  <ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/><!--原撤销申请号  原退回申请号-->
+  <ITEM NAME="#RESP1"  			  TYPE="%-1s"       FUNCTIONS=""/><!--撤销应答 退回应答-->
+  <ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/><!--优先级别 -->
+  <ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/><!--处理状态 -->
+  <ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"       FUNCTIONS=""/><!--汇票是否核押 -->
+  <ITEM NAME="#PACKID"            TYPE="%-8s"       FUNCTIONS=""/><!--包序号 -->
+  <ITEM NAME="#PACK_DATE"         TYPE="%-8s"       FUNCTIONS=""/><!--包日期 -->
+  <ITEM NAME="#O_PACK_DATE"       TYPE="%-8s"       FUNCTIONS=""/><!--原包日期 -->
+  <ITEM NAME="#O_PACKID"          TYPE="%-8s"       FUNCTIONS=""/><!--原包序号 -->
+  <ITEM NAME="#O_TXNUM"           TYPE="%-5s"       FUNCTIONS=""/><!--原业务类型编号 -->
+  <ITEM NAME="#LV_YW_IND"         TYPE="%-12s"      FUNCTIONS=""/><!--小额业务种类号,2位编号或者12位描述 -->
+  <ITEM NAME="#RESP_DATE"         TYPE="%-8s"       FUNCTIONS=""/><!--应答日期 -->
+  <ITEM NAME="#RCP_STS"           TYPE="%-2s"       FUNCTIONS=""/><!--业务回执状态 -->
+  <ITEM NAME="#RESP2"             TYPE="%-8s"       FUNCTIONS=""/><!--ccpc交易处理代码-->
+  <ITEM NAME="#RETCODE"           TYPE="%-2s"       FUNCTIONS=""/><!--退汇原因-->
+  <ITEM NAME="#YW_DTL_ID"         TYPE="%-8s"       FUNCTIONS=""/><!--退汇原因-->
+  <ITEM NAME="#ACC_IND"           TYPE="%-1s"       FUNCTIONS=""/><!--实时业务付款人帐户类型-->
+  <ITEM NAME="#REQ_TYPE"          TYPE="%-1s"       FUNCTIONS=""/><!--申请类型 0＝单笔  1＝整包-->
+  <ITEM NAME="#DF_FREEAMT"        TYPE="%-16s"      FUNCTIONS=""/><!--对方手续费-->
+  <ITEM NAME="#PROTNO"            TYPE="%-60s"      FUNCTIONS=""/><!--多方协议号-->
+  <ITEM NAME="#PO_NO"             TYPE="%-8s"       FUNCTIONS=""/><!--汇票号码-->
+  <ITEM NAME="#PO_TYPE"           TYPE="%-1s"       FUNCTIONS=""/><!--汇票类型0可转 1 不可转 2现金-->
+  <ITEM NAME="#NOTPAY_CONTENT"    TYPE="%-255s"     FUNCTIONS=""/><!--内容 非支付时候用到-->
+
+  <ITEM NAME="#GO2"   TYPE="%-1s" FUNCTIONS="j(#TXNUM=30502,T{1})G(1,#OK)"/>
+
+</PAGE>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON" NAME="#ADDIT" >
+  <ONCLICK>"{
+    	if(#TXNUM=='30501'){
+        	if(opendlg('../xml/LVZPQC.DLG')){
+            	return(true);
+        	}else{
+            	return(false);
+        	}
+        }else if(#TXNUM=='30504'){//支票圈存回应
+        	if(opendlg('../xml/LVZPYD.DLG')){
+            	return(true);
+        	}else{
+            	return(false);
+        	}
+        }else if(#TXNUM=='30505'){//证书查询
+        	if(opendlg('../xml/LVZSCX.DLG')){
+            	return(true);
+        	}else{
+            	return(false);
+        	}
+        }else if(#TXNUM=='30506'){//证书查询应答
+        	if(opendlg('../xml/LVZSYD.DLG')){
+            	return(true);
+        	}else{
+            	return(false);
+        	}
+        }else if(#TXNUM=='30503' ){//客户帐户查询应答
+        	if(opendlg('../xml/LVZHYD.DLG')){
+            	return(true);
+        	}else{
+            	return(false);
+        	}
+		}
+
+  }"
+  </ONCLICK>
+  </ITEM>

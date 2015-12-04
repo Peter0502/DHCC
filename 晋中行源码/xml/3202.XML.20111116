@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3202 储蓄取款业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	//与神码通讯 Begin by hxc
+	dim @filename as string;
+	@filename='../tmp/'+$FD7+$FD10+'.fds';
+	if((substr(#ACTNO,0,6)=='621223') and (#CASHFLAG=='1'))//卡取现金
+{
+	savefds(@filename);
+	
+	initfd();
+	commsend_001();
+	$FD16='7005';
+	$FD30=#ACTNO;
+	$FD75=#MSR2BAK;
+	$FD76=#MSR3BAK;
+	
+	$FD79=#DRAW_PWD;
+	$FD21=#CURCD;
+	$FD39=itoa(#TXAMT*100);
+	if(#SELFYN=='0')
+	{
+		$FD27=#AGENTNAME;
+		$FD68=#ATCETYPE;
+		$FD63=#ATCENUM;
+	}
+	callagn();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#TRAN_FEE=val($FD40);
+	#TRAN_FEE1=val($FD40,0.01);
+	#CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+	loadfds(@filename);	
+}
+else if(((substr(#ACTNO,0,6)=='621223') or (substr(#DFNO,0,6)=='621223')) and (#CASHFLAG=='2'))//卡卡转账
+{
+	savefds(@filename);
+
+	initfd();
+	commsend_001();
+	$FD16='7006';
+	$FD30=#ACTNO;    //转出账号
+	$FD31=#DFNO;    //转入账号
+	$FD79=#DRAW_PWD;
+	$FD21=#CURCD;
+	$FD39=itoa(#TXAMT*100);
+	if(substr(#ACTNO,0,6)=='621223')    //卡折标志： 0 折；1 卡
+	{
+		$FD67='C';
+	}
+	else
+	{
+		$FD67='P';
+	}
+	if(substr(#DFNO,0,6)=='621223')    //卡折标志： 0 折；1 卡
+	{
+		$FD69='C';
+	}
+	else
+	{
+		$FD69='P';
+	}
+	$FD25=#101CNAME;   //转入客户名
+	$FD75=$MSR2;
+	$FD76=$MSR3;
+	$MSR2='';
+	$MSR3='';
+	if(#SELFYN=='0')
+	{
+		$FD27=#AGENTNAME;
+		$FD68=#ATCETYPE;
+		$FD63=#ATCENUM;
+	}
+	callagn();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#TRAN_FEE=val($FD40);
+	#TRAN_FEE1=val($FD40,0.01);
+	#CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+	loadfds(@filename);	
+}
+	//与神码通讯 End by hxc
+	
+	initfd();
+	commsend_001();
+	
+	// for test
+	#ACCOUNTFLAG='1';
+	$FD101=getitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME');
+	$FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+	$FD112=space(28)+#ZFDBHWB;// add by chenchao 2011-7-31 17:59:54 为后台传值支付协议编号
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+	//showmsg('$KINDNO='+$KINDNO);
+	if(($FD12!='0000') and ($FD12!='Z003') and (substr(#ACTNO,0,6)=='621223') and (len(#ACTNO)==19))//卡交易核心处理失败往数码发送取消交易
+	{
+		#RESP_CODE=$FD12;
+		showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#ACTNO;
+		$FD39=itoa(#TXAMT*100);
+		$FD43=#CARD_TRACENO;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		showmsg('取款失败!!...');
+		rerun();
+	}
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+}"
+</FIRSTWORK>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+   "T(3202                          储蓄取款业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <!--获取焦点-->
+  <ITEM NAME="#FOCUS" INPUT="TEXT" LINE="5"  COL="1000" VISABLE="TRUE" />
+  <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=2202)"/>
+  <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <ITEM NAME="#ACT_LX"    TYPE="%-1s"  FUNCTIONS="T(1)"/>   
+  <ITEM NAME="#ACT_LX_CK" TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#TXCD"      TYPE="%4s"   FUNCTIONS="T(3202)"/>     <!---交易代码--->
+  <ITEM NAME="#TXNAME"    TYPE="%-10s" FUNCTIONS="T(储蓄取款)"/> <!---交易名称--->
+  <!--  <ITEM NAME="#SELFYN"    TYPE="%-1s"  FUNCTIONS="T(1)"/> 同名Item liangqi注--><!--因打凭证需要设此变量,意为是否本人---->
+  <!--<ITEM NAME="#AGENTNAME" TYPE="%-20s" FUNCTIONS=""/>  同名Item liangqi注-->   <!----因打凭证需要设此变量---->
+  <!--<ITEM NAME="#SATCETYPE" TYPE="%-20s" FUNCTIONS=""/>  同名Item liangqi注-->   <!----因打凭证需要设此变量---->
+  <!--<ITEM NAME="#ATCENUM"   TYPE="%-1s"  FUNCTIONS=""/>   同名Item liangqi注-->  <!----因打凭证需要设此变量---->
+ 
+  <!-- 取款信息录入 -->
+  <IMPORT>DPACTINFO.IMP</IMPORT>
+
+  <!-- 转帐对方账号 -->
+  <IMPORT>TRANSINFO.IMP</IMPORT>
+
+  <!--输出变量--->
+  <ITEM NAME="#TXCNT"   TYPE="%2d"  FUNCTIONS="T($OCCURS=#TXCNT)J(#TOTCNT)" />
+  <ITEM NAME="#TOTCNT"  TYPE="%5d"  FUNCTIONS="E(#TOTCNT+#TXCNT)J(#TOTCNTC)"/>
+  <ITEM NAME="#TOTCNTC" TYPE="%5d"  FUNCTIONS="T($TOTCNT=#TOTCNT)"/>
+  <ITEM NAME="#O_TXDAY" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#O_PBDSC" TYPE="%-3s" FUNCTIONS="J(#OL_PBDSC)"/>
+  <ITEM NAME="#OL_PBDSC" TYPE="%-2s" FUNCTIONS="T(  )j(#O_PBDSC=001,T{存})j(#O_PBDSC=002,T{取})"/>
+  <ITEM NAME="#O_TXAMT" TYPE="%16.2f" FUNCTIONS="J(#OL_TXAMT)"/>
+  <ITEM NAME="#OL_TXAMT" TYPE="%-16s" FUNCTIONS="X(#O_TXAMT)"/>
+  <ITEM NAME="#O_CRDB" TYPE="%-1s" FUNCTIONS="J(#OL_SIGN)"/>
+  <ITEM NAME="#OL_SIGN" TYPE="%-1s" FUNCTIONS="T( )j(#O_CRDB=1,T{-})"/>
+  <ITEM NAME="#O_AVBAL" TYPE="%16.2f" FUNCTIONS="J(#OL_AVBAL)"/>
+  <ITEM NAME="#OL_AVBAL" TYPE="%-16s" FUNCTIONS="X(#O_AVBAL)"/>
+  <ITEM NAME="#O_TLRNO" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#TRAN_FEE" TYPE="%16.2f" FUNCTIONS=""/>
+  <ITEM NAME="#TRAN_FEE1" TYPE="%16.2f" FUNCTIONS=""/>
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="储蓄取款">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 3,30,'储蓄取款');
+		print( 4,22,'账/卡 号:[19]',#ACTNO);
+		print( 5,22,'户    名:[60]',#CUSTNAME);
+		print( 6,22,'产品名称:[30]',#PRODNAME);
+		print( 7,22,'凭证类型:[30]',#SVOCTYPE);
+		print( 8,22,'凭证号码:[16]',#VOCNUM);
+		print( 9,22,'取款方式:[ 4]',#SCASHFLAG);
+		print(10,22,'交易金额:[21]',#LTXAMT);
+		print(11,22,'流 水 号:[ 6]',$FD4);
+	}"
+	</PRINT>
+	
+</RESPONSE>
+<IMPORT>CX_QK_VOC.IMP</IMPORT>
+<IMPORT>CXCZ.IMP</IMPORT>
+<IMPORT>CX_CK_PZ.IMP</IMPORT>
+<LASTWORK>
+"{
+	//showmsg(#ACT_LX);
+	//showmsg(#ACT_LX_CK);
+}"
+</LASTWORK>
+</TRANSACTION>

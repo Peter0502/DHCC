@@ -1,0 +1,282 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"sherrmsg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int sherrmsg_con ( struct sherrmsg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct sherrmsg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->txday);
+	zip_tail(ps->txtime);
+	zip_tail(ps->kinbr);
+	zip_tail(ps->tlrno);
+	zip_tail(ps->wssrno);
+	zip_tail(ps->tranname);
+	zip_tail(ps->txname);
+	zip_tail(ps->errseq);
+	zip_tail(ps->errmsg);
+	zip_tail(ps->oldinput);
+	zip_tail(ps->newinput);
+	zip_tail(ps->sdtlrno);
+}
+int Sherrmsg_Debug(struct sherrmsg_c *ps){
+	vtcp_log("sherrmsg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("sherrmsg_c.txday=[%s]\n",ps->txday);
+	vtcp_log("sherrmsg_c.txtime=[%s]\n",ps->txtime);
+	vtcp_log("sherrmsg_c.kinbr=[%s]\n",ps->kinbr);
+	vtcp_log("sherrmsg_c.tlrno=[%s]\n",ps->tlrno);
+	vtcp_log("sherrmsg_c.wssrno=[%s]\n",ps->wssrno);
+	vtcp_log("sherrmsg_c.tranname=[%s]\n",ps->tranname);
+	vtcp_log("sherrmsg_c.txname=[%s]\n",ps->txname);
+	vtcp_log("sherrmsg_c.errseq=[%s]\n",ps->errseq);
+	vtcp_log("sherrmsg_c.errmsg=[%s]\n",ps->errmsg);
+	vtcp_log("sherrmsg_c.oldinput=[%s]\n",ps->oldinput);
+	vtcp_log("sherrmsg_c.newinput=[%s]\n",ps->newinput);
+	vtcp_log("sherrmsg_c.sdtlrno=[%s]\n",ps->sdtlrno);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Sherrmsg_Sel(reply,sherrmsg_c,fmtstr,va_alist)
+char    *reply;
+struct  sherrmsg_c *sherrmsg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Sherrmsg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Sherrmsg_Fet_Sel( sherrmsg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Sherrmsg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Sherrmsg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,sherrmsg.* FROM sherrmsg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE sherrmsg_sel FROM :comm;
+	EXEC SQL DECLARE sel_sherrmsg CURSOR FOR sherrmsg_sel;
+
+	EXEC SQL OPEN sel_sherrmsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sherrmsg_Fet_Sel ( struct sherrmsg_c *sherrmsg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_sherrmsg INTO :sherrmsg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch sherrmsg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch sherrmsg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(sherrmsg_c);
+
+	return 0;
+}
+
+int Sherrmsg_Clo_Sel (){
+	EXEC SQL CLOSE sel_sherrmsg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Sherrmsg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,sherrmsg.* FROM sherrmsg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE sherrmsg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_sherrmsg CURSOR FOR sherrmsg_upd;
+
+	EXEC SQL OPEN upd_sherrmsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sherrmsg_Fet_Upd( struct sherrmsg_c *sherrmsg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_sherrmsg INTO :sherrmsg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH sherrmsg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(sherrmsg_c);
+
+	return 0;
+}
+
+int Sherrmsg_Upd_Upd( struct sherrmsg_c sherrmsg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE sherrmsg SET txday=:sherrmsg_c.txday,
+			txtime=:sherrmsg_c.txtime,
+			kinbr=:sherrmsg_c.kinbr,
+			tlrno=:sherrmsg_c.tlrno,
+			wssrno=:sherrmsg_c.wssrno,
+			tranname=:sherrmsg_c.tranname,
+			txname=:sherrmsg_c.txname,
+			errseq=:sherrmsg_c.errseq,
+			errmsg=:sherrmsg_c.errmsg,
+			oldinput=:sherrmsg_c.oldinput,
+			newinput=:sherrmsg_c.newinput,
+			sdtlrno=:sherrmsg_c.sdtlrno
+	WHERE rowid=:sherrmsg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Sherrmsg_Del_Upd(struct sherrmsg_c sherrmsg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM sherrmsg WHERE rowid=:sherrmsg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sherrmsg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_sherrmsg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Sherrmsg_Ins( struct sherrmsg_c sherrmsg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO sherrmsg VALUES (:sherrmsg_c.txday,
+			:sherrmsg_c.txtime,
+			:sherrmsg_c.kinbr,
+			:sherrmsg_c.tlrno,
+			:sherrmsg_c.wssrno,
+			:sherrmsg_c.tranname,
+			:sherrmsg_c.txname,
+			:sherrmsg_c.errseq,
+			:sherrmsg_c.errmsg,
+			:sherrmsg_c.oldinput,
+			:sherrmsg_c.newinput,
+			:sherrmsg_c.sdtlrno);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT sherrmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,30 @@
+#ifndef __mo_ibl_CH__
+#define __mo_ibl_CH__
+struct mo_ibl_c{
+	char      rowid[20];
+	char      pact_no[21];
+	char      br_no[6];
+	long      ac_id;
+	char      op_ac_no[21];
+	char      acc_no[8];
+	char      prdt_no[4];
+	char      sign[2];
+	char      op_name[51];
+	long      term;
+	double    amt;
+	double    rate;
+	double    over_rate;
+	double    no_pay_bal;
+	long      opn_date;
+	long      matr_date;
+	long      wrk_date;
+	long      trance_no;
+	char      sts[2];
+	char      tel[5];
+	char      chk[5];
+	char      auth[5];
+	char      op_br_no[13];
+	char      kh_ac_no[20];
+	char      kh_name[61];
+};
+#endif 

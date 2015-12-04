@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111101" TITLE="8320  金太阳卡成长记录本打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<COMMSEND>
+	"{
+				initfd();
+				commsend_001();
+				$FD16='2321';
+				$FD30=#AC_NO;
+				$FD44=#KSRQ;
+				$FD45=#JSRQ;
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+	}"
+	</COMMSEND>
+	<COMMRECV>
+	"{
+		commrecv_001();
+	}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+			"T(8320                          金太阳卡成长记录本打印)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+			"T(─────────────────────────────────────)"/>
+		<ITEM NAME="#PGLINES" TYPE="%2d" FUNCTIONS="T($PGLINES=10)"/>
+		<ITEM NAME="#PLINES" TYPE="%2d" FUNCTIONS="T($PLINES=10)"/>
+		<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2321)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+		
+		<ITEM LINE="6" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(读取方式:)"/>
+		<ITEM LINE="6" COL="20" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取芯片方式"/>
+				<OPTION VALUE="1" TITLE="读取磁条方式"/>
+			</SELECT>
+		  <ONLOSTFOCUS>"{
+		     if(#DQFS=='0')
+		     {
+			     enable(#ACNO_CT,false);
+			     enable(#ACNO_IC,true);
+			     show(#ACNO_IC,true);
+			     show(#ACNO_CT,false);
+		     }
+		     if(#CHILD_DQFS=='1')
+		     {
+			     enable(#ACNO_IC,false);
+			     enable(#ACNO_CT,true);
+			     show(#ACNO_CT,true);
+			     show(#ACNO_IC,false); 
+		     }
+		   }"
+		  </ONLOSTFOCUS>
+	  </ITEM>
+	  <ITEM LINE="7" COL="10" TYPE="%-14s" FUNCTIONS="T(金太阳卡卡号:)" />
+	  <ITEM LINE="7" COL="20" NAME="#ACNO_CT"  TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	  <ITEM LINE="7" COL="20" NAME="#ACNO_IC"  TYPE="%-19s" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+		<ITEM NAME="#AC_NO" TYPE="%-19s"  FUNCTIONS="">
+			<ONLOSTFOCUS>
+      "{
+    	if(#DQFS=='0')
+	 	{
+	 		#AC_NO=#ACNO_IC;
+	 	}
+	 	if(#DQFS=='1')
+	 	{
+	 		#AC_NO=#ACNO_CT;
+	 	}
+	 	if( substr(#AC_NO,6,2) != '10' ) 
+	 	{
+	 		showmsg('请输入金太阳卡卡号!');
+	 		return(false);
+	 	}
+    	
+	    commsend_001();
+	    $FD31=#AC_NO;
+	    $FD16='9958';
+	    callserver();
+	    if($FD12 != '0000')
+	    {
+	        showmsg(geterror());
+	        return(false);
+	    }
+	    #AC_NO=delspace($FD31);
+	    
+	    commsend_001();
+	    $FD16='9331';
+	    $FD102=getitems('#AC_NO');
+	    callserver();
+	    if($FD12 != '0000')
+	    {
+	        showmsg(geterror());
+	        return(false);
+	    }
+      }"
+	    </ONLOSTFOCUS>
+	  </ITEM>
+	  
+		<ITEM LINE="9" COL="10" TYPE="%-14s" FUNCTIONS="T(查询日期区间:)" />
+		<ITEM LINE="9" COL="20" TYPE="%-8s"  FUNCTIONS="D()" NAME="#KSRQ" INPUT="TEXT" FUNCTIONS="V(NB)" />
+		<ITEM LINE="9" COL="28" TYPE="%-3s"  FUNCTIONS="T( → )" />
+		<ITEM LINE="9" COL="32" TYPE="%-8s"  FUNCTIONS="D()" NAME="#JSRQ" INPUT="TEXT" FUNCTIONS="V(NB)T($HDATE)">
+			<ONLOSTFOCUS>
+			"{
+		    if(#KSRQ &gt; #JSRQ and  #JSRQ != '')
+		    {
+		      showmsg('开始日期不能大于结束日期');
+		      return(false);
+		    }
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		
+		<ITEM LINE="21" COL="59" TYPE="%-6s" INPUT="BUTTON" FUNCTIONS="T(确定)" >
+			<ONLOSTFOCUS>
+			"{
+				dim @f as string;
+				
+				initfd();
+				commsend_001();
+				$FD16='2321';
+				$FD31=#AC_NO;
+				@f=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	</VARIABLE>
+
+	<REQUEST>
+	</REQUEST>
+	
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印存款证明">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  	<!--
+  "{
+        dim @txtime  as string;
+        dim @yyyy as string;
+        dim @mm as string;
+        dim @dd as string;
+        dim @bzje1 as string;
+        dim @bzje2 as string;
+        dim @rmb1 as string;
+        dim @rmb2 as string;
+        dim @rmb3 as string;
+        dim @rmb4 as string;
+        dim @rmb5 as string;
+        
+        dim @line1   as number;
+        dim @line2   as number;
+        dim @counter as number;
+        dim @tmpstr  as string;
+        dim @sfeeamt  as string;
+        dim @heji as string;
+        
+        
+				@txtime=substr(#RQ,6,2)+'/'+substr(#RQ,4,2)+'/'+substr(#RQ,0,4);
+
+				@heji='';
+				@yyyy=substr(#RQ,0,4);
+				@mm = substr(#RQ,4,2);
+				@dd = substr(#RQ,6,2);
+
+				if($FD21=='01')
+				{
+					@rmb1='RMB';
+				}
+				if($FD22=='01')
+				{
+					@rmb2='RMB';
+				}
+				if(rtrim($FD23)=='01')
+				{
+					@rmb3='RMB';
+				}
+				if(rtrim($FD24)=='01')
+				{
+					@rmb4='RMB';
+				}
+				if(rtrim($FD58)=='01')
+				{
+					@rmb5='RMB';
+				}
+
+				
+				#JINE1 = val($FD39,0.01);
+				#JINE2 = val($FD40,0.01);	
+				#JINE3 = val($FD41,0.01);	
+				#JINE4 = val($FD42,0.01);	
+				#JINE5 = val($FD43,0.01);	
+				
+				print( 11,80,'[6][24]',' ',$HDATE);
+				
+        print( 13,18,'[1][32][27][9][7][6]',' ',#CUSTNAME,#YID_NO,@yyyy,@mm,@dd);
+        
+        print( 16,29,'[7][24]',' ',@txtime);
+        print( 16,25,'[24]',#KHYWM);
+        
+        print( 17,11,'[1][24]',' ',#YID_NO); 
+        
+        print( 21,14,'[3][27][21][3]/[17][8] ','1',$FD30,$FD25,@rmb1,#JINE1,$FD44);
+        if(len($FD31) == 0)
+        {
+        	print( 28,14,'[50]RMB/[17] ',@heji,#JINE1);
+        }
+        if(len($FD31)!=0)
+        {
+        	print( 22,14,'[3][27][21][3]/[17][8] ','2',$FD31,$FD26,@rmb2,#JINE2,$FD45);
+        	if(len($FD32) == 0)
+        	{
+        		print( 28,14,'[50]RMB/[17] ',@heji,#JINE1+#JINE2);
+        	}
+        }
+        if(len($FD32)!=0)
+        {
+        	print( 23,14,'[3][27][21][3]/[17][8] ','3',$FD32,$FD27,@rmb3,#JINE3,$FD46);
+        	if(len($FD33) == 0)
+        	{
+        		print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3);
+        	}
+				}
+				if(len($FD33)!=0)
+        {
+        	print( 24,14,'[3][27][21][3]/[17][8] ','4',$FD33,$FD38,@rmb4,#JINE4,$FD47);
+        	if(len($FD37) == 0)
+        	{
+        		print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3+#JINE4);
+        	}
+  			}
+  			if(len($FD37)!=0)
+        {
+        	print( 25,14,'[3][27][21][3]/[17][8] ','5',$FD37,$FD62,@rmb5,#JINE5,$FD28);
+        	print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3+#JINE4+#JINE5);
+   			}
+       // print( 29,69,'[30]',$BRNAME);
+
+ }"
+ -->
+  </PRINT>
+  </RESPONSE>
+	
+	<OUTPUT>
+	</OUTPUT>
+
+</TRANSACTION>

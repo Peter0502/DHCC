@@ -1,0 +1,119 @@
+<!--大额支付交易往帐手续费打印-->
+<!-- 122域变量定义 -->
+<ITEM NAME="#FD122_AC_NO"    TYPE="%20d"/>
+<ITEM NAME="#FD122_TX_AMT"   TYPE="%12s"/>
+<ITEM NAME="#FD122_AV_BAL"   TYPE="%12s"/>
+<ITEM NAME="#FD122_TX_CNT"   TYPE="%4d"/>
+<ITEM NAME="#FD122_FEE_IND"  TYPE="%1d"/>
+<ITEM NAME="#FD122_JZ_FEE"   TYPE="%12d"/>
+<ITEM NAME="#FD122_RET_FEE"  TYPE="%12d"/>
+<ITEM NAME="#FD122_FEE_NO"   TYPE="%3d"/>
+<ITEM NAME="#FD122_FEE_AMT"  TYPE="%13.2f"/>
+<ITEM NAME="#XFEE_AMT"  TYPE="%16s"/>
+<ITEM NAME="#FD122_CUR_NO"   TYPE="%2s"/>
+<ITEM NAME="#FD122_CT_IND"   TYPE="%1d"/>
+<ITEM NAME="#FD122_NAME1"     TYPE="%50d"/>
+<ITEM NAME="#FD122_FEE_ACC_NO"     TYPE="%20d"/>
+<ITEM NAME="#FD122_NAME2"     TYPE="%50d"/>
+
+<!-- 9 域 -->
+<ITEM NAME="#FD9_AUTH_NO"    TYPE="%4s"/>
+<ITEM NAME="#FD9_AUTH_PWD"   TYPE="%6s"/>
+<ITEM NAME="#FD9_FEE_IND"    TYPE="%1s"/>
+
+<ITEM NAME="#PRTNAME"     TYPE="%-70s"/>
+<ITEM NAME="#FEEFLG" TYPE="%4s" />
+<ITEM NAME="#PRTACTNO"    TYPE="%-40s">
+<ONLOSTFOCUS>
+"{
+	setitems('#FD122_AC_NO#FD122_TX_AMT#FD122_AV_BAL#FD122_TX_CNT#FD122_FEE_IND#FD122_JZ_FEE#FD122_RET_FEE#FD122_FEE_NO#FD122_FEE_AMT#FD122_CUR_NO#FD122_CT_IND#FD122_NAME1#FD122_FEE_ACC_NO#FD122_NAME2',$FD122);
+	setitems('#FD9_AUTH_NO#FD9_AUTH_PWD#FD9_FEE_IND',$FD9);
+	//showmsg('$FD93 ====['+#FD9_FEE_IND+']');
+	if(#FD9_FEE_IND=='1'){
+		#PRTACTNO='';
+		#PRTNAME='现金';
+	}
+	else if(#FD9_FEE_IND=='2'){
+		#PRTACTNO='手续费帐号：'+#PAY_AC_NO;
+		#PRTNAME='户      名：'+#PAY_NAME;
+	}
+	#XFEE_AMT=itoa(#FD122_FEE_AMT,'%16.2f');
+	//showmsg(#XFEE_AMT);
+	#XFEE_AMT=comma(#XFEE_AMT,16);
+	//showmsg(#XFEE_AMT);
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" CHECK="#FD9_FEE_IND?3" DESC="请打印业务专用凭证(支付手续费)" >
+NOTHING  
+</PACKAGE>
+<INIT>
+"{
+	setitems('#FD122_AC_NO#FD122_TX_AMT#FD122_AV_BAL#FD122_TX_CNT#FD122_FEE_IND#FD122_JZ_FEE#FD122_RET_FEE#FD122_FEE_NO#FD122_FEE_AMT#FD122_CUR_NO#FD122_CT_IND#FD122_NAME1#FD122_FEE_ACC_NO#FD122_NAME2',$FD122);
+	setitems('#FD9_AUTH_NO#FD9_AUTH_PWD#FD9_FEE_IND',$FD9);
+	if(#FD9_FEE_IND=='1'){
+		#PRTACTNO='';
+		#PRTNAME='现金';
+	}
+	else if(#FD9_FEE_IND=='2'){
+		#PRTACTNO='手续费帐号：'+#PAY_AC_NO;
+		#PRTNAME='户      名：'+#PAY_NAME;
+	}
+	#XFEE_AMT=itoa(#FD122_FEE_AMT,'%16.2f');
+	#XFEE_AMT=comma(#XFEE_AMT,16);
+	print( 2,20,'fd93[1      ]',#FD9_FEE_IND);
+}"
+</INIT>
+<PRINT>
+"{
+		$KINDNO='00';
+	dim @txtime  as string;
+	setitems('#FD122_AC_NO#FD122_TX_AMT#FD122_AV_BAL#FD122_TX_CNT#FD122_FEE_IND#FD122_JZ_FEE#FD122_RET_FEE#FD122_FEE_NO#FD122_FEE_AMT#FD122_CUR_NO#FD122_CT_IND#FD122_NAME1#FD122_FEE_ACC_NO#FD122_NAME2',$FD122);
+	if(#FD9_FEE_IND=='1'){
+		#PRTACTNO='';
+		#PRTNAME='';
+		#FEEFLG='现金';
+	}
+	else if(#FD9_FEE_IND=='2'){
+		if(#TXNO == '5850' or #TXNO == '5851' or #TXNO == '5852' or #TXNO=='5320')//增加一个5320
+		{//借记业务手续应收收款人费用,这里用TXNO变量来区别, 若以后有新加交易向此处加#TXNO
+			#PRTACTNO='手续费帐号:'+#CASH_AC_NO;
+			#PRTNAME='户      名:'+#CASH_NAME;
+		}
+		else
+		{
+			#PRTACTNO='手续费帐号:'+#PAY_AC_NO;
+			#PRTNAME='户      名:'+#PAY_NAME;
+		}
+		#FEEFLG='转帐';
+	}
+	#XFEE_AMT=itoa(#FD122_FEE_AMT,'%16.2f');
+	#XFEE_AMT=comma(#XFEE_AMT,16);
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+
+
+//	print( 2,20,'fd93[1      ]',#FD9_FEE_IND);
+
+		print( 5, 20,'机构名称:[30]',$BRNAME);  
+		print( 5, 2,'代码:[4]',#TXCD);
+		print( 5, 13,'交易:[24]',#TXNAME);
+		
+		print( 7,44,'\L0支付系统手续费凭证\L1');
+		print( 9,20,'委托 日 期:[8       ]',$HDATE);
+		print(10,20,'收费 方 式:[4]',#FEEFLG);
+		print(11,20,'[40               ]',#PRTACTNO);
+		print(12,20,'[70]',#PRTNAME);
+		print(13,20,'收费 金 额:[16]',ltrim(#XFEE_AMT));
+		print(20,80,'客户签名:_____________________');
+		
+		print( 24,20,'备注:');
+		print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print( 24,5,'柜员:[4]',$FD7);
+		print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<!--大额支付交易往帐符合-->

@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="7021  卡业务签约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE UPLOOP="TRUE">
+		<ITEM LINE="3"  COL="3" TYPE="%-51s" FUNCTIONS=
+		"T(7021                          卡业务签约)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=7021)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(7021)"/>      <!---交易代码--->	
+		<ITEM NAME="#TXNAME"  TYPE="%10s"  FUNCTIONS="T(卡业务签约)"/>
+			
+		<!--输出变量--->
+		<ITEM LINE="7"  COL="17"  TYPE="%-5s" FUNCTIONS="T(卡号:)" />
+		<ITEM LINE="7"  COL="45"  TYPE="%-5s" FUNCTIONS="T(序号:)" />
+		<ITEM LINE="9"  COL="17"  TYPE="%-5s" FUNCTIONS="T(户名:)" />
+		<!--ITEM LINE="9"  COL="17"  TYPE="%-11s" FUNCTIONS="T(检查标志:)" DEVICE="MSR"  m($MSR2,1,19)/-->
+		<ITEM LINE="11"  COL="17"  TYPE="%-5s" FUNCTIONS="T(密码:)" />		
+		<ITEM LINE="13"  COL="17"  TYPE="%-18s" FUNCTIONS="T(签约状态:)" />
+		<ITEM LINE="15"  COL="17"  TYPE="%-18s" FUNCTIONS="T(签约模块:)" />		
+		<ITEM LINE="17"  COL="17"  TYPE="%-21s" NAME="#QY" FUNCTIONS="T(签约起始/终止日期:)" />
+		<ITEM LINE="17" COL="43" TYPE="%-3s"  NAME="#BQ" FUNCTIONS="T(→)"/>
+		<ITEM LINE="19"  COL="17"  TYPE="%-5s" FUNCTIONS="T(备注:)" />
+		<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+		<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM  LINE="7" COL="23"  NAME="#CARD_NO" INPUT="TEXT" DEVICE="MSR" TYPE="%-19s" FUNCTIONS="V(NB)m($MSR2,1,19)">
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223')
+						{
+							showmsg('卡号的前6位必须为621223');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+						dim @baktxno as string;
+						initfd();
+						@baktxno=$TXNO;
+						$TXNO='9952';
+						$FD102=#CARD_NO;						
+						commsend_001();
+						callserver();
+						$TXNO=@baktxno;
+						// 挂失状态下可以解约--20110125--mod
+						if($FD12!='0000'){
+							if($FD12!='P170'){
+								showmsg(geterror());
+								return(false);
+							}
+						}
+						// 挂失状态下可以解约--20110125--mod
+						#ACTSEQ=substr($FD102,24,4);
+						show(#ACTSEQ,true);
+					  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+		<ITEM LINE="7"  COL="51" NAME="#ACTSEQ" INPUT="TEXT"  TYPE="%-4s" FUNCTIONS="V(NB)">
+			 <ONLOSTFOCUS>
+				"{
+						dim @baktxno as string;
+			      initfd();
+			      @baktxno=$TXNO;
+						commsend_001();
+						$FD16='9925';
+						$FD102=#CARD_NO+'     '+#ACTSEQ+space(350);
+						callserver();
+						$TXNO=@baktxno;
+						if($FD12 != '0000')
+						{		
+							showmsg(geterror());
+							return(false);
+						}
+						#CARD_NAME=substr($FD102,125,50);
+						show(#CARD_NAME,true);
+				}"
+		  </ONLOSTFOCUS>
+     </ITEM>
+		<ITEM LINE="9"  COL="23" NAME="#CARD_NAME" INPUT="LABEL"  TYPE="%-30s" FUNCTIONS="V(NB)" />
+		<ITEM  LINE="11"  COL="23"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+		
+		<!--输出-->
+		<ITEM NAME="#TRACK2" TYPE="%-37s"  FUNCTIONS=""/>
+		<ITEM NAME="#TRACK3" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM NAME="#PASSWD" TYPE="%-6s"  FUNCTIONS=""/>		
+		
+		<ITEM LINE="13"  COL="27" NAME="#TROTH_STATE" INPUT="SELECT" TYPE="%-1s" FUNCTIONS="T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="0.关闭"/>
+			<OPTION VALUE="1" TITLE="1.开通"/>			
+		</SELECT>
+		 </ITEM>
+		<ITEM LINE="15"  COL="27" NAME="#MODULE"  INPUT="SELECT" TYPE="%-4s" FUNCTIONS="T(1001)">	
+		<SELECT>
+			<OPTION VALUE="1001" TITLE="1001.短信服务"/>
+			<OPTION VALUE="1002" TITLE="1002.ATM转账"/>
+			<OPTION VALUE="1003" TITLE="1003.银联互联网支付"/>
+			<!--OPTION VALUE="1003" TITLE="1003.网上银行"/>
+			<OPTION VALUE="1004" TITLE="1004.电话银行"/>
+			<OPTION VALUE="1005" TITLE="1005.支付宝"/>
+			<OPTION VALUE="1006" TITLE="1006.快钱"/>
+			<OPTION VALUE="1007" TITLE="1007.柜面通"/-->
+		</SELECT>
+			<ONLOSTFOCUS>"{
+				if(#MODULE=='1001' and #TROTH_STATE=='1')
+				{
+					enable(#QY,true);
+					show(#QY,true);
+					enable(#START_DATE,true);
+					show(#START_DATE,true);
+					enable(#END_DATE,true);
+					show(#END_DATE,true);
+					enable(#BQ,true);
+					show(#BQ,true);
+				}
+				else {
+					enable(#QY,false);
+					show(#QY,false);
+					enable(#START_DATE,false);
+					show(#START_DATE,false);
+					enable(#END_DATE,false);
+					show(#END_DATE,false);
+					enable(#BQ,false);
+					show(#BQ,false);
+				}
+		 }"
+       </ONLOSTFOCUS>
+		 </ITEM>		
+		<ITEM LINE="17"  COL="35" NAME="#START_DATE"  INPUT="TEXT" TYPE="%-8s" FUNCTIONS="T($HDATE)D()">
+		<ONLOSTFOCUS>"{
+    	    if($HDATE &gt; #START_DATE)
+         	{
+         	  showmsg('签约起始日期不能小于当日!');
+         	  return (false);
+        	 }
+		 }"
+       </ONLOSTFOCUS>
+		</ITEM >
+		<ITEM LINE="17"  COL="45" NAME="#END_DATE"  INPUT="TEXT" TYPE="%-8s" FUNCTIONS="T($HDATE)D()">
+		<ONLOSTFOCUS>"{
+    	    if(#START_DATE &gt; #END_DATE)
+         	{
+         	  showmsg('签约终止日期不能小于签约起始日期!');
+         	  return (false);
+        	 }
+		 }"
+       </ONLOSTFOCUS>
+		</ITEM >
+		<ITEM LINE="19"  COL="23" NAME="#REMARKS"  INPUT="TEXT" TYPE="%-16s" FUNCTIONS=""/>	
+		<ITEM NAME="#SEQ_NO"  TYPE="%-16s"   FUNCTIONS=""/>		
+		<ITEM NAME="#PINGT"  TYPE="%-12s"   FUNCTIONS=""/>		
+
+		<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+			<ONCLICK>
+					"{								
+						initfd();
+						dim @seq  as string;
+						dim @ping  as string;
+						commsend_001();
+						$FD16='7021';
+						$FD30=#CARD_NO;
+						$FD79=#PASSWORD;
+						$FD75=#MSR2BAK;
+						$FD76=#MSR3BAK;
+						$FD67=#TROTH_STATE;
+						$FD36=#MODULE;
+						$FD45=#START_DATE;
+						$FD46=#END_DATE;
+						$FD112=#REMARKS;
+						callagn();
+						if($FD12 != '0000')
+						{		
+							showmsg(geterror());
+							return(false);
+						}
+						#SEQ_NO=delspace(itoa(val($FD43),'%16d'));
+						#PINGT=delspace(itoa(val($FD37),'%12d'));						
+						runoutput();//BUTTON 调用打印
+						rerun();//清空填写信息内容										
+					}"
+			</ONCLICK>
+		</ITEM>
+		
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="卡业务签约">
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 3,20,'交易名称:[10]',#TXNAME);
+		print( 5,20,'卡号:[30]',#CARD_NO);
+		print( 7,20,'户名:[20]',#CARD_NAME);
+	    if(#TROTH_STATE=='0')
+		{
+		  print(9,20,'签约状态:关闭');	
+		}
+		 if(#TROTH_STATE=='1')
+		{
+		 print(9,20,'签约状态:开通');	
+		}
+		switch(#MODULE){
+			case '1001':
+				 print(11,20,'签约模块:短信服务');
+				 if (#TROTH_STATE=='1')
+				 {
+					print(11,40,'签约日期:[8]',#START_DATE);	
+					print(11,60,'~');	
+					print(11,62,'[8]',#END_DATE);
+				 }
+				break;		
+			case '1002':
+				 print(11,20,'签约模块:ATM转账');	
+				break;
+			case '1003':
+				 print(11,20,'签约模块:银联互联网支付');	
+				break;
+		  default:
+				print(11,20,'签约模块:其他方式');	
+				break;
+			}
+		print(13,20,'卡系统流水:[16]',#SEQ_NO);			
+    print(15,20,'平台流水号:[12]',#PINGT);	
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);		
+		print( 5, 2,'交易代码: 7021');
+		print( 5,13,'交易名称:[10]',#TXNAME);		
+		print( 7,20,'卡号:[20]',#CARD_NO);
+		print( 9,20,'户名:[30]',#CARD_NAME);
+	    if(#TROTH_STATE=='0')
+		{
+		  print(11,20,'签约状态:关闭');	
+		}
+		 if(#TROTH_STATE=='1')
+		{
+		 print(11,20,'签约状态:开通');	
+		}
+		switch(#MODULE){
+			case '1001' :
+				 print(13,20,'签约模块:短信服务');
+				 if (#TROTH_STATE=='1')
+				 {
+					print(13,20,'签约日期:[8]',#START_DATE);	
+					print(13,2,'~');	
+					print(13,1,'[8]',#END_DATE);
+				 }	
+				break;		
+			case '1002' :
+				 print(13,20,'签约模块:ATM转账');	
+				break;
+			case '1003' :
+				 print(13,20,'签约模块:银联互联网支付');	
+				break;
+			case '1004' :
+				 print(13,20,'签约模块:电话银行');	
+				break;
+			case '1005' :
+				  print(13,20,'签约模块:支付宝');		
+				break;
+			case '1006' :
+				print(13,20,'签约模块:快钱');
+				break;
+		  case '1007' :
+			  print(13,20,'签约模块:柜面通');	
+			  break;
+		  default :
+				print(13,20,'签约模块:其他方式');	
+				break;
+			}
+		print(15,20,'卡系统流水:[16]',#SEQ_NO);			
+		//print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		//print(21,80,'客户签名:_____________________');    
+	    print(24,20,'备注:[16]',#REMARKS);
+        print(24,6,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'平台流水号:[12]',#PINGT);	
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+</TRANSACTION>

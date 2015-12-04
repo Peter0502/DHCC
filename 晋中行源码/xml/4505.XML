@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4505 五级评定"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$MSGTYPE='03001';
+	$TXNO='3305';
+	$FD16='3305';
+	$FD25=#NAME;
+	$FD37=#ACTNO;
+	$FD65='3305';
+	$FD70=#TXTP;
+	$FD79=#PASSWD;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4505                            五级评定)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="9"   COL="19" TYPE="%-14s" FUNCTIONS="T(贷款账号 :)"/>
+  <ITEM LINE="9"     COL="45"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="11"  COL="19" TYPE="%-14s" FUNCTIONS="T(户    名 :)"/>
+  <ITEM LINE="11"     COL="45"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="13"  COL="19" TYPE="%-14s" FUNCTIONS="T(五级认定!:)"/>
+
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="9"   COL="29	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		$MSGTYPE='03001';
+        $TXNO='9807';
+        $FD2=$OPNBR;
+        $FD3=$KINBR;
+        $FD5=$HDATE;
+        $FD6='';
+        $FD7=$TLRNO;
+        $FD8='';
+        $FD9='';
+        $FD10=$TTYNAME;
+        $FD16='9807';
+        $FD17='';
+        $FD37=#ACTNO;
+        $FD65='3305';
+
+        callserver();
+        if($FD12!='0000')
+        {
+			showmsg(geterror());
+            return(false);
+        }
+
+		#NAME=$FD25;
+		#TXTP=$FD70;
+		show(#NAME,true);
+		show(#TXTP,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#NAME" 	INPUT="LABEL" 	LINE="11"  COL="29	" TYPE="%-60s" 	FUNCTIONS=""/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+ <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="9" COL="52" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11" COL="52" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#TXTP" 	INPUT="SELECT" 	LINE="13"  COL="29	" TYPE="%-1s" 	FUNCTIONS="T(1)">
+  <SELECT>
+     <OPTION VALUE="1" TITLE="正常"/>
+     <OPTION VALUE="2" TITLE="次级"/>
+     <OPTION VALUE="3" TITLE="关注"/>
+     <OPTION VALUE="4" TITLE="可疑"/>
+     <OPTION VALUE="5" TITLE="损失"/>
+  </SELECT>
+  </ITEM>
+
+  <ITEM NAME="#PASSWD" 	    TYPE="%-6s" 	FUNCTIONS=""/>
+  <ITEM NAME="#DESC" 	    TYPE="%-6s" 	FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+  switch(#TXTP){
+	case '1':
+		#DESC='正常';
+		break;
+	case '2':
+		#DESC='次级';
+		break;
+	case '3':
+		#DESC='关注';
+		break;
+	case '4':
+		#DESC='可疑';
+		break;
+	case '5':
+		#DESC='损失';
+		break;
+  }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#WSSRNO"      TYPE="%-6s"     />
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+             dim @txtime  as string;
+             @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+             print( 5, 20,'机构名称:[30]',$BRNAME);
+             print( 5, 2,'代码:4505');
+             print( 5, 13,'交易:五级评定');
+	     print( 7, 20,'贷款账号:[18] 户名:[60]',#ACTNO,#NAME);
+	     print( 9, 20,'账户状态:[10]',#DESC);
+             print_sq();
+	     print( 24,20,'备注:')
+             print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+             print( 24,5,'柜员:[4]',$FD7);
+             print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

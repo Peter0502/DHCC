@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3358  银联柜面通存款确认"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3" COL="3" TYPE="%-54S" FUNCTIONS=
+"T(3358                       银联柜面通存款确认)"/>
+<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE=" 8" COL="17" TYPE="%-15s" FUNCTIONS="T(确认日期:)"/>
+<ITEM LINE="12" COL="17" TYPE="%-15s" FUNCTIONS="T(确认卡号:)"/>
+<ITEM LINE="14" COL="17" TYPE="%-11s" FUNCTIONS="T(确认金额:)"/>
+<ITEM LINE="16" COL="17" TYPE="%-11s" FUNCTIONS="T(原流水号:)"/>
+<ITEM NAME="#CARD_SEQ_ID"     TYPE="%-3s"   FUNCTIONS=""/>    
+<ITEM NAME="#TX_DATE" INPUT="TEXT" LINE="8"  COL="27" TYPE="%8d"   ENABLE="FALSE" FUNCTIONS="T($HDATE)D()V(NB)"/>
+<ITEM NAME="#LDQFS" LINE="10"  COL="17"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+<ITEM LINE="10" COL="27" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+			<OPTION VALUE="2" TITLE="无卡人工输入"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+  	if('0' == #DQFS)
+	{ enable(#ACTNO1,true);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,true);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,false);
+		
+	}
+	else if('1' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,true);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,false);
+		show(#ACTNO2,true);
+		show(#AC_NO_NO,false);
+		
+	}
+	else if('2' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,true);
+		show(#ACTNO1,false);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,true);
+	}
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="12" COL="27" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" />
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="12"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)"/>
+<ITEM NAME="#AC_NO_NO"   INPUT="TEXT" LINE="12" COL="27" TYPE="%-20s" VISABLE="FALSE" FUNCTIONS="V(NB)I()"/>
+<ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+	if('0' == #DQFS)
+	{
+	#AC_NO=#ACTNO1;
+	}
+	else if('1' == #DQFS)
+	{
+	#AC_NO=#ACTNO2;
+	}
+	else if ('2' == #DQFS)
+	{
+	#AC_NO=#AC_NO_NO;
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#TX_AMT"   INPUT="TEXT" LINE="14" COL="27" TYPE="%17.2f" FUNCTIONS="T()"/>
+<ITEM NAME="#ORSEQNO"   LINE="16"      COL="27" TYPE="%12d"   INPUT="TEXT" FUNCTIONS="V(NB)" DEVICE = "KEYBOARD"/>
+<ITEM LINE="21" COL="60" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+	dim @shuju as string;
+	initfd();
+	commsend_001();
+	$FD16='7835';
+	$FD30=#AC_NO;
+	$FD40=itoa(#TX_AMT*100,'%012.0f');
+	$FD43=#ORSEQNO;
+	$FD75=$MSR2;
+	$FD76=$MSR3; 
+	$FD94=#DQFS;
+	if(#DQFS=='2')
+	{
+	$FD94='0';
+	}       
+	if(#DQFS == '1')
+	{
+		@shuju=initiccard();
+		#CARD_SEQ_ID=strfld(@shuju,'|',4);
+		showmsg('#CARD_SEQ_ID='+#CARD_SEQ_ID);
+		$FD23 ='0'+#CARD_SEQ_ID;//IC卡序列号
+	}
+	callagn();
+	//showmsg('$FD12='+$FD12);
+	if( $FD12=='H036' )
+	{
+		showmsg('原存款交易核心记账未成功，不能做存款确认交易！');
+		return(false);
+	}
+	else if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	runoutput();
+	rerun();
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通存款确认成功，按任意键继续">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 5,30,'银联柜面通存款确认');
+	print( 7,20,'交易日期:[8 ]',#TX_DATE);
+	print( 8,20,'交易帐号:[20]',#AC_NO);
+	print( 9,20,'平台流水:[12]',$FD52);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="银联柜面通存款确认成功，请打印业务专用凭证(1/2打印纸)">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5,2 ,'交易代码:3358');
+	print( 5,15,'交易名称:银联柜面通存款确认');
+ 	print( 7,20,'卡    号: [24]',#AC_NO);
+	print( 8,20,'交易日期: [8 ]',#TX_DATE);
+	print( 9,20,'平台流水: [12]',$FD52);
+	print_sq();
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+	print(24,05,'柜员:[4]',$FD7);
+	print(24,5 ,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

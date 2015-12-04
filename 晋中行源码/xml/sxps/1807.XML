@@ -1,0 +1,473 @@
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1807 定期贷记业务录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-42s" FUNCTIONS="T( 1807                    定期贷记业务录入)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#HZJE"  TYPE="%16.2f" FUNCTIONS=""/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1807)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(定期贷记业务录入)"/>
+	<ITEM LINE="5" COL="03" TYPE="%-11s" FUNCTIONS="T(项目  编号:)"/>
+	<ITEM LINE="5" COL="14" NAME="#TXNO" TYPE="%-24s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		//调用短交易查询原录入信息
+		initfd();
+		commsend_001();
+		$FD16 = '1004';
+		$FD18 = 'pbp';
+		$FD81 = #TXNO;
+		$FD71 = '2';	//标识定期贷记
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		showblock('BLOCK_TH',true,false);
+		#YWTYPE=$FD64;            //业务种类
+		#TXNUM=$FD34;            //业务类型
+		#PAY_NO=$FD31;          //付款人账号
+		#PAY_NAME=$FD26;       //付款人名称
+		#PAY_ADD=$FD112;      //付款人地址
+		#HZJE=val($FD39,1);   //交易金额
+		#CUR_NO=$FD89;       //币种
+		#NU_TYPE = $FD68;
+		#DOCTYPE = $FD50;
+		#NOTE_NO = $FD60;
+	//	showmsg(#YWTYPE);
+	//	showmsg('付款人账号'+#PAY_NO+$FD31);			
+		show(#TXNUM,true);
+		show(#YWTYPE,true);
+		enable(#TXNUM,false);
+		enable(#YWTYPE,false);
+		enable(#PAY_NO,false);
+		enable(#PAY_NAME,false);
+		enable(#PAY_ADD,false);
+		enable(#CUR_NO,false);
+		enable(#NU_TYPE,false);
+		enable(#DOCTYPE,false);
+		enable(#NOTE_NO,false);
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<BLOCK NAME="BLOCK_TH" LINE="0" VISABLE="FALSE">
+		<ITEM LINE="6" COL="03" TYPE="%-11s" FUNCTIONS="T(付款人账号:)"/>
+		<ITEM LINE="6" COL="14" NAME="#PAY_NO" INPUT="TEXT" TYPE="%-32s" FUNCTIONS="T()V(NB)">
+		<!--
+		<ONLOSTFOCUS>
+		"{
+			if (substr(#PAY_NO,0,1) == '6' or substr(#PAY_NO,0,1) == '1')
+			{
+				show(#PZZL,false);
+				show(#NOTE_TYPE,false);
+				show(#NOTEHM,false);
+				show(#NOTE_NO,false);
+				if( substr(#PAY_NO,0,1) == '1'){//折子要求校验凭证号码
+					show(#PZZL,true);
+					show(#NOTE_TYPE,true);
+					#NOTE_TYPE='010';
+					enable(#NOTE_TYPE,false);
+					show(#NOTEHM,true);
+					show(#NOTE_NO,true);
+				}
+			}else if (substr(#PAY_NO,0,1) == '5'){
+    	
+				//对公账户需要校验凭证
+				show(#PZZL,true);
+				show(#NOTE_TYPE,true);
+				show(#NOTEHM,true);
+				show(#NOTE_NO,true);
+			}else{
+    	
+				show(#PZZL,false);
+				show(#NOTE_TYPE,false);
+				show(#NOTEHM,false);
+				show(#NOTE_NO,false);
+			}
+    	
+			initfd();
+			commsend_001();
+			$FD16 = '9101';
+			$FD18 = 'CBS';
+			$FD114 = #PAY_NO;
+			callagn_cnaps2();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				showmsg('查询出错,没有找到相应的账户信息!');
+				return(false);
+			}
+			if (delspace($FD128) == '6' or delspace($FD128) == '8' or delspace($FD128) == '41'){
+					showmsg('挂账账号不允许做业务,请核对！');
+					return(false);
+				}
+			#OPEN_BRAN = $FD2;
+			#PAY_NM = $FD25;
+			#PZHM = delspace($FD33);//凭证号码
+			#PZZT = delspace($FD93);//凭证状态
+			if (substr(#PAY_NO,0,1) == '9'){
+				enable(#PAY_NM,true);
+			}else{
+				enable(#PAY_NM,false);
+			}
+			#FKKHHH = $FD63;//付款开户行号
+			#TX_AMT1 = val($FD42,0.01);//showmsg('账户可用余额='+itoa(#TX_AMT1,'%.2f'));
+			showhelp(4,40,5,30,'账户信息',' 可用余额:'+itoa(val($FD42,0.01),'%16.2f'));
+			$FD59=delspace($FD59);
+			#ZHLX=$FD59;
+		
+			if(delspace($FD36) == '2010')//对公折需校验折子号码
+			{
+				show(#PZZL,true);
+				show(#NOTE_TYPE,true);
+				#NOTE_TYPE='010';
+				enable(#NOTE_TYPE,false);
+				show(#NOTEHM,true);
+				show(#NOTE_NO,true);
+			}
+			
+			dim @buf1 as string;
+			if($FD59 == '1')
+			{
+				#DRAW_PWD = '';
+				showmsg('需要检查密码');
+				show(#LDRAW_PWD,true);
+				show(#DRAW_PWD,true);
+			}
+			if($FD72 == '2')
+			{
+				showmsg('需要检查证件');
+				show(#LBL_ID_TYPE,true);
+				show(#ID_TYPE,true);
+				show(#LBL_ID_NO,true);
+				show(#ID_NO,true);
+			}
+			if($FD59 != '1' and $FD59 != '2')
+			{
+				show(#LDRAW_PWD,false);
+				show(#DRAW_PWD ,false);
+				show(#LBL_ID_TYPE,false);
+				show(#ID_TYPE,false);
+				show(#LBL_ID_NO,false);
+				show(#ID_NO,false);
+			}
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+		-->
+		</ITEM>
+		<ITEM LINE="7" COL="03" TYPE="%-11s" NAME="#PAY1" FUNCTIONS="T(付款人姓名:)"/>
+		<ITEM LINE="7" COL="14" NAME="#PAY_NAME" INPUT="TEXT" TYPE="%-60s" FUNCTIONS="T()V(NB)"/>
+		<ITEM LINE="8" COL="03" TYPE="%-11s" NAME="#PAY2" FUNCTIONS="T(付款人地址:)"/>
+		<ITEM LINE="8" COL="14" NAME="#PAY_ADD" INPUT="TEXT" TYPE="%-60s" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			dim @val as number;
+			@val = call('chkhalf '+#BRF,1);
+			if(@val !=0 and #BRF!='')
+			{
+				showmsg('输入的字符中有非法汉字，请检查');
+				return (false);
+			}
+		}"
+		</ONLOSTFOCUS>
+		</ITEM>
+	
+		<ITEM LINE="9" COL="03" TYPE="%-11s" FUNCTIONS="T(业务  类型:)"/>
+		<ITEM LINE="9" COL="14" NAME="#TXNUM" TYPE="%-4s"  DEVICE="KAYBOARD" FUNCTIONS="T()V(NB)">
+			<SELECT>
+				<OPTION VALUE="A101" TITLE="公益性资金汇划  "/>
+				<OPTION VALUE="C211" TITLE="薪金报酬        "/>
+				<OPTION VALUE="E100" TITLE="普通定期贷记业务" />
+				<OPTION VALUE="E101" TITLE="定期代付        "/>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="9" COL="41" TYPE="%-11s" FUNCTIONS="T(业务  种类:)"/>
+		<ITEM LINE="9" COL="52" NAME="#YWTYPE" TYPE="%-5s" INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+			<SELECT >
+				<OPTION VALUE="09001" TITLE="其他"/>
+				<OPTION VALUE="01300" TITLE="慈善捐款"/>
+				<OPTION VALUE="01200" TITLE="薪金报酬"/>
+				<OPTION VALUE="00100" TITLE="电费"/>
+				<OPTION VALUE="00200" TITLE="水暖费"/>
+				<OPTION VALUE="00300" TITLE="煤气费"/>
+				<OPTION VALUE="00400" TITLE="电话费"/>
+				<OPTION VALUE="00500" TITLE="通讯费"/>
+				<OPTION VALUE="00600" TITLE="保险费"/>
+				<OPTION VALUE="00700" TITLE="房屋管理费"/>
+				<OPTION VALUE="00800" TITLE="代理服务费"/>
+				<OPTION VALUE="00900" TITLE="学教费"/>
+				<OPTION VALUE="01000" TITLE="有线电视费"/>
+				<OPTION VALUE="01100" TITLE="企业管理费用"/>
+			</SELECT>
+		</ITEM>
+	</BLOCK>
+		
+	<ITEM LINE="10" COL="3" TYPE="%-11s" NAME="#LDRAW_PWD"  INPUT="LABEL" FUNCTIONS="T(支取  密码:)"/>
+	<ITEM LINE="10" COL="14" TYPE="%-6s" INPUT="TEXT"  DEVICE="KEYBOARD" NAME="#PayPasswd" FUNCTIONS="V(NB)i()">
+	
+	<!--
+	<ONLOSTFOCUS>
+		"{
+			if((#ZHLX=='0' or #ZHLX=='1' ) and delspace(#DRAW_PWD) == '' )
+			{
+				showmsg('无密户不允许做此业务');
+			}
+			initfd();
+			commsend_001();
+			$FD16='9317';
+			$FD30=#PAY_NO;
+			$FD79=getitems('#DRAW_PWD');
+			//callserver();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return (false);
+			}
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	-->
+	</ITEM>
+	<ITEM LINE="11" COL="03" TYPE="%-11s" FUNCTIONS="T(货币  类型:)"/>
+	<ITEM LINE="11" COL="14" TYPE="%3s" INPUT="SELECT" DEVICE="KEYBOARD" NAME="#CUR_NO" FUNCTIONS="V(NB)T(CNY)">
+		<SELECT>
+			<OPTION VALUE="CNY" TITLE="0.人民币"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="11" COL="41" TYPE="%-11s" FUNCTIONS="T(交易  金额:)"/>
+	<ITEM LINE="11" COL="52" NAME="#txamt"  INPUT="TEXT"  TYPE="%16.2f"  FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		if(#txamt &gt; 500000000000)
+		{
+			if(msgbox('请检查是否金额输入错误,确认继续,取消重新输入','金额太大提示','ok|cancel') == 1)
+			{
+				return(false);
+			}
+		}
+		if(#txamt == 0 )
+		{
+			showmsg('交易金额要大于零!');
+			return(false);
+		}
+		//检查交易金额与项目维护时汇总金额是否一致
+		if(#txamt != #HZJE)
+		{
+			showmsg('交易金额与汇总金额不一致!');
+			//showmsg('汇总金额为：'+#HZJE1);
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="12" COL="03" TYPE="%-11s" FUNCTIONS="T(钞汇  类型:)"/>
+	<ITEM LINE="12" COL="14" NAME="#NU_TYPE" TYPE="%1s"  DEVICE="KAYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="丙钞"/>
+			<OPTION VALUE="2" TITLE="甲汇"/>
+			<OPTION VALUE="3" TITLE="乙钞"/>
+			<OPTION VALUE="4" TITLE="乙汇"/>
+			<OPTION VALUE="6" TITLE="丙汇"/>
+		</SELECT>
+	</ITEM>
+
+	<ITEM LINE="14" COL="03" TYPE="%-11s" INPUT="LABEL"  NAME="#PZZL"  FUNCTIONS="T(凭证  类型:)"/>
+	<ITEM LINE="14" COL="14" TYPE="%-2s" INPUT="SELECT"  DEVICE="KEYBOARD" NAME="#DOCTYPE" FUNCTIONS="V(NB)T(01)">
+		<SELECT>
+			<OPTION VALUE="01" TITLE="0.转账支票"/>
+			<OPTION VALUE="02" TITLE="1.电汇凭证"/>
+			<OPTION VALUE="03" TITLE="2.其他"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="14" COL="41" NAME="#NOTEHM" TYPE="%-11s" INPUT="LABEL"   FUNCTIONS="T(凭证  号码:)"/>
+	<ITEM LINE="14" COL="52" NAME="#NOTE_NO"  INPUT="TEXT"   TYPE="%-16s"  FUNCTIONS="T()V(NB)"/>
+	
+	
+
+	
+	<ITEM LINE="16" COL="03" TYPE="%-11s" INPUT="LABEL"   FUNCTIONS="T(手续费标志:)"/>
+	<ITEM LINE="16" COL="14" TYPE="%-2s" INPUT="SELECT"  DEVICE="KEYBOARD" NAME="#FEETYPE" FUNCTIONS="V(NB)T(01)">
+		<SELECT>
+			<OPTION VALUE="01" TITLE="0.现金"/>
+			<OPTION VALUE="02" TITLE="1.转账"/>
+			<OPTION VALUE="03" TITLE="2.不收"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#FEETYPE == '03')
+			{
+				show(#NOTFEE,false);
+				show(#FEESUM,false);
+			}else{
+				show(#NOTFEE,true);
+				show(#FEESUM,true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="16" COL="41" NAME="#NOTFEE" TYPE="%-11s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(手续费金额:)"/>
+	<ITEM LINE="16" COL="52" NAME="#FEESUM"  TYPE="%16.2f" VISABLE="FALSE" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			goitem(#BRF,true);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="18" COL="03" TYPE="%-11s" FUNCTIONS="T(业务  附言:)"/>
+	<ITEM LINE="18" COL="14" NAME="#BRF"  TYPE="%-62s"  DEVICE="KEYBOARD" FUNCTIONS="T()">
+	<!--
+	<ONLOSTFOCUS>
+	"{
+		dim @val as number;
+		@val = call('chkhalf '+#BRF,1);
+		if(@val !=0 and #BRF!='')
+		{
+			showmsg('输入的字符中有非法汉字，请检查');
+			return (false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	-->
+	</ITEM>
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @buffer as string;
+		dim @file as file;
+		dim @stramt as string;
+		dim @AMT    as number;		
+		dim @remit  as string;
+		initfd();
+		commsend_001();
+		
+		//调短交易1106确定汇路
+		//$FD16='1106';
+		//$FD18='pbp';
+		//$FD34=#TXNUM;          //业务类型
+		//$FD64=#YWTYPE;         //业务种类
+		//callagnpbp();
+		//if($FD12!='0000')
+		//{
+		//	showmsg(geterror());
+		//	return(false);
+		//}
+		//@remit=$FD28;
+		//调短交易1106确定汇路
+		
+		initfd();
+		commsend_001();
+		@AMT = #txamt*100;
+		@remit = 'sxps';
+		@stramt = itoa(@AMT,'%d');
+		$FD39 = @stramt;	//交易金额    
+		@AMT = #FEESUM*100;
+		@stramt = itoa(@AMT,'%d');	
+		$FD40 = @stramt;		//手续费金额	
+		$FD16 = '1206';
+		$FD18 = 'pbp';
+		$FD81 = #TXNO;    //交易序号	
+		$FD30 = #PAY_NO; //付款账号
+		$FD25 = #PAY_NAME;   //付款名称
+		$FD112 = #PAY_ADD;   //付款地址
+		$FD34 = #TXNUM;       //业务类型
+		$FD64 = #YWTYPE;     //业务种类
+		$FD67 = #FEETYPE;		//手续费标志feeway
+		$FD57 = #PayPasswd;	//支付密码
+		$FD67 = #NU_TYPE;   //钞汇类型
+		$FD89 = #CUR_NO;  //币种
+		$FD92 = #DOCTYPE;	//凭证类型
+		$FD60 = #NOTE_NO;	//凭证号
+		$FD103 = #BRF;  //附言
+		$FD36 = '2';	//借贷标志
+		$FD28 = @remit;	//汇路
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		showmsg('交易成功!');
+		runoutput();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="显示内容" >
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+			print( 3, 32,'定期贷记业务录入');
+			print(6,25,'交易  日期:[8]',$FD46);
+			print(7,25,'交易  序号:[8]',$FD33);
+			print( 8,25, '项目  编号:[30]',#TXNO);
+			print( 9,25, '付款人账号:[32]',#PAY_NO);
+			print(10,25, '付款人名称:[60]',#PAY_NAME);
+			print(11,25, '交易  金额:[17]',itoa(#txamt,'%.2f'));
+			if(#DOCTYPE != '')
+			{
+				print(12,25, '凭证  类型:[20]',getseltitle(#DOCTYPE,#DOCTYPE));
+				print(13,25, '凭证  号码:[16]',#NOTE_NO);
+			}
+		//	print(14,25,'业务  流水:[20]',$FD41);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5, 10,'机构名称:[30]',$BRNAME);
+		print( 5, 5,'代码:1405');
+		print( 5, 5,'交易:定期贷记业务录入');
+		print( 7,25, '项目  编号:[30]',#TXNO);
+		//print( 8,25, '录入  日期:[8]',#LRRQ);
+		//print( 7,25, '交易支付序号:[16]',$FD43);
+		print( 9,25, '付款人账号:[32]',#PAY_NO);
+		print( 10,25, '付款人名称:[60]',#PAY_NAME);
+		print(11,25, '交易  金额:[17]',itoa(#txamt,'%.2f'));
+		if(#DOCTYPE != '')
+		{
+			print(12,10, '凭证  类型:[20]            凭证号码:[16]',getseltitle(#DOCTYPE,#DOCTYPE),#NOTE_NO);
+		}
+		
+		//print(14,25,'业务  日期:[8]',$FD44);
+		print(15,25,'业务  流水:[20]',$FD41);
+		
+		//print(22,10,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(22,5,'柜员:[6]',$FD7);
+		//if (len($FD64) != 6)
+		//{
+		//	$FD64 = space(6-(len($FD64)),'0') + $FD64;
+		//}
+		//print(22,5,'柜员流水:[8]',$FD64);
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

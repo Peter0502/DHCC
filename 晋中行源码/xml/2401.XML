@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111001" TITLE="2401 客户之间关系维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+   "{
+     commsend_001();
+     $FD67=#OPTYPE;
+     $FD29=#CUSTNO;
+     $FD25=#CUSTNAME;
+     $FD28=#GCUSTNO;
+     $FD26=#GCUSTNAME;
+     $FD23=#RECODE;
+   }"
+</COMMSEND>
+<COMMRECV>
+  "{
+     commrecv_001();
+   }"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+   "T(2401                        客户之间关系维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1401)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!-------输入变量------->
+  <ITEM LINE="6" COL="6" TYPE="%-10s" FUNCTIONS="T(操作类型:!)"/>
+  <ITEM LINE="6" COL="16" NAME="#OPTYPE" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="T(1)">
+    <SELECT>
+      <OPTION VALUE="1" TITLE="修改" />
+      <OPTION VALUE="2" TITLE="删除" />
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#SOPTYPE"   TYPE="%-4s"  FUNCTIONS="S(#OPTYPE,#OPTYPE)"/>
+
+  <ITEM LINE="8" COL="6" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="10" COL="6" TYPE="%-10s" FUNCTIONS="T(客户名称:)"/>
+  <ITEM LINE="8" COL="16" TYPE="%-8s"   NAME="#CUSTNO" INPUT="TEXT" FUNCTIONS="h()V(NB)">
+    <ONLOSTFOCUS>
+ 	    "{initfd();
+ 	  	  dim @txno_bak as string;
+ 	 	    dim @tota as string;
+ 	  	  @txno_bak=$TXNO;
+ 	 	    $TXNO='9848';
+ 	 	    $FD29=#CUSTNO;
+ 	   	  commsend_001();
+ 	  	  @tota=callserver();
+ 	  	  $TXNO=@txno_bak;
+		    if($FD12!='0000'){
+			  showmsg(geterror());
+			  return(false);
+			  } 
+		    #CUSTNAME=delspace($FD25);
+		    show(#CUSTNAME,true);
+		    enable(#CUSTNAME,false);
+		 }"	 	
+   </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="10" COL="16" TYPE="%-60s" NAME="#CUSTNAME"  INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM LINE="12" COL="3"  TYPE="%-74s" FUNCTIONS=
+  "T(--------------------------------------------------------------------------)"/>
+  <ITEM LINE="14" COL="6" TYPE="%-12s" FUNCTIONS="T(关联客户号: )"/>
+  <ITEM LINE="16" COL="6" TYPE="%-12s" FUNCTIONS="T(关联客户名: )"/>
+  <ITEM LINE="18" COL="6" TYPE="%-12s" FUNCTIONS="T(关系  代码:!)"/>
+  <ITEM LINE="14" COL="18" TYPE="%-8s" NAME="#GCUSTNO" INPUT="TEXT" FUNCTIONS="h()V(NB)">
+    <ONLOSTFOCUS>
+	"{
+		initfd();
+		dim @txno_bak as string;
+		dim @tota as string;
+		@txno_bak=$TXNO;
+		$TXNO='9852';
+		$FD28=#GCUSTNO;
+		$FD29=#CUSTNO;
+		commsend_001();
+		@tota=callserver();
+		$TXNO=@txno_bak;	
+		if($FD12!='0000')
+		{showmsg(geterror());
+		return(false);
+		}
+		#GCUSTNAME=delspace($FD26);
+		show(#GCUSTNAME,true);
+		enable(#GCUSTNAME,false);
+		#RECODE=delspace($FD23);
+		show(#RECODE,true);
+		if(#OPTYPE == '2')
+		{
+			enable(#RECODE,false);
+		}
+		else
+		{
+			enable(#RECODE,true);
+		}
+			
+      }"
+    </ONLOSTFOCUS> 
+  </ITEM>
+  <ITEM NAME="#GCUSTNAME" INPUT="TEXT" LINE="16" COL="18" TYPE="%-60s" FUNCTIONS="T()" />
+  <ITEM NAME="#RECODE" INPUT="SELECT" LINE="18" COL="18" TYPE="%-3s" FUNCTIONS="" >
+    <SELECT>
+       <OPTION VALUE="001" TITLE="子女"/>
+       <OPTION VALUE="002" TITLE="父母"/>
+       <OPTION VALUE="003" TITLE="夫妻"/>
+       <OPTION VALUE="004" TITLE="兄妹"/>
+       <OPTION VALUE="005" TITLE="任职"/>
+       <OPTION VALUE="006" TITLE="参股"/>
+       <OPTION VALUE="007" TITLE="总裁"/>
+       <OPTION VALUE="008" TITLE="股东"/>
+       <OPTION VALUE="009" TITLE="联合公司"/>
+       <OPTION VALUE="010" TITLE="控股公司"/>
+       <OPTION VALUE="011" TITLE="子公司"/>
+       <OPTION VALUE="012" TITLE="其他"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#SRECODE"   TYPE="%-8s"  FUNCTIONS="S(#RECODE,#RECODE)"/>
+
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错------------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM LINE="20" COL="59" TYPE="%-6s" FUNCTIONS="T(确 定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="客户之间关系">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{ 
+		if(#OPTYPE == '1')
+		{
+			print( 3,30,'客户之间关系[ 4]',#SOPTYPE);
+			print( 5,6,'客  户  号: [ 8]',#CUSTNO);
+			print( 6,6,'客户  名称: [60]',#CUSTNAME);
+			print( 7,6,'关联客户号: [ 8]',#GCUSTNO);
+			print( 8,6,'关联客户名: [60]',#GCUSTNAME);
+			print( 9,6,'关系  代码: [ 8]',#SRECODE);
+		}
+		else
+		{
+			print( 3,30,'客户之间关系[4]',#SOPTYPE);
+			print( 5,6,'客  户  号: [8]',#CUSTNO);
+			print( 7,6,'关联客户号: [8]',#GCUSTNO);
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

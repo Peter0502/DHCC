@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01000100010000000000000000000000" TITLE="3901       结构性存款反向止付"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+                rerun();        
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS= "T(3901                        结构性存款反向止付)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2901)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<!--屏幕输入内容 --> 
+ <ITEM LINE="06"      COL="7"  TYPE="%-13s"     FUNCTIONS="T(操作类型: )"/>
+ <ITEM LINE="07"      COL="7" TYPE="%-13s"     FUNCTIONS="T(账号:!)"/> 
+ 
+ <!--控制输入内容 -->  
+ <ITEM LINE="06"   COL="20"  TYPE="%-12s"  NAME="#OPTYPE" INPUT="SELECT" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T()">
+ 	<SELECT LINE="6" COL="20">
+         <OPTION VALUE="1" TITLE="登记"/>
+         <OPTION VALUE="2" TITLE="解除"/>
+       </SELECT>
+ </ITEM>
+ <ITEM LINE="07"   COL="20"  NAME="#ACTNO" TYPE="%-19s"  VISABLE="TRUE"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+        <ONLOSTFOCUS>
+        "{
+		initfd();
+		commsend_001();
+		if(substr(#ACTNO,1,4)!='2001' and substr(#ACTNO,1,4)!='2002' and substr(#ACTNO,1,4)!='2003' and substr(#ACTNO,1,4)!='2004'){
+			showmsg('输入账户'+#ACTNO+'非机构性存款账户，请确认！');
+			return(false);
+ 		}
+        }"
+        </ONLOSTFOCUS>
+ </ITEM>
+
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+    initfd();
+    commsend_001();
+    $FD16='2901';
+    $FD67=#OPTYPE;
+    $FD30=#ACTNO;
+    callserver();
+    if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+    }
+    runoutput();
+ }"
+ </ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        print(5, 25,'结构性存款维护交易成功!');
+    }"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印凭证 "  LINESPACE="24">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        dim @txtime as string;
+        dim @space as string;
+        @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        $KINDNO = '00'; 
+        if(#OPTYPE=='1'){
+        	@space = '登记';
+        }else if(#OPTYPE=='2'){
+        	@space = '解除';
+        }
+               
+        
+        print( 4,10,'机构名称:[30]',$BRNAME);
+        print( 4,5,'代码:3901');
+        print( 4,5,'交易:结构性存款反向止付');
+        print( 9,10,'操作类型:[4]',@space);
+        print( 10,10,'账    号:[20]',#ACTNO);
+        print(21,10,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(21,5,'柜员:[6]',$FD7);
+        print(21,5,'流水号:[6]',substr($FD126,2,6));
+        print_sq();
+        
+    }"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+	

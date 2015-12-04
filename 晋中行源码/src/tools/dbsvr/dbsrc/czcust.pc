@@ -1,0 +1,290 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"czcust_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int czcust_con ( struct czcust_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct czcust_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->opnbr);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->name);
+	zip_tail(ps->pact_no);
+	zip_tail(ps->opday);
+	zip_tail(ps->endday);
+	zip_tail(ps->id_no);
+	zip_tail(ps->crd_no);
+	zip_tail(ps->tablename);
+	zip_tail(ps->flag);
+	zip_tail(ps->id_type);
+}
+int Czcust_Debug(struct czcust_c *ps){
+	vtcp_log("czcust_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("czcust_c.opnbr=[%s]\n",ps->opnbr);
+	vtcp_log("czcust_c.ac_id=[%f]\n",ps->ac_id);
+	vtcp_log("czcust_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("czcust_c.cif_no=[%f]\n",ps->cif_no);
+	vtcp_log("czcust_c.name=[%s]\n",ps->name);
+	vtcp_log("czcust_c.pact_no=[%s]\n",ps->pact_no);
+	vtcp_log("czcust_c.avbal=[%f]\n",ps->avbal);
+	vtcp_log("czcust_c.opday=[%s]\n",ps->opday);
+	vtcp_log("czcust_c.endday=[%s]\n",ps->endday);
+	vtcp_log("czcust_c.id_no=[%s]\n",ps->id_no);
+	vtcp_log("czcust_c.crd_no=[%s]\n",ps->crd_no);
+	vtcp_log("czcust_c.tablename=[%s]\n",ps->tablename);
+	vtcp_log("czcust_c.flag=[%s]\n",ps->flag);
+	vtcp_log("czcust_c.id_type=[%s]\n",ps->id_type);
+	vtcp_log("czcust_c.ncif_no=[%ld]\n",ps->ncif_no);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Czcust_Sel(reply,czcust_c,fmtstr,va_alist)
+char    *reply;
+struct  czcust_c *czcust_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Czcust_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Czcust_Fet_Sel( czcust_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Czcust_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Czcust_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,czcust.* FROM czcust WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE czcust_sel FROM :comm;
+	EXEC SQL DECLARE sel_czcust CURSOR FOR czcust_sel;
+
+	EXEC SQL OPEN sel_czcust;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Czcust_Fet_Sel ( struct czcust_c *czcust_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_czcust INTO :czcust_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch czcust error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch czcust finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(czcust_c);
+
+	return 0;
+}
+
+int Czcust_Clo_Sel (){
+	EXEC SQL CLOSE sel_czcust;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Czcust_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,czcust.* FROM czcust WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE czcust_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_czcust CURSOR FOR czcust_upd;
+
+	EXEC SQL OPEN upd_czcust;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Czcust_Fet_Upd( struct czcust_c *czcust_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_czcust INTO :czcust_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH czcust finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(czcust_c);
+
+	return 0;
+}
+
+int Czcust_Upd_Upd( struct czcust_c czcust_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE czcust SET opnbr=:czcust_c.opnbr,
+			ac_id=:czcust_c.ac_id,
+			ac_no=:czcust_c.ac_no,
+			cif_no=:czcust_c.cif_no,
+			name=:czcust_c.name,
+			pact_no=:czcust_c.pact_no,
+			avbal=:czcust_c.avbal,
+			opday=:czcust_c.opday,
+			endday=:czcust_c.endday,
+			id_no=:czcust_c.id_no,
+			crd_no=:czcust_c.crd_no,
+			tablename=:czcust_c.tablename,
+			flag=:czcust_c.flag,
+			id_type=:czcust_c.id_type,
+			ncif_no=:czcust_c.ncif_no
+	WHERE rowid=:czcust_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Czcust_Del_Upd(struct czcust_c czcust_c , char * reply  ){
+
+	EXEC SQL DELETE FROM czcust WHERE rowid=:czcust_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Czcust_Clo_Upd( ){
+	EXEC SQL CLOSE upd_czcust;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Czcust_Ins( struct czcust_c czcust_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO czcust VALUES (:czcust_c.opnbr,
+			:czcust_c.ac_id,
+			:czcust_c.ac_no,
+			:czcust_c.cif_no,
+			:czcust_c.name,
+			:czcust_c.pact_no,
+			:czcust_c.avbal,
+			:czcust_c.opday,
+			:czcust_c.endday,
+			:czcust_c.id_no,
+			:czcust_c.crd_no,
+			:czcust_c.tablename,
+			:czcust_c.flag,
+			:czcust_c.id_type,
+			:czcust_c.ncif_no);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT czcust error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,270 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"ln_expand_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int ln_expand_con ( struct ln_expand_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct ln_expand_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->exp_br_no);
+	zip_tail(ps->exp_ind);
+	zip_tail(ps->tel);
+}
+int Ln_expand_Debug(struct ln_expand_c *ps){
+	vtcp_log("ln_expand_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("ln_expand_c.ac_id=[%ld]\n",ps->ac_id);
+	vtcp_log("ln_expand_c.ac_seqn=[%ld]\n",ps->ac_seqn);
+	vtcp_log("ln_expand_c.exp_br_no=[%s]\n",ps->exp_br_no);
+	vtcp_log("ln_expand_c.exp_amt=[%f]\n",ps->exp_amt);
+	vtcp_log("ln_expand_c.exp_rate=[%f]\n",ps->exp_rate);
+	vtcp_log("ln_expand_c.exp_beg_date=[%ld]\n",ps->exp_beg_date);
+	vtcp_log("ln_expand_c.exp_mtr_date=[%ld]\n",ps->exp_mtr_date);
+	vtcp_log("ln_expand_c.exp_ind=[%s]\n",ps->exp_ind);
+	vtcp_log("ln_expand_c.rgst_date=[%ld]\n",ps->rgst_date);
+	vtcp_log("ln_expand_c.tel=[%s]\n",ps->tel);
+	vtcp_log("ln_expand_c.trace_no=[%ld]\n",ps->trace_no);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Ln_expand_Sel(reply,ln_expand_c,fmtstr,va_alist)
+char    *reply;
+struct  ln_expand_c *ln_expand_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Ln_expand_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Ln_expand_Fet_Sel( ln_expand_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Ln_expand_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Ln_expand_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,ln_expand.* FROM ln_expand WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_expand_sel FROM :comm;
+	EXEC SQL DECLARE sel_ln_expand CURSOR FOR ln_expand_sel;
+
+	EXEC SQL OPEN sel_ln_expand;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_expand_Fet_Sel ( struct ln_expand_c *ln_expand_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_ln_expand INTO :ln_expand_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch ln_expand error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch ln_expand finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_expand_c);
+
+	return 0;
+}
+
+int Ln_expand_Clo_Sel (){
+	EXEC SQL CLOSE sel_ln_expand;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Ln_expand_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,ln_expand.* FROM ln_expand WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_expand_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_ln_expand CURSOR FOR ln_expand_upd;
+
+	EXEC SQL OPEN upd_ln_expand;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_expand_Fet_Upd( struct ln_expand_c *ln_expand_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_ln_expand INTO :ln_expand_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH ln_expand finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_expand_c);
+
+	return 0;
+}
+
+int Ln_expand_Upd_Upd( struct ln_expand_c ln_expand_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE ln_expand SET ac_id=:ln_expand_c.ac_id,
+			ac_seqn=:ln_expand_c.ac_seqn,
+			exp_br_no=:ln_expand_c.exp_br_no,
+			exp_amt=:ln_expand_c.exp_amt,
+			exp_rate=:ln_expand_c.exp_rate,
+			exp_beg_date=:ln_expand_c.exp_beg_date,
+			exp_mtr_date=:ln_expand_c.exp_mtr_date,
+			exp_ind=:ln_expand_c.exp_ind,
+			rgst_date=:ln_expand_c.rgst_date,
+			tel=:ln_expand_c.tel,
+			trace_no=:ln_expand_c.trace_no
+	WHERE rowid=:ln_expand_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Ln_expand_Del_Upd(struct ln_expand_c ln_expand_c , char * reply  ){
+
+	EXEC SQL DELETE FROM ln_expand WHERE rowid=:ln_expand_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_expand_Clo_Upd( ){
+	EXEC SQL CLOSE upd_ln_expand;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Ln_expand_Ins( struct ln_expand_c ln_expand_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO ln_expand VALUES (:ln_expand_c.ac_id,
+			:ln_expand_c.ac_seqn,
+			:ln_expand_c.exp_br_no,
+			:ln_expand_c.exp_amt,
+			:ln_expand_c.exp_rate,
+			:ln_expand_c.exp_beg_date,
+			:ln_expand_c.exp_mtr_date,
+			:ln_expand_c.exp_ind,
+			:ln_expand_c.rgst_date,
+			:ln_expand_c.tel,
+			:ln_expand_c.trace_no);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_expand error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

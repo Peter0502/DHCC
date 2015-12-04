@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="8687    批量正式开卡交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(8687                        批量正式开卡交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6687)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <!--ITEM LINE="7" COL="13" TYPE="%-10s" FUNCTIONS="T(操作类型:)"/-->
+  <ITEM LINE="7" COL="11" TYPE="%-15s" FUNCTIONS="T(预开卡日期:)"/>
+  <ITEM LINE="7" COL="49" TYPE="%-10s" FUNCTIONS="T(核心流水:)"/>
+  <ITEM LINE="9" COL="9" TYPE="%-14s" FUNCTIONS="T(成功文件名称:)"/>
+  <ITEM LINE="11" COL="13" TYPE="%-10s" FUNCTIONS="T(代理单位:)"/>
+  <ITEM LINE="13" COL="9"  TYPE="%-14s" FUNCTIONS="T(文件导入方式:)"/>
+  <ITEM LINE="13" COL="49"  TYPE="%-10s" FUNCTIONS="T(初始密码:)"/>
+  <ITEM LINE="15" COL="13" TYPE="%-10s" FUNCTIONS="T(总 金 额:)"/>
+  <ITEM LINE="15" COL="49" TYPE="%-10s" FUNCTIONS="T(总 笔 数:)"/>
+
+  
+  <!--ITEM NAME="#TXTYPE" INPUT="LABEL" LINE="7" COL="23" TYPE="%-5s" FUNCTIONS="T(0)">
+  <SELECT>
+      <OPTION VALUE ="0" TITLE="0.查询状态"/>
+      <OPTION VALUE ="1" TITLE="1.批量开卡"/>
+  </SELECT>
+  </ITEM-->
+  <ITEM NAME="#TXDATE" INPUT="TEXT" LINE="7" COL="23" TYPE="%-8s" FUNCTIONS="V(NB)T($HDATE)"/>
+ 
+	<ITEM NAME="#TRACENO" INPUT="TEXT" LINE="7" COL="59" TYPE="%-6s" FUNCTIONS="V(NB)">
+		<ONGOTFOCUS>
+  "{
+				#TRACENO='';
+				show(#TRACENO,true);
+				enable(#TRACENO,true);
+				#FILENAME='';
+				show(#FILENAME,true);
+				enable(#FILENAME,true);
+				#UNITNO='';
+				show(#UNITNO,true);
+				enable(#UNITNO,true);
+				#INPUTTYPE='';
+				show(#INPUTTYPE,true);
+				enable(#INPUTTYPE,true);
+				#TOTAMT=0.00;
+				show(#TOTAMT,true);
+				enable(#TOTAMT,true);
+				#TOTCNT='';
+				show(#TOTCNT,true);
+				enable(#TOTCNT,true);
+				#CSPWD='';
+				show(#CSPWD,true);
+				enable(#CSPWD,true);
+	 }"
+  </ONGOTFOCUS>
+	<ONLOSTFOCUS>
+  "{		
+			dim @txno_bak as string;
+			@txno_bak=$TXNO;
+			$TXNO='8687';
+			commsend_001();
+			$FD28=#TXDATE;
+			$FD29=#TRACENO;
+			callagn();
+			//if($FD12!='0000')
+			//{
+			//	showmsg(geterror());
+			//	return(false);
+			//}
+			$TXNO=@txno_bak;
+			showhelp(5,38,5,38,'批量发卡结果描述','卡系统批量发卡结果: '+$FD95);
+			if($FD72 == '9')
+			{	
+				#FILENAME=$FD81;
+				show(#FILENAME,true);
+				enable(#FILENAME,false);
+				#UNITNO=$FD82;
+				show(#UNITNO,true);
+				enable(#UNITNO,false);
+				#INPUTTYPE=$FD70;
+				show(#INPUTTYPE,true);
+				enable(#INPUTTYPE,false);
+				#TOTAMT=$FD39;
+				show(#TOTAMT,true);
+				enable(#TOTAMT,false);
+				#TOTCNT=$FD47;
+				show(#TOTCNT,true);
+				enable(#TOTCNT,false);
+				#CSPWD=$FD79;
+				show(#CSPWD,true);
+				enable(#CSPWD,false);
+				@txno_bak=$TXNO;
+				$TXNO='9841';
+				$FD92=#UNITNO;
+				commsend_001();
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				$TXNO=@txno_bak;
+			}
+			else if($FD72 == '1' or $FD72 == '0')
+			{
+					showmsg('卡系统批量发卡结果:'+$FD95+',请确认后重新执行8686交易!');
+					return(false);
+			}
+
+					 }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM NAME="#TIAOZ" INPUT="LABEL"  TYPE="%10s" FUNCTIONS="J(#RESP_CODE)"/>
+  <ITEM NAME="#FILENAME" INPUT="TEXT" LINE="9" COL="23" TYPE="%-40s" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#UNITNO" INPUT="TEXT" LINE="11" COL="23" TYPE="%-4s" FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#INPUTTYPE" INPUT="SELECT" LINE="13" COL="23" TYPE="%-5s" FUNCTIONS="T(1)">
+  <SELECT>
+      <!--OPTION VALUE ="0" TITLE="0.手工"/-->
+      <OPTION VALUE ="1" TITLE="1.导磁盘"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#SPROSTYLE"     TYPE="%-10s"      FUNCTIONS="S(#INPUTTYPE,#INPUTTYPE)"/>
+  
+  <ITEM LINE="13"   COL="59" NAME="#CSPWD"       TYPE="%6s"  DEVICE="PINPAD"  INPUT="TEXT"    FUNCTIONS="V(NB)i()">
+  <ONLOSTFOCUS>
+  "{ 
+     if(len(delspace(#CSPWD))!=6)
+     {
+       showmsg('初始密码长度必须为6位!!!');
+       return(false);
+     }
+     //showmsg('初始密码为:"'+#CSPWD+'",请牢记!');
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#TOTAMT" INPUT="TEXT" LINE="15" COL="23" TYPE="%-17.2f" FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+  "{
+	if(#TOTAMT &lt; 0.00){
+		showmsg('金额不能为负数!');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#STOTAMT"     TYPE="%-17s"  FUNCTIONS="X(#TOTAMT)"/>
+  
+  <ITEM NAME="#TOTCNT" INPUT="TEXT" LINE="15" COL="59" TYPE="%-8s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	if(atoi(#TOTCNT) &lt;= 0){
+		showmsg('笔数不能为负数!');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM NAME="#RESP_CODE"  TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+ 		 dim @txno_bak as string;
+	  //   $FD16='7104';
+	  //   $FD26=#FILENAME;
+	  //   //callagn();
+	  //   if($FD12!='0000'){
+	  //   	showmsg(geterror());
+	  //   	return(false);
+	  //   }
+	  //   //72用于返回神码处理的信息，要根据约定修改
+	  //   if(#TXTYPE=='0'){//查询
+	  //   	if($FD72=='0'){
+	  //   		showmsg('神码还没有给回复,请稍等！');
+	  //   	}else if($FD72=='1'){
+	  //   		showmsg('神码审查没通过，请查看错误！');
+	  //   		//可以通过一定的域进行相应的返回错误信息
+	  //   	}else if($FD72=='9'){
+	  //   		showmsg('神码审查通过，可以进行开卡了！');
+	  //   	}
+	  //   }
+	  //   if(#TXTYPE=='1'){//开卡
+	  //   	//if($FD72!='9'){
+	  //   	//	showmsg('神码审查没有通过，不能开卡!');
+	  //   	//	return(false);
+	  //   	//}
+	  @txno_bak=$TXNO;
+		$FD16=$TXNO;//调用核心的服务
+		$FD26=#FILENAME;
+		$FD40=getitems('#TOTAMT');
+		$FD23='101';//活期
+		$FD90='020';//卡
+		$FD55=getitems('#TOTCNT');
+		$FD70=#INPUTTYPE;
+		$FD79=#CSPWD;
+		callserver();
+		#RESP_CODE=$FD12;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			//showmsg($FD13);
+			initfd();
+			$FD16='6222';
+	  	$FD26=#FILENAME;
+	  	$FD48=#RESP_CODE;
+	  	callagn();
+	  	if($FD12!='0000'){
+	  		showmsg(geterror());
+	  	}
+			//initfd();
+			return(false);
+		}
+		$TXNO=@txno_bak;
+		@txno_bak=$TXNO;
+		//initfd();
+		$FD16='6222';
+	  $FD26=#FILENAME;
+	  $FD48=#RESP_CODE;
+	  callagn();
+	  if($FD12!='0000'){
+	  	showmsg(geterror());
+	  	return(false);
+	  }
+	  $TXNO=@txno_bak;
+		runoutput();
+	//   }
+  }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="屏显批量正式开卡结果">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print(3, 20,'单位编码:[4 ]',#UNITNO);
+		print(5, 20,'文件名称:[60]',#FILENAME);
+		print(7, 20,'录入方式:[10]',#SPROSTYLE);
+		print(9, 20,'总 金 额:[17]',#STOTAMT);
+		print(11, 20,'总 笔 数:[8]',#TOTCNT);
+		print(13,20,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印批量正式开卡结果">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:8687');
+		print( 5,13,'交易名称:卡系统批量正式开卡');
+		print(9, 20,'单位编码:[4 ]',#UNITNO);
+		print(11, 20,'文件名称:[60]',#FILENAME);
+		print(13, 20,'录入方式:[10]',#SPROSTYLE);
+		print(15, 20,'总 金 额:[17]',#STOTAMT);
+		print(17, 20,'总 笔 数:[8]',#TOTCNT);
+		print(23,20,'备注:');
+		print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[4]',$FD7);
+		print(23,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

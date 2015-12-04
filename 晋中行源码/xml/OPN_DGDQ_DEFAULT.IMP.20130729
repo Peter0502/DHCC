@@ -1,0 +1,190 @@
+  <PAGE NAME="DEFAULT">
+  <BLOCK NAME="ACTINFO" LINE="2" COL="0" >
+  <ITEM LINE="05"    COL="15"  TYPE="%-10s" FUNCTIONS="T(证件类型:!)"/>
+  <ITEM LINE="07"    COL="15"  TYPE="%-10s" FUNCTIONS="T(证件号码: )"/>
+  <ITEM LINE="7"   COL="45" NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="7"   COL="60" NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="09"    COL="14"  TYPE="%-20s" FUNCTIONS="T(【新开帐户信息】)"  /> 
+  <ITEM LINE="10"    COL="15"  TYPE="%-61s" FUNCTIONS="T(-------------------------------------------------------------)"/>
+  
+  <ITEM LINE="12"    COL="15"  TYPE="%-14s" FUNCTIONS="T(户        名: )" NAME="#S_NAME" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="14"    COL="15"  TYPE="%-14s" FUNCTIONS="T(介 质  种 类:!)" NAME="#S_JZZL" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"    COL="15"  TYPE="%-14s" FUNCTIONS="T(凭 证  号 码: )" NAME="#S_PZHM" INPUT="LABEL" VISABLE="FALSE"/>
+<!--
+  <ITEM LINE="18"    COL="15"  TYPE="%-14s" FUNCTIONS="T(对应活期账号: )" NAME="#S_ACNO" INPUT="LABEL" VISABLE="FALSE"/>
+-->
+ 
+  <ITEM LINE="5" COL="25" NAME="#ZJLX" TYPE="%-1s"  DEVICE="KEYBOARD" INPUT="SELECT"  FUNCTIONS="T(8)">
+  <SELECT>
+      <OPTION VALUE="8" TITLE="企业代码证"/> 
+      <OPTION VALUE="9" TITLE="经营许可证"/> 
+      <OPTION VALUE="A" TITLE="营业执照"/> 
+      <OPTION VALUE="B" TITLE="事业法人证书"/> 
+      <OPTION VALUE="C" TITLE="工商核准号"/> 
+     </SELECT>
+  </ITEM>
+
+  <ITEM LINE="7" COL="25" NAME="#ZJHM" TYPE="%-20s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)I()">
+   <ONLOSTFOCUS>
+   "{
+	dim @s as string;
+	dim @tota as string;
+	dim @list1 as string;
+	dim @list2 as string;
+	dim @i as number;
+	dim @khlx as string;
+	dim @tmp      as string;
+	dim @tmp_head as string;
+
+	commsend_001();
+	$FD16=#CP_SERV;
+  	$FD116=space(35)+#ZJLX+#ZJHM;
+	@tota=callserver();
+
+	if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+//		showmsg('第一次开户请先做客户资料登记!');
+//		@khlx='2';
+//		if(#ZJLX=='B'){
+//			@khlx='3';
+//		}
+//    @s='#KHLX='+@khlx+';#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';';
+//    open('2101.XML',@s);
+       
+	}
+	
+	@tmp='';
+	@tmp_head='';
+	while(@i &lt; len(@tota))
+	{
+		@tmp=substr(@tota,@i,20);
+		@tmp_head=substr(@tmp,0,4);
+		if(@tmp_head=='1031' or rtrim(@tmp_head)=='')
+		{
+			break;
+		}
+		@i=@i+32;
+	}	
+
+	show(#S_NAME,true);
+	show(#S_JZZL,true);
+	show(#S_PZHM,true);
+	show(#CUSTNAME,true);
+	show(#JZZL,true);
+	show(#VOCNUM,true);
+	//show(#S_ACNO,true);
+	//show(#ACTNO,true);
+	setsel(#JZZL,substr(@tota,0,@i),'o5t20o1v4o2');
+	
+	#JZZL='0007';
+	show(#JZZL,true);
+	
+	@list1=substr(@tota, @i, len(@tota)-@i);
+	setsel(#PRODNO,@list1,'o5t22o1v3o2');
+
+	#CUSTNAME=substr($FD116,56,60);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-1 显示图片信息 start-->
+<ITEM NAME="#LYIDNO" TYPE="%-20s" FUNCTIONS="" />
+<ITEM NAME="#LYIDTYPE" TYPE="%-1s" FUNCTIONS="" />
+<ITEM LINE="7" COL="55" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYIDNO=#ZJHM;
+      #LYIDTYPE=#ZJLX;
+      call_96681();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7" COL="70" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYIDNO=#ZJHM;
+      #LYIDTYPE=#ZJLX;
+      call_96682();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-1 显示图片信息 end-->
+  <ITEM LINE="12" COL="29" NAME="#CUSTNAME" TYPE="%-60s" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="14" COL="29" NAME="#JZZL"     TYPE="%-4s"  INPUT="SELECT" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="16" COL="29" NAME="#VOCNUM"   TYPE="%16d"  INPUT="TEXT"   VISABLE="FALSE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+   "{
+	dim @s as string;
+	dim @tota as string;
+
+	initfd();
+	commsend_001();
+	$FD16=#JZ_SERV;
+	$FD116=#JZZL+space(131,' ')+#VOCNUM;
+	
+	@tota=callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	// 定期的产品代码
+	initfd();
+	commsend_001();
+	$FD16=#CARD_SERV;
+	$FD116=#JZZL;
+	@tota=callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	setsel(#PRODNO,@tota,'o5t30o1v3o2');
+	#PRODNO='253';
+	show(#PRODNO,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<!--
+   <ITEM NAME="#ACTNO" TYPE="%-24s" VISABLE="FALSE" FUNCTIONS=""/>
+   <ITEM LINE="18" COL="29" NAME="#ACTNO" TYPE="%-24s" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="">
+  <ONLOSTFOCUS>
+   "{
+	initfd();
+	commsend_001();
+	$FD16='6700';
+	$FD30=#ACTNO;
+	$FD116=space(35)+#ZJLX+#ZJHM;
+	$FD67='1';
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	showhelp(3,70,8,3,'户名','户  名:'+$FD25);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+-->
+
+  </BLOCK>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+  if(#TX_ACT_TYPE=='1') //活期产品
+  {
+	  loadpage('PAGE3');
+	}else if(#TX_ACT_TYPE=='2') //定期产品
+	{
+	  loadpage('PAGE1');
+	}else{
+	  showmsg('产品类型选择错误，请检查前台程序!');
+	  return(false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+  </PAGE>
+

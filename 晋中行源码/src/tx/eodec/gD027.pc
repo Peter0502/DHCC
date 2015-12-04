@@ -1,0 +1,457 @@
+/************************************************************
+* 文 件 名: gD027.c
+* 功能描述：日终入总行总帐 gl_mst
+*           翻牌后执行。
+* 作    者: 
+* 完成日期: 2003年3月14日
+*
+* 修改记录：
+* 日    期: 2003年6月25日
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#define MYSQLERR if( ret ) { \
+		sprintf(acErrMsg,"DO DATABASE ERROR[%d]",ret ); \
+		WRITEMSG \
+		goto ErrExit;\
+		}
+#define SQLERR if( sqlca.sqlcode ) { \
+		sprintf(acErrMsg,"DO DATABASE ERROR[%d]",sqlca.sqlcode ); \
+		WRITEMSG \
+		goto ErrExit;\
+		}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#include "dc_log_bk_c.h"
+EXEC SQL include sqlca;
+
+struct com_sys_parm_c com_sys_parm_c;
+
+gD027()
+{
+	int ret = 0;
+
+    ret=sql_begin(); /*打开事务*/
+    if( ret )
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	if( ret )
+	{
+		sprintf(acErrMsg,"读取系统参数错误" );
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"S005" );
+		goto ErrExit;
+	}
+
+sprintf( acErrMsg," read_time[%s]lst[%d]today[%d] ",
+com_sys_parm_c.real_time_ind,com_sys_parm_c.lst_date,com_sys_parm_c.sys_date );
+	if( com_sys_parm_c.real_time_ind[0]=='Y' )
+	{
+		sprintf(acErrMsg,"系统实时记账，不必处理总帐");
+		WRITEMSG
+		goto OkExit;
+	}
+
+	/*------------查借贷平衡--------------*/
+	ret = pub_eod_check_dc_log();
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"检查分录流水的借贷平衡错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    ret = pub_eod_update_glmst();
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"更新总帐的相关数据错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    ret = pub_eod_insert_oldglmst();
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"将总帐导入到历史总帐里去!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"日终入总帐成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"日终入总帐失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+/**********************************************************************
+ * 函 数 名：   pub_eod_update_glmst
+ * 函数功能：   更新总帐的数据
+********************************************************************/
+int pub_eod_update_glmst()
+{
+    int ret;
+    double sum;
+    struct gl_mst_c gl_mst_c,gl_mst_tmp;
+	int fet_gl=0;
+	char fet_glstr[21];
+	int fet_dc=0;
+	char fet_dcstr[21];
+	int fet_ind;
+	int first=0;
+	int end_gl=0,end_dc=0;
+	int dc_do=0,dc_ttl=0;
+	char yjkm[7],ejkm[7];
+	struct com_item_c com_item;
+
+EXEC SQL BEGIN DECLARE SECTION;
+    struct dc_log_bk_c dc_log_bk;
+EXEC SQL END DECLARE SECTION;
+
+    memset(&gl_mst_c, 0x0, sizeof(struct gl_mst_c));
+    memset(&gl_mst_tmp,0x0,sizeof(struct gl_mst_c));
+
+	/**--- jack --- @20030828@ ----- 处理没有发生的总帐科目 ----**/
+    ret = Gl_mst_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYSQLERR
+	while(1)
+	{
+     	ret = Gl_mst_Fet_Upd(&gl_mst_tmp,g_pub_tx.reply);
+		if( ret==100 ) break;
+		MYSQLERR
+		/**处理期初数**/
+		sub_begin_do( &gl_mst_tmp );
+       	ret = Gl_mst_Upd_Upd(gl_mst_tmp, g_pub_tx.reply);
+		MYSQLERR
+	}
+    Gl_mst_Clo_Upd();
+	/**--------------------------------------------------------**/
+	/**---- jack ----- @20030913@ ---- 改用group by分组 -----**
+    ret = Dc_log_bk_Dec_Sel(g_pub_tx.reply, "sts='0' order by acc_hrt");
+	**/
+	EXEC SQL declare cur_dc_log cursor for 
+		select opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		group by opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind;
+	SQLERR
+
+	EXEC SQL open cur_dc_log;
+	SQLERR
+
+	fet_gl=1;
+	fet_dc=1;
+
+    while(1)
+    {
+		/**---- jack ----- @20030913@ ---- 改用group by分组 -----**
+        ret = Dc_log_bk_Fet_Sel(&dc_log_bk,g_pub_tx.reply);
+		**------------------------------------------------------**/
+		memset(&dc_log_bk,0x00,sizeof(struct dc_log_bk_c));
+		EXEC SQL fetch cur_dc_log into :dc_log_bk.opn_br_no,:dc_log_bk.cur_no,:dc_log_bk.acc_hrt,
+			:dc_log_bk.dc_ind,:dc_log_bk.ct_ind,:dc_log_bk.amt,:dc_log_bk.trace_cnt;
+        if( sqlca.sqlcode==1403 )  break;
+		SQLERR
+		pub_base_strpack( dc_log_bk.opn_br_no );
+		pub_base_strpack( dc_log_bk.cur_no );
+		pub_base_strpack( dc_log_bk.acc_hrt );
+
+		ret=Com_item_Sel(g_pub_tx.reply,&com_item,"acc_hrt='%s'",
+			dc_log_bk.acc_hrt );
+		vtcp_log("ACC[%s]",dc_log_bk.acc_hrt);
+		MYSQLERR
+		pub_base_strpack( com_item.up_acc_hrt );
+		strcpy( ejkm,com_item.up_acc_hrt );
+		strcpy( yjkm,com_item.up_acc_hrt );
+		yjkm[3]='0';
+		yjkm[4]='0';
+		vtcp_log("ACC[%s][%s][%s]",dc_log_bk.acc_hrt,ejkm,yjkm);
+
+        ret = Gl_mst_Dec_Upd(g_pub_tx.reply,
+			"br_no='%s' and cur_no='%s' and acc_hrt in('%s','%s','%s') order by acc_hrt desc",
+			dc_log_bk.opn_br_no,dc_log_bk.cur_no,dc_log_bk.acc_hrt,ejkm,yjkm );
+		MYSQLERR
+		while(1)
+		{
+       	 	ret = Gl_mst_Fet_Upd(&gl_mst_tmp,g_pub_tx.reply);
+			if( ret==100 ) break;
+			MYSQLERR
+			/**处理发生数**/
+			ret = sub_add_do( dc_log_bk,&gl_mst_tmp );
+			MYSQLERR
+
+        	ret = Gl_mst_Upd_Upd(gl_mst_tmp, g_pub_tx.reply);
+			MYSQLERR
+		}
+       	Gl_mst_Clo_Upd();
+    }
+    Gl_mst_Clo_Sel();
+
+	ret=sql_execute("update gl_mst set \"date\"=%d",com_sys_parm_c.lst_date);
+	MYSQLERR
+
+	sprintf( acErrMsg,"处理结束：共[%d]处理[%d]",dc_ttl,dc_do);
+	WRITEMSG
+
+    return 0;
+ErrExit:
+	return 1;
+}
+sub_begin_do( struct gl_mst_c *p_gl_mst_c )
+{
+	struct gl_mst_c gl_mst_c;
+	int ret;
+
+	memcpy( &gl_mst_c,p_gl_mst_c,sizeof(gl_mst_c) );
+
+        gl_mst_c.date = com_sys_parm_c.lst_date; 
+        gl_mst_c.ldd_bal = gl_mst_c.dr_bal;
+        gl_mst_c.lcd_bal = gl_mst_c.cr_bal;
+		gl_mst_c.rdd_cnt=0;
+		gl_mst_c.rcd_cnt=0;
+		gl_mst_c.rdd_amt=0;
+		gl_mst_c.rcd_amt=0;
+		gl_mst_c.cdd_cnt=0;
+		gl_mst_c.ccd_cnt=0;
+		gl_mst_c.cdd_amt=0;
+		gl_mst_c.ccd_amt=0;
+
+        ret = pub_base_day_xun(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 旬初 */
+            gl_mst_c.tddr_bal = gl_mst_c.dr_bal;    /* 旬初借方余额 */
+            gl_mst_c.tdcr_bal = gl_mst_c.cr_bal;    /* 旬初贷方余额 */
+            gl_mst_c.tddr_cnt = 0;
+            gl_mst_c.tdcr_cnt = 0;
+            gl_mst_c.tddr_amt = 0.00;
+            gl_mst_c.tdcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_month(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 月初 */
+            gl_mst_c.mdr_bal = gl_mst_c.dr_bal;
+            gl_mst_c.mcr_bal = gl_mst_c.cr_bal;
+            gl_mst_c.mdr_cnt = 0;
+            gl_mst_c.mcr_cnt = 0;
+            gl_mst_c.mdr_amt = 0.00;
+            gl_mst_c.mcr_amt = 0.00;
+        }
+        
+        ret = pub_base_day_quarter(com_sys_parm_c.lst_date);
+        if (ret == 0)
+        {
+            /* 季初 */
+            gl_mst_c.qdr_bal = gl_mst_c.dr_bal;
+            gl_mst_c.qcr_bal = gl_mst_c.cr_bal;
+            gl_mst_c.qdr_cnt = 0;
+            gl_mst_c.qcr_cnt = 0;
+            gl_mst_c.qdr_amt = 0.00;
+            gl_mst_c.qcr_amt = 0.00;
+        }
+
+        /*ret = pub_base_day_year(com_sys_parm_c.lst_date);*年末为99 **
+        if (ret == 99)
+		*/
+		if(com_sys_parm_c.lst_date%10000==101)
+        {
+            /* 年初 */
+            gl_mst_c.ydr_bal = gl_mst_c.dr_bal;
+            gl_mst_c.ycr_bal = gl_mst_c.cr_bal;
+            gl_mst_c.ydr_cnt = 0;
+            gl_mst_c.ycr_cnt = 0;
+            gl_mst_c.ydr_amt = 0.00;
+            gl_mst_c.ycr_amt = 0.00;
+        }
+
+	memcpy( p_gl_mst_c , &gl_mst_c ,sizeof(gl_mst_c) );
+}
+
+sub_add_do( dc_log_bk,p_gl_mst_c )
+ struct dc_log_bk_c dc_log_bk;
+ struct gl_mst_c *p_gl_mst_c;
+{
+	int ret=0;
+	struct gl_mst_c gl_mst_c;
+	struct com_item_c com_item_c;
+	double tmpdbl=0,tmp_ddbal=0,tmp_ccbal=0;
+
+	memcpy( &gl_mst_c,p_gl_mst_c,sizeof(gl_mst_c) );
+	memset( &com_item_c,0x00,sizeof(struct com_item_c) );
+	ret=Com_item_Sel(g_pub_tx.reply,&com_item_c,"acc_hrt='%s'",gl_mst_c.acc_hrt);
+	MYSQLERR
+
+		if( dc_log_bk.dc_ind[0]=='1' )
+		{
+			gl_mst_c.rdd_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.rdd_amt+=dc_log_bk.amt;
+			gl_mst_c.tddr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.tddr_amt+=dc_log_bk.amt;
+			gl_mst_c.mdr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.mdr_amt+=dc_log_bk.amt;
+			gl_mst_c.qdr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.qdr_amt+=dc_log_bk.amt;
+			gl_mst_c.ydr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.ydr_amt+=dc_log_bk.amt;
+			if( dc_log_bk.ct_ind[0]=='1' )
+			{
+				gl_mst_c.cdd_cnt+=dc_log_bk.trace_cnt;
+				gl_mst_c.cdd_amt+=dc_log_bk.amt;
+			}
+
+			if( gl_mst_c.dc_ind[0]=='2' )
+			{
+				gl_mst_c.cr_bal-=dc_log_bk.amt;
+			}
+			else if( gl_mst_c.dc_ind[0]=='1' )
+			{
+				gl_mst_c.dr_bal+=dc_log_bk.amt;
+			}
+			else
+			{
+				if( com_item_c.roll_ind[0]=='Y' )
+				{
+					tmpdbl=gl_mst_c.dr_bal-gl_mst_c.cr_bal+dc_log_bk.amt;
+					gl_mst_c.dr_bal=0.00;
+					gl_mst_c.cr_bal=0.00;
+					if( tmpdbl>0.005 )
+						gl_mst_c.dr_bal=tmpdbl;
+					else
+						gl_mst_c.cr_bal=-tmpdbl;
+				}
+				else
+				{
+					gl_mst_c.dr_bal+=dc_log_bk.amt;
+					/* added by liuxuan 20070920 非轧差双性科目特殊处理 */
+					if(com_item_c.acc_knd[0]=='0'){
+						tmp_ddbal=0;tmp_ccbal=0;
+						EXEC SQL select sum(dr_bal),sum(cr_bal) into :tmp_ddbal,:tmp_ccbal from gl_mst where cur_no=:gl_mst_c.cur_no and br_no=:gl_mst_c.br_no and acc_hrt in(select acc_hrt from com_item where up_acc_hrt=:com_item_c.acc_hrt and acc_hrt!=:com_item_c.acc_hrt);
+						if(sqlca.sqlcode){
+							vtcp_log("[%s][%d]合计金额错[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+							goto ErrExit;
+						}
+						gl_mst_c.dr_bal=tmp_ddbal; gl_mst_c.cr_bal=tmp_ccbal;
+					}
+					/* added over */
+				}
+			}
+		}
+		else
+		{
+			gl_mst_c.rcd_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.rcd_amt+=dc_log_bk.amt;
+			gl_mst_c.tdcr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.tdcr_amt+=dc_log_bk.amt;
+			gl_mst_c.mcr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.mcr_amt+=dc_log_bk.amt;
+			gl_mst_c.qcr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.qcr_amt+=dc_log_bk.amt;
+			gl_mst_c.ycr_cnt+=dc_log_bk.trace_cnt;
+			gl_mst_c.ycr_amt+=dc_log_bk.amt;
+			if( dc_log_bk.ct_ind[0]=='1' )
+			{
+				gl_mst_c.ccd_cnt+=dc_log_bk.trace_cnt;
+				gl_mst_c.ccd_amt+=dc_log_bk.amt;
+			}
+
+			if( gl_mst_c.dc_ind[0]=='2' )
+			{
+				gl_mst_c.cr_bal+=dc_log_bk.amt;
+			}
+			else if( gl_mst_c.dc_ind[0]=='1' )
+			{
+				gl_mst_c.dr_bal-=dc_log_bk.amt;
+			}
+			else
+			{
+				if( com_item_c.roll_ind[0]=='Y' )
+				{
+					tmpdbl=gl_mst_c.dr_bal-gl_mst_c.cr_bal-dc_log_bk.amt;
+					gl_mst_c.dr_bal=0.00;
+					gl_mst_c.cr_bal=0.00;
+					if( tmpdbl>0.005 )
+						gl_mst_c.dr_bal=tmpdbl;
+					else
+						gl_mst_c.cr_bal=-tmpdbl;
+				}
+				else{
+					gl_mst_c.cr_bal+=dc_log_bk.amt;
+					/* added by liuxuan 20070920 非轧差双性科目特殊处理 */
+					if(com_item_c.acc_knd[0]=='0'){
+						tmp_ddbal=0;tmp_ccbal=0;
+						EXEC SQL select sum(dr_bal),sum(cr_bal) into :tmp_ddbal,:tmp_ccbal from gl_mst where cur_no=:gl_mst_c.cur_no and br_no=:gl_mst_c.br_no and acc_hrt in(select acc_hrt from com_item where up_acc_hrt=:com_item_c.acc_hrt and acc_hrt!=:com_item_c.acc_hrt);
+						if(sqlca.sqlcode){
+							vtcp_log("[%s][%d]合计金额错[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+							goto ErrExit;
+						}
+						gl_mst_c.dr_bal=tmp_ddbal; gl_mst_c.cr_bal=tmp_ccbal;
+					}
+					/* added over */
+				}
+			}
+		}
+	memcpy( p_gl_mst_c , &gl_mst_c ,sizeof(gl_mst_c) );
+
+    return 0;
+ErrExit:
+	return 1;
+}
+/**********************************************************************
+ * 函 数 名：   pub_eod_insert_oldglmst
+ * 函数功能：   将总帐中的数据导入到历史总帐里去
+ * 作者/时间：  rob/20030315
+ *
+ * 参数：
+ *     输入: 
+ *     输出: 
+ *     返回: <>0失败
+             =0成功
+ *
+ * 修改历史：
+ *
+********************************************************************/
+int pub_eod_insert_oldglmst()
+{
+    int ret;
+
+    ret = sql_execute("insert into gl_mst_hst select br_no,cur_no,acc_hrt,\
+          \"date\",dc_ind,up_acc_hrt,dr_bal,cr_bal,ldd_bal,lcd_bal,rdd_cnt,\
+          rcd_cnt,rdd_amt,rcd_amt,cdd_cnt,ccd_cnt,cdd_amt,ccd_amt from gl_mst");
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"向历史总帐中备份数据错误!! [%d]",ret);
+        WRITEMSG
+        return ret;
+    }
+    return 0;
+}

@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3513 协定户分户利率调整"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='2613';	
+	$FD30=getitems('#ACTNO');     // 账号
+	$FD34=getitems('#ACTSEQN');   // 账户序号
+	$FD67='1';
+	$FD28=getitems('#TZ_RATE');   // 活期利率
+	//showmsg(itoa(val(#TZ_RATE),'%.5f'));
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(3513                          协定户分户利率调整)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <PAGE NAME="DEFAULT">
+     
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2613)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+	<ITEM NAME="AAA" TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{
+		//showmsg('由于担保保证金部分账户按分户利率计息，此交易用于维护分户利率，需要信贷系统做‘保证金利率维护’授权，请谨慎操作。');
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>	
+
+  <ITEM LINE="6"  COL="05" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+ 
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		$TXNO='9741';
+		$FD30=#ACTNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#ACTNO',$FD30);
+		setitems('#ACTSEQN',$FD34);    	
+		if(substr(#ACTNO,0,1)!='5'){
+			showmsg('只有对公活期户才可以做此业务!');
+			return(false);
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="6"  COL="50" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>  
+  <ITEM NAME="#ACTSEQN" INPUT="TEXT" LINE="6"  COL="60" TYPE="%-4s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		dim @tota    as string;
+		@baktxno=$TXNO;
+		$MSGTYPE='03001';
+
+		$TXNO='9740';
+		$FD30=#ACTNO;
+		$FD34=#ACTSEQN;
+		commsend_001();	
+		@tota = callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if($FD68!='6')
+		{
+			showmsg('请输入协定存款帐号！');
+			return(false);
+		}
+		//if(atoi($FD56) &gt; 0 )
+	//{
+	 // showmsg('该帐号积数不为零不能调整利率,先结息! ');
+   // return(false);
+	//}
+		setitems('#CUR_NO',$FD21);
+		setitems('#PRDT_CODE',$FD23);
+		setitems('#OLDNAME',$FD26);  //原户名
+		//showmsg('ONAME='+#OLDNAME);
+		//showmsg('NAME='+#CUSTNAME);
+		setitems('#PROD_NAME',$FD27);
+		setitems('#AVBAL',$FD41);
+		//setitems('#FH_RATE',$FD85);
+		#FH_RATE=itoa(val($FD85,0.000001),'%.5f');
+	//	showmsg($FD88);
+	//	setitems('#RATE',$FD88);
+	//	showmsg($FD87);
+	//	setitems('#JZRATE',$FD87);
+		showblock('ACTINFO',true,true);
+		//showmsg('需要清算中心做高级预授权后才可以做本业务!');
+ 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+    <ITEM LINE="8"  COL="3"  TYPE="%-75s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+   
+  <BLOCK NAME="ACTINFO" LINE="10" COL="05" VISABLE="FALSE"> 
+
+   <ITEM LINE="0"  COL="0" TYPE="%-10s" FUNCTIONS="T(产品编号:!)"/>
+   <ITEM LINE="0"  COL="10" NAME="#PRDT_CODE" INPUT="TEXT"  TYPE="%-3s"  ENABLE="FALSE"/>
+   <ITEM LINE="0"  COL="15" NAME="#PROD_NAME" INPUT="TEXT"  TYPE="%-30s" ENABLE="FALSE"/>
+
+
+   <ITEM LINE="1"  COL="0" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM NAME="#CUR_NO" LINE="1"  COL="10" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCUR_NO" FUNCTIONS="S(#CUR_NO,#CUR_NO)"/>
+   
+   <ITEM LINE="2"  COL="0" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>   
+  <ITEM LINE="2"  COL="10" NAME="#LAVBAL" TYPE="%-21s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>   
+
+  <ITEM LINE="3"  COL="0" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="3"  COL="10" NAME="#OLDNAME" TYPE="%-60s" FUNCTIONS="" />
+<!---
+  <ITEM LINE="5"  COL="0" TYPE="%-10s" FUNCTIONS="T(基准利率:)"/>
+  <ITEM LINE="5"  COL="10" NAME="#JZRATE" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM LINE="5"  COL="30" TYPE="%-10s" FUNCTIONS="T(现 利 率:)"/>
+  <ITEM LINE="5"  COL="40" NAME="#RATE" TYPE="%-8s" FUNCTIONS=""/>
+--->  
+  <ITEM LINE="5"  COL="0" TYPE="%-10s" FUNCTIONS="T(分户利率:)"/>
+  <ITEM LINE="5"  COL="10" NAME="#FH_RATE" TYPE="%-8s" FUNCTIONS=""/>
+  
+  
+ 
+  <ITEM LINE="7"  COL="0" TYPE="%-10s" FUNCTIONS="T(调整利率:)"/>
+  <ITEM LINE="7"  COL="10" NAME="#TZ_RATE" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="">
+	
+  </ITEM>
+
+  <ITEM NAME="#LNINTST"    TYPE="%-24s" FUNCTIONS="X(#NINTST)"/>
+
+  </BLOCK>
+
+  </PAGE>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+
+    
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+
+<RESPONSE>
+
+	<PACKAGE DEVICE="SCREEN" DESC="利率调整成功">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 7,20,'帐    号:[20                  ]             帐户序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'户    名:[60                                                          ]',#OLDNAME);
+		print( 9,20,'产品名称:[30                            ]   ',#PROD_NAME);
+		print(11,20,'改前利率:[8]',#FH_RATE);
+		//print(12,20,'基准利率:[8]',#JZRATE);
+		print(12,20,'调整利率:[8]',#TZ_RATE);
+		//print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3513');
+		print( 5,13,'交易:协定户分户利率调整');
+
+		print( 7,20,'帐    号:[20                  ]             帐户序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'户    名:[60                                                          ]',#OLDNAME);
+		print( 9,20,'产品名称:[30                            ]   ',#PROD_NAME);
+		print(11,20,'改前利率:[8]',#FH_RATE);
+		//print(12,20,'基准利率:[8]',#JZRATE);
+		print(12,20,'调整利率:[8]',#TZ_RATE);
+		//print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

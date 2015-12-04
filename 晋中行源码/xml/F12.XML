@@ -1,0 +1,73 @@
+<TRANSACTION RIGHTS="01010000" TITLE="F12  授权处理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(F12                         授权交易提交处理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM LINE="8"   COL="20" TYPE="%-8s" FUNCTIONS="T(流水号:)"/>
+  <ITEM LINE="10"  COL="20" TYPE="%-8s" FUNCTIONS="T(授权号:)"/> 
+  <ITEM LINE="12"  COL="20" TYPE="%-8s" FUNCTIONS="T(授权人:)"/>
+  <ITEM LINE="12"  COL="35" TYPE="%-8s" FUNCTIONS="T(口  令:)"/>
+  <ITEM LINE="8"   COL="28" NAME="#WSSRNO" INPUT="TEXT"  TYPE="%-7s" FUNCTIONS="V(NB)"/> 
+  <ITEM LINE="10"  COL="28" NAME="#AUTHNUM" INPUT="TEXT"  TYPE="%-7s"  >  
+  <ONLOSTFOCUS>"{
+	if(delspace(#AUTHNUM)!=''){
+		goitem(	#SHOW,false);
+	}
+  }"	
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="28" NAME="#AUTHNAME" DEVICE="MSR" INPUT="TEXT"  TYPE="%-4s" FUNCTIONS="F()" >
+  <ONLOSTFOCUS>"{
+	if(delspace(#AUTHNUM)!='' and delspace(#AUTHNAME)!=''){
+		showmsg('授权号和授权人只能输入其中的一个');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+      
+  <ITEM LINE="12"  COL="43" NAME="#AUTHPWD" INPUT="TEXT"  TYPE="%6d" FUNCTIONS="i()V(NB)"/>  
+  <ITEM NAME="#SHOW" LINE="21"  COL="55" TYPE="%-6s" FUNCTIONS="T(查  看)" INPUT="BUTTON">
+  <ONCLICK>"{
+	if(showscr('../tmp/'+#WSSRNO+'.scr')){
+	}else{
+		showmsg('没有找到交易流水');
+		goitem(#SHOW,false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#OK" LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	if(delspace(#AUTHNUM)!='' and delspace(#AUTHNAME)!=''){
+		showmsg('授权号和授权人只能输入其中的一个');
+		return(false);
+	}
+	if(loadfds('../tmp/'+#WSSRNO+'.fds')){
+		$FD14='9'+#WSSRNO;
+		if(delspace(#AUTHNUM)!=''){
+			$FD9='@@@'+#AUTHNUM;
+		}else{
+			$FD9=#AUTHNAME+#AUTHPWD;
+		}
+		if($TLRNO==#AUTHNAME){
+			showmsg('不能对自己授权!');
+			goitem(#OK,false);
+			return(true);
+		}
+		submit();
+	}else{
+		showmsg('没有找到需授权的交易');
+		goitem(#OK,false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<LASTWORK>"{
+	showmsg('交易成功,如需打印请到原交易按流水号['+$FD4+']补打!');
+}"
+</LASTWORK>
+</TRANSACTION>

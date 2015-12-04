@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7052 支付宝卡通签约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7052                         支付宝卡通解约)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7052)"/>
+
+ 
+  <ITEM LINE="6"  COL="35"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+   <ITEM NAME="#LDQFS" LINE="6"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="16" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="6" COL="46" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="6"  COL="46" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	   	<ITEM  LINE="8"  COL="16"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+	 <ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+	<!-------------
+	 <SELECT>
+        <OPTION VALUE="D" TITLE="借记卡"/>
+    </SELECT>
+  </ITEM>
+	----------------->
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD35=#KLX;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//为不去核心的交易补打平台流水做准备
+		$FD4=itoa(val($FD37),'%06d');	
+		runoutput();
+		 close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3,28,'支付宝卡通解约');
+		print(8,32,'交易成功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:7052');
+	print( 5, 13,'交易:支付宝卡通解约');
+	print( 8, 20,'卡 号:[20]',#CARD_NO);
+	print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+	print(21,80,'客户签名:_____________________');
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] 交易时间[8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

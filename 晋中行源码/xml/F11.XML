@@ -1,0 +1,88 @@
+<TRANSACTION RIGHTS="11111001" TITLE="7703 复核处理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	$FD2=$OPNBR;
+	$FD3=$KINBR;
+	$FD5=$HDATE;
+	$FD7=#JZTLRNO;
+	$FD10=$TTYNAME;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(F11                             复核处理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM LINE="12"  COL="25" TYPE="%-10s" FUNCTIONS="T(复核流水:)"/>
+  <ITEM LINE="14"  COL="23" TYPE="%-12s" FUNCTIONS="T(录入柜员号:)"/>
+  <ITEM LINE="12"  COL="35" NAME="#WSSRNO" INPUT="TEXT"  TYPE="%-7s" FUNCTIONS="V(NB)"/> 
+  <ITEM NAME="#OTXNO" TYPE="%-4s" FUNCTIONS=""/> 
+  <ITEM NAME="#OTXNAME" TYPE="%-30s" FUNCTIONS=""/> 
+  <ITEM LINE="14"  COL="35" NAME="#JZTLRNO" INPUT="TEXT"  TYPE="%4d" FUNCTIONS="V(NB)"/> 
+  <ITEM NAME="#SHOW" LINE="21"  COL="55" TYPE="%-6s" FUNCTIONS="T(查  看)" INPUT="BUTTON">
+  <ONCLICK>"{
+	if(showscr('../tmp/'+#WSSRNO+'.scr')){
+	}else{
+		showmsg('没有找到需复核的交易');
+		goitem(#SHOW,false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM NAME="#SUBMIT" LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	if(loadfds('../tmp/'+#WSSRNO+'.fds')){
+		$FD14='7'+#WSSRNO;
+
+		if($TLRNO==$FD7){
+			showmsg('不能对自己复核!');
+			goitem(#SUBMIT,false);
+			return(true);
+		}
+		$FD8=$TLRNO;
+		#OTXNO=$FD16;
+		submit();
+	}else{
+		showmsg('没有找到需复核的交易');
+		goitem(#SUBMIT,false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<!--为了能正常保存补打信息,不能有RESPONSE-->
+<LASTWORK>"{
+	dim @i as number;
+	savefds('../tmp/prt_'+#WSSRNO+'.fds');
+	initfd();
+	commsend_001();
+	$FD16='9672';
+	$FD64=#OTXNO;
+	callserver();
+	if($FD12!='0000'){
+		#OTXNAME='取交易名称失败';
+	}
+	#OTXNAME=delspace($FD63);
+	loadfds('../tmp/prt_'+#WSSRNO+'.fds');
+	openprinter('screen');
+	print(5,10,'交易成功,如需打印请到原录入交易按流水号\['+$FD4+'\]补打!');
+	showmsg('复核完成,按任意键打印...');
+	closeprinter();
+	openprinter('printer');
+	print(5,30,'复核信息');
+	print(6,10,'复核交易:[30]',#OTXNAME);
+	print(7,10,'录入柜员:[4]',#JZTLRNO);
+	print(8,10,'录入流水:[7]',#WSSRNO);
+	print(9,10,'复核柜员:[4]',$TLRNO);
+	print(10,10,'复核流水:[6]',$FD4);
+	print(12,10,'请到原录入交易按流水号\[[6\]]补打凭证!',$FD4);
+	closeprinter();
+	call('/usr/bin/cp -f ../dat/'+$TLRNO+'_'+$FD4+'.dat ../dat/'+#JZTLRNO+'_'+$FD4+'.dat',1);
+}"
+</LASTWORK>
+</TRANSACTION>

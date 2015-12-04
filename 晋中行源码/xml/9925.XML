@@ -1,0 +1,275 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="历史缴费查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9925                        历史缴费查询)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=9010)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="7" COL="6"  TYPE="%-10s" NAME="#LBIFS" FUNCTIONS="T(绑定方式: )"/>
+  <ITEM LINE="7" COL="15" TYPE="%-1s"  NAME="#BIFS"  INPUT="SELECT" FUNCTIONS="V(NB)T(0)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="已绑定用户代码"/>
+      <OPTION VALUE="1" TITLE="未绑定用户代码"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+      if(#BIFS=='0')
+      {
+        show(#LBIDQFS,true);
+        show(#BIDQFS,true);
+        show(#LBIACTNO,true);
+        show(#LACNAME,true);
+        show(#AC_NAME,true);
+        enable(#BIUSER_NO,true);
+        show(#BIUSER_NO,true);
+        enable(#USER_NO,false);
+        show(#USER_NO,false);
+      }
+      if(#BIFS=='1')
+      {
+        show(#LBIDQFS,false);
+        show(#BIDQFS,false);
+        show(#LBIACTNO,false);
+        enable(#ACTNO3,false);
+        enable(#ACTNO4,false);
+        show(#ACTNO3,false);
+        show(#ACTNO4,false);
+        show(#LACNAME,false);
+        show(#AC_NAME,false);
+        enable(#BIUSER_NO,false);
+        show(#BIUSER_NO,false);
+        enable(#USER_NO,true);
+        show(#USER_NO,true);
+      }
+     }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="8" COL="6" TYPE="%-10s" NAME="#LBIDQFS" VISABLE="FALSE"  INPUT="LABEL"  FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="8" COL="15" TYPE="%-1s"  NAME="#BIDQFS"  VISABLE="FALSE"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="读取磁条方式"/>
+      <OPTION VALUE="1" TITLE="读取芯片方式"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+      if(#BIDQFS=='1')
+      {
+        enable(#ACTNO3,false);
+        enable(#ACTNO4,true);
+        show(#ACTNO3,false);
+        show(#ACTNO4,true);
+      }
+      if(#BIDQFS=='0')
+      {
+        enable(#ACTNO3,true);
+        enable(#ACTNO4,false);
+        show(#ACTNO3,true);
+        show(#ACTNO4,false);
+      }
+      refresh();
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="35" NAME="#LBIACTNO" TYPE="%-10s"  VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(支付账号:)" />
+
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM LINE="8" COL="44" TYPE="%-19s"  NAME="#ACTNO3" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+    <ONLOSTFOCUS>
+    "{
+      #AC_NO=#ACTNO3;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="44" TYPE="%-19s"  NAME="#ACTNO4" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+    <ONLOSTFOCUS>
+    "{
+      #AC_NO=#ACTNO4;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS=""/>
+  <ITEM  LINE="12"   COL="15"  NAME="#BIUSER_NO" INPUT="LABEL" TYPE="%-6s"  VISABLE="FALSE"  FUNCTIONS="" >
+    <ONLOSTFOCUS>
+    "{
+      if(#BIFS=='0')
+      {
+        //核心查询已绑定卡户名
+        dim @info as string;
+        dim @tmpacid as string;
+        #AC_NAME='';
+        refresh();
+        
+        initfd();
+        commsend_001();
+        $FD16='9598';
+        $FD123='select ac_id from mdm_ac_rel where ac_no='+chr(39)+#AC_NO+chr(39);
+        @info=callserver();
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        if(@info=='')
+        {
+            showmsg('账号不存在,请核对后重新输入!!');
+            return(false);
+        }
+        @tmpacid=delspace(strfld(@info,'|',0));
+        
+        initfd();
+        commsend_001();
+        $FD16='9598';
+        @info='';
+        $FD123='select name from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+        @info=callserver();
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        #AC_NAME=delspace(strfld(@info,'|',0));
+
+        //查询该卡所绑定的用户代码
+        initfd();
+        commsend_001();
+        $FD16='9040';             //平台用户绑定查询接口
+        $FD60='RQDS';             //平台交易类型
+        $FD31=#AC_NO;             //查询银行卡
+
+        callagnpt();
+        if($FD12!='0000'){
+          showmsg(geterror());
+          rerun();
+          return(false);
+        }
+        #BIUSER_NO=delspace($FD30);    //已绑定用户代码
+
+        //查询该绑定的用户代码所对应的用户信息
+        initfd();
+        commsend_001();
+        $FD16='1010';                  //平台用户查询接口
+        $FD60='RQDS';                  //平台交易类型
+        $FD30=#BIUSER_NO;              //绑定卡的用户代码利用短交易查询
+
+        callagnpt();
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        #YHNAME=delspace($FD25);       //用户姓名
+        #ADDRESS=delspace($FD76);      //用户单位及地址
+
+        enable(#YHNAME,false);
+        enable(#ADDRESS,false);
+        show(#YHNAME,true);
+        show(#ADDRESS,true);
+      }else{
+        showmsg('交易异常,未绑定的用户不应该使用BIUSER_NO，请于科技部联系!!!!!');
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9" COL="6"  NAME="#LACNAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="9" COL="15" NAME="#AC_NAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="10" COL="6"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+
+  <ITEM LINE="12"   COL="6" TYPE="%-12s"  FUNCTIONS="T(用户代码:)"/>
+  <ITEM LINE="12"   COL="15" NAME="#USER_NO" INPUT="TEXT" TYPE="%-6s"  FUNCTIONS="V(000001,999999)">
+    <ONLOSTFOCUS>
+    "{
+      if(#BIFS=='1')                   //未绑定卡的用户代码
+      {
+        initfd();
+        commsend_001();
+        $FD16='1010';                  //平台用户查询接口
+        $FD60='RQDS';                  //平台交易类型
+        $FD30=#USER_NO;
+        
+        callagnpt();
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        #YHNAME=delspace($FD25);       //用户姓名
+        #ADDRESS=delspace($FD76);      //用户单位及地址
+
+        enable(#YHNAME,false);
+        enable(#ADDRESS,false);
+        show(#YHNAME,true);
+        show(#ADDRESS,true);
+      }else{
+        showmsg('交易异常,绑定的用户不应该使用USER_NO，请于科技部联系!!!!!');
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="12"  COL="30" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="12"  COL="40" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+  <ITEM LINE="13"  COL="6"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="13"  COL="15" NAME="#ADDRESS"  TYPE="%-64s"    INPUT="LABEL" FUNCTIONS="T()"/>
+
+  <ITEM LINE="15" COL="6" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+  <ITEM LINE="15" COL="24" TYPE="%-3s" FUNCTIONS="T( → )"/>
+  <ITEM LINE="15" COL="15" NAME="#BEG_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS="V(00000001,99999999)"/>
+  <ITEM LINE="15" COL="28" NAME="#END_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS="T($HDATE)V(00000001,99999999)">
+    <ONLOSTFOCUS>
+    "{
+      if(len(delspace(#BEG_DATE))!=8 or len(delspace(#END_DATE))!=8){
+        showmsg('交易日期无效，请输入8位的交易日期!!');
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+ 
+   <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>"{
+      dim @tota as string;
+      dim @selid as number;
+      initfd();
+      commsend_001();
+      $FD16='9010';             //平台历史缴费查询接口
+      $FD60='RQDS';             //平台交易类型
+      //BIUSER_NO:绑定卡的用户代码
+      if(#BIFS=='0')
+      {
+        #USER_NO=#BIUSER_NO;
+      }
+      $FD30=#USER_NO;
+      $FD28=#BEG_DATE;
+      $FD29=#END_DATE;
+
+    @tota=callagnpt();
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+    }
+    @tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+    if(@tota==''){
+      showmsg('未找到该用户记录!');
+      rerun();
+      return(false);
+    }
+    autolist(@tota);
+    @selid=list_work();
+    rerun();
+   }"
+   </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

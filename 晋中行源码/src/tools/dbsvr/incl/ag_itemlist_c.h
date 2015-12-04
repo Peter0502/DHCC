@@ -1,0 +1,50 @@
+#ifndef __ag_itemlist_CH__
+#define __ag_itemlist_CH__
+struct ag_itemlist_c{
+	char      rowid[20];
+	char      item_no[21];
+	char      unit_no[5];
+	char      bank_tlcs[13];
+	char      owe_month[7];
+	char      trn_date[9];
+	double    am00;
+	double    am01;
+	double    am02;
+	double    am03;
+	double    am04;
+	double    am05;
+	double    am06;
+	double    am07;
+	double    am08;
+	double    am09;
+	double    am10;
+	double    am11;
+	double    am12;
+	double    am13;
+	double    am14;
+	double    am15;
+	double    am16;
+	double    am17;
+	double    am18;
+	double    am19;
+	double    am20;
+	double    am21;
+	double    am22;
+	double    am23;
+	double    am24;
+	double    am25;
+	double    am26;
+	double    am27;
+	double    am28;
+	double    am29;
+	double    am30;
+	char      sc00[21];
+	char      sc01[21];
+	char      sc02[21];
+	char      sc03[21];
+	char      sc04[21];
+	char      sc05[21];
+	char      sc06[21];
+	char      stcd[2];
+};
+#endif 

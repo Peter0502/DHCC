@@ -1,0 +1,255 @@
+/********************************************************************************
+* 文 件 名:  sp3702.pc
+* 功能描述： 过渡流水信息
+* 作    者:  xyy 
+* 完成日期： 2007-1-18 13:54
+* 修 改 人:  
+* 修改记录： 
+* 日    期: 
+* 修改内容:  
+* 注    意:新系统中trace_log中的字段有些比老系统的长，所以，就扩展了部分xdtl_main中
+	         字段的长度，其中包括一下几个字段:
+	         exdkey      varchar2(18---->19)  帐号        
+           exdkey1     varchar2(18---->19)  辅助帐号1 表内帐号
+           exdkey2     varchar2(18---->19)  辅助帐号2 表外帐号
+           exdkey3     varchar2(18---->19)  辅助帐号3 表外复利帐号
+           exdkey4     varchar2(18---->19)  辅助帐号4 付息帐号  
+           crdno1      varchar2(12---->16)  凭证号1 借
+	         crdno2      varchar2(12---->16)  凭证号2 贷   
+	         crdtype1    varchar2(2----->3)   凭证类别1 (需增加凭证代号和类别对应表)   
+	         crdtype2    varchar2(2----->3)   凭证类别2 
+	         
+	         对于新系统中的新名词暂时放在xdtl_main 表的text字段中，
+	         例如:
+                  [0-2]   prdt_no   产品编号
+********************************************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+#include "xdtl_main_c.h"
+#include "bctl_c.h"
+#include "trace_log_c.h"
+EXEC SQL INCLUDE sqlca;
+
+extern char * pcGetWorkday();
+int  sp3702()
+{
+    int   i = 0,iCount = 0 , j=0;
+    int   iTxcode=0;
+    long  lTxday;
+    long  lTrace_no;
+    char  cTxday[9];
+    struct xdtl_main_c xdtl_main;
+    struct trace_log_c trace_log;
+    struct global_c    global;
+    
+    memset(cTxday      , 0 , sizeof(cTxday));
+    memset(&xdtl_main  , 0 , sizeof(xdtl_main));
+    memset(&trace_log  , 0 , sizeof(trace_log));
+    memset(&global     , 0 , sizeof(global));
+    
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    
+    g_reply_int = Global_Sel(g_pub_tx.reply,&global,"1 = 1");
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查老系统操作员控制表错误[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cTxday, global.global_tbsdy,sizeof(cTxday)-1);
+    vtcp_log("[%s][%d]cTxday==[%s]",__FILE__,__LINE__,cTxday);
+    lTxday = apatoi(cTxday,8);
+    vtcp_log("[%s][%d]lTxday==[%ld]",__FILE__,__LINE__,lTxday);
+    
+    EXEC SQL DECLARE c1 CURSOR FOR select trace_no,count(*) from trace_log where tx_date =: lTxday and sts ='0' group by trace_no order by trace_no;
+    EXEC SQL OPEN c1;
+    if(sqlca.sqlcode!=0)
+    {
+        sprintf( acErrMsg,"[%s][%d]打开游标出错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while(1)
+    {
+    	  lTrace_no =0;
+    	  iCount = 0;
+    	  EXEC SQL FETCH c1 INTO :lTrace_no,:iCount;
+        vtcp_log("[%s][%d]lTrace_no=[%ld] iCount=[%d]",__FILE__,__LINE__,lTrace_no,iCount);
+        if(sqlca.sqlcode==1403)
+        {
+          if(i==0)
+          {
+          	 /**今天应该不会没有未监督的流水吧**/
+             sprintf( acErrMsg,"[%s][%d]未找到所要记录[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+             strcpy( g_pub_tx.reply, "P015" );
+             set_zd_data(DC_GET_MSG,acErrMsg);
+             WRITEMSG
+             goto ErrExit;
+          }
+          break;
+        }
+        vtcp_log("[%s][%d]lTrace_no==[%ld]",__FILE__,__LINE__,lTrace_no);
+        vtcp_log("[%s][%d]iCount======[%d]",__FILE__,__LINE__,iCount);
+        g_reply_int = Trace_log_Dec_Sel(g_pub_tx.reply,"trace_no ='%ld' order by trace_cnt",lTrace_no);
+        if( g_reply_int )
+        {
+            sprintf( acErrMsg,"[%s][%d]查老系统操作员控制表错误[%d]",__FILE__,__LINE__,g_reply_int);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        j = 0;
+        iTxcode = 0;
+        while(1)
+        {
+            memset(&trace_log,0,sizeof(trace_log));
+            g_reply_int = Trace_log_Fet_Sel(&trace_log,g_pub_tx.reply);
+            if(g_reply_int == 100)
+            {
+                if(j == 0)
+                {
+                    sprintf(acErrMsg," 未找到所要记录 ",g_reply_int);
+                    strcpy( g_pub_tx.reply,"S047" );
+                    set_zd_data(DC_GET_MSG,acErrMsg);
+                    WRITEMSG
+                    goto ErrExit;
+                }
+                break;
+            }
+            if(g_reply_int)
+            {
+                sprintf(acErrMsg," Fet新系统流水表出错",g_reply_int );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            /**给xdtl_main表里的字段赋值**/
+            j++;
+            vtcp_log("[%s][%d]这是取出该流水[%ld]的第[%d]次",__FILE__,__LINE__,trace_log.trace_no,j);
+            
+            if( j ==1 )  /***为了提高效率第一次FET出来以后就插入，以后不再插入***/
+            {
+                /**流水号**/
+                apitoa(trace_log.trace_no,sizeof(xdtl_main.wssrno)-1,xdtl_main.wssrno);
+                vtcp_log("[%s][%d]trace_no==[%ld]wssrno=[%s]",__FILE__,__LINE__,trace_log.trace_no,xdtl_main.wssrno);
+                /**交易时间**/
+                apitoa(trace_log.tx_time,sizeof(xdtl_main.txtime)-1,xdtl_main.txtime);
+                vtcp_log("[%s][%d]tx_time==[%ld]txtime=[%s]",__FILE__,__LINE__,trace_log.tx_time,xdtl_main.txtime);
+                /**交易日期**/
+                apitoa(trace_log.tx_date,sizeof(xdtl_main.txday)-1,xdtl_main.txday);
+                vtcp_log("[%s][%d]tx_date==[%ld]txday=[%s]",__FILE__,__LINE__,trace_log.tx_date,xdtl_main.txday);
+                /**交易机构**/
+                memcpy(xdtl_main.kinbr,trace_log.tx_br_no,sizeof(trace_log.tx_br_no)-1);
+                vtcp_log("[%s][%d]tx_br_no==[%s]kinbr=[%s]",__FILE__,__LINE__,trace_log.tx_br_no,xdtl_main.kinbr);
+                /**开户机构**/
+                memcpy(xdtl_main.opnbr,trace_log.opn_br_no,sizeof(trace_log.opn_br_no)-1);
+                vtcp_log("[%s][%d]opn_br_no==[%s]opnbr=[%s]",__FILE__,__LINE__,trace_log.opn_br_no,xdtl_main.opnbr);
+                /**交易代码**/
+                memcpy(xdtl_main.txtno,trace_log.tx_code,sizeof(trace_log.tx_code)-1);
+                vtcp_log("[%s][%d]tx_code==[%s]txtno=[%s]",__FILE__,__LINE__,trace_log.tx_code,xdtl_main.txtno);
+                /**币种**/
+                memcpy(xdtl_main.curcd,trace_log.cur_no,sizeof(trace_log.cur_no)-1);
+                vtcp_log("[%s][%d]cur_no==[%s]curcd=[%s]",__FILE__,__LINE__,trace_log.cur_no,xdtl_main.curcd);
+                /**操作员号**/
+                memcpy(xdtl_main.tlrno,trace_log.tel,sizeof(trace_log.tel)-1);
+                vtcp_log("[%s][%d]tel==[%s]tlrno=[%s]",__FILE__,__LINE__,trace_log.tel,xdtl_main.tlrno);
+                /**标志**/
+                xdtl_main.hcode[0] = trace_log.sts[0];
+                vtcp_log("[%s][%d]tel==[%s]tlrno=[%s]",__FILE__,__LINE__,trace_log.sts,xdtl_main.hcode);
+                /**为switch准备**/
+                iTxcode = apatoi(trace_log.tx_code,4);
+                vtcp_log("[%s][%d]iTxcode==[%d]",__FILE__,__LINE__,iTxcode);
+            }
+
+            /*****这里处理帐号和金额****/
+            switch(iTxcode)
+            {
+            	  case 2101: /**活期开户**/
+            	  	       if( j ==1 )/**这里的j相当于新系统的trace_log中的trace_cnt**/
+            	  	       {
+            	  	       	   /**凭证类型**/
+            	  	           memcpy(xdtl_main.crdtype1,trace_log.note_type,sizeof(trace_log.not_type)-1);
+            	  	           /**凭证号码**/
+            	  	           memcpy(xdtl_main.crdno1  ,trace_log.note_no  ,sizeof(trace_log.note_no)-1);
+            	  	           /**702重要支付凭证**/
+            	  	           memcpy(xdtl_main.exdkey2 ,trace_log.ac_no    ,sizeof(trace_log.ac_no)-1);
+            	  	           /**金额**/
+            	  	           dbl2str(&trace_log.amt,0,sizeof(xdtl_main.exdtxamt2)-1,0,xdtl_main.exdtxamt2);
+            	  	       }
+            	  	       if( j ==2 )
+            	  	       {
+            	  	       	   /**帐号**/
+            	  	       	   memcpy(xdtl_main.exdkey ,trace_log.ac_no    ,sizeof(trace_log.ac_no)-1);
+            	  	       	   /**金额**/
+            	  	       	   dbl2str(&trace_log.amt,0,sizeof(xdtl_main.txamt)-1,0,xdtl_main.txamt);
+            	  	       	   /**借贷**/
+            	  	       	   xdtl_main.crdb[0] = '2';
+            	  	       	   /**产品名称**/
+            	  	       	   memcpy(xdtl_main.text,trace_log.prdt_no,sizeof(trace_log.prdt_no)-1);
+            	  	       }
+            	  	       if( j ==3 )
+            	  	       {
+            	  	       }
+            	  	       /***这里要查开销户登记簿***/
+            	  	       
+            	  	       
+            	  	       
+            	  
+            	  default:
+                        break;
+
+            }
+            
+            
+            /***本部分处理帐号和金额***/
+            
+        }
+        Trace_log_Clo_Sel();
+        vtcp_log("[%s][%d] 成功关闭游标后再把该流水[%ld]的信息插入到表里! ",__FILE__,__LINE__,lTrace_no);
+        
+        vtcp_log("[%s][%d]把本流水的所有cnt都取出来以后在插入数据!!",__FILE__,__LINE__);
+        Xdtl_main_Debug(&xdtl_main);
+        g_reply_int = Xdtl_main_Ins(&xdtl_main,g_pub_tx.reply);
+        if(g_reply_int)
+        {
+        	  Xdtl_main_Debug(&xdtl_main);
+            sprintf(acErrMsg," Fet操作员控制表出错",g_reply_int );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        vtcp_log("[%s][%d]插入一条流水[%s]成功!!",__FILE__,__LINE__,xdtl_main.wssrno);
+        i++;
+        vtcp_log("[%s][%d]这是取出的第[%d]条流水",__FILE__,__LINE__,i);
+    }
+    EXEC SQL close  c1;
+    vtcp_log("[%s][%d]导数据全部顺利完成!!",__FILE__,__LINE__);
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;
+}

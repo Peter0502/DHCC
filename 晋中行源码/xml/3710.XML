@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3710 卡业务凭证补打"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+	}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+		"T(3710                          卡业务凭证补打)"/>
+	<ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+		"T(────────────────────────────────────"/>
+	<PAGE NAME="DEFAULT">
+		<ITEM LINE="6" COL="5" TYPE="%-18s" FUNCTIONS="T(原前台交易代码:)"/>
+		<ITEM NAME="#QTDM" INPUT="TEXT" LINE="6" COL="22" TYPE="%-4s"   FUNCTIONS="V(NB)"/>
+			<ITEM LINE="8" COL="5" TYPE="%-18s" FUNCTIONS="T(原交易平台流水:)"/>
+		<ITEM NAME="#PTLS" INPUT="TEXT" LINE="8" COL="22" TYPE="%-12s"   FUNCTIONS="V(NB)"/>
+		<ITEM LINE="17" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+			<ONLOSTFOCUS>
+			"{
+				dim @filename as string;
+				@filename=#QTDM+delspace(#PTLS)+'.fds';
+				showmsg('@filename='+@filename);
+				$FD16='';
+				loadfds(@filename);
+				//showmsg('$FD30='+$FD30);
+				//showmsg('$FD43='+$FD43);
+				if(len($FD16)==0);
+				{
+				showmsg('原交易信息不存在，请检查录入信息是否正确！');
+				return(false);  
+				}
+				runoutput();
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	</PAGE>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN"  DESC="交易完成">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 8,25,'原前台交易代码：[4    ]',#QTDM);
+		print(10,25,'原交易平台流水：[12    ]',delspace(#PTLS));
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24" CHECK="$FD16=7021">
+      NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);		
+		print( 5, 2,'交易代码: 7021');
+		print( 5,13,'交易名称:[10]',#TXNAME);		
+		print( 7,20,'卡号:[20]',#CARD_NO);
+		print( 9,20,'户名:[30]',#CARD_NAME);
+	    if(#TROTH_STATE=='0')
+		{
+		  print(11,20,'签约状态:关闭');	
+		}
+		 if(#TROTH_STATE=='1')
+		{
+		 print(11,20,'签约状态:开通');	
+		}
+		switch(#MODULE){
+			case '1001' :
+				 print(13,20,'签约模块:短信服务');
+				 if (#TROTH_STATE=='1')
+				 {
+					print(13,20,'签约日期:[8]',#START_DATE);	
+					print(13,2,'~');	
+					print(13,1,'[8]',#END_DATE);
+				 }	
+				break;		
+			case '1002' :
+				 print(13,20,'签约模块:ATM转账');	
+				break;
+			case '1003' :
+				 print(13,20,'签约模块:银联互联网支付');	
+				break;
+			case '1004' :
+				 print(13,20,'签约模块:电话银行');	
+				break;
+			case '1005' :
+				 print(13,20,'签约模块:网上支付');
+				break;
+			case '1006' :
+				print(13,20,'签约模块:快钱');
+				break;
+		  case '1007' :
+			  print(13,20,'签约模块:柜面通');	
+			  break;
+		  default :
+				print(13,20,'签约模块:其他方式');	
+				break;
+			}
+		print(15,20,'卡系统流水:[16]',#SEQ_NO);			
+		//print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		//print(21,80,'客户签名:_____________________');    
+	    print(24,20,'备注:[16]',#REMARKS);
+        print(24,6,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'平台流水号:[12]',#PINGT);	
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

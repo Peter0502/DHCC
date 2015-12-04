@@ -1,0 +1,74 @@
+#include "find_debug.h" 
+/**********************************************************************
+    程序名:sequence.pc			
+-----------------------------------------------------------------------
+    本程序包含数据库序列操作处理函数。
+**********************************************************************/
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include <varargs.h>
+#define EXTERN
+#include "public.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+/****得到流水号****/
+int nGetTraceSeqn(){
+	long nSeqn=-1;
+	EXEC SQL SELECT  seq_trace_no.nextval into :nSeqn from dual;
+	if(sqlca.sqlcode){
+		return(-1);
+	}else{
+		return(nSeqn);
+	}
+}
+/****设置流水号****/
+int nSetTraceSeqn(long nNewSeqn){
+	long nSeqn=0;
+	long i;
+	/****TODO:SSH Gethere记录所有清流水号的地方****/
+	{
+		char pcFileName[128];
+		char pcTlrno[5];
+		char pcTxno[5];
+		char pcTime[32];
+		FILE *fp;
+		sprintf(pcFileName,"%s/log/traceno.log",getenv("HOME"));
+		fp=fopen(pcFileName,"ab");	
+		if(fp!=NULL){
+			MEMSET_DEBUG(pcTime,'\0',sizeof(pcTime));
+			MEMSET_DEBUG(pcTlrno,'\0',sizeof(pcTlrno));
+			MEMSET_DEBUG(pcTxno,'\0',sizeof(pcTxno));
+			iGetDateTime(pcTime);
+			get_zd_data(DC_TEL,pcTlrno);
+			get_zd_data(DC_TX_CODE,pcTxno);
+			fprintf(fp,"时间:[%s]|柜员:[%s]|交易:[%d]|新序号[%d]\n",pcTime,pcTlrno,pcTxno,nNewSeqn);
+			fclose(fp);
+		}
+	}
+	EXEC SQL DROP SEQUENCE seq_trace_no;
+	EXEC SQL create sequence seq_trace_no increment by 1 start with 1;
+	for(i=0;i<nNewSeqn-1;i++){
+		EXEC SQL select seq_trace_no.nextval into :nSeqn from dual;
+	}
+	if(sqlca.sqlcode){
+		return(-1);
+	}else{
+		return(0);
+	}
+	if(nNewSeqn==0){
+		/****翻盘,同时初始化授权码****/
+		EXEC SQL DROP SEQUENCE seq_trace_no;
+		EXEC SQL create sequence seq_trace_no increment by 1 start with 500000;
+	}
+}
+/****得到授权号****/
+int nGetAuthSeqn(){
+	long nSeqn=-1;
+	EXEC SQL SELECT  seq_auth_no.nextval into :nSeqn from dual;
+	if(sqlca.sqlcode){
+		return(-1);
+	}else{
+		return(nSeqn);
+	}
+}

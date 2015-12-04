@@ -1,0 +1,286 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbfesabk_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbfesabk_con ( struct mbfesabk_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbfesabk_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->sabkcode);
+	zip_tail(ps->sabkname);
+	zip_tail(ps->sabksname);
+	zip_tail(ps->sabkstat);
+	zip_tail(ps->sabkclass);
+	zip_tail(ps->sbksupr);
+	zip_tail(ps->blccpc);
+	zip_tail(ps->bnkcity);
+	zip_tail(ps->sabkaddress);
+	zip_tail(ps->postcode);
+	zip_tail(ps->cnttel);
+	zip_tail(ps->bkemail);
+	zip_tail(ps->content);
+}
+int Mbfesabk_Debug(struct mbfesabk_c *ps){
+	vtcp_log("mbfesabk_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbfesabk_c.sabkcode=[%s]\n",ps->sabkcode);
+	vtcp_log("mbfesabk_c.sabkname=[%s]\n",ps->sabkname);
+	vtcp_log("mbfesabk_c.sabksname=[%s]\n",ps->sabksname);
+	vtcp_log("mbfesabk_c.sabkstat=[%s]\n",ps->sabkstat);
+	vtcp_log("mbfesabk_c.sabkclass=[%s]\n",ps->sabkclass);
+	vtcp_log("mbfesabk_c.sbksupr=[%s]\n",ps->sbksupr);
+	vtcp_log("mbfesabk_c.blccpc=[%s]\n",ps->blccpc);
+	vtcp_log("mbfesabk_c.bnkcity=[%s]\n",ps->bnkcity);
+	vtcp_log("mbfesabk_c.sabkaddress=[%s]\n",ps->sabkaddress);
+	vtcp_log("mbfesabk_c.postcode=[%s]\n",ps->postcode);
+	vtcp_log("mbfesabk_c.cnttel=[%s]\n",ps->cnttel);
+	vtcp_log("mbfesabk_c.bkemail=[%s]\n",ps->bkemail);
+	vtcp_log("mbfesabk_c.content=[%s]\n",ps->content);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbfesabk_Sel(reply,mbfesabk_c,fmtstr,va_alist)
+char    *reply;
+struct  mbfesabk_c *mbfesabk_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbfesabk_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbfesabk_Fet_Sel( mbfesabk_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbfesabk_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbfesabk_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbfesabk.* FROM mbfesabk WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfesabk_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbfesabk CURSOR FOR mbfesabk_sel;
+
+	EXEC SQL OPEN sel_mbfesabk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfesabk_Fet_Sel ( struct mbfesabk_c *mbfesabk_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbfesabk INTO :mbfesabk_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbfesabk error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbfesabk finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfesabk_c);
+
+	return 0;
+}
+
+int Mbfesabk_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbfesabk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbfesabk_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbfesabk.* FROM mbfesabk WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfesabk_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbfesabk CURSOR FOR mbfesabk_upd;
+
+	EXEC SQL OPEN upd_mbfesabk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfesabk_Fet_Upd( struct mbfesabk_c *mbfesabk_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbfesabk INTO :mbfesabk_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbfesabk finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfesabk_c);
+
+	return 0;
+}
+
+int Mbfesabk_Upd_Upd( struct mbfesabk_c mbfesabk_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbfesabk SET sabkcode=:mbfesabk_c.sabkcode,
+			sabkname=:mbfesabk_c.sabkname,
+			sabksname=:mbfesabk_c.sabksname,
+			sabkstat=:mbfesabk_c.sabkstat,
+			sabkclass=:mbfesabk_c.sabkclass,
+			sbksupr=:mbfesabk_c.sbksupr,
+			blccpc=:mbfesabk_c.blccpc,
+			bnkcity=:mbfesabk_c.bnkcity,
+			sabkaddress=:mbfesabk_c.sabkaddress,
+			postcode=:mbfesabk_c.postcode,
+			cnttel=:mbfesabk_c.cnttel,
+			bkemail=:mbfesabk_c.bkemail,
+			content=:mbfesabk_c.content
+	WHERE rowid=:mbfesabk_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbfesabk_Del_Upd(struct mbfesabk_c mbfesabk_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbfesabk WHERE rowid=:mbfesabk_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfesabk_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbfesabk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbfesabk_Ins( struct mbfesabk_c mbfesabk_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbfesabk VALUES (:mbfesabk_c.sabkcode,
+			:mbfesabk_c.sabkname,
+			:mbfesabk_c.sabksname,
+			:mbfesabk_c.sabkstat,
+			:mbfesabk_c.sabkclass,
+			:mbfesabk_c.sbksupr,
+			:mbfesabk_c.blccpc,
+			:mbfesabk_c.bnkcity,
+			:mbfesabk_c.sabkaddress,
+			:mbfesabk_c.postcode,
+			:mbfesabk_c.cnttel,
+			:mbfesabk_c.bkemail,
+			:mbfesabk_c.content);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfesabk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

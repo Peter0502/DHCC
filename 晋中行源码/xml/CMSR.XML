@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="CMSR 卡写磁条"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  initfd();
+  commsend_001();
+  $FD21='01';    //货币标志
+  $FD37=#CARDSERIAL;
+  showmsg($FD37);
+}"
+</COMMSEND>
+<COMMRECV>"{
+  commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(CMSR                         临时卡写磁条)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO"        TYPE="%-4s" FUNCTIONS="T($TXNO=1805)"/>
+  <ITEM NAME="#MSGTYPE"     TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TX_ACT_TYPE" TYPE="%-1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#OPNBR4"  TYPE="%4d"   FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#OPNBR"   TYPE="%-7s"  FUNCTIONS="T(#OPNBR4)"/>
+  
+  
+  <!-- 输入客户信息 -->  
+  <ITEM LINE="10"  COL="25" TYPE="%-10s"  FUNCTIONS="T(卡顺序号: )"/>
+  <ITEM NAME="#UNIONPAY"  TYPE="%-6s"  FUNCTIONS="T(622465)"/>
+  <ITEM NAME="#KFAREA"    TYPE="%-2s"  FUNCTIONS="T(81)"/>
+  <ITEM LINE="10"  COL="35" NAME="#CARDORDNO" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#MSR2"    TYPE="%-37s"     FUNCTIONS="T()"/><!---第二磁道郑商标准-->
+  <ITEM NAME="#MSR3"    TYPE="%-104s"    FUNCTIONS="T()"/><!---第三磁道郑商标准-->
+  <ITEM NAME="#CARDNO"  TYPE="%-19s"     FUNCTIONS="T()"/><!---卡号--->
+  <ITEM NAME="#CARDSERIAL"       TYPE="%-17d"   FUNCTIONS="T(#UNIONPAY+#KFAREA+#CARDORDNO)"/><!---卡号前十八位--->
+  
+
+
+  <ITEM LINE="21"       COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+ <REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="卡写磁!">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+	dim @msr2 as string;
+	dim @msr3 as string;
+	     
+	@msr2=$FD75;
+	@msr3=$FD76;
+	showmsg('请按任义键刷卡...');
+	rtrim(@msr2);
+	rtrim(@msr3);
+	showmsg(@msr2);
+	if(writemsr(@msr2,@msr3)){
+		print(8,30,' 写磁成功!');
+	}else{
+		print(8,30,' 写磁失败!');
+	}
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

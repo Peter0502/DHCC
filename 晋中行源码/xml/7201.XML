@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7201 对外现金收付"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+   	dim @baktxno as string;
+   	@baktxno=$TXNO;
+	commsend_001();
+	$FD30=#KHZH;
+	$FD27=#KHMC;
+	$FD67=#CZM;
+	$FD68=#DFJG;
+	$FD81=#ZSYT;
+	$FD118=#BZ+#PZZL+space(16)+getitems('#FSE')+#XJFX;
+	 $FD16='5201';
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+    }"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7201                          对外现金收付)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5201)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  <ITEM LINE="6" COL="12" TYPE="%-9s" FUNCTIONS="T(操 作 码:)"/>
+  <ITEM NAME="#CZM" INPUT="SELECT" LINE="6" COL="22" TYPE="%-1s" FUNCTIONS="T(1)">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="付出"/>
+		<OPTION VALUE="1" TITLE="收入"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="8"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+  <ITEM LINE="10" COL="12" TYPE="%-9s" FUNCTIONS="T(对方机构!)"/>
+  <ITEM LINE="11" COL="12" TYPE="%-9s" FUNCTIONS="T(客户帐号:)"/>
+  <ITEM LINE="12" COL="12" TYPE="%-9s" FUNCTIONS="T(客户名称:)"/>
+  <ITEM LINE="15" COL="12" TYPE="%-9s" FUNCTIONS="T(币    种!)"/>
+  <ITEM LINE="16" COL="12" TYPE="%-9s" FUNCTIONS="T(发 生 额:)"/>
+  <ITEM LINE="17" COL="12" TYPE="%-9s" FUNCTIONS="T(凭证种类!)"/>
+  <ITEM LINE="19" COL="12" TYPE="%-9s" FUNCTIONS="T(现金分析!)"/>
+  <ITEM LINE="20" COL="12" TYPE="%-9s" FUNCTIONS="T(自输用途!)"/>
+  <ITEM NAME="#DFJG" INPUT="SELECT" LINE="10" COL="22" TYPE="%-1s" FUNCTIONS="T(1)">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="人民银行"/>
+		<OPTION VALUE="2" TITLE="工商银行"/>
+		<OPTION VALUE="3" TITLE="农业银行"/>
+		<OPTION VALUE="4" TITLE="中国银行"/>
+		<OPTION VALUE="5" TITLE="建设银行"/>
+		<OPTION VALUE="6" TITLE="交通银行"/>
+		<OPTION VALUE="7" TITLE="兴业银行"/>
+		</SELECT>
+		</ITEM>
+  <ITEM NAME="#KHZH" INPUT="TEXT" LINE="11" COL="22" TYPE="%-24s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+ "{	initfd();	
+    commsend_001();
+ 		$FD16='9866';
+		$FD30=#KHZH;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#KHMC=delspace($FD27);
+		show(#KHMC,true);
+		enable(#KHMC,false);
+}"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#KHMC" INPUT="TEXT" LINE="12" COL="22" TYPE="%-50s" FUNCTIONS=""/>
+  <ITEM NAME="#BZ" INPUT="SELECT" LINE="15" COL="22" TYPE="%-2s" FUNCTIONS="T(01)">
+   <SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+
+		<!----现在只留人民币选项
+		<OPTION VALUE="12" TITLE="英镑"/>
+		<OPTION VALUE="13" TITLE="港元"/>
+		<OPTION VALUE="14" TITLE="美元"/>
+		<OPTION VALUE="15" TITLE="瑞士法郎"/>
+		<OPTION VALUE="27" TITLE="日元"/>
+		<OPTION VALUE="28" TITLE="加元"/>
+		<OPTION VALUE="29" TITLE="澳元"/>
+		<OPTION VALUE="38" TITLE="欧元"/>
+		---->
+    </SELECT>
+	</ITEM>
+  <ITEM NAME="#FSE" INPUT="TEXT" LINE="16" COL="22" TYPE="%17.2f" FUNCTIONS="V(0000000000000001,0009999999999999)"/>
+  <ITEM NAME="#AAAAA" FUNCTIONS="">
+   <ONLOSTFOCUS>
+        "{
+             if(#CZM=='0')
+             {
+               #PZZL='003';
+               if(#DFJG=='1')
+               {
+                #XJFX='250';
+               }
+               else
+               {
+               #XJFX='230';
+               }
+             }
+             else
+             {
+               #PZZL='004';
+               if(#DFJG=='1')
+               {
+                #XJFX='150';
+               }
+               else
+               {
+                #XJFX='130';
+               }
+             }
+        }"
+        </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PZZL" INPUT="SELECT" ENABLE="FALSE" LINE="17" COL="22" TYPE="%-3s" FUNCTIONS="T(003)">
+	<SELECT>
+		<OPTION VALUE="003" TITLE="现付传票"/>
+		<OPTION VALUE="004" TITLE="现收传票"/>
+		</SELECT>
+       
+	</ITEM>
+	<ITEM NAME="#XJFX" INPUT="SELECT" ENABLE="FALSE" LINE="19" COL="22" TYPE="%-7s" FUNCTIONS="T(230)">
+	<SELECT>
+		<OPTION VALUE="230" TITLE="同业往来支出"/>
+		<OPTION VALUE="130" TITLE="同业往来收入"/>
+		<OPTION VALUE="150" TITLE="由人行业务领取现金"/>
+		<OPTION VALUE="250" TITLE="交存人行业务库现金"/>
+		</SELECT>
+	</ITEM>
+  <ITEM NAME="#ZSYT" INPUT="TEXT" LINE="20" COL="22" TYPE="%-20s" FUNCTIONS=""/>
+   
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#NAME1"  TYPE="%-20s" FUNCTIONS="S(#CZM,#CZM)"/>
+  <ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#PZZL,#PZZL)"/>
+  <ITEM NAME="#NAME3"  TYPE="%-20s" FUNCTIONS="S(#XJFX,#XJFX)"/>
+  <ITEM NAME="#NAME4"  TYPE="%-20s" FUNCTIONS="S(#DFJG,#DFJG)"/>
+  <ITEM NAME="#NAME5"  TYPE="%-20s" FUNCTIONS="S(#BZ,#BZ)"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($HDATE,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($HDATE,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($HDATE,7,2)"/>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="对外现金收付">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+          print( 2,  24,'交易名称:对外现金收付');
+          print( 4,  20,'交易机构:[5]',$FD2);
+	  print( 5,  20,'交易日期:[4]年[2]月[2]日',#YEAR,#MON,#DAY);  
+	  print( 6,  20,'流水号码:[6]',$FD4);
+	  print( 7,  20,'操作员号:[4]',$FD7);
+	  print( 8,  20,'操作码  :[20 ]',#NAME1);
+	  print( 9,  20,'对方机构:[20 ]',#NAME4);
+	  print( 10, 20,'客户帐号:[24 ]',#KHZH);
+	  print( 11, 20,'客户名称:[50 ]',#KHMC);
+	  print( 12, 20,'币    种:[20 ]',#NAME5); 
+	  print( 13, 20,'发 生 额:[20 ]',ltrim(comma(itoa(#FSE,'%17.2f'),16)));
+	  print( 14, 20,'凭证种类:[20 ]',#NAME2);
+	  print( 15, 20,'现金分析:[20 ]',#NAME3);
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+ <PACKAGE DEVICE="PRINTER"  DESC="打印业务专用凭证">
+  NOTHING
+ </PACKAGE>
+<PRINT>"{
+	  $KINDNO = '00';
+	  dim @txtime as string;
+	  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	  print( 5, 20,'机构名称:[30]',$BRNAME);  
+          print( 5, 2,'代码:7201');
+          print( 5, 13,'交易:对外现金收付');
+
+	  print( 7, 20, '操 作 码:[20]',#NAME1);
+	  print( 8, 20, '对方机构:[20]',#NAME4);
+	  print( 9, 20, '客户帐号:[24]',#KHZH);
+	  print( 9,  6, '客户名称:[50]',#KHMC);
+	  print(10, 20, '币    种:[20]',#NAME5);
+	  print(10, 10, '发 生 额:[20]',ltrim(comma(itoa(#FSE,'%17.2f'),16)));
+	  print(11, 20, '凭证种类:[20]',#NAME2);
+	  print(12, 20, '现金分析:[20]',#NAME3);
+	  printacdtl_1();
+          print(24,20,'备注:');
+          print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+          print(24,5,'柜员:[4]',$FD7);
+          print(24,5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

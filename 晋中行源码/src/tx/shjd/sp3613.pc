@@ -1,0 +1,98 @@
+/******************************************************************************
+*交易名称：事后监督操作员小工具                                               *
+*函数名称：sp3613()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:  
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-12 10:30                                             *
+*修改日期：                                                                   *
+*数据库表:                                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "xdtl_main_c.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+
+EXEC SQL INCLUDE sqlca;
+
+int sp3613()
+{  
+	char		brname[31];
+	char		actname[41];
+	char 		brno[6];
+	char		obrno[31];
+	char		actno[19];
+	char		newactno[19];
+	char		oldactno[51];
+	memset(brno,0x00,sizeof(brno));
+	memset(obrno,0x00,sizeof(obrno));
+	memset(actno,0x00,sizeof(actno));
+	memset(newactno,0x00,sizeof(newactno));
+	memset(oldactno,0x00,sizeof(oldactno));
+	memset(brname,0x00,sizeof(brname));
+	memset(actname,0x00,sizeof(actname));
+	pub_base_sysinit();
+  get_fd_data("0910",brno);
+  get_fd_data("0300",actno);
+  get_fd_data("0310",oldactno);
+	
+	if(strlen(actno) == 0)
+	{
+		if(strlen(brno)== 0)
+		{
+			EXEC SQL select nactno,name INTO :newactno,:actname from oldnewacc where oactno= :oldactno;
+			if(sqlca.sqlcode != 0)
+			{
+			      goto ErrExit;
+			}
+			set_zd_data("0250",actname);
+			set_zd_data("0320",newactno);
+		}
+		else
+		{
+			EXEC SQL select brname INTO :brname from bctl where brno= :brno;
+			if(sqlca.sqlcode!=0)
+			{
+			      goto ErrExit;
+			}
+			set_zd_data("0250",brname);
+			EXEC SQL select obrno INTO :obrno from oldnewbrno where nbrno= :brno;
+			if(sqlca.sqlcode != 0)
+			{
+			      goto ErrExit;
+			}
+			set_zd_data("0460",obrno);
+		}
+	}
+	else
+	{
+		EXEC SQL select name INTO :actname from cpbmr where actno= :actno;
+		if(sqlca.sqlcode!=0)
+		{
+		      goto ErrExit;
+		}
+			set_zd_data("0250",actname);
+	}
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

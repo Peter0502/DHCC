@@ -1,0 +1,484 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="代收业务发票打印"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9959                      代收业务发票打印)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=9020)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="7" COL="5"  TYPE="%-12s" NAME="#LAGENT_TYPE" FUNCTIONS="T(代收费类型: )"/>
+  <ITEM LINE="7" COL="15" TYPE="%-2s"  NAME="#AGENT_TYPE"  INPUT="SELECT" FUNCTIONS="V(NB)T(02)">
+    <SELECT>
+      <OPTION VALUE="01" TITLE="晋中燃气"/>
+      <OPTION VALUE="02" TITLE="国新洁源天然气"/>
+      <OPTION VALUE="03" TITLE="晋中供水"/>
+    </SELECT>
+  </ITEM>
+   
+  <ITEM LINE="9"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(流  水  号:)"/>
+  <ITEM LINE="9"  COL="15" TYPE="%-12s"    NAME="#OLD_TRACENO"  INPUT="TEXT"  FUNCTIONS="V(000000000001,999999999999)"/>
+  <ITEM LINE="11"  COL ="5" TYPE="%-14s"   FUNCTIONS="T(交 易 日 期:)"/>
+  <ITEM LINE="11"  COL="15" TYPE="%-8s"    NAME="#OLD_DATE"     INPUT="TEXT"  FUNCTIONS="T($HDATE)V(00000001,99999999)">
+    <ONLOSTFOCUS>
+    "{
+        if(len(delspace(#OLD_DATE))!=8){
+          showmsg('交易日期无效，请输入8位的交易日期!!');
+          return(false);
+        }
+		 initfd();
+      commsend_001();
+      $FD16='6607';             //单条流水详情查询接口
+      $FD60='AGENT';            //平台代理收费业务交易类型
+      $FD22=#AGENT_TYPE;        //代收费类型
+      $FD32=#OLD_TRACENO;       //原平台交易流水 COM_OLD_SW_TRACE_NO
+      $FD28=#OLD_DATE;          //原交易日期 com_old_tx_date
+
+	   #TOT= callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      #TOT=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		 if(#TOT==''){
+		   showmsg('未找到该用户交易记录!');
+		   rerun();
+		   return(false);
+		 }
+		 //showmsg(#TOT);
+	
+	// ----------------------------------      TOT 内容	    -------------------------------------------
+	// 0交易代码|1交易名称|2帐号|3户名|4交易金额|5交易渠道|6介质类型|7介质号码|8现转标志|9交易类型|10交易状态|
+	// 11缴费用户名称|12缴费用户地址|13用户号|14是否打印|15凭证开始号码|16凭证结束号码|17备注1|18备注2
+	// |1第三方交易码|2用户类型|3用户类型描述|4机构码|5 |6用户id|7用户名称|8用户地址|9结余金额|10应缴金额|11介质号|12购买数量|13调节系数|14计费气量
+	// |15费用合计|16用户余额|17优惠余额|18优惠金额|19账户支出|20购买码|21最大可购买量|22普表返回的明细笔数|23普表返回的明细内容|24缴费ID
+	// |25发票数量|26发票内容|27写卡旧密码|28写卡新密码|29数据区|30写数据开始|31数据长度|32数据信息|33卡类型|34 |35 |36        
+	// ------------------------------------------------------------------------------------------------
+      #YHNAME=delspace(strfld(#TOT,'|',11));             //用户姓名
+      #ADDRESS=delspace(strfld(#TOT,'|',12));            //用户单位及地址      
+      #TX_AMT=delspace(itoa(strfld(#TOT,'|',4),'%-10.2f'));  //缴费金额
+      #TX_CHANNEL=delspace(strfld(#TOT,'|',5));         //交易渠道
+      #JFFS=delspace(strfld(#TOT,'|',8));               //缴费方式
+      #TX_CODE=delspace(strfld(#TOT,'|',0));            //交易代码
+	  #TX_NAME=delspace(strfld(#TOT,'|',1));            //交易代码
+      #TX_BRNO=delspace($FD45);            //机构号
+      #TX_TEL=delspace($FD46);             //柜员号
+      #TX_STAT=delspace(strfld(#TOT,'|',10));            //交易状态
+      #TX_TYPE=delspace(strfld(#TOT,'|',9));            //交易类型		  
+      #ACC_TRACE_NO=delspace($FD4);       //核心交易流水
+      #ACC_TX_DATE=delspace($FD86);        //核心交易日期
+      #BRF=delspace(strfld(#TOT,'|',17));               //说明
+      #OLD_TRACENO=delspace($FD32);        //平台交易流水
+	  #USER_ID=delspace(strfld(#TOT,'|',13));        //用户号
+	  #NOTE_NO=delspace(strfld(#TOT,'|',7));        //用户介质
+      #AC_NO=delspace(strfld(#TOT,'|',2));              //账号
+      #AC_NAME=delspace(strfld(#TOT,'|',3));            //户名
+
+      //交易状态不为正常成功的，不进行补打
+      if(#TX_STAT != '0'){
+       // showmsg('该笔交易流水非正常成功状态，不可进行补打!');
+       // rerun();
+       // return(false);
+      }
+	  //0成功 *.失败 1.核心记账成功 2.核心签约成功 C.已冲正 T.已退费
+	  if(#TX_STAT=='0'){
+		#STAT='交易成功';
+	  }else if(#TX_STAT=='*'){
+		#STAT='交易失败';
+	  }else if(#TX_STAT=='1'){
+		#STAT='核心记账成功,第三方失败！';
+	  }else if(#TX_STAT=='2'){
+		#STAT='核心签约成功,第三方失败！';
+	  }else if(#TX_STAT=='C'){
+		#STAT='已冲正';
+	  }else if(#TX_STAT=='T'){
+		#STAT='已退费';
+	  }
+
+      //1.缴费 2.退费 3.绑定 4.解绑 5.签约 6.解约 7.换卡 8.冲正
+	  if(#TX_TYPE=='1'){
+		#TYPE='缴费';
+	  }else if(#TX_TYPE=='2'){
+		#TYPE='退费';
+	  }else if(#TX_TYPE=='3'){
+		#TYPE='绑定';
+	  }else if(#TX_TYPE=='4'){
+		#TYPE='解绑';
+	  }else if(#TX_TYPE=='5'){
+		#TYPE='签约';
+	  }else if(#TX_TYPE=='6'){
+		#TYPE='解约';
+	  }else if(#TX_TYPE=='7'){
+		#TYPE='换卡';
+	  }else if(#TX_TYPE=='8'){
+		#TYPE='冲正';
+	  }
+
+      //[6603]退费交易取得原缴费流水号
+      if(#TX_CODE=='6603'){
+        #OLD_J_TRACENO=delspace(strfld(#TOT,'|',18));
+      }
+     }"
+    </ONLOSTFOCUS>
+  </ITEM>
+ <ITEM LINE="12" COL="3"  TYPE="%-110s" VISABLE="TRUE" FUNCTIONS="T(----------------------------------------------------------------------------------------------------------)"/>
+  <ITEM NAME="#OPN_BR_NO"    TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#USER_NO"    TYPE="%-6s"  FUNCTIONS=""/>
+  <ITEM NAME="#C_CERTTYPE" TYPE="%-1s" FUNCTIONS=""/><!---账户对应证件类型--->
+  <ITEM NAME="#CERTTYPE_CN" TYPE="%-20s" FUNCTIONS=""/><!---证件类型中文--->
+  <ITEM NAME="#C_CERTNO" TYPE="%-20s" FUNCTIONS=""/><!---账户对应证件号码--->
+  <ITEM NAME="#OLD_J_TRACENO"    TYPE="%-20s"  FUNCTIONS=""/><!---退费业务对应缴费流水号--->
+  <ITEM NAME="#TOT"    TYPE="%-1024s"  FUNCTIONS=""/>
+
+  
+
+  <ITEM NAME="#UTX_AMT"  TYPE="%-40s"   FUNCTIONS="U(#TX_AMT)"/><!---大写金额--->
+
+  <ITEM NAME="#OVERDUE_AMT"  TYPE="%-12s"   FUNCTIONS=""><!---本次欠费--->
+    <ONLOSTFOCUS>
+    "{
+      
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BALANCE_AMT"  TYPE="%-12s"   FUNCTIONS=""><!---本次结余--->
+    <ONLOSTFOCUS>
+    "{
+     
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#RUNOUT"     TYPE="%-60s"    FUNCTIONS="">
+    <ONLOSTFOCUS>
+    "{
+      //runoutput();
+     // rerun();
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <!-- 凭证变量 -->
+  <ITEM NAME="#TX_TIME"        TYPE="%-8s"     FUNCTIONS=""/>
+  
+  <ITEM NAME="#SYBS"           TYPE="%-9s"     FUNCTIONS=""/>
+  <ITEM NAME="#BYBS"           TYPE="%-9s"     FUNCTIONS=""/>
+  <ITEM NAME="#YL"             TYPE="%-9s"     FUNCTIONS=""/>
+  <ITEM NAME="#DJ"             TYPE="%-4s"     FUNCTIONS=""/>
+  <ITEM NAME="#RQF"            TYPE="%-10s"    FUNCTIONS=""/>
+  <ITEM NAME="#BXF"            TYPE="%-8s"     FUNCTIONS=""/>
+  <ITEM NAME="#FZJ"            TYPE="%-8s"     FUNCTIONS=""/>
+  <ITEM NAME="#SYQF"           TYPE="%-10s"    FUNCTIONS=""/>
+  <ITEM NAME="#ZNJ"            TYPE="%-8s"     FUNCTIONS=""/>
+  <ITEM NAME="#SYJY"           TYPE="%-10s"    FUNCTIONS=""/>
+  <ITEM NAME="#DYJJK"          TYPE="%-10s"    FUNCTIONS=""/>
+  <ITEM NAME="#YSHJ"           TYPE="%-11s"    FUNCTIONS=""/>
+  <ITEM NAME="#CHBY"           TYPE="%-8s"     FUNCTIONS=""/>
+  <ITEM NAME="#PHONE"          TYPE="%-11s"    FUNCTIONS=""/>
+  <ITEM NAME="#TX_CHANNEL"     TYPE="%1s"      FUNCTIONS=""/>
+  <ITEM NAME="#JFFS"           TYPE="%1s"      FUNCTIONS=""/>
+  <ITEM NAME="#TX_CODE"        TYPE="%-4s"     FUNCTIONS=""/>
+  <ITEM LINE="13"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(交 易 名 称:)"/>
+  <ITEM LINE="13" COL="15"  NAME="#TX_NAME"     TYPE="%-40s"     FUNCTIONS=""/>
+  <ITEM LINE="13"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(用 户 名 称:)"/>
+  <ITEM LINE="13"  COL="50" NAME="#YHNAME"         TYPE="%-40s"    FUNCTIONS=""/>
+  <ITEM LINE="14"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(交 易 状 态:)"/>
+  <ITEM LINE="14" COL="15"  NAME="#STAT"     TYPE="%-40s"     FUNCTIONS=""/>
+  <ITEM LINE="14"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(用 户 地 址:)"/>
+  <ITEM LINE="14"  COL="50" NAME="#ADDRESS"        TYPE="%-120s"    FUNCTIONS=""/>
+  <ITEM LINE="15"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(交 易 类 型:)"/>
+  <ITEM LINE="15" COL="15"  NAME="TYPE"     TYPE="%-40s"     FUNCTIONS=""/>
+  <ITEM LINE="15"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(用 户 ID:)"/>
+  <ITEM LINE="15"  COL="50" NAME="#USER_ID"        TYPE="%-40s"    FUNCTIONS=""/>
+  <ITEM LINE="16"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(客 户 账 户:)"/>
+  <ITEM LINE="16" COL="15" NAME="#AC_NO"   TYPE="%-19s"    FUNCTIONS=""/>
+  <ITEM LINE="16"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(行 业 介 质:)"/>
+  <ITEM LINE="16"  COL="50" NAME="#NOTE_NO"        TYPE="%-40s"    FUNCTIONS=""/>
+  <ITEM LINE="17"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(客 户 户 名:)"/>
+  <ITEM LINE="17" COL="15" NAME="#AC_NAME"   TYPE="%-19s"    FUNCTIONS=""/>
+  <ITEM LINE="17"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(交 易 金 额:)"/>
+  <ITEM LINE="17"  COL="50" NAME="#TX_AMT"        TYPE="%-40s"    FUNCTIONS=""/>
+  <ITEM NAME="#TX_BRNO"        TYPE="%-5s"     FUNCTIONS=""/>
+  <ITEM NAME="#TX_TEL"         TYPE="%-4s"     FUNCTIONS=""/>
+  <ITEM NAME="#TX_STAT"        TYPE="%-1s"     FUNCTIONS=""/>
+  <ITEM NAME="#TX_TYPE"        TYPE="%-1s"     FUNCTIONS=""/>
+  <ITEM NAME="#ACC_TX_DATE"    TYPE="%-8s"     FUNCTIONS=""/>
+  <ITEM NAME="#BRF"            TYPE="%-112s"   FUNCTIONS=""/>
+  <ITEM NAME="#OLD_ACNO"       TYPE="%-19s"    FUNCTIONS=""/>
+  <ITEM NAME="#OLD_ACNAME"     TYPE="%-60s"    FUNCTIONS=""/>
+  <ITEM LINE="18" COL="3"  TYPE="%-110s" VISABLE="TRUE" FUNCTIONS="T(----------------------------------------------------------------------------------------------------------)"/>
+
+  <ITEM LINE="19"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(发票开始号码:)"/>
+  <ITEM LINE="19" COL="15" NAME="#QSHM" INPUT="TEXT"  TYPE="%16d"    FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="19"  COL="41"  TYPE="%-14s"   FUNCTIONS="T(发票结束号码:)"/>
+  <ITEM LINE="19"  COL="50" NAME="#ZZHM"    INPUT="TEXT"    TYPE="%16d"    FUNCTIONS="T()V(NB)">
+   <ONLOSTFOCUS>
+  "{
+         if(#ZZHM &lt; #QSHM)
+         {
+           showmsg('终止号码必须大于起始号码');
+           return(false);
+         }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FLAG"   TYPE="%-12s"     FUNCTIONS="G(#CZTYPE=1,#SUBMIT)">
+   <ONLOSTFOCUS>
+  "{
+     // #PZSL=itoa((atoi(substr(#ZZHM,8,8))-atoi(substr(#QSHM,8,8))+1),'%12d'); mod 20120103
+     initfd(); 
+     commsend_001(); 
+     $FD16='9204'; 
+     $FD58=#QSHM; 
+     $FD59=#ZZHM; 
+     callserver(); 
+     if($FD12!='0000') 
+     { 
+          showmsg(geterror()); 
+          return(false); 
+     } 
+     #PZSL=$FD60; 
+     show(#PZSL,true);
+      enable(#PZSL,false);
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="20"  COL="5"  TYPE="%-14s"   FUNCTIONS="T(发 票 数 量:)"/>
+  <ITEM LINE="20" COL="15" NAME="#PZSL"   TYPE="%12s"    FUNCTIONS="T(0)"/>
+  <!-- 凭证变量 -->
+  <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>"{
+     $FD12=='0000';
+	 if($FD12!='0000'){
+						  showmsg(geterror());
+						  return(false);
+					  }
+      runoutput();
+      rerun();
+
+      
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+   NOTHING
+  </PACKAGE>
+  <PRINT>
+    "{
+      print( 3,25,'补打业务凭条成功');
+      //9923[2010]缴费凭证补打
+      if(#TX_CODE=='2010' and #TX_STAT=='0' and #TX_TYPE=='1'){
+        print( 5,25,'补打燃气缴费凭条');
+        print( 6,20,'用户代码:[6]       用户名:[60]',#USER_NO,#YHNAME);
+        if(#JFFS=='1'){
+          print(7,20,'缴费方式:现金         缴费金额:[10]',delspace(comma(#TX_AMT)));
+        }else{
+          print(7,20,'缴费方式:转账         支付账号:[20]',delspace(#AC_NO));
+          print(8,20,'缴费金额:[10]',delspace(comma(#TX_AMT)));
+        }
+      }
+      //9924[3010]退费凭条补打
+      if(#TX_CODE=='9954' and #TX_STAT=='0' and #TX_TYPE=='2')
+      {
+        print(5,25,'补打退费凭条');
+        print(6,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+        print(7,20,'地    址：[64]',#ADDRESS);
+        print(8,20,'原缴费金额：[16]         退费金额：[16]',delspace(comma(#TX_AMT)),delspace(comma(#TX_AMT)));
+        print(9,20,'原缴费流水：[8]                 退费流水：[8]',delspace(#OLD_J_TRACENO),#OLD_TRACENO);
+        if(#JFFS == '2')
+        {
+          print(10,20,'退费方式：转账');
+          print(11,20,'银行卡：[19]          户名：[60]',#AC_NO,#AC_NAME);
+        }
+        else
+        {
+          print(10,20,'退费方式：现金');
+        }
+      }
+      //9921[5010]燃气费用代扣签解约凭条补打
+      if(#TX_CODE=='5010' and #TX_STAT=='0'){
+        if(#TX_TYPE=='0')
+        {
+          print(5,25,'补打燃气费用代扣签约凭条');
+          print(6,20,'用户代码：[6]                代扣状态：签约',#USER_NO);
+          print(7,20,'签约卡号：[19]   签约卡户名：[60]',#AC_NO,#AC_NAME);
+          print(8,20,'证件类型：[20]  证件号码：[18]',#CERTTYPE_CN,#C_CERTNO);
+        }
+        if(#TX_TYPE=='2')
+        {
+          print(5,25,'补打燃气费用代扣解约凭条');
+          print(6,20,'用户代码：[6]                代扣状态：解约',#USER_NO);
+          print(7,20,'解约卡号：[19]   解约卡户名：[60]',#AC_NO,#AC_NAME);
+          print(8,20,'证件类型：[20]  证件号码：[18]',#CERTTYPE_CN,#C_CERTNO);
+        }
+      }
+      //9920[9030]用户绑定解绑凭条补打
+      if(#TX_CODE=='9030' and #TX_STAT=='0'){
+        if(#TX_TYPE=='2')
+        {
+          print(5,25,'补打用户绑定凭条');
+          print(6,20,'用户代码：[6]            用户姓名：[40]',#USER_NO,#YHNAME);
+          print(7,20,'地    址：[64]',#ADDRESS);
+          print(8,20,'绑定账号：[19]        绑定账户名：[60]',#AC_NO,#AC_NAME);
+        }
+        if(#TX_TYPE=='3'){
+          print(5,25,'补打用户绑定维护凭条');
+          print(6,20,'用户代码：[6]            用户姓名：[40]',#USER_NO,#YHNAME);
+          print(7,20,'地    址：[64]',#ADDRESS);
+          print(8,20,'原代收账号：[19]               代收账户名：[60]',#OLD_ACNO,#OLD_ACNAME);
+          print(9,20,'新代收账号：[19]               代收账户名：[60]',#AC_NO,#AC_NAME);
+        }
+        if(#TX_TYPE=='4')
+        {
+          print(5,25,'补打用户解绑凭条');
+          print(6,20,'用户代码：[6]            用户姓名：[40]',#USER_NO,#YHNAME);
+          print(7,20,'地    址：[64]',#ADDRESS);
+          print(8,20,'解绑账号：[19]        解绑账户名：[60]',#AC_NO,#AC_NAME);
+        }
+      }
+    }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印燃气公司收据" CHECK="#TX_CODE=2010">
+  NOTHING
+  </PACKAGE>
+
+  <PRINT>
+  "{
+    dim @txdate  as string;
+    @txdate=substr(#OLD_DATE,0,4)+'年'+substr(#OLD_DATE,4,2)+'月'+substr(#OLD_DATE,6,2)+'日';
+
+    //2010缴费凭证补打
+    if(#TX_CODE=='2010' and #TX_STAT=='0' and #TX_TYPE=='1'){
+	    print(3,40,'[14]                     [8]',@txdate,delspace(#OLD_TRACENO));
+	    print(4,13,'\B0[30]\B1[40]\B0[6]\B1',delspace(#YHNAME),delspace(#ADDRESS),delspace(#USER_NO));
+        print(5,6,'[9]      [9]      [9]     [4]       [10]   [8]    [8]',delspace(#SYBS),delspace(#BYBS),delspace(#YL),delspace(#DJ),delspace(#RQF),delspace(#BXF),delspace(#FZJ));
+        print(8,10,'[2][10]      [8]       [10]       [10]         [11]',' ',delspace(#SYQF),delspace(#ZNJ),delspace(#SYJY),delspace(#DYJJK),delspace(#YSHJ));
+        print(10,22,'[15]                             [15]',delspace(comma(itoa(#TX_AMT,'%.2f'))),delspace(#OVERDUE_AMT));
+        print(11,22,'[36]        [15]',delspace(#UTX_AMT),delspace(#BALANCE_AMT));
+        print(15,12,'[8]                [11]                            [4]',delspace(#CHBY),delspace(#PHONE),$FD7);
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务专用凭证">
+    NOTHING
+  </PACKAGE>
+  <PRINT>
+   "{
+      dim @txtime  as string;
+      @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+      print(5,20,'机构名称:[30]',$BRNAME);
+      print(5,2,'代码:9956');
+      print(5,13,'交易:补打业务凭条');
+
+      //9923[2010]缴费凭证补打
+      if(#TX_CODE=='9954' and #TX_STAT=='0' and #TX_TYPE=='1'){
+        print(7,40,'\L0缴费\L1');
+        if(#JFFS=='1'){
+          print(9,20,'缴费方式：现金                       缴费金额：[15]',delspace(comma(#TX_AMT)));
+          print(10,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+          print(11,20,'地    址：[64]',#ADDRESS);
+          print(12,20,'平台流水：[8]                   交 易 行：[4]',#OLD_TRACENO,#TX_BRNO);
+        }else{
+          print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,#TX_BRNO);
+          print(10,20,'缴费方式：转账                       缴费金额：[15]',delspace(comma(#TX_AMT)));
+          print(11,20,'支付账号：[20]       户    名：[20]',delspace(#AC_NO),#AC_NAME);
+          print(12,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+          print(13,20,'地    址：[64]',#ADDRESS);
+          print(14,20,'平台流水：[8]',#OLD_TRACENO);
+
+          print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+          print(19,80,'客户签名:_____________________');
+        }
+      }
+      //9924[3010]退费凭证补打
+      if(#TX_CODE=='9954' and #TX_STAT=='0' and #TX_TYPE=='2')
+      {
+        print(7,40,'\L0燃气退费\L1');
+        print(9,20,'用户代码：[6]                  用户姓名：[40]',#USER_NO,#YHNAME);
+        print(10,20,'地    址：[64]',#ADDRESS);
+        if(#JFFS == '2')
+        {
+          print(11,20,'退费方式：转账');
+          print(12,20,'原缴费金额：[16]      支付账号：[19]',delspace(comma(#TX_AMT)),delspace(#AC_NO));
+          print(13,20,'退费金额：[16]        退入账号：[19]',delspace(comma(#TX_AMT)),delspace(#AC_NO));
+          print(14,20,'原缴费流水：[8]              退费流水：[8]',delspace(#OLD_J_TRACENO),#OLD_TRACENO);
+        }
+        else
+        {
+          print(11,20,'退费方式：现金');
+          print(12,20,'原缴费金额：[16]      退费金额：[16]',delspace(comma(#TX_AMT)),delspace(comma(#TX_AMT)));
+          print(13,20,'原缴费流水：[8]              退费流水：[8]',delspace(#OLD_J_TRACENO),#OLD_TRACENO);
+        }
+        print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+        print(19,80,'客户签名:_____________________');
+      }
+      //9921[5010]燃气费用代扣签/解约凭证补打
+      if(#TX_CODE=='5010' and #TX_STAT=='0'){
+        print(7,27,'\L0燃气费用代扣签/解约\L1');
+        print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,#TX_BRNO);
+        if(#TX_TYPE=='0')
+        {
+          print(10,20,'业务类型：签约');
+          print(11,20,'签约账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+          print(12,20,'证件类型：[20]       证件号码：[18]',#CERTTYPE_CN,#C_CERTNO);
+        }
+        if(#TX_TYPE=='2')
+        {
+          print(10,20,'业务类型：解约');
+          print(11,20,'解约账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+          print(12,20,'证件类型：[20]       证件号码：[18]',#CERTTYPE_CN,#C_CERTNO);
+        }
+        print(13,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+        print(14,20,'地    址：[64]',#ADDRESS);
+        print(15,20,'平台流水:[8]',#OLD_TRACENO);
+
+        print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+        print(19,80,'客户签名:_____________________');
+      }
+      //9920[9030]用户绑定/解绑凭证补打
+      if(#TX_CODE=='9030' and #TX_STAT=='0'){
+        print(7,27,'\L0燃气用户绑定/解绑\L1');
+        print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,#TX_BRNO);
+        if(#TX_TYPE=='2')
+        {
+          print(10,20,'业务类型：绑定');
+          print(11,20,'绑定账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+        }
+        if(#TX_TYPE=='3')
+        {
+          print(10,20,'业务类型：维护');
+          print(11,20,'原绑定账号：[19]      户    名：[60]',#OLD_ACNO,#OLD_ACNAME);
+          print(12,20,'新绑定账号：[19]      户    名：[60]',#AC_NO,#AC_NAME);
+        }
+        if(#TX_TYPE=='4')
+        {
+          print(10,20,'业务类型：解绑');
+          print(11,20,'解绑账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+        }
+        print(13,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+        print(14,20,'地    址：[64]',#ADDRESS);
+        print(15,20,'平台流水:[8]',#OLD_TRACENO);
+        
+        print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+        print(19,80,'客户签名:_____________________');
+      }
+
+      print( 23,20,'备注:');
+      print( 23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+      print( 23,5,'柜员:[4]',$FD7);
+      print( 23,5,'流水号:[6]',#ACC_TRACE_NO);
+    }"
+  </PRINT>
+</RESPONSE>
+</TRANSACTION>

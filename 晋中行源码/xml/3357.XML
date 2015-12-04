@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3357 银联柜面通存款撤销冲正"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3" COL="3" TYPE="%-54S" FUNCTIONS=
+"T(3357                   银联柜面通存款撤销冲正)"/>
+<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE="8"  COL="15" TYPE="%-15s" FUNCTIONS="T(冲正日期:)"/>
+<ITEM LINE="10" COL="15" TYPE="%-11s" FUNCTIONS="T(读取方式:)"/>
+<ITEM LINE="12" COL="15" TYPE="%-15s" FUNCTIONS="T(冲正账号:)"/>
+<ITEM LINE="14" COL="15" TYPE="%-11s" FUNCTIONS="T(冲正流水:)"/>
+<ITEM NAME="#TX_DATE"  INPUT="TEXT" LINE="8"  COL="27" ENABLE="FALSE" TYPE="%8d" FUNCTIONS="T($HDATE)D()V(NB)"/>
+<ITEM NAME="#DQFS"  INPUT="SELECT" LINE="10" COL="27" TYPE="%-3s" FUNCTIONS="T(0)V(NB)">
+<SELECT>
+	<OPTION VALUE="0" TITLE="0.读取磁条方式"/>
+	<OPTION VALUE="1" TITLE="1.读取芯片方式"/>
+	<OPTION VALUE="2" TITLE="2.无卡人工输入"/>
+</SELECT>
+<ONLOSTFOCUS>
+"{
+	if('0' == #DQFS)
+	{ enable(#ACTNO1,true);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,true);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,false);
+	}
+	else if('1' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,true);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,false);
+		show(#ACTNO2,true);
+		show(#AC_NO_NO,false);
+	}
+	else if('2' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,true);
+		show(#ACTNO1,false);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,true);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="12" COL="27" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" />
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="12"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)"/>
+<ITEM NAME="#AC_NO_NO"   INPUT="TEXT" LINE="12" COL="27" TYPE="%-20s" VISABLE="FALSE" FUNCTIONS="V(NB)I()"/>
+<ITEM NAME="#AC_NO" TYPE="%-20s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+		if('0' == #DQFS)
+		{
+		#AC_NO=#ACTNO1;
+		}
+		else if('1' == #DQFS)
+		{
+		#AC_NO=#ACTNO2;
+		}
+		else if('2' == #DQFS)
+		{
+		#AC_NO=#AC_NO_NO;
+		}
+
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#TX_TRACE" INPUT="TEXT" LINE="14" COL="27" TYPE="%012d"   FUNCTIONS="V(NB)"/>
+<ITEM LINE="21" COL="60" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONLOSTFOCUS>
+"{
+	initfd();
+	commsend_001();
+	$FD16='7834';
+	$FD58=#TX_TRACE;
+	$FD85=#TX_DATE;
+	$FD30=delspace(#AC_NO);
+	callagn();
+	if('H036' == $FD12)
+	{
+	showmsg('原存款撤销交易卡系统返回是不成功的，不必发冲正交易!');
+	return(false);
+	}
+	else if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	runoutput();
+	rerun();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通存款撤销冲正成功，按任意键继续">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print(3,30,'银联柜面通存款撤销冲正');
+	print(5,20,'冲正帐号:[24]',#AC_NO);
+	print(7,20,'冲正流水:[20]',#TX_TRACE);
+	print(9,20,'平台流水:[12]',$FD52);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="银联柜面通存款撤销冲正成功，请打印业务专用凭证(1/2打印纸)">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码:3357');
+	print( 5,15,'交易名称:银联柜面通存款撤销冲正');
+	print( 8,20,'冲正帐号:[24]',#AC_NO);
+	print( 9,20,'冲正流水:[20]',#TX_TRACE);
+	print(10,20,'平台流水:[12]',$FD52);
+	print(20,90,'客户签字:________________');
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+	print(24,05,'柜员:[4]',$FD7);
+	print(24,05,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

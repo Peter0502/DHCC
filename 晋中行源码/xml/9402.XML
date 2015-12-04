@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9402 现金登记簿查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(9402                        柜员现金交易明细查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=8402)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM NAME="#DOLIST"  TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @selid as number;
+
+	dim @t10000 as string;
+	dim @t5000  as string;
+	dim @t2000  as string;
+	dim @t1000  as string;
+	dim @t500   as string;
+	dim @t200   as string;
+	dim @t100   as string;
+	dim @t50    as string;
+	dim @t20    as string;
+	dim @t10    as string;
+	dim @t5     as string;
+	dim @t2     as string;
+	dim @t1     as string;
+	
+		if(#DOLIST == '1')
+		{
+			@selid = list_work(); 
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+			@selid = list_getselid();
+			if(@selid &lt; 0 or #CERSG == ' ')
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+		@t10000 = list_gettext(@selid,12);
+		@t5000  = list_gettext(@selid,13);
+		@t2000  = list_gettext(@selid,14);
+		@t1000  = list_gettext(@selid,15);
+		@t500   = list_gettext(@selid,16);
+		@t200   = list_gettext(@selid,17);
+		@t100   = list_gettext(@selid,18);
+		@t50    = list_gettext(@selid,19);
+		@t20    = list_gettext(@selid,20);
+		@t10    = list_gettext(@selid,21);
+		@t5     = list_gettext(@selid,22);
+		@t2     = list_gettext(@selid,23);
+		@t1     = list_gettext(@selid,24);
+        	
+		open('94011.XML','#T10000='+@t10000+';#T5000='+@t5000+';#T2000='+@t2000+';#T1000='+@t1000+
+		';#T500='+@t500+';#T200='+@t200+';#T100='+@t100+';#T50='+@t50+';#T20='+@t20+';#T10='+@t10+';#T5='+@t5+';#T2='+@t2+';#T1='+@t1+';');
+		return(true);
+		}
+	list_del();
+	#DOLIST = '';
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="5"  COL="5" TYPE="%-12s" FUNCTIONS="T(【查询条件】)"/>
+  <ITEM LINE="6"  COL="3" TYPE="%-74s" FUNCTIONS=
+  "T(---------------------------------------------------------------------------)"/>
+  
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(机构编码:)"/>
+  <ITEM LINE="8"  COL="45" TYPE="%-10s" FUNCTIONS="T(柜    员:)"/>
+  <ITEM LINE="9"  COL="5"  TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  <!---
+  <ITEM LINE="9"  COL="45" TYPE="%-10s" FUNCTIONS="T(收付标志:!)"/>
+  --->
+  <ITEM LINE="10" COL="5"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+
+  <ITEM LINE="10" COL="45" TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+  
+  <ITEM LINE="11" COL="5"  TYPE="%-10s" FUNCTIONS="T(流水日期:)"/>
+  <ITEM LINE="11" COL="25" TYPE="%-2s"  FUNCTIONS="T(→)"/>
+  <ITEM LINE="12" COL="5"  TYPE="%-10s" FUNCTIONS="T(摘    要:)"/>
+  <ITEM LINE="12" COL="41" TYPE="%-14s" FUNCTIONS="T(是否查看券别:!)"/>
+  
+ <!--输入变量-->
+  <ITEM NAME="#BRNO" LINE="8" COL="15" TYPE="%-5s" INPUT="TEXT" FUNCTIONS=""/>  
+  <ITEM NAME="#TLNO" LINE="8" COL="55" TYPE="%-7s" INPUT="TEXT" FUNCTIONS="T($TLRNO)"/>
+  <ITEM NAME="#ACNO" LINE="9" COL="15" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+ "{
+    commsend_001();
+ 		$FD16='9958';
+		$FD38=#ACNO;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#ACNO=$FD38;
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+  
+  <!---
+  <ITEM NAME="#ADIND" LINE="9" COL="55" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T()">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="付出"/>
+		<OPTION VALUE="1" TITLE="收入"/>
+	</SELECT>
+  </ITEM>
+  --->
+  <ITEM NAME="#CUNO" LINE="10" COL="15" TYPE="%-2s" INPUT="SELECT" FUNCTIONS="T(01)">
+  <SELECT>
+                <OPTION VALUE="01" TITLE="01人民币 "/>
+
+		<!----现在只留人民币选项
+                <OPTION VALUE="12" TITLE="12英镑 "/>
+                <OPTION VALUE="13" TITLE="13港元 "/>
+                <OPTION VALUE="14" TITLE="14美元 "/>
+                <OPTION VALUE="15" TITLE="15瑞士法郎 "/>
+                <OPTION VALUE="27" TITLE="27日元 "/>
+                <OPTION VALUE="28" TITLE="28加元 "/>
+                <OPTION VALUE="29" TITLE="29澳元 "/>
+                <OPTION VALUE="38" TITLE="38欧元 "/>
+		---->
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#AMT"   LINE="10" COL="55" TYPE="%17.2f" INPUT="TEXT"   FUNCTIONS=""/>
+  <ITEM NAME="#LDATE" LINE="11" COL="15" TYPE="%-8s"   INPUT="TEXT"   FUNCTIONS="T($HDATE)D()"/>
+  <ITEM NAME="#HDATE" LINE="11" COL="28" TYPE="%-8s"   INPUT="TEXT"   FUNCTIONS="D()"/>
+  <ITEM NAME="#BRF"   LINE="12" COL="15" TYPE="%-20s"  INPUT="TEXT"   FUNCTIONS=""/>
+  <ITEM NAME="#CERSG" LINE="12" COL="55" TYPE="%-1s"   INPUT="SELECT" FUNCTIONS="T()">
+  <SELECT>
+  	<OPTION VALUE="9" TITLE="是"/>
+  	<OPTION VALUE=" " TITLE="否"/>
+  </SELECT>
+  </ITEM>
+  
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+	dim  @tota as string;
+	
+	commsend_001();
+	$FD16='8402';
+	$FD21=#CUNO;
+	$FD29=#LDATE;
+	$FD38=#ACNO;
+	$FD44=#HDATE;
+	$FD63=getitems('#BRF');
+	$FD64=#TLNO;
+	$FD70=#CERSG;  //现用作券别登记标志
+	$FD91=#BRNO;
+	$FD100=getitems('#AMT');
+
+	@tota=callserver();
+	if($FD12!='0000') 
+	{
+		showmsg(geterror());
+		return(false);
+	}
+
+	autolist(@tota);
+	#DOLIST = '1';
+	
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,922 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00100000" TITLE="2104 活期销户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-42s" FUNCTIONS=
+    "T(2104                             活期销户)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <!-- 活期销户输入项显示 -->
+  <ITEM LINE="6"   COL="15" TYPE="%-10s" FUNCTIONS="T(行    号: )"/>
+  <ITEM LINE="7"   COL="15" TYPE="%-10s" FUNCTIONS="T(帐    号: )"/>
+  <ITEM LINE="9"   COL="15" TYPE="%-10s" FUNCTIONS="T(余    额: )"/>
+  <ITEM LINE="11"  COL="15" TYPE="%-10s" FUNCTIONS="T(转帐类型:!)"/>
+  <ITEM LINE="12"  COL="15" TYPE="%-10s" FUNCTIONS="T(对 方 号: )"/>
+
+  <ITEM LINE="12"  COL="47" TYPE="%-10s" NAME="#SFZHXH" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(帐户序号:)"/>
+
+  <ITEM LINE="14"  COL="15" TYPE="%-10s" FUNCTIONS="T(密印标志:!)"/>
+  <ITEM LINE="15"  COL="15" TYPE="%-10s" FUNCTIONS="T(储户密码: )"/>
+  <ITEM NAME="#SVOC" LINE="17"  COL="15" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(凭 证 号: )"/>
+  <ITEM NAME="#SHOWZJLX" LINE="18"  COL="15" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS="T(证件类型:!)" INPUT="LABEL"/>
+  <ITEM NAME="#SHOWZJHM" LINE="19"  COL="15" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS="T(证件号码: )" INPUT="LABEL" />
+  <ITEM LINE="6"  COL="47"   TYPE="%-10s"  FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="7"  COL="47"   TYPE="%-10s"  FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="6"  COL="58"   NAME="#SHOWNAME"   TYPE="%-20s"  INPUT="LABEL"/>
+  <ITEM LINE="7"  COL="58"   NAME="#SHOWAMT"    TYPE="%-19s"  INPUT="LABEL"/>
+  <ITEM LINE="14" COL="25"   NAME="#UCKCHOP"     TYPE="%-6s"    INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM NAME="#SUBACTNO" TYPE="%-18s"  FUNCTIONS=""/>
+
+  <!-- 授权处理 -->
+  <ITEM NAME="#AUTHTLRNO"  TYPE="%-6s" INPUT="LABEL"/>
+  <ITEM NAME="#AUTHNO"  TYPE="%-6s" INPUT="LABEL"/>
+  <ITEM NAME="#FILER" TYPE="%-200s"/>
+  <ITEM NAME="#QFLAG1" TYPE="%-1s">
+  <ONLOSTFOCUS>
+  "{
+	#OPFLAG='1';
+	show(#OPFLAG,true);
+        if(#QFLAG1=='2')        //授权批准
+        {
+                #OPNBR4=substr(#FILER,1,4);
+                #ACTNOSERIAL=substr(#FILER,5,11);
+                #TXAMT=val(substr(#FILER,16,12))/100;
+                #OPFLAG=substr(#FILER,28,1);
+                #TERM=substr(#FILER,29,2);
+                #TRFFLG=substr(#FILER,31,1);
+                #VOCNUM2=substr(#FILER,32,7);
+                #ASSTLR2=substr(#FILER,39,7);
+                #ACNO=substr(#FILER,46,18);
+                #FZHXH=substr(#FILER,64,3);
+                #SUBACTNO=substr(#FILER,67,18);
+
+		if(#OPFLAG=='2')
+		{
+			show(#ACNO,true);
+			show(#FZHXH,true);
+		}
+
+		enable(#OPNBR4,false);
+		enable(#ACTNOSERIAL,false);
+		enable(#TXAMT,false);
+		enable(#OPFLAG,false);
+		enable(#TERM,false);
+		enable(#TRFFLG,false);
+		enable(#VOCNUM2,false);
+		enable(#ASSTLR2,false);
+		enable(#ACNO,false);
+		enable(#FZHXH,false);
+        }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!-- 授权处理 -->
+
+  <!--活期销户输入项显示结束-->
+  <ITEM LINE="6"  COL="25"   NAME="#OPNBR4"  TYPE="%4s" DEVICE="KEYBOARD" FUNCTIONS="T($KINBR)">
+  <ONLOSTFOCUS>
+     "{
+          dim @a as string;
+          @a = checkno('D11', 'P_G_'+'001'+#OPNBR4);
+          if('' != @a){
+                        showhelp(4,22,5,55,'支行信息', '行号:'+substr(@a,0,7)+chr(10)+'行名:'+substr(@a,8,12));
+			#OPNBR4=substr(@a,0,7);
+		    	show(#OPNBR4,true);
+                      }else{
+                             showmsg('行号有错');
+                             return(false);
+                           }
+      }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#OPNBR" TYPE="%-7s" FUNCTIONS="T(#OPNBR4)"/>
+  <ITEM LINE="7" COL="25" NAME="#ACTNOSERIAL" TYPE="%11d" DEVICE="MSR" FUNCTIONS="m($MSR2, 8, 11)T()"/>
+  <ITEM NAME="#ACTNOMID" TYPE="%3d"  FUNCTIONS="T(021)"/>
+  <ITEM NAME="#ACTYPE"     TYPE="%1s" />
+  <ITEM NAME="#NKIND"      TYPE="%1s" />
+   <ITEM NAME="#ZHYE" TYPE="%-30s"/>
+  <ITEM NAME="#ACTNO" TYPE="%-18s" FUNCTIONS="T(#OPNBR+#ACTNOMID+#ACTNOSERIAL)">
+  <ONLOSTFOCUS>
+"{
+    dim @a as string;
+    dim @b as string;
+    dim @h as string;
+    @b='';
+    @a='';
+    //showmsg('OPNBR= ['+#OPNBR+']');
+    //showmsg('OPNBR4= ['+#OPNBR4+']');
+    @a=checkno('D09',#ACTNO);
+    if(@a!=''){
+    @h = checkno('D11', #ACTNO);
+     if('p' == substr(@h, 121, 1)){
+		showhelp(7,26,4,52,'帐户信息','户名:'+substr(@h,0,14)+chr(10)+'余额:'+comma(substr(@h,40,12))+chr(10)+'止付标志:'+substr(@h,122,12)+chr(10)+'冻结标志:'+substr(@h, 134, 12)+chr(10)+'账户状态:'+substr(@h,146, 12));
+	}else{
+	  showhelp(4,26,4,52,'帐户信息','户名:'+substr(@h,0,14)+chr(10)+'余额:'+comma(substr(@h,40,12)));
+	    }
+
+        #ACTYPE=substr(@a,59,1);
+        #NKIND=substr(@a,61,1);
+	#CKCHOP=substr(@a,60,1);
+        if(#CKCHOP=='0')
+        {
+	    #UCKCHOP='密';
+            show(#PASSWD1,true);
+        }else{
+	    #UCKCHOP='无';
+            show(#PASSWD1,false);
+			if(#OPNBR!=$KINBR){
+				showmsg('--橙色警告:没有密码的帐户不可以进行通兑业务!--');
+				return(false);
+			}
+        }
+	show(#UCKCHOP,true);
+	if(#NKIND=='1'){
+        show(#ZJLX,true);
+        show(#ZJHM,true);
+        show(#SHOWZJLX,true);
+        show(#SHOWZJHM,true);
+	show(#VOCNUM,false);
+	show(#SVOC,false);
+        showmsg('挂失销户!');
+	}else{
+        show(#ZJLX,false);
+        show(#ZJHM,false);
+        show(#SHOWZJLX,false);
+        show(#SHOWZJHM,false);
+	}
+        if(#ACTYPE=='1'){
+        	show(#OPFLAG,true);
+        }else{
+        	show(#OPFLAG,true);
+                show(#ACNO,false);
+        }
+	#ACTNO=substr(@a,34,18);
+ 
+        #SHOWNAME=substr(@a,5,15);
+        #SHOWAMT=substr(@a,20,14);
+        #ZHYE=substr(@a,20,14);
+        #ACTNOSERIAL=substr(@a,44,8);
+        #OPNBR=substr(@a,52,4);
+        show(#SHOWNAME,true);
+        show(#SHOWAMT,true);
+        show(#ACTNOSERIAL,true);
+        show(#OPNBR,true);
+    }else{
+        show(#SHOWNAME,false);
+        show(#SHOWAMT,false);
+        showmsg('帐号不存在!');
+	return(false);
+    }
+#PRTACC1=substr(#ACTNO,0,6);
+#PRTACC2=substr(#ACTNO,6,6);
+#PRTACC3=substr(#ACTNO,12,6);
+ }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="9" COL="25" NAME="#TXAMT"  TYPE="%13.2f" DEVICE="KEYBOARD" FUNCTIONS="V(000000000000,999999999999)"/>
+  <ITEM NAME="#XTXAMT" TYPE="%-13s"  FUNCTIONS="X(#TXAMT)"/>
+  <ITEM NAME="#LIMAMT" TYPE="%13.2f" FUNCTIONS="T(000004999999)"/>
+
+  <ITEM NAME="#JFLAG" TYPE="%1s" FUNCTIONS="j(#LIMAMTless#TXAMT,T{1}T{0})"/>
+  <ITEM NAME="#GOEND" TYPE="%1s" FUNCTIONS="j(#JFLAG=0and#NKIND=0,T{0}T{1})">
+
+ <ONLOSTFOCUS>
+  "{
+    if(#GOEND=='1'){
+        show(#ZJLX,true);
+        show(#ZJHM,true);
+        show(#SHOWZJLX,true);
+        show(#SHOWZJHM,true);
+    }else{
+        show(#ZJLX,false);
+        show(#ZJHM,false);
+        show(#SHOWZJLX,false);
+        show(#SHOWZJHM,false);
+    }
+  }"
+</ONLOSTFOCUS>
+</ITEM>
+  <ITEM LINE="11" COL="25" NAME="#OPFLAG"  TYPE="%-1s" DEVICE="KEYBOARD"  INPUT="SELECT" VISABLE="FALSE" MESSAGE="个人结算户请选择0现金1转帐2转开整整户" FUNCTIONS="G(1,#ZHLX)">
+  <SELECT LINE="11" COL="27">
+      <OPTION VALUE="1" TITLE="现金销户  "/>
+      <OPTION VALUE="2" TITLE="转帐销户  "/>
+  <!----    <OPTION VALUE="3" TITLE="转开整整户"/>     ----->
+    </SELECT>
+    <ONLOSTFOCUS>
+  "{
+	show(#SHOWTERM,false);
+	show(#SHOWTRFFLG,false);
+	show(#SHOWVOCNUM,false);
+	show(#SHOWASSTLR,false);
+	show(#TERM,false);
+	show(#TRFFLG,false);
+	show(#VOCNUM2,false);
+	show(#ASSTLR2,false);
+        show(#SFZHXH,false);
+        show(#FZHXH,false);
+
+      if(#OPFLAG=='2'){
+        show(#ACNO,true);
+      }else if(#OPFLAG=='3' and $HCODE=='0'){
+        show(#ACNO,false);
+        show(#SHOWTERM,true);
+        show(#SHOWTRFFLG,true);
+        show(#SHOWVOCNUM,true);
+        show(#SHOWASSTLR,true);
+        show(#TERM,true);
+        show(#TRFFLG,true);
+        show(#VOCNUM2,true);
+        show(#ASSTLR2,true);
+      }else if(#OPFLAG=='1'){
+        show(#ACNO,false);
+	if(#OPFLAG == '1' and #TXAMT &gt; 50000){
+       		rtrim(#TERM);	
+       		rtrim(#TRFFLG);	
+       		rtrim(#VOCNUM2);	
+	       	rtrim(#ASSTLR2);	
+	       	rtrim(#ACNO);	
+	       	rtrim(#FZHXH);	
+	
+	       	if(len(#TERM)==0)
+ 	       	{
+ 		   #TERM='00';
+ 	       	}
+ 	       	if(len(#TRFFLG)==0)
+ 	       	{
+ 		   #TRFFLG='0';
+ 	       	}
+ 	       	if(len(#VOCNUM2)==0)
+ 	       	{
+ 		   #VOCNUM2='       ';
+ 	       	}
+ 	       	if(len(#ASSTLR2)==0)
+ 	       	{
+ 		   #ASSTLR2='       ';
+ 	       	}
+ 	       	if(len(#ACNO)==0)
+ 	       	{
+ 		   #ACNO='                  ';
+ 	       	}
+ 	       	if(len(#FZHXH)==0)
+ 	       	{
+ 		   #FZHXH='   ';
+ 	       	}
+ 	
+ 	       	#FILER=#OPNBR4+#ACTNOSERIAL+itoa(#TXAMT*100,'%12.0f')+#OPFLAG+#TERM+#TRFFLG+#VOCNUM2+#ASSTLR2+#ACNO+#FZHXH+#SUBACTNO;
+ 	        showmsg('此交易需要授权请申请');
+ 	        open('F511.XML','#ACTNO='+#ACTNO+';#TXAMT='+itoa(#TXAMT*100,'%12.0f')+';#TXNAME=活储挂销;#TXNUM=2104;'+'#FILER='+#FILER+';');
+	}
+      }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <!-- 增加用于转开整整户 开始 ---->
+  <ITEM LINE="10" COL="47" NAME="#SHOWTERM"   TYPE="%-12s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(存    期:)"/>
+  <ITEM LINE="11" COL="47" NAME="#SHOWTRFFLG" TYPE="%-12s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(转存标志:)"/>
+  <ITEM LINE="12" COL="47" NAME="#SHOWVOCNUM" TYPE="%-12s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(存 单 号:)"/>
+  <ITEM LINE="13" COL="47" NAME="#SHOWASSTLR" TYPE="%-12s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(客户经理:)"/>
+
+  <ITEM LINE="10"  COL="57" NAME="#TERM"   INPUT="SELECT"
+DEVICE="KEYBOARD" VISABLE="FALSE" TYPE="%-2s" FUNCTIONS="T(12)">
+    <SELECT LINE="12" COL="25">
+      <OPTION VALUE="03" TITLE="三个月"/>
+      <OPTION VALUE="06" TITLE="六个月"/>
+      <OPTION VALUE="12" TITLE="一  年"/>
+      <OPTION VALUE="24" TITLE="二  年"/>
+      <OPTION VALUE="36" TITLE="三  年"/>
+      <OPTION VALUE="60" TITLE="五  年"/>
+    </SELECT>
+</ITEM>
+  <ITEM NAME="#CCTERM"   TYPE="%-6s"  FUNCTIONS="j(#TERM=03,T{三个月})j(#TERM=06,T{六个月})j(#TERM=09,T{九个月})j(#TERM=12,T{一年  }j(#TERM=24,T{二年  })j(#TERM=36,T{三年  })j(#TERM=60,T{五年  })"/>
+
+  <ITEM LINE="11"  COL="57" NAME="#TRFFLG" INPUT="SELECT"
+DEVICE="KEYBOARD" VISABLE="FALSE" TYPE="%-1s" FUNCTIONS="T(0)">
+    <SELECT LINE="11" COL="27">
+      <OPTION VALUE="0  " TITLE="不 转 存"/>
+      <OPTION VALUE="1  " TITLE="自动转存"/>
+    </SELECT>
+    <ONLOSTFOCUS>
+    "{
+        if(#TRFFLG=='1'){
+                if(#TERM=='03' or #TERM=='06'){
+                        showmsg('一年以下不能办理自动转存!');
+                return(false);
+                }
+        }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="12"  COL="57" NAME="#VOCNUM2" INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE" TYPE="%7d" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13"  COL="57" NAME="#ASSTLR2"  INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE" TYPE="%-7s" FUNCTIONS="T()"/>
+<!---   增加用于转开整整户 结束-->
+ <ITEM  NAME="#SZH" TYPE="%-18s" />
+ <ITEM  NAME="#SNAME" TYPE="%-60s" />
+ <ITEM LINE="12" COL="25" NAME="#ACNO" MESSAGE="请输入7位科目号或18位活期帐号"  TYPE="%-18s" INPUT="TEXT" VISABLE="FALSE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)J(#UACT1)">
+ <ONLOSTFOCUS>
+  "{
+    dim @a as string;
+    dim @h as string;
+    @a='';
+
+    show(#SFZHXH,false);
+    show(#FZHXH,false);
+    if(substr(#ACNO,5,1)=='8')  /** 一本通户 **/
+    {
+        show(#SFZHXH,true);
+        show(#FZHXH,true);
+        return(true);
+    }
+
+    #SUBACTNO='000000000000000000';
+
+    @a=checkno('D11',#ACNO);
+    if(@a!=''){ 
+	#ACNO=substr(@a,56,18);
+	#SZH=substr(@a,56,18);
+    @h = checkno('D11', #ACNO);
+ if('p' == substr(@h, 121, 1)){#SNAME=substr(@h,0,14);
+                showhelp(7,26,4,52,'帐户信息','户名:'+substr(@h,0,14)+chr(10)+'余额:'+comma(substr(@h,40,12))+chr(10)+'止付标志:'+subs
+tr(@h,122,12)+chr(10)+'冻结标志:'+substr(@h, 134, 12)+chr(10)+'账户状态:'+substr(@h,146, 12));
+  }else{
+    showhelp(4,26,4,52,'帐户信息','户名:'+substr(@h,0,14)+chr(10)+'余额:'+comma(substr(@h,40,12)));
+    }
+   // showmsg('ACNO='+#ACNO+ ' ',2);
+	#ACNO=substr(@a,56,18);
+	show(#ACNO,true);
+
+    }else{
+        showmsg('帐号不存在!');
+	return(false);
+    }
+    
+}"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="12"  COL="57" NAME="#FZHXH" TYPE="%3d" INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE" FUNCTIONS="">
+    <ONLOSTFOCUS>
+  "{
+    dim @a as string;
+    @a='';
+    @a=checkno('D09',#ACNO+#FZHXH);
+    if(@a!=''){
+        #SUBACTNO=substr(@a,68,18);
+        showhelp(4,22,5,55,'帐户信息',substr(@a,0,20)+'余额:'+substr(@a,20,14));
+    }else{
+        showmsg('帐号不存在!');
+        return(false);
+    }
+}"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+   <!-- 加科目的校验 gyf.20031010-->
+  <!--到这里结束  -->
+  <!--开封无卡  gyf.20040228-->
+  <ITEM NAME="#ZHLX"       TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#CARDNO"     TYPE="%19d" />
+  <ITEM NAME="#CARDSERIAL" TYPE="%-3d" FUNCTIONS="T(000)"/>
+
+ <!-- 交易授权 -->
+ <ITEM NAME="#SHOUQUAN"  TYPE="%-1s" INPUT="LABEL">
+ <ONLOSTFOCUS>
+  "{
+	
+       if(#QFLAG1!='2')
+       {
+           if(#NKIND=='1' )
+           {
+	       rtrim(#TERM);	
+	       rtrim(#TRFFLG);	
+	       rtrim(#VOCNUM2);	
+	       rtrim(#ASSTLR2);	
+	       rtrim(#ACNO);	
+	       rtrim(#FZHXH);	
+
+	       if(len(#TERM)==0)
+	       {
+		   #TERM='00';
+	       }
+	       if(len(#TRFFLG)==0)
+	       {
+		   #TRFFLG='0';
+	       }
+	       if(len(#VOCNUM2)==0)
+	       {
+		   #VOCNUM2='       ';
+	       }
+	       if(len(#ASSTLR2)==0)
+	       {
+		   #ASSTLR2='       ';
+	       }
+	       if(len(#ACNO)==0)
+	       {
+		   #ACNO='                  ';
+	       }
+	       if(len(#FZHXH)==0)
+	       {
+		   #FZHXH='   ';
+	       }
+
+               #FILER=#OPNBR4+#ACTNOSERIAL+itoa(#TXAMT*100,'%12.0f')+#OPFLAG+#TERM+#TRFFLG+#VOCNUM2+#ASSTLR2+#ACNO+#FZHXH+#SUBACTNO;
+               showmsg('此交易需要授权请申请');
+	       if(#NKIND=='1')
+	       {
+               		open('F511.XML','#ACTNO='+#ACTNO+';#TXAMT='+itoa(#TXAMT*100,'%12.0f')+';#TXNAME=活储挂销;#TXNUM=2104;'+'#FILER='+#FILER+';');
+	       }
+		else
+		{
+               		open('F511.XML','#ACTNO='+#ACTNO+';#TXAMT='+itoa(#TXAMT*100,'%12.0f')+';#TXNAME=活储销户;#TXNUM=2104;'+'#FILER='+#FILER+';');
+		}
+           }
+       }
+  }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <!-- 交易授权 -->
+
+  <!--gyf.20040228-->
+  <ITEM LINE="14" COL="25" NAME="#CKCHOP" TYPE="%1d" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+          if(#CKCHOP=='2'){
+	         show(#PASSWD1,false);
+          }else{
+       		 show(#PASSWD1,true);
+         }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="15" COL="25" NAME="#PASSWD1" TYPE="%6d" DEVICE="PINPAD" FUNCTIONS="i()V(NB)"/>
+  <ITEM NAME="#PASSWD" TYPE="%-8s" FUNCTIONS="T($XPASS)"/>
+  <ITEM LINE="17" COL="25" NAME="#VOCNUM" TYPE="%7d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="18" COL="25" NAME="#ZJLX" TYPE="%2d" VISABLE="FALSE" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T(01)V(01,07)">
+  <SELECT LINE="18" COL="27">
+	<OPTION VALUE="01 " TITLE="身份证"/>
+	<OPTION VALUE="02 " TITLE="户口薄"/>
+	<OPTION VALUE="03 " TITLE="军官证"/>
+	<OPTION VALUE="04 " TITLE="护照  "/>
+	<OPTION VALUE="05 " TITLE="居住证"/>
+	<OPTION VALUE="06 " TITLE="学生证"/>
+	<OPTION VALUE="07 " TITLE="其他  "/>
+</SELECT>
+</ITEM>
+<ITEM LINE="19" COL="25" NAME="#ZJHM" TYPE="%-20s" VISABLE="FALSE" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TTT"   TYPE="%1s" FUNCTIONS="T(1)G(1,#HCODE)"/>
+  <ITEM NAME="#CHARGE" TYPE="%6d" />
+  <ITEM NAME="#CHPASS" TYPE="%6s" />
+  <ITEM NAME="#CHPAWD" TYPE="%8s" FUNCTIONS="T($XPASS)"/>
+  <ITEM NAME="#HHH"    TYPE="%1s" FUNCTIONS="T(1)G(1,#CKCHOP)"/>
+  <ITEM NAME="#HCODE"  TYPE="%1s"  FUNCTIONS="T($HCODE)"/>
+  <ITEM NAME="#TASKID" TYPE="%-2s" FUNCTIONS="T(UP)"/>
+  <ITEM NAME="#TMTYPE" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#APTYPE" TYPE="%-1s" FUNCTIONS="T(P)"/>
+  <ITEM NAME="#TXNO"   TYPE="%-2s" FUNCTIONS="T(40)"/>
+  <ITEM NAME="#PTYPE"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#MULTTX" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#CRDB"   TYPE="%-1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#SUPIN1" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SUPIN2" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#REASON" TYPE="%-6s" FUNCTIONS="T(000000)"/>
+  <ITEM NAME="#TLRNO"  TYPE="%-6s" FUNCTIONS="T($TLRNO)"/>
+  <ITEM NAME="#NBCD"   TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TRNMOD" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SBTMOD" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#CURCD"  TYPE="%-3s" FUNCTIONS="T(000)"/>
+  <ITEM NAME="#CURP"   TYPE="%-1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#TXDAY"  TYPE="%-8s" FUNCTIONS="T($HDATE)"/>
+  <ITEM NAME="#PDATE"  TYPE="%-6s" FUNCTIONS="T($HDATE,3,6)"/>
+  <ITEM NAME="#PKEY"   TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#PFLAG1" TYPE="%-1s" FUNCTIONS="T(4)"/>
+  <ITEM NAME="#PFLAG2" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#KINBR"  TYPE="%-7s" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#ACTNO1" TYPE="%-11s"  FUNCTIONS="T(#ACTNOMID+#ACTNOSERIAL)"/>
+  <ITEM NAME="#NAME"    TYPE="%-20s" FUNCTIONS="J(#PNAME)"/>
+  <ITEM NAME="#ADDRESS" TYPE="%-40s" />
+  <ITEM NAME="#PNAME"   TYPE="%-10s" FUNCTIONS="T(#NAME,1,10)"/>
+  <ITEM NAME="#DSCPT"   TYPE="%3d" FUNCTIONS="j(#OPFLAG=1,T{001})j(#OPFLAG=2,T{002})j(#OPFLAG=3,T{002})"/>
+  <ITEM NAME="#IDSCPT"  TYPE="%-6s" FUNCTIONS="T(现金  )"/>
+  <ITEM NAME="#TXTYPE"  TYPE="%-2s" FUNCTIONS="T(C )"/>
+  <ITEM NAME="#HFLAG"   TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#PFLAG3"  TYPE="%-1s" FUNCTIONS="J(#QQQ)T(#KFLAG=B)"/>
+  <ITEM NAME="#PFLAG4"  TYPE="%-1s" FUNCTIONS="T(#PFLAG4=1,T{#PKEY=1})"/>
+  <ITEM NAME="#TXCNT"   TYPE="%2d" FUNCTIONS="T($OCCURS=#TXCNT)J(#TOTCNT)" />
+  <ITEM NAME="#TOTCNT"  TYPE="%5d" FUNCTIONS="E(#TOTCNT+#TXCNT)J(#TOTCNTC)"/>
+  <ITEM NAME="#TOTCNTC" TYPE="%5d" FUNCTIONS="T($TOTCNT=#TOTCNT)"/>
+  <ITEM NAME="#OPBCOL"  TYPE="%-2s" FUNCTIONS="J(#TTT1)"/>
+  <ITEM NAME="#TTT1"    TYPE="%1s"  FUNCTIONS="T($PBLINE=#OPBCOL)T($KINDNO=02)"/>
+  <ITEM NAME="#FODATE"  TYPE="%-2s"  FUNCTIONS="J(#AMTFLG)"/>
+  <ITEM NAME="#NULL"    TYPE="%-13s"  FUNCTIONS="T(             )"/>
+  <ITEM NAME="#AMTFLG"  TYPE="%1s"   FUNCTIONS="T(#TXAMT1=#NULL)T(#TXAMT2=#NULL)"/>
+  <ITEM NAME="#LODATE"  TYPE="%-6s"/>
+  <ITEM NAME="#OPBDSC"  TYPE="%-3s" FUNCTIONS="J(#TEMP11)J(#TEMP12)J(#TEMP13)J(#TEMP14)J(#TEMP15)J(#TEMP16)"/>
+  <ITEM NAME="#PPBDSC"  TYPE="%-2s"/>
+ <ITEM NAME="#TEMP11"  TYPE="%-1s" FUNCTIONS="j(#OPBDSC=101,T{#PPBDSC=开})j(#OPBDSC=102,T{#PPBDSC=存})j(#OPBDSC=103,T{#PPBDSC=取})j(#OPBDSC=104,T{#PPBDSC=销})"/>
+  <ITEM NAME="#TEMP12"  TYPE="%-1s" FUNCTIONS="j(#OPBDSC=105,T{#PPBDSC=息})j(#OPBDSC=106,T{#PPBDSC=冲})j(#OPBDSC=107,T{#PPBDSC=汇})j(#OPBDSC=108,T{#PPBDSC=薪})"/>
+  <ITEM NAME="#TEMP13"  TYPE="%-1s" FUNCTIONS="j(#OPBDSC=109,T{#PPBDSC=话})j(#OPBDSC=110,T{#PPBDSC=换})j(#OPBDSC=111,T{#PPBDSC=登})j(#OPBDSC=112,T{#PPBDSC=补})"/>
+  <ITEM NAME="#TEMP14"  TYPE="%-1s" FUNCTIONS="j(#OPBDSC=113,T{#PPBDSC=冲})j(#OPBDSC=114,T{#PPBDSC=费})j(#OPBDSC=115,T{#PPBDSC=拆})j(#OPBDSC=116,T{#PPBDSC=滞})"/>
+  <ITEM NAME="#TEMP15"  TYPE="%-1s" FUNCTIONS="j(#OPBDSC=117,T{#PPBDSC=水})j(#OPBDSC=118,T{#PPBDSC=视})j(#OPBDSC=119,T{#PPBDSC=租})j(#OPBDSC=120,T{#PPBDSC=税})j(#OPBDSC=121,T{#PPBDSC=并})j(#OPBDSC=122,T{#PPBDSC=网})"/>
+   <ITEM NAME="#TEMP16"  TYPE="%-1s"  FUNCTIONS="j(#OPBDSC=130,T{#PPBDSC=本})j(#OPBDSC=131,T{#PPBDSC=息})j(#OPBDSC=143,T{#PPBDSC=贷})"/>
+  <ITEM NAME="#OTXAMT"  TYPE="%11.2f" FUNCTIONS="J(#XOTXAMT)"/>
+  <ITEM NAME="#XOTXAMT" TYPE="%-13s"  FUNCTIONS="X(#OTXAMT)"/>
+  <ITEM NAME="#OOPNBR"  TYPE="%-7s"/>
+  <ITEM NAME="#OCRDB"   TYPE="%-1s" FUNCTIONS="J(#MARK2)J(#TXAMT1)J(#TXAMT2)J(#CRAMT)J(#DRAMT)J(#PDTXAMT2)"/>
+  <ITEM NAME="#MARK2"   TYPE="%-1s"   FUNCTIONS="j(#OCRDB=1and$HCODE=0,T{-})j(#OCRDB=1and$HCODE=1,T{+})j(#OCRDB=2and$HCODE=0,T{+})j(#OCRDB=2and$HCODE=1,T{-})"/>
+  <ITEM NAME="#TXAMT1"   TYPE="%-13s" FUNCTIONS="T(#MARK2+#XOTXAMT)"/>
+  <ITEM NAME="#TXAMT2"   TYPE="%13s" FUNCTIONS="T(#TXAMT1)"/>
+  <ITEM NAME="#PDTXAMT2" TYPE="%9s"  FUNCTIONS="T(#TXAMT1,1,9)"/>
+  <ITEM NAME="#CRAMT"  TYPE="%13s"   FUNCTIONS="j(#OCRDB=2,T{#TXAMT2}T{             })"/>
+  <ITEM NAME="#DRAMT"  TYPE="%13s"   FUNCTIONS="j(#OCRDB=1,T{#TXAMT1}T{             })"/>
+
+  <ITEM NAME="#OAVBAL"  TYPE="%11.2f" FUNCTIONS="J(#PAVBAL)J(#KK1)J(#KK2)J(#KK3)J(#KK4)J(#PDKK2)"/>
+  <ITEM NAME="#KK1"     TYPE="%-1s" FUNCTIONS="T($)"/>
+  <ITEM NAME="#KK2"     TYPE="%13s" FUNCTIONS="T(#PAVBAL)"/>
+  <ITEM NAME="#PDKK2"   TYPE="%10s" FUNCTIONS="T(#PAVBAL,1,10)"/>
+  <ITEM NAME="#KK3"     TYPE="%13s" FUNCTIONS="T(#KK1+#KK2)"/>
+  <ITEM NAME="#KK4"     TYPE="%13s" FUNCTIONS="T(j(#OPBDSC=104,T{          -0-})"/>
+  <ITEM NAME="#PAVBAL"  TYPE="%-13s" FUNCTIONS="X(#OAVBAL)"/>
+  <ITEM NAME="#OTLRNO"  TYPE="%-6s"/>
+  <ITEM NAME="#OKEY"    TYPE="%-1s" FUNCTIONS="T(#PKEY=#OKEY)j($HCODE=1and#PKEY=1,T{#PKEY=3})j($HCODE=1and#PKEY=2,T{#PKEY=3})"/>
+  <ITEM NAME="#OACTNO"  TYPE="%-18s" FUNCTIONS="J(#OACTNO1)"/>
+  <ITEM NAME="#OACTNO1" TYPE="%9s" FUNCTIONS="T(#OACTNO,10,9)"/>
+  <ITEM NAME="#OCKCHOP" TYPE="%-1s"  FUNCTIONS="J(#CCKCHOP)J(#TCTD)" />
+  <ITEM NAME="#CCKCHOP" TYPE="%-2s"  FUNCTIONS="j(#OCKCHOP=0,T{密})j(#OCKCHOP=1,T{印})j(#OCKCHOP=2,T{无})" />
+  <ITEM NAME="#OOPDAY"  TYPE="%-8s" />
+  <ITEM NAME="#ONAME"   TYPE="%-20s" />
+  <ITEM NAME="#OFLAG"   TYPE="%-1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#PBDSC"   TYPE="%-3s" FUNCTIONS="J(#TEMP21)J(#TEMP22)J(#TEMP23)J(#TEMP24)" />
+  <ITEM NAME="#PDSCPT"  TYPE="%-2s"/>
+  <ITEM NAME="#TEMP21"  TYPE="%-1s"  FUNCTIONS="j(#PBDSC=101,T{#PDSCPT=开})j(#PBDSC=102,T{#PDSCPT=存})j(#PBDSC=103,T{#PDSCPT=取})j(#PBDSC=104,T{#PDSCPT=销})" />
+  <ITEM NAME="#TEMP22"  TYPE="%-1s"  FUNCTIONS="j(#PBDSC=105,T{#PDSCPT=结})j(#PBDSC=106,T{#PDSCPT=冲})j(#PBDSC=107,T{#PDSCPT=汇})j(#PBDSC=108,T{#PDSCPT=薪})" />
+  <ITEM NAME="#TEMP23"  TYPE="%-1s"  FUNCTIONS="j(#PBDSC=109,T{#PDSCPT=话})j(#PBDSC=110,T{#PDSCPT=换})j(#PBDSC=111,T{#PDSCPT=登})j(#PBDSC=112,T{#PDSCPT=补})" />
+  <ITEM NAME="#TEMP24"  TYPE="%-1s"   FUNCTIONS="j(#PBDSC=113,T{#PDSCPT=冲})j(#PBDSC=114,T{#PDSCPT=费})" />
+  <ITEM NAME="#IRATE"   TYPE="%-7.4f"  FUNCTIONS="J(#XIRATE)J(#XIRATE2)"/>
+  <ITEM NAME="#XIRATE"  TYPE="%-8s"    FUNCTIONS="X(#IRATE)"/>
+  <ITEM NAME="#XIRATE2" TYPE="%4s"    FUNCTIONS="T(#XIRATE,1,4)"/>
+  <ITEM NAME="#INTRT"   TYPE="%-11.2f" FUNCTIONS="J(#TRT)J(#SSS)"/>
+  <ITEM NAME="#TRT"     TYPE="%-13s"    FUNCTIONS="X(#INTRT)" />     <!--利息-->
+  <ITEM NAME="#SSS"     TYPE="%-9s"     FUNCTIONS="T(#TRT,1,9)"/>
+  <ITEM NAME="#INTAX"   TYPE="%11.2f"  FUNCTIONS="J(#TAX)J(#OTAX)J(#INREATRT)(#ANTRT)" />
+  <ITEM NAME="#TAX"      TYPE="%-13s"  FUNCTIONS="X(#INTAX)" />
+  <ITEM NAME="#OTAX"     TYPE="%-9s"   FUNCTIONS="T(#TAX,1,9)"/>
+  <ITEM NAME="#INREATRT" TYPE="%11.2f" FUNCTIONS="E(#INTRT-#INTAX)J(#REATRT)" />
+  <ITEM NAME="#REATRT"   TYPE="%13s"   FUNCTIONS="X(#INREATRT)"/>
+  <ITEM NAME="#TAXTRT"  TYPE="%-11.2f" FUNCTIONS="J(#XTAXTRT)J(#NNN)"/> <!--利息税-->
+  <ITEM NAME="#XTAXTRT" TYPE="%-13s"    FUNCTIONS="X(#TAXTRT)"/>
+  <ITEM NAME="#NNN"     TYPE="%-9s"     FUNCTIONS="T(#XTAXTRT,1,9)"/>
+  <ITEM NAME="#TAXRATE" TYPE="%-7.4f"  FUNCTIONS="J(#XTAXRATE)"/><!--税率-->
+  <ITEM NAME="#XTAXRATE" TYPE="%-7s"   FUNCTIONS="X(#TAXRATE)"/>
+  <ITEM NAME="#ANTRT"   TYPE="%-11.2f" FUNCTIONS="E(#INTRT-#INTAX)J(#XANTRT)"/>
+  <ITEM NAME="#XANTRT"  TYPE="%-13s"   FUNCTIONS="X(#ANTRT)"/>
+  <ITEM NAME="#TOTAMT"  TYPE="%-11.2f" FUNCTIONS="J(#PTOTAMT)"/>
+  <ITEM NAME="#PTOTAMT" TYPE="%-13s"   FUNCTIONS="X(#TOTAMT)" />
+  <ITEM NAME="#RELAMT"  TYPE="%11.2f" FUNCTIONS="J(#PRELAMT)J(#CCTXAMT)J(#ZCTXAMT)"/>
+  <ITEM NAME="#PRELAMT" TYPE="%-13s"   FUNCTIONS="X(#RELAMT)" />
+  <ITEM NAME="#ZCTXAMT" TYPE="%-13s"  FUNCTIONS="j(#DSCPT=001,T{}T{#PRELAMT})"/> 
+  <ITEM NAME="#CCTXAMT" TYPE="%-40s"  FUNCTIONS="U(#RELAMT)"/>
+  <ITEM NAME="#YTXAMT"  TYPE="%-13s"  FUNCTIONS="X(#INTRT)J(#GGG)"/><!--应税利息-->
+  <ITEM NAME="#GGG"     TYPE="%9s"    FUNCTIONS="T(#YTXAMT,1,9)"/>
+  <ITEM NAME="#EMPTY1"  TYPE="%-1s"   FUNCTIONS="T(#PFLAG2=0)" />
+  <ITEM NAME="#SPCD"    TYPE="%-1s"   FUNCTIONS="T($SPCD)" />
+  <ITEM NAME="#OSAVBAL" TYPE="%-1s"   FUNCTIONS="j(#HCODE=0,T{ }T{-})" />
+  <ITEM NAME="#TIME"    TYPE="%-5s"   FUNCTIONS="T($SYSTIME,1,5)" />
+  <ITEM NAME="#BRSRNO"  TYPE="%-5s" />
+  <ITEM NAME="#KIND"    TYPE="%-4s"   FUNCTIONS="T(活期)" />
+  <ITEM NAME="#AAA"     TYPE="%-4s"   FUNCTIONS="T(#KINBR,4,4)" />
+  <ITEM NAME="#PTLRNO"  TYPE="%-6s"   FUNCTIONS="T(#TLRNO)" />
+  <ITEM NAME="#PCD"     TYPE="%-1s"   FUNCTIONS="J(#KINDO)" />
+  <ITEM NAME="#CARDS"   TYPE="%-1s"   FUNCTIONS="J(#ATMSTS)" />
+  <ITEM NAME="#ATMSTS"  TYPE="%-8s"   FUNCTIONS="j(#CARDS=N,T{正常    })j(#CARDS=A,T{申请卡  })j(#CARDS=R,T{没收    })j(#CARDS=H,T{正式挂失})j(#CARDS=T,T{临时挂失})j(#CARDS=M,T{制卡    })j(#CARDS=K,T{拣拾    })j(#CARDS=C,T{销毁})j(#CARDS=0,T{未申请卡})" />
+  <ITEM NAME="#PBBAL"   TYPE="%-11.2f" />
+<ITEM NAME="#KINDO"  TYPE="%-1s"  FUNCTIONS="j(#PCD=1and$HCODE=0and#NKIND=0,T{1})j(#PCD=0and$HCODE=0,T{2})j(#PCD=1and$HCODE=1,T{3})j(#PCD=1and$HCODE=1,T{4})" />
+  <ITEM NAME="#KTLRNO"  TYPE="%-9s"  FUNCTIONS="T(#TLRNO)" />
+  <ITEM NAME="#SPACE"   TYPE="%-1s"  />
+  <ITEM NAME="#TYPEMP"  TYPE="%-1s"  />
+  <ITEM NAME="#GUDATE"  TYPE="%-8s"  FUNCTIONS="J(#FLGGU)" />
+  <ITEM NAME="#ASSTLR"  TYPE="%-10s" FUNCTIONS="T(0000000000)" />
+  <ITEM NAME="#FLGGU"   TYPE="%-1s"  FUNCTIONS="j(#GUDATE?,T{0}T{1})" />
+  <ITEM NAME="#REFLG"   TYPE="%-8s"  FUNCTIONS="j($HCODE=1,T{清户取消}T{        })" />
+  <ITEM NAME="#KKIN"    TYPE="%-1s"  FUNCTIONS="T(#NKIND)" />
+  <ITEM NAME="#XXFLG"   TYPE="%-1s"  FUNCTIONS="T(#KKIN=0)" />
+  <ITEM NAME="#OVFLG"   TYPE="%-1s"  FUNCTIONS="J(#OVFLG1)" />
+  <ITEM NAME="#OVFLG1"  TYPE="%-30s" FUNCTIONS="j(#OVFLG=0,T{                              })j(#OVFLG=2,T{本日取款超过五万 请出示身份证 })" />
+  <ITEM NAME="#ISDAY"   TYPE="%-8s"  />
+  <ITEM NAME="#PBFLAG"   TYPE="%-1s" FUNCTIONS="T(#PFLAG3=B)"/>
+  <ITEM NAME="#DBFLAG"   TYPE="%-1s" FUNCTIONS="T(#PFLAG3=B)"/>
+  <ITEM NAME="#KFLAG"   TYPE="%-1s"  FUNCTIONS="J(#QQQ)T(#PFLAG3=B)j(#NKIND=0and#KFLAG=6,T{#KFLAG=A})"/>
+<ITEM NAME="#QQQ"   TYPE="%-1s"  FUNCTIONS="T(#PBFLAG=B)T($PBLINE=0)T($KINDNO=0)"/>
+<ITEM NAME="#BRNFLG"  TYPE="%-1s"  FUNCTIONS="J(#CBRNFLG)" />
+<ITEM NAME="#CBRNFLG" TYPE="%-8s"  FUNCTIONS="j(#BRNFLG=0,T{        })j(#BRNFLG=1,T{同城异地})j(#BRNFLG=2,T{跨结算点})j(#BRNFLG=3,T{跨结算点})j(#BRNFLG=4,T{异    地})" />
+<ITEM NAME="#CERTIFTYPE" TYPE="%-2s" FUNCTIONS="J(#UCERTIFTYPE)"/>
+<ITEM NAME="#UCERTIFTYPE" TYPE="%-8s" FUNCTIONS="j(#CERTIFTYPE=01,T{身份证})j(#CERTIFTYPE=02,T{户口薄})j(#CERTIFTYPE=03,T{军官证})j(#CERTIFTYPE=04,T{武警证})j(#CERTIFTYPE=05,T{港通行证})j(#CERTIFTYPE=06,T{台通行证})j(#CERTIFTYPE=07,T{护照})"/>
+<ITEM NAME="#RATE"    TYPE="%-6s" FUNCTIONS=""/>
+<ITEM NAME="#DINUM"   TYPE="%10.3f" FUNCTIONS="J(#PDINUM)"/>
+<ITEM NAME="#PDINUM"  TYPE="%11s"  FUNCTIONS="X(#DINUM)"/>
+<ITEM NAME="#FTXAMT"   TYPE="%13.2f" FUNCTIONS="J(#LTXAMT)"/>
+<ITEM NAME="#LTXAMT"  TYPE="%-16s"  FUNCTIONS="X(#FTXAMT)"/>
+<ITEM NAME="#MSG"     TYPE="%-4s"  FUNCTIONS="j($HCODE=1,T{取消}T{})"/>
+<ITEM NAME="#CHAR"    TYPE="%-4s"  FUNCTIONS="T(活期)"/>
+<ITEM NAME="#MARK1"   TYPE="%4s"   FUNCTIONS="j(#OCKCHOP=2,T{    }T{ 密 })"/>
+<ITEM NAME="#MONEYBOX"   TYPE="%-1s"   FUNCTIONS="j(#OPFLAG=1,T{$MONEYBOX=1}T{$MONEYBOX=0})"/>
+<ITEM NAME="#HTRMSEQ"    TYPE="%-2s"  FUNCTIONS="T($MONEYBOX+$BOXFLAG)"/>
+<ITEM NAME="#BRNAME"     TYPE="%-20s"/>
+<ITEM NAME="#TCTD"    TYPE="%-8s"  FUNCTIONS="j(#OCKCHOP=2,T{        }T{通存通兑})"/>
+<ITEM NAME="#UDSCPT"  TYPE="%-4s"   FUNCTIONS="j(#DSCPT=001,T{现金}T{转帐})"/>
+<ITEM NAME="#UMSG1"   TYPE="%-10s"  FUNCTIONS="j(#DSCPT=001,T{}T{对 方 号: })"/>
+<ITEM NAME="#UMSG2"   TYPE="%-8s"   FUNCTIONS="j(#NKIND=1,T{挂失销户}T{    })"/>
+<ITEM NAME="#ZCJM"   TYPE="%-10s"   FUNCTIONS="j(#DSCPT=001,T{}T{转存金额: })"/>
+<ITEM NAME="#UACT1"  TYPE="%-18s"  FUNCTIONS="j(#DSCPT=001,T{}T{#ACNO})"/>
+
+<ITEM NAME="#AVBAL"   TYPE="%13.2f" FUNCTIONS="J(#LAVBAL)"/>
+<ITEM NAME="#LAVBAL"  TYPE="%-13s"  FUNCTIONS="X(#AVBAL)"/>
+
+<ITEM NAME="#ORATE"    TYPE="%-7s" FUNCTIONS="J(#XORATE)"/>
+<ITEM NAME="#XORATE"   TYPE="%4s"  FUNCTIONS="T(#ORATE,1,4)"/>
+
+<ITEM NAME="#OINTRT"    TYPE="%-12s"  FUNCTIONS="J(#XOINTRT)"/>
+<ITEM NAME="#XOINTRT"   TYPE="%13s"   FUNCTIONS="T(#OINTRT)"/>
+
+<ITEM NAME="#DINTRT"    TYPE="%13.2f"  FUNCTIONS="J(#XDINTRT)J(#XDINTRT2)J(#PDXDINTRT)"/>
+<ITEM NAME="#XDINTRT2"  TYPE="%-13s"   FUNCTIONS="X(#DINTRT)"/>
+<ITEM NAME="#XDINTRT"   TYPE="%13s"    FUNCTIONS="T(#XDINTRT2)"/>
+<ITEM NAME="#PDXDINTRT" TYPE="%7s"     FUNCTIONS="T(#XDINTRT2,1,7)"/>
+
+<ITEM NAME="#AUTHNO"   TYPE="%6d"   FUNCTIONS=""/>
+
+
+<ITEM NAME="#CHARACNO"   TYPE="%1s"   FUNCTIONS="J(#HDPZ)J(#DRACNO)J(#PCHAR)"/>
+<ITEM NAME="#HDPZ"      TYPE="%1s"    FUNCTIONS="j(#CHARACNO=3and#NKIND=1,T{1}T{0})"/>
+<ITEM NAME="#DRACNO"    TYPE="%-7s"   FUNCTIONS="j(#CHARACNO=1,T{2110101})j(#CHARACNO=3,T{2110102})"/>
+<ITEM NAME="#PCHAR"     TYPE="%-4s"   FUNCTIONS="j(#CHARACNO=1,T{活折})j(#CHARACNO=3,T{活单})"/>
+<ITEM NAME="#CRACNO"    TYPE="%-7s"   FUNCTIONS=""/>
+
+
+  <ITEM NAME="#IEDATE"    TYPE="%-8s"   FUNCTIONS=""/>
+  <ITEM NAME="#ZZPRT"     TYPE="%-1s"   FUNCTIONS="J(#QQQ)"/>
+  <ITEM NAME="#ZZRATE"    TYPE="%7.5f"  FUNCTIONS="J(#IZZRATE)"/>
+  <ITEM NAME="#IZZRATE"   TYPE="%-4s"   FUNCTIONS="X(#ZZRATE)"/>
+
+  <ITEM NAME="#PSIGN"   TYPE="%8s"   FUNCTIONS="j(#TRFFLG=0,T{不 转 存})j(#TRFFLG=1,T{自动转存})j(#TRFFLG=2,T{约定转存})"/>
+  <ITEM NAME="#TRTERM2" TYPE="%-2s"  FUNCTIONS="j(#TRFFLG=0,T{  }T{#TERM})"/>
+  <ITEM NAME="#TRTERM3" TYPE="%-2s"  FUNCTIONS="j(#TRFFLG=0,T{  }T{月})"/>
+
+
+  <ITEM NAME="#ZZACTNO"   TYPE="%-18s"  FUNCTIONS="">
+<!--
+  <ONLOSTFOCUS>
+   "{
+       if($HCODE=='1')
+       {
+	   showmsg('销户交易不允许取消!');
+	   return(false);
+       }
+    }"
+   </ONLOSTFOCUS>
+-->
+   </ITEM>
+
+
+  <ITEM NAME="#CRFLAG" TYPE="%1s"      FUNCTIONS="J(#TTT2)J(#QQQ)"/>
+  <ITEM NAME="#TTT2"   TYPE="%1s"      FUNCTIONS="T(#DBFLAG=0)T(#FLGGU=9)"/>
+  <ITEM NAME="#CRBAL"  TYPE="%13.2f"   FUNCTIONS="J(#XCRBAL)"/>
+  <ITEM NAME="#CRNAME"  TYPE="%-20s"   FUNCTIONS=""/>
+  <ITEM NAME="#XCRBAL" TYPE="%13s"     FUNCTIONS="X(#CRBAL)"/>
+ 
+  <ITEM NAME="#IFLAG" TYPE="%-1s">
+  <ONLOSTFOCUS>
+  "{  
+  if(( #TXAMT &gt; 199999.99) and (#IFLAG=='0' or '' == #IFLAG)  )
+	   {   //showmsg('FKRMC='+#SHOWAMT+ ' ',2); 
+      #IFLAG = '1';	   
+	            if ( (#OPFLAG=='1') )
+	              {
+	               open('9903.XML', '#FKRMC='+#SHOWNAME+';#YE='+#ZHYE+';#SKRMC='+#SHOWNAME+';#FKHHH='+#OPNBR4+';#FKRLX='+'02'+';#FKRZJHM='+#ZJHM+';#FKRZH='+#ACTNO+';#HBFHJE=' +'RMB'+itoa(#TXAMT*100,'%015.0f')+ ';#JSFS='+'01'+';#JYLXDM='+'2104'+';#FKRQ='+$HDATE+';')     
+                
+                }
+                  else
+                   { 
+                   open('9906.XML','#FKRMC='+#SHOWNAME+';#SKRMC='+#SNAME+';#YE='+#ZHYE+';#FKHHH='+#OPNBR4+';#FKRZH='+#ACTNO+';#FKRLX='+'02'+';#FKRZJHM='+#ZJHM+';#SKRZH='+#SZH+';#FKRQ='+$HDATE+';#SKRQ='+$HDATE+';#HBFHJE=' +'RMB'+itoa(#TXAMT*100,'%015.0f')+ ';#PZDM='+#VOCNUM+';#JSFS='+'37'+';#JYLXDM='+'2104'+';')
+                     }
+         
+     }              
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+<ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+<MONEY VARIABLE="#TXAMT"/>
+
+<REQUEST><PACKAGE SERVICE="dh21040">
+ $APCTLHD#HTRMSEQ$HEJFNO#OPNBR#KINBR$TRMSEQ$TXTNO#TASKID#TMTYPE#APTYPE
+ #TXNO#PTYPE#DSCPT#HCODE#ACTNO#TXTYPE#MULTTX#CRDB$SUPCD1$SUPCD2#REASON
+ #TLRNO#NBCD#TRNMOD#SBTMOD#CURCD$XCRT#TXAMT
+ $MONEY13$MONEY12$MONEY11$MONEY10$MONEY09$MONEY08$MONEY07$MONEY06$MONEY05$MONEY04$MONEY03$MONEY02$MONEY01
+ #CKCHOP#PASSWD#ASSTLR#NKIND#HFLAG#VOCNUM#ZJHM#CHARGE#CHPAWD$HDATE#ZJLX#ACNO#AUTHNO
+ #OPFLAG#TERM#TRFFLG#VOCNUM2#ASSTLR2#SUBACTNO
+</PACKAGE></REQUEST>
+<RESPONSE>
+<PACKAGE>
+ P40101#NAME#ADDRESS#IRATE#INTRT#TOTAMT#PFLAG4#PCD#CARDS#OOPDAY#OCKCHOP
+       #OFLAG#BRNFLG#ISDAY#OVFLG#INTAX#RELAMT#TAXRATE#TAXTRT#BRNAME#ACTNO#AVBAL#ACNO#CHARACNO#CRACNO#CRFLAG#CRBAL#CRNAME#BRSRNO
+</PACKAGE>
+<PACKAGE>
+ P00714#TXCNT#PBFLAG#OPBCOL#OKEY%LOP#FODATE#LODATE#OPBDSC#OTXAMT#OCRDB#OAVBAL#OTLRNO#ORATE#OINTRT%BAK
+</PACKAGE><PACKAGE>
+ P00805#OOPNBR#OACTNO#OCKCHOP#OOPDAY#ONAME#OFLAG#PFLAG3
+</PACKAGE><PACKAGE>
+ P00704#TXCNT#PBFLAG#OPBCOL#OKEY%LOP#FODATE#LODATE#OPBDSC#OTXAMT#OCRDB#OAVBAL#OTLRNO#ORATE#OINTRT%BAK
+</PACKAGE><PACKAGE>
+ D00704#TXCNT#DBFLAG#OPBCOL#OKEY%LOP#FODATE#LODATE#OPBDSC#OTXAMT#OCRDB#OAVBAL#OTLRNO#ORATE#DINTRT%BAK
+</PACKAGE>
+<PACKAGE>
+P04108#TYPEMP#GUDATE
+</PACKAGE>
+<PACKAGE>
+ P40119#ZZPRT#ZZRATE#ZZACTNO#IEDATE
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+<PACKAGE>
+ 001$9999=9P140000E显示内容N505#REFLG#ACTNO#NAME#ADDRESS#XTXAMT#TRT#PRELAMT#OTAX#UDSCPT#UMSG1#UACT1#FZHXH#BRSRNO
+</PACKAGE>
+<PACKAGE>
+ 002#CHARACNO=1P140000C取款凭证N205#DRACNO$HDATE#ACTNO#PNAME#XTXAMT$HDATE$TLRNO#BRSRNO#ACTNO#PNAME#XTXAMT#LAVBAL#UDSCPT#UMSG2#UMSG1#UACT1#FZHXH#LAVBAL#PCHAR#ZCJM#ZCTXAMT#XIRATE2#AUTHTLRNO
+</PACKAGE>
+<PACKAGE>
+ 002#HDPZ=1P140000C取款凭证N205#DRACNO$HDATE#ACTNO#PNAME#XTXAMT$HDATE$TLRNO#BRSRNO#ACTNO#PNAME#XTXAMT#LAVBAL#UDSCPT#UMSG2#UMSG1#UACT1#FZHXH#LAVBAL#PCHAR#ZCJM#ZCTXAMT#XIRATE2#AUTHTLRNO
+</PACKAGE>
+<PACKAGE>
+006#DBFLAG=2P140000J储蓄存单N205%LOP#FODATE#LODATE#PPBDSC#ACTNO#PDTXAMT2#PDXDINTRT#PDKK2#BRSRNO#OTLRNO#AUTHTLRNO#OTAX#UDSCPT#UMSG1#UACT1#FZHXH%BAK
+</PACKAGE>
+<PACKAGE>
+006$HCODE=0P140000K利息清单N205$HDATE#ACTNO#ACTNO#PNAME#ISDAY#PNAME#ISDAY#XTXAMT#SSS#XTXAMT#SSS#SSS#XTAXRATE#XTAXRATE#OTAX#PRELAMT
+$KINBR$HDATE#BRSRNO#OTAX#PRELAMT$KINBR$TLRNO#BRSRNO$TLRNO#AUTHTLRNO#AUTHTLRNO
+</PACKAGE>
+<PACKAGE>
+006#NKIND=1P140000H原挂失申请书N205$HDATE$KINBR$TLRNO#BRSRNO$KINBR$TLRNO#BRSRNO#ACTNO#PNAME#XTXAMT#AUTHTLRNO
+</PACKAGE>
+<PACKAGE>
+ 003#PBFLAG=0P140000A存    折N205%LOP#FODATE#LODATE#PPBDSC#DRAMT#CRAMT#KK2#PTLRNO%BAK
+</PACKAGE>
+<PACKAGE>
+ 004#PBFLAG=1P140000A另 一 页N205%LOP#FODATE#LODATE#PPBDSC#DRAMT#CRAMT#KK2#PTLRNO%BAK
+</PACKAGE>
+<PACKAGE>
+ 005#PBFLAG=2P140000A新 存 折N205%LOP#FODATE#LODATE#PPBDSC#DRAMT#CRAMT#KK2#PTLRNO%BAK
+</PACKAGE>
+
+<PACKAGE>
+ 007#PFLAG3=1P140000B新折首页N205#PNAME#ACTNO$HDATE#TCTD#MARK1
+</PACKAGE>
+<PACKAGE>
+ 010#FLGGU=0P140000F显示内容N505#GUDATE
+</PACKAGE>
+<PACKAGE>
+ 002#CRFLAG=1P140000M客户回单(存款)N205$HDATE#ACNO#FZHXH#CRNAME#XTXAMT#XCRBAL$KINBR$TLRNO#BRSRNO
+</PACKAGE>
+
+<!--整整存单，存款凭条
+ 002#ZZPRT=0P140000G存款凭证N205#CRACNO$HDATE$TLRNO#BRSRNO#ZZACTNO#PNAME#XTXAMT#XTXAMT
+-->
+
+<PACKAGE>
+ 002#ZZPRT=0P140000G存款凭证N205#CRACNO$HDATE#ZZACTNO#NAME#XTXAMT$HDATE$TLRNO#BRSRNO#ZZACTNO#NAME#XTXAMT#CCTERM$HDATE#IZZRATE#PSIGN#XTXAMT#ACTNO#VOCNUM2#IZZRATE
+</PACKAGE>
+<PACKAGE>
+ 003#ZZPRT=0P140000I整整存单N205#PSIGN#TRTERM2#TRTERM3#CRACNO#ZZACTNO#PNAME#CCTXAMT#XTXAMT$HDATE#XTXAMT$HDATE#CCTERM#IZZRATE#IEDATE#CCKCHOP#BRSRNO$TLRNO
+</PACKAGE>
+
+
+<FORMAT NAME="P140000A">
+"00 ######## ## ####################################### ######
+"
+</FORMAT>
+<FORMAT NAME="P140000B">
+"02         &lt;font size=&quot;4&quot;&gt;##########&lt;/font&gt;         ##################
+07
+08
+11           ####/##/##    挂牌利率        ########     ####
+"
+</FORMAT>
+<FORMAT NAME="P140000C">
+"02                       #######                                      2104
+03                                                                                             ########
+06                                                                                             ##################
+07                                                                                             ##########
+08                                                                                             #############
+09            交易日期:  ########           操 作 员:  ######      流 水 号: #####
+10            帐    号:  ################## 户    名:  ##########                              活期储蓄
+11            交易金额:  #############      帐户余额:  #############
+12            销户方式:  ############       ########## ##################  ###                 #############
+13            帐户类别:  ####               ########## #############                           ####
+14                                                                           ######      
+"
+</FORMAT>
+<FORMAT NAME="P140000H" LINESPACE="27">
+"03                             ####        ##        ## 
+04                       #######        挂失销户申请                   ######            ##### 
+05      机    构:#######         操 作 员:######              流 水 号:#####       
+06      业务类型:挂失销户        帐    号:##################  户    名:##########  余    额:#############
+13                                                  ######
+"
+</FORMAT>
+<FORMAT NAME="P140000E">
+"03                              活期清户 ########
+05                     帐    号 :  ##################
+06                     户    名 :  ####################
+07                     地    址 :  ########################################
+08                     发 生 额 :  #############
+09                     利    息 :  #############
+10                 税后本息合计 :  #############
+11                     利 息 税 :  #########
+12                     转帐类型 :  ####   ##########  ################## ###
+13                     流 水 号 :  #####
+"
+</FORMAT>
+<FORMAT NAME="P140000F">
+"06              ================================================
+07              *  该帐户正式挂失未到期 ! 挂式日期为####/##/## *
+08              ================================================
+"
+</FORMAT>
+<FORMAT NAME="P140000I">
+"01                                                        整存整取                 ######## ## ##
+03                  #######
+05                  &lt;font size=&quot;4&quot;&gt;##################&lt;/font&gt;                      &lt;font size=&quot;4&quot;&gt;##########&lt;/font&gt;
+06                  &lt;font size=&quot;5&quot;&gt;########################################&lt;/font&gt;&lt;font size=&quot;4&quot;&gt;#############&lt;/font&gt;
+09         ########  ############# ########    ######  ####   ########    ###########   ######
+"
+</FORMAT>
+
+<FORMAT NAME="P140000G">
+"02                       #######                                      2104
+03                                                                                             ####/##/##
+06                                                                                             ##################
+07                                                                                             ####################
+08                                                                                             #############
+09            交易日期: ####/##/##          操 作 员: ######       流 水 号: #####
+10            账    号: ##################  户    名: ####################                     活期储蓄
+11            金    额: #############       存    期: ######       起 息 日: ####/##/##        
+12            利    率: ####％              转存标志: ########     开户类型: 转帐              #############
+13            对 方 号: ##################  凭证号码: #######                                  ####％
+"
+</FORMAT>
+
+<!--
+<FORMAT NAME="P140000G">
+"03                       #######                                                        2104
+04
+05
+06
+10            交易日期:  ########                    操 作 员:  ######           流 水 号: #####
+11            帐    号:  ##################          户    名:  ##########
+12            交易金额:  #############               帐户余额:  #############
+13            开户方式:  转开整整户
+"
+</FORMAT>
+-->
+
+<FORMAT NAME="P140000J">
+"00            ######## ## ################## ######### ####### ########## ##### ###### ######
+01             利 息 税:  #########   销户方式:  #### 
+02             ########## ##################  ###
+"
+</FORMAT>
+<FORMAT NAME="P140000K" LINESPACE="24">
+"03               活期       ####      ##       ##                            2104            活期           2104
+04                    ##################                                                     ##################
+05                    ##########           ########                                         ##########   ########
+06                                                                                            #############
+07                                                                                            #########
+08           #############               #########           #########     #######            #######
+09                                                                                            #########
+10                                                                                              #############
+11                                                                                            #######
+12                                                                                            ########
+13                                                                                            ##### 
+14             #########           #############  #######    ######        #####              ######
+15                                                ######                                                    ######
+"
+</FORMAT>
+<FORMAT NAME="P140000M">
+"01  2104                                  无折续存客户回单
+02                                  交易日期:  ########
+03                                  帐    号:  ##################  ###
+04                                  户    名:  ####################
+05                                  续存金额:  #############
+06                                  帐户余额:  #############
+07                                  交易行号:  #######
+08                                  操 作 员:  ######
+09                                  流 水 号:  #####
+11                                  客户签字:
+"
+</FORMAT>
+</OUTPUT>
+</TRANSACTION>

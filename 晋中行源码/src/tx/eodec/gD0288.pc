@@ -1,0 +1,269 @@
+/*************************************************************
+* 文 件 名: gD0288.c
+* 功能描述：统计可用资金
+
+注意：请在汇总支行总帐(gl_sub)后使用
+.
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "com_branch_c.h"
+#include "com_item_c.h"
+#include "dc_acc_rel_c.h"
+#include "com_sys_parm_c.h"
+#include "zjgl_mst_c.h"
+#include "zjgl_hst_c.h"
+#include "gl_sub_c.h"
+#include "com_cur_no_code_c.h"
+#include "com_parm_c.h"
+
+struct com_sys_parm_c com_sys_parm_c;
+struct com_branch_c com_branch;
+struct com_cur_no_code_c wp_com_cur_no_code;
+
+int ret;
+
+gD0288()
+{
+  /** 打开事务 **/
+  sql_begin(); 
+	MYSQLERR
+	
+	  /** 取流水号 **/
+  if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+  {
+        sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+        WRITEMSG
+        goto ErrExit;
+  }
+  set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+  set_zd_long( DC_TRACE_CNT,1 );
+
+  /** 初始化全局变量 **/
+  ret = 0;
+	pub_base_sysinit();
+	
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+	
+	sprintf(acErrMsg,"日终统计可用资金[%d]!",com_sys_parm_c.sys_date);
+	WRITEMSG
+	
+	g_pub_tx.tx_date = com_sys_parm_c.lst_date;
+	
+	ret = Com_branch_Dec_Sel(g_pub_tx.reply,"br_type in ('3','4','5')  and wrk_sts<>'*' and br_no<>'%s' ",CW_BR_NO);
+	MYRETERR
+	while(1)
+	{
+	  ret = Com_branch_Fet_Sel(&com_branch,g_pub_tx.reply);
+	  if(ret==100) break;
+	  MYRETERR
+	  
+	  ret = igD0288_Predata();
+	  MYRETERR
+	  
+	}
+	Com_branch_Clo_Sel();
+	
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int igD0288_Predata()
+{
+    int    cur_cnt = 0;
+    
+    /** 按币种分类统计 **/
+    ret = Com_cur_no_code_Dec_Sel(g_pub_tx.reply,"use_ind='Y'");
+    MYRETERR
+    
+    while(1)
+    {
+        ret = Com_cur_no_code_Fet_Sel(&wp_com_cur_no_code,g_pub_tx.reply);
+        if(ret==100) break;
+        MYRETERR
+        
+        cur_cnt = sql_count( "gl_sub", "cur_no='%s'" ,\
+                              wp_com_cur_no_code.cur_no );
+        if(cur_cnt==0)
+            continue;
+        ret=gD0288_Insert(); 
+        MYRETERR
+    }
+    Com_cur_no_code_Clo_Sel();
+    
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}
+
+int gD0288_Insert()
+{
+   double ddep_bal=0;
+   double ddep_bal2=0;
+   double dcln_bal=0;
+   double dsy_bal=0;
+   double dqy_bal=0;
+   double dzbj1_bal=0;
+   double dzbj6_bal=0;
+   double dzbj4_bal=0;
+   double dzbj7_bal=0,dzbj8_bal=0,dzbj9_bal=0,dzbj10_bal=0,dzbj11_bal=0,dzbj12_bal=0;
+   double d416_bal=0;
+   double td_bal = 0;
+   double dbfj_rate = 0;
+   double bfj_amt = 0;
+   double tmp_bal=0;
+   
+   struct zjgl_mst_c wd_zjgl_mst;
+   struct com_parm_c wd_com_parm;
+   
+   /** 按照财务部要求于20130929 存款合计中加入了203协定存款，225电子现金科目 wudawei  20130929 **/
+   /** 存款合计 **/
+   ret = sql_sum_double( "gl_sub","cr_bal-dr_bal",&ddep_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt in ('20100','20200','20300','20500','21100','21500','21700','22100','22200','22300','22500',\
+   '23100','23200','23300','23400','23500','23600','24100','24200','24300','24400','25100','25200','25500','25800','26000',\
+   '26100','26200','26300','26400','26500','26600','26700','26800','27200','28000')", \
+   com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 贷款合计 **//*20151130 wudawei 贷款调整 新增147,148科目*/
+   ret = sql_sum_double( "gl_sub","dr_bal-cr_bal",&dcln_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt in ('10100','11400','11500','12000','12100','12200','12300','12400','12500','12600','12700','12800','12900',\
+   '13000','13100','13200','13300','13400','13500','13600','13700','13800','13900','14000','14100','14200','14300',\
+   '14500','14700','14800','14900','15100','15200','15300','15400','16100','16200','16300','19000')",
+    com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 损益类合计 **/
+   ret = sql_sum_double( "gl_sub","cr_bal-dr_bal",&dsy_bal,\
+   " br_no='%s' and cur_no='%s' and substr(acc_hrt,1,1)='5'\
+    and acc_hrt in (select acc_hrt from com_item where acc_lvl='1' and substr(acc_hrt,1,1)='5') ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 所有者权益合计 **/
+   ret = sql_sum_double( "gl_sub","cr_bal-dr_bal",&dqy_bal,\
+   " br_no='%s' and cur_no='%s' and substr(acc_hrt,1,1)='3'\
+    and acc_hrt in (select acc_hrt from com_item where acc_lvl='1' and substr(acc_hrt,1,1)='3') ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR   
+  
+   /** 416 **/
+   ret = sql_sum_double( "gl_sub","cr_bal-dr_bal",&d416_bal,\
+   " br_no='%s' and cur_no='%s' and substr(acc_hrt,1,1)='4'\
+    and acc_hrt in (select acc_hrt from com_item where acc_lvl='1' \
+    and substr(acc_hrt,1,1)='4' and substr(acc_hrt,1,3) not in ('407','416')) ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+    
+
+   /** 4070201 **/
+   ret = sql_sum_double( "zjgl_mst","dr_bal-cr_bal",&ddep_bal2,\
+   " opn_br_no='%s' and cur_no='%s' and acc_hrt='40721' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+ 
+   /** 4070202 **/
+   ret = sql_sum_double( "zjgl_mst","dr_bal-cr_bal",&dzbj4_bal,\
+   " opn_br_no='%s' and cur_no='%s' and acc_hrt='40722' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+ 
+   /** 4070204 **/
+   ret = sql_sum_double( "ass_mst","bal",&dzbj1_bal,\
+   " br_no='%s' and sts<>'*' and sign='1' ", com_branch.br_no);
+   MYRETERR
+   
+   /** 4070206 上存 包括那些资产之类的**/
+   ret = sql_sum_double( "ass_mst","bal",&dzbj6_bal,\
+   " br_no='%s' and sts<>'*' and sign='2' ", com_branch.br_no);
+   MYRETERR
+ 
+   /** 取得备付比 **/
+   ret = Com_parm_Sel(g_pub_tx.reply,&wd_com_parm,"parm_code='BFJBL' and parm_seqn=1");
+   MYRETERR
+   dbfj_rate = atof(wd_com_parm.val);
+ 
+  /* 
+   if(!memcmp(com_branch.br_no,QS_BR_NO,sizeof(com_branch.br_no)-1)) tmp_bal = 0.0 ;   
+   if(!memcmp(com_branch.br_no,CW_BR_NO,sizeof(com_branch.br_no)-1)) tmp_bal = 0.0 ;   
+   if(!memcmp(com_branch.br_no,"10101",sizeof(com_branch.br_no)-1)) tmp_bal = 454155.02  ;   
+   if(!memcmp(com_branch.br_no,"10201",sizeof(com_branch.br_no)-1)) tmp_bal = 444061.00  ;   
+   if(!memcmp(com_branch.br_no,"10301",sizeof(com_branch.br_no)-1)) tmp_bal = 2976231.67 ;   
+   if(!memcmp(com_branch.br_no,"10401",sizeof(com_branch.br_no)-1)) tmp_bal = 524146.55 ;   
+   if(!memcmp(com_branch.br_no,"10501",sizeof(com_branch.br_no)-1)) tmp_bal = 388456.11 ;   
+   if(!memcmp(com_branch.br_no,"10601",sizeof(com_branch.br_no)-1)) tmp_bal = 163700.00 ;   
+   if(!memcmp(com_branch.br_no,"10701",sizeof(com_branch.br_no)-1)) tmp_bal = 2290597.12 ;   
+   if(!memcmp(com_branch.br_no,"10801",sizeof(com_branch.br_no)-1)) tmp_bal = 966025.17  ;   
+   if(!memcmp(com_branch.br_no,"10901",sizeof(com_branch.br_no)-1)) tmp_bal = 579444.44  ;   
+   if(!memcmp(com_branch.br_no,"11001",sizeof(com_branch.br_no)-1)) tmp_bal = 886266.70 ;   
+   if(!memcmp(com_branch.br_no,"11101",sizeof(com_branch.br_no)-1)) tmp_bal = 40553792.83 ;   
+   if(!memcmp(com_branch.br_no,"11201",sizeof(com_branch.br_no)-1)) tmp_bal =  100000.00  ;   
+   if(!memcmp(com_branch.br_no,"11301",sizeof(com_branch.br_no)-1)) tmp_bal =  3340935.22  ;   
+   if(!memcmp(com_branch.br_no,"11401",sizeof(com_branch.br_no)-1)) tmp_bal = 0.0 ;   
+  */
+   d416_bal+=tmp_bal;
+   
+   /** 4070203 **/
+   td_bal = ddep_bal-dcln_bal+dsy_bal+dqy_bal+d416_bal+dzbj1_bal-ddep_bal2-dzbj4_bal -dzbj6_bal;\
+  /*        存款     -贷款    +损益   +所有者 + 通兑   +拆借     - 4070201  -4070202  -上存  */ 
+   /** 更新备付金 **/
+   if(pub_base_CompDblVal(td_bal,0.00)==0)
+   	  goto OkExit;
+  
+   sprintf(acErrMsg,"[%s][%d]存款合计:[%f]",__FILE__,__LINE__,ddep_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]备付金比率:[%f]",__FILE__,__LINE__,dbfj_rate);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]贷款合计:[%f]",__FILE__,__LINE__,dcln_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]损益合计:[%f]",__FILE__,__LINE__,dsy_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]所有者权益合计:[%f]",__FILE__,__LINE__,dqy_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]一级准备金:[%f]",__FILE__,__LINE__,ddep_bal2*dbfj_rate/100);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]4070204余额:[%f]",__FILE__,__LINE__,dzbj1_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]上存余额:[%f]",__FILE__,__LINE__,dzbj6_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]4科目合计:[%f]",__FILE__,__LINE__,d416_bal);
+	 WRITEMSG
+   sprintf(acErrMsg,"[%s][%d]本次更新备付金金额:[%f]",__FILE__,__LINE__,td_bal);
+	 WRITEMSG
+	 	  
+   ret = ipubf_acct_zjgl_trance(com_branch.br_no,wp_com_cur_no_code.cur_no,"4070203",&bfj_amt,&td_bal);
+   MYRETERR
+
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}
+
+

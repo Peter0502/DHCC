@@ -1,0 +1,228 @@
+/*************************************************
+* 文 件 名: gD855.pc
+* 功能描述：事后数据备份
+*
+* 作    者: ligl2008
+* 完成日期：2007-3-16 15:33
+*
+* 修改记录： 
+* 日   期:
+* 修 改 人:
+* 修改内容:
+*************************************************/
+#define MYSQLERR(y) if(sqlca.sqlcode && sqlca.sqlcode!=1403){\
+        sprintf(acErrMsg,"sqlerror[%d][L%d]",sqlca.sqlcode,y);\
+        WRITEMSG\
+        strcpy( g_pub_tx.reply,"D103" );\
+        goto ErrExit;\
+        }
+
+#include <stdio.h>
+#include <fcntl.h>
+#include <math.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "trace_log_bk_c.h"
+#include "sum_tax_c.h"
+#include "com_item_c.h"
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL INCLUDE sqlda.h;
+
+extern char *get_env_info(char *infoname);
+
+int gD855( )
+{
+        EXEC SQL BEGIN DECLARE SECTION;
+     long vMBfrq;
+        EXEC SQL END DECLARE SECTION;
+    long bfrq,bfrq_rm,bfrq_tmp;
+    int ret;
+    char bffs[2];
+    char cdqk[2];
+    char dbname[20],datadev[50],logdev[50];
+    char comm[1024],path[100];
+          char dbuser[10],dbpasswd[10],filename[80];    
+    struct com_sys_parm_c com_sys_parm_c;
+    memset(&com_sys_parm_c, 0x0, sizeof(struct com_sys_parm_c));
+    if (pub_base_sysinit())
+    {
+        sprintf(acErrMsg,"初始化公用结构错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+        memset(g_pub_tx.reply, 0, sizeof(g_pub_tx.reply));
+    memset(path,0x0,sizeof(path));
+    memset(dbname,0x0,sizeof(dbname));
+    memset(dbuser,0x0,sizeof(dbuser));
+    memset(dbpasswd,0x0,sizeof(dbpasswd));
+
+
+	/* 20150427 BY WYW
+    strcpy(path,"/backup/databackup");
+	*/
+    strcpy(path,(char*)getenv("BFLDIR"));
+    strcpy(dbname,getenv("DBNAME"));
+    /****修改为新加密方式  20120604
+    strcpy(dbuser,getenv("DB_USER"));
+    strcpy(dbpasswd,getenv("DB_PASSWD"));
+    ****/
+    memcpy(dbuser,get_env_info("DB_USER"),sizeof(dbuser));
+    memcpy(dbpasswd,get_env_info("DB_PASSWD"),sizeof(dbpasswd));
+    vtcp_log("[%s][%d]  dbuser==[%s] dbpasswd==[%s]",__FILE__,__LINE__,dbuser,dbpasswd);
+
+    ret = Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"查询公共参数表错误!![%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }  
+    bfrq = com_sys_parm_c.sys_date;
+    ret = pub_base_deadlineD(bfrq,-1,&bfrq_tmp);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"取一天前日期错误!!");
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O136");
+        goto ErrExit;
+    }
+    bfrq = bfrq_tmp;
+          memset(comm,0x00,sizeof(comm));
+          sprintf( comm,"%s/",path);
+          chdir( comm );
+          sprintf(acErrMsg,"chdir [%s]",comm);
+    WRITEMSG
+    memset(comm,0x00,sizeof(comm));
+    sprintf(comm,"%s/%de/",path,bfrq);
+    ret = chdir(comm);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    if ( ret )
+    {
+        sprintf(acErrMsg,"进入目录失败[%d][%s]",ret,strerror(errno));
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O141");
+        goto ErrExit;
+    } 
+    /*****/
+        vMBfrq=bfrq;
+        sprintf(acErrMsg,"[日期: [%ld]",vMBfrq);
+        WRITEMSG
+    EXEC SQL drop table sh_com_tel;
+    EXEC SQL drop table sh_com_branch;    
+    EXEC SQL drop table sh_dd_mst_hst;    
+    EXEC SQL drop table sh_td_mst_hst;    
+    EXEC SQL drop table sh_ln_mst_hst;    
+    EXEC SQL drop table sh_in_mst_hst;    
+    EXEC SQL drop table sh_prdt_ac_id;    
+                EXEC SQL drop table sh_mdm_ac_rel;    
+                EXEC SQL drop table sh_cif_basic_inf; 
+                EXEC SQL drop table sh_cif_id_code_rel;
+
+          EXEC SQL create table sh_cif_basic_inf as select * from cif_basic_inf where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_cif_basic_inf select * from cif_basic_inf where crt_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_cif_id_code_rel as select * from cif_id_code_rel where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_cif_id_code_rel (select * from cif_id_code_rel where cif_no in (select cif_no from sh_cif_basic_inf));
+          MYSQLERR(__LINE__)
+          EXEC SQL create table sh_dd_mst_hst as select * from dd_mst_hst where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_dd_mst_hst select * from dd_mst_hst where tx_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_td_mst_hst as select * from td_mst_hst where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_td_mst_hst select * from td_mst_hst where tx_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_ln_mst_hst as select * from ln_mst_hst where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_ln_mst_hst select * from ln_mst_hst where tx_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_in_mst_hst as select * from in_mst_hst where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_in_mst_hst select * from in_mst_hst where tx_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_mdm_ac_rel as select * from mdm_ac_rel where 1=2;
+          MYSQLERR(__LINE__)      
+          EXEC SQL insert into sh_mdm_ac_rel select * from mdm_ac_rel where beg_date=:vMBfrq;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_com_tel as select * from com_tel;
+          MYSQLERR(__LINE__)
+          EXEC SQL create table sh_com_branch as select * from com_branch;
+          MYSQLERR(__LINE__)      
+          EXEC SQL create table sh_prdt_ac_id as select * from prdt_ac_id;
+          MYSQLERR(__LINE__)      
+
+
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"shjddata_%d.dmp",bfrq);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%de/%s tables=sh_cif_id_code_rel,sh_com_tel,sh_com_branch,sh_dd_mst_hst,dd_mst,td_mst,sh_td_mst_hst,ln_mst,sh_ln_mst_hst,in_mst,sh_in_mst_hst,sh_mdm_ac_rel,mo_loss,mo_hold,sh_cif_basic_inf,cif_no_per,cif_no_com,dd_parm,ln_parm,td_parm,in_parm,sh_prdt_ac_id,trace_parm,trace_log_bk,dc_log_bk ",dbuser,dbpasswd,getenv("DB_NAME"),path,bfrq,filename);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%de/%s tables=sh_cif_id_code_rel,sh_com_tel,sh_com_branch,sh_dd_mst_hst,dd_mst,td_mst,sh_td_mst_hst,ln_mst,sh_ln_mst_hst,in_mst,sh_in_mst_hst,sh_mdm_ac_rel,mo_loss,mo_hold,sh_cif_basic_inf,cif_no_per,cif_no_com,dd_parm,ln_parm,td_parm,in_parm,sh_prdt_ac_id,trace_parm,trace_log_bk,dc_log_bk ",dbuser,dbpasswd,path,bfrq,filename);
+    }
+    */
+    
+    sql_execute("create or replace directory dump_dir as '%s/%de'",path,bfrq); /*生成备份目录*/  	
+	  sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=sh_cif_id_code_rel,sh_com_tel,sh_com_branch,sh_dd_mst_hst,dd_mst,td_mst,sh_td_mst_hst,ln_mst,sh_ln_mst_hst,in_mst,sh_in_mst_hst,sh_mdm_ac_rel,mo_loss,mo_hold,sh_cif_basic_inf,cif_no_per,cif_no_com,dd_parm,ln_parm,td_parm,in_parm,sh_prdt_ac_id,trace_parm,trace_log_bk,dc_log_bk  parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"备份事后数据错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+    memset(comm,0,sizeof(comm));
+    sprintf(comm,"compress -vf shjddata_%d.dmp",bfrq);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"压缩日终后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+          /* 开始传数据*/
+    memset(comm,0,sizeof(comm));
+    sprintf(comm,"ftp_to_shjd.sh %s %s %d",get_env_info("SHJD_FTP_USER"),get_env_info("SHJD_FTP_PWD"),bfrq);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"传输事后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"AT13");
+        goto ErrExit;
+    }
+    strcpy(g_pub_tx.ac_no,"");
+    strcpy(g_pub_tx.brf,"日终后处理备份");
+OkExit:
+        sql_commit();
+        strcpy( g_pub_tx.reply, "0000" );
+        sprintf(acErrMsg,"日终后处理备份成功 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 0;
+ErrExit:
+        sprintf(acErrMsg,"日终后处理备份失败 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 1;
+}

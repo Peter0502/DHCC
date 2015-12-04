@@ -1,0 +1,1053 @@
+/*************************************************************
+* 文 件 名: rpt97b.c
+* 功能描述：内部账户不动户统计
+*
+* 作    者: zgf
+* 完成日期: 2013年04月19日
+*
+* 注：格式文件为RPT97b.tbl
+*insert into com_eod_exec values 
+(9007,'R97b','rpt97b','内部账户不动户统计','1111111111','7','12','01','01','2','Y','Y','N','2','Y');
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define extern
+#define ERR_DEAL if(ret) {\
+	sprintf(acErrMsg,"数据库错误!"); \
+	WRITEMSG \
+	goto ErrExit; \
+	}
+#define MYSQLERR if( sqlca.sqlcode ) {\
+		sprintf( acErrMsg, "sql error [%d]",sqlca.sqlcode ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "public.h"
+#include "card.h"
+#include "com_sys_parm_c.h"
+#include "com_item_c.h"
+#include "acno_hst_log_c.h"
+#include "com_branch_c.h"
+#include "note_parm_c.h"
+#include "dd_mst_c.h"
+#include "in_mst_c.h"
+#include "ln_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "acc_ac_id_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+/*#define PAGE_CNT 57*/
+#define PAGE_CNT 55
+#define NOT_FULL_DATE 1231
+int printTail=0;
+EXEC SQL BEGIN DECLARE SECTION;
+struct in_mst_c	s_in_mst;
+struct mdm_ac_rel_c	s_mdm_ac_rel;
+EXEC SQL END DECLARE SECTION;
+static long page,total;
+static struct 	com_sys_parm_c 		s_com_sys_parm;
+static struct	acno_hst_log_c 	     	s_acno_hst_log;
+static struct	acno_hst_log_c 	     	v_acno_hst_log;
+static struct	acno_hst_log_c 	     	m_acno_hst_log;	/**存放某个帐号最后一个满页的记录处的那条记录**/
+
+static struct  	dd_mst_c	     	s_dd_mst;
+
+static struct  	in_mst_c             	v_in_mst;
+static struct  	in_mst_c             	m_in_mst;
+static struct  	ln_mst_c             	s_ln_mst;
+static struct  	acc_ac_id_c             	s_acc_ac_id;
+
+char 	pre_br_no[6];
+char 	pre_acc_hrt[6];
+char   	filename[100];
+char   	filename_not_full[100];
+
+long 	start_date ;
+long 	end_date ;
+long	pre_tx_date;
+long	lst_tx_date;
+double 	cr_sum_amt;
+double 	m_cr_sum_amt;
+double	dr_sum_amt;
+double	m_dr_sum_amt;
+double	ye_sum_amt;
+int 	opncnt;
+FILE 	*fp;
+FILE 	*fp_not_full;
+char 	vjgbm[6];
+char 	t_str[41];
+int   ptail = 0 ;    /***未满页的地方结尾打出了满页结尾***/
+int	ret = 0;
+int 	flag = 0;							/*** 0- 无 1-存款 2-贷款 3-内部 ***/
+int 	tag = 0;
+long 	line_file=0;
+char 	vpfm[21];
+int	l_hst_cnt = 0;	/*当前明细表有多少条待打印的记录**/
+int 	line;
+long	pre_ac_id = 0;
+int   ftpg = 1;   /* 机构第一页 */
+int   nxt  = 0;  /* 区别是否只打印内部 */
+
+int get_ratio_lsqd(int bli,int bll,char str[100]);
+
+rpt97b()
+{
+	vtcp_log("[%s][%d]开始生成内部帐户不动户满页帐!\n",__FILE__,__LINE__);
+
+	int    	ttlnum;
+	long 	recordnum = 0;
+	long  	recordnum_notfull = 0; 	/* add by LiuYue 2007-1-30 21:47 */
+
+	EXEC SQL BEGIN DECLARE SECTION;
+		long tmp_date=0;
+	EXEC SQL END DECLARE SECTION;
+
+	memset(pre_br_no,0x00,sizeof(pre_br_no));
+	memset(pre_acc_hrt,0x00,sizeof(pre_acc_hrt));
+
+	strcpy(pre_br_no,"-----");
+	pre_ac_id = 999999;
+
+	ret = Com_sys_parm_Sel(g_pub_tx.reply,&s_com_sys_parm,"1=1");
+	ERR_DEAL
+
+	g_pub_tx.tx_date = s_com_sys_parm.lst_date;
+/**注释掉灵活取结转日期 start 20131223**
+	tmp_date = s_com_sys_parm.lst_date/10000*10000+101;
+	start_date = (s_com_sys_parm.lst_date/10000-1)*10000 + 101;
+	end_date = (s_com_sys_parm.lst_date/10000-1)*10000 + 1231;
+*注释掉灵活取结转日期 end 20131223***/	
+/**结转日期写死，从com_sys_parm取lst_date为上面末日期，因为该报表一年跑一次 start***/
+	tmp_date = s_com_sys_parm.lst_date;/**获取到年初的值**/
+	start_date = (s_com_sys_parm.lst_date/10000)*10000 + 101;
+	end_date = s_com_sys_parm.lst_date;/**获取到上年末的值**/
+	vtcp_log("[%s][%d]aaaaaaaaaaaaaaa[%ld]bbbbbbbbbbbb==[%ld]ccccccccccccccc==[%ld]\n",__FILE__,__LINE__,tmp_date,start_date,end_date);	
+/******end******/
+	strcpy( filename , "RPT97b");
+	strcpy( filename_not_full,"RPT97b_NOT_FULL");
+	strcpy( vpfm, "RPT97b");
+	pub_rpt_rmfile( "",filename,0 );
+	pub_rpt_rmfile( "",filename_not_full,0 );
+
+  EXEC SQL declare in_mst_cc cursor for
+		select b.ac_no,a.bal,a.ac_id,a.opn_br_no,a.prdt_no,a.lst_date,a.name,a.hst_pg
+		from in_mst a , mdm_ac_rel b 
+		where a.ac_id = b.ac_id
+    and substr(b.ac_no,2,1) != 7 and substr(b.ac_no,2,1) != 6
+    and a.lst_date < :tmp_date 
+    and a.bal != 0 
+    order by a.opn_br_no,a.ac_id;
+		MYSQLERR
+
+		EXEC SQL open in_mst_cc;
+		MYSQLERR
+
+	while (1)
+	{
+		memset(&s_in_mst,0x00,sizeof(struct in_mst_c));
+		memset(&s_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+		EXEC SQL fetch in_mst_cc into:s_mdm_ac_rel.ac_no,:s_in_mst.bal,:s_in_mst.ac_id,:s_in_mst.opn_br_no,:s_in_mst.prdt_no,:s_in_mst.lst_date,:s_in_mst.name,:s_in_mst.hst_pg;
+		if( sqlca.sqlcode==1403 )
+		{
+			if( ttlnum )
+			{
+				fclose(fp);
+			}
+			break;
+		}
+		else if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"读取结息表异常出错!");
+			WRITEMSG			
+			goto ErrExit;			
+		}
+		
+		/****如果机构号变化了需要重新开闭问文件***/
+		if ( strncmp(pre_br_no,s_in_mst.opn_br_no,5) )
+		{
+			if ( strncmp(pre_br_no,"-----",5) )
+			{
+				fclose(fp);
+				recordnum =0; /**这个标志页设置为0  一旦换了机构就别再首先打印表尾了***/
+				line = 0;
+			}
+			ret = pub_rpt_openfile( &fp,s_in_mst.opn_br_no,filename );
+			ERR_DEAL
+			ftpg = 1;
+		}
+		strcpy( pre_br_no,s_in_mst.opn_br_no );
+
+		/***如果帐号变化了**/
+		if (pre_ac_id!=s_in_mst.ac_id)
+		{
+			l_hst_cnt =0;
+			page = 0;			
+
+			/***获取当前帐号打印到了多少页了**
+			ret = sql_max_long_xier("in_mst","hst_pg",&page,"ac_id=%ld ",s_in_mst.ac_id);
+			ERR_DEAL
+			*/
+			vtcp_log("[%s][%d]当前帐号[%ld]已经打印的页数==[%ld]\n",__FILE__,__LINE__,s_in_mst.ac_id,page);	
+			
+			/**如果不是第一次的话***/
+			if (pre_ac_id!=999999)
+			{
+				if (recordnum)
+				{
+					memcpy(&v_in_mst,&m_in_mst,sizeof(v_in_mst));
+					if( ptail==0 )
+						{
+						  ret = print_tail();
+					    ERR_DEAL
+						  print_HY();
+					    ERR_DEAL
+						}
+					ptail = 0;
+				}
+			}
+			recordnum =0;
+			recordnum_notfull  = 0;/* add by LiuYue 2007-1-30 21:48*/
+			line_file = 0;
+			
+			/***获取到该科目需要打印的记录条数**/
+			l_hst_cnt = sql_count("in_mst "," opn_br_no='%s' and ac_id = '%ld' ",s_in_mst.opn_br_no,s_in_mst.ac_id);
+			vtcp_log("[%s][%d]机构[%s]帐号[%ld]待打印的记录条数为[%d]\n",__FILE__,__LINE__,s_in_mst.opn_br_no,s_in_mst.ac_id,l_hst_cnt);
+
+			if (l_hst_cnt+7<10)
+			{
+				/***避免如果只有一笔记录的情况下v_acno_hst_log 没有值***/
+				memcpy(&v_in_mst,&s_in_mst,sizeof(v_in_mst));
+				if ( l_hst_cnt>0 )
+				{
+					printf("[%s][%d]line_file===[%d],l_hst_cnt===[%d]\n",__FILE__,__LINE__,line_file,l_hst_cnt);
+					/* 打印页首 */
+					/*page = 1;*/
+					page = page +1;
+
+					ret = print_head_not_full(4);
+					ERR_DEAL
+
+					line = 0;
+
+					ret = print_body_not_full( );
+					ERR_DEAL
+
+					recordnum_notfull++;
+
+					strcpy( pre_br_no,s_in_mst.opn_br_no );
+					ttlnum++;
+
+					printf("[%s][%d]这是今年的最后一天了需要打印出未满页的记录!\n",__FILE__,__LINE__);
+					printf("[%s][%d]recordnum_notfull=[%d],l_hst_cnt=[%d]!\n",__FILE__,__LINE__,recordnum_notfull,l_hst_cnt);
+					/* rem by LiuYue 2007-1-30 21:49
+					if(line_file == l_hst_cnt+8) 因为这里的line_file包括了标题部分*
+					**************replace by next line **********************************/
+					if (recordnum_notfull == l_hst_cnt) /*因为这里的line_file包括了标题部分**/
+					{
+						printf("[%s][%d]my xier,总记录数不足满页的情况，你硬要打印，到打印尾巴时候了!\n",__FILE__,__LINE__);
+						ret = print_tail_not_full();
+						ERR_DEAL
+							line_file += 3; /**结转一行  结束框架占2行***/
+					}
+					pre_ac_id = s_in_mst.ac_id;
+					strcpy( vjgbm,s_in_mst.opn_br_no );
+				}
+				continue;
+			}
+			page += 1;
+			pre_ac_id = s_in_mst.ac_id;
+			strcpy( vjgbm,s_in_mst.opn_br_no );
+
+			/* 打印页首 */
+			ret = print_head(4);
+		}
+		memcpy(&v_in_mst,&s_in_mst,sizeof(v_in_mst));
+
+		if (l_hst_cnt+7<10)
+		{
+			if ( l_hst_cnt>0 )
+			{
+				if (line_file==0 && l_hst_cnt>0)	/*由于在标志 FLAG_SEE处 没有进行表头的打印，所以放到这里来打印**/
+				{
+					/* 打印页首 */
+					ret = print_head_not_full(4);
+					ERR_DEAL
+						line = 0;
+				}
+				ret = print_body_not_full( );
+				ERR_DEAL
+
+				recordnum_notfull ++;/* add by LiuYue 2007-1-30 21:50 */
+				vtcp_log("[%s][%d]开始更新记录的打印标志!\n",__FILE__,__LINE__);
+
+				pre_ac_id = s_in_mst.ac_id;
+				ttlnum++;
+
+				if (recordnum_notfull == l_hst_cnt)  /*因为这里的line_file包括了标题部分**/
+				{
+					printf("[%s][%d]my xier,总记录数不足满页的情况，你硬要打印，到打印尾巴时候了!\n",__FILE__,__LINE__);
+					ret = print_tail_not_full();
+					ERR_DEAL
+						line_file += 3; /**结转一行  结束框架占2行***/
+				}
+			}
+			continue;
+		}
+		recordnum++; /**某个帐号的明细增加标志**/
+		/* 打印分户信息 */
+
+		if (l_hst_cnt>=(PAGE_CNT-7) && (recordnum-l_hst_cnt/(PAGE_CNT-7)*(PAGE_CNT-7) > 0))/*如果当前待打印的hst_cnt-当前hst_cnt<满页笔数,则不打印**/
+		{
+			ttlnum++;
+			/****保存这最后一个满页的那一笔记录，处理当不打印未满页帐时候，最后一个满页帐的结转金额打印的不是那一笔，而是最后一笔记录，
+			比如  若有132条记录，结转金额用的是第132 而不是100****/
+			if ((recordnum-l_hst_cnt/(PAGE_CNT-7)*(PAGE_CNT-7))==1)
+				memcpy(&m_in_mst,&s_in_mst,sizeof(m_in_mst));
+
+			if ( l_hst_cnt>0 )
+			{
+				if ((recordnum-l_hst_cnt/(PAGE_CNT-7)*(PAGE_CNT-7))==1)
+				{
+					/*打印满页的表尾 0619*/
+					if( pre_ac_id==s_in_mst.ac_id )
+						{
+							ret = print_tail();
+							ERR_DEAL
+						  print_HY();
+					    ERR_DEAL
+							ptail=1;
+						}
+					printf("[%s][%d]这是今年的最后一天了需要打印出未满页的记录!\n",__FILE__,__LINE__);
+					/* 打印页首 */
+					line = 0;
+					page = page +1;
+					/*
+					ret = print_head_not_full(4);
+					ERR_DEAL*/
+					if( page==1 )/*判断是否继续打未满页上页 070701*/
+					    {
+					    	ret = print_head_not_full(4);
+					    	ERR_DEAL
+					    }else
+					    {
+					    	ret = print_head_not_full(1);
+					    	ERR_DEAL
+					    }
+
+				}
+				ret = print_body_not_full( );
+				ERR_DEAL
+
+				vtcp_log("[%s][%d]开始更新记录的打印标志!\n",__FILE__,__LINE__);
+
+				line_file ++;
+
+				pre_ac_id = s_in_mst.ac_id;
+
+				ttlnum++;
+
+				if (recordnum ==l_hst_cnt)
+				{
+					printf("[%s][%d]老大到了记录的最后一笔了该打印尾巴了!\n",__FILE__,__LINE__);
+					ret = print_tail_not_full();
+					ERR_DEAL
+				}
+			}
+			continue;
+
+		}
+		pre_ac_id = s_in_mst.ac_id;
+		ttlnum++;
+
+		ret = print_body( );
+		ERR_DEAL
+
+			vtcp_log("[%s][%d]开始更新记录的打印标志!\n",__FILE__,__LINE__);
+		if(recordnum-l_hst_cnt/(PAGE_CNT-7)*(PAGE_CNT-7)==0)
+		{
+			m_cr_sum_amt = cr_sum_amt;
+			m_dr_sum_amt = dr_sum_amt;
+		}
+	}
+		
+	vtcp_log("[%s][%d]提交数据库!\n",__FILE__,__LINE__);
+	sql_commit();   /*--提交事务--*/
+	vtcp_log("机构[%s]完成\n",s_in_mst.opn_br_no);
+	/******************程序出口************************/
+	/*
+	* 正常出口
+	*/
+	/** if (g_pub_tx.tx_date%10000 !=NOT_FULL_DATE)	如果那天不打印未满页帐，删除掉未满页文件
+		pub_rpt_rmfile( "",filename_not_full,0 );del by martin **/
+
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+		vtcp_log("Before OK return: reply is [%s]\n",g_pub_tx.reply);
+	return (0);
+	/*
+	* 错误出口
+	*/
+	ErrExit:
+		strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+		vtcp_log("Before bad return: reply is [%s]\n",g_pub_tx.reply);
+	return (1);
+
+}
+
+/* 中间函数 */
+int Make_yeb_sub( char vrec[3] )
+{
+	ret=pub_rpt_read_pfm_qd(fp,&line_file,vpfm,"0001",vrec,&opncnt,get_ratio_lsqd);
+	ERR_DEAL
+
+		GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表首 */
+int print_head(int m_tag )
+{
+	if (ftpg != 1)
+	{
+		fprintf(fp, "\f");
+	}
+	char vrec[3];
+
+	cr_sum_amt = 0.0;
+	dr_sum_amt = 0.0;
+	ye_sum_amt = 0.0;
+/**
+	if ( line+7>PAGE_CNT )
+	{
+		print_tail();
+		print_HY();
+		line=0;
+	}
+***/
+	if (ftpg == 1)
+	{
+		fprintf(fp,"%c%c",0x1b,0x40);
+	}
+	fprintf(fp,"\n");
+	strcpy( vrec,"HH" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+
+		line+=6;
+		ftpg+=1;
+
+	if (m_tag>2)
+		tag = m_tag;
+	else
+		tag = 1;
+	printf("[%s][%d]打印结转标志 =[%d]\n",__FILE__,__LINE__,tag);
+	ret = Make_yeb_sub("DD");
+	ERR_DEAL
+		tag = 0;
+	line+=1;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表体 */
+int print_body_A( )
+{
+	char vrec[3];
+/**
+	if ( line+1>PAGE_CNT )
+	{
+		print_tail();
+		print_HY();
+		page++;
+		print_head(1);
+	}
+****/
+	strcpy( vrec,"DD" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+		line+=1;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表尾 */
+int print_tail( )
+{
+	char vrec[3];
+
+	tag = 8;	/**打印汇总信息**/
+	ret = Make_yeb_sub("AA");
+	ERR_DEAL
+		line+=1;
+	tag = 0;
+
+	tag = 2;/*结转下页标志*/
+	ret = Make_yeb_sub("DD");
+	ERR_DEAL
+		line+=1;
+	tag = 0;
+
+	strcpy( vrec,"CC" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+		line+=2;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+/* 打印HY */
+int print_HY( )
+{
+	/*
+	char vrec[3];
+
+	strcpy( vrec,"YY" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+	*/
+	vtcp_log("[%s][%d]+++++++++++++++++\n",__FILE__,__LINE__);
+	/***fprintf(fp,"\f"); 更换到开头**/
+	line=0;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+/* 打印HY */
+int print_FF( )
+{
+	char vrec[3];
+
+	strcpy( vrec,"FF" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+
+		line=0;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表体 */
+int print_body( )
+{
+	char vrec[3];
+
+	if ( line+1>PAGE_CNT )
+	{
+		print_tail();
+		print_HY();
+		page++;
+		print_head(1);
+	}
+	strcpy( vrec,"BB" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+		line+=1;
+
+	/**处理 借贷以及余额的总计***/
+	if ( s_acno_hst_log.dc_ind[0]=='1' )
+		dr_sum_amt += s_acno_hst_log.tx_amt;
+	else if ( s_acno_hst_log.dc_ind[0]=='2' )
+		cr_sum_amt += s_acno_hst_log.tx_amt;
+
+	/****处理 借贷 以及余额的总结**/
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 中间函数 */
+int Make_yeb_sub_not_full( char vrec[3] )
+{
+	/*ret=pub_rpt_read_pfm_qd(fp_not_full,&line_file,vpfm,"0001",vrec,&opncnt,get_ratio_lsqd);notfull*/
+	ret=pub_rpt_read_pfm_qd(fp,&line_file,vpfm,"0001",vrec,&opncnt,get_ratio_lsqd);
+	ERR_DEAL
+
+		GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表首 */
+int print_head_not_full(int m_tag )
+{
+	if (ftpg != 1)
+	{
+		fprintf(fp, "\f");
+	}
+	char vrec[3];
+
+	cr_sum_amt = 0.0;
+	dr_sum_amt = 0.0;
+	ye_sum_amt = 0.0;
+/*
+	if ( line+7>PAGE_CNT )
+	{
+		print_tail_not_full();
+		print_HY_not_full();
+		line=0;
+	}
+*/
+	if (printTail==0)
+	{
+	/****	fprintf(fp,"\f"); 更换到开头*/
+		/*fprintf(fp_not_full,"\f");notfull*/
+	}
+	else
+		printTail=0;
+	/*fprintf(fp_not_full,"%c%c",0x1b,0x40);
+	fprintf(fp_not_full,"\n");notfull*/
+	if (ftpg == 1)
+	{
+		fprintf(fp,"%c%c",0x1b,0x40);
+	}
+	fprintf(fp,"\n");
+	strcpy( vrec,"HH" );
+	ret = Make_yeb_sub_not_full(vrec);
+	ERR_DEAL
+
+		line+=6;
+		ftpg+=1;
+
+	if (m_tag>2)
+		tag = m_tag;
+	else
+		tag = 1;
+	printf("[%s][%d]打印结转标志 =[%d]\n",__FILE__,__LINE__,tag);
+	ret = Make_yeb_sub_not_full("DD");
+	ERR_DEAL
+		tag = 0;
+	line+=1;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表体 */
+int print_body_A_not_full( )
+{
+	char vrec[3];
+/*
+	if ( line+1>PAGE_CNT )
+	{
+		print_tail_not_full();
+		print_HY_not_full();
+		page++;
+		print_head_not_full(1);
+	}
+*/
+	strcpy( vrec,"DD" );
+	ret = Make_yeb_sub_not_full(vrec);
+	ERR_DEAL
+		line+=1;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表尾 */
+int print_tail_not_full( )
+{
+	char vrec[3];
+
+	pre_tx_date = s_acno_hst_log.tx_date;	/**打印页末尾时候需要用到一个日期***/
+	lst_tx_date = pre_tx_date;		/**打印页尾巴时候，如果是某科目最后一页用这个日期**/
+
+	tag = 8;	/**打印汇总信息**/
+	ret = Make_yeb_sub_not_full("AA");
+	ERR_DEAL
+		line+=1;
+	tag = 0;
+
+	printf("[%s][%d]兄弟来打印尾巴了!\n",__FILE__,__LINE__);
+	vtcp_log("[%s][%d]兄弟来打印尾巴了!\n",__FILE__,__LINE__);
+	tag = 2;/*结转下页标志*/
+	ret = Make_yeb_sub_not_full("DD");
+	ERR_DEAL
+		line+=1;
+	tag = 0;
+
+	strcpy( vrec,"CC" );
+	ret = Make_yeb_sub_not_full(vrec);
+	ERR_DEAL
+		line+=2;
+
+	print_HY_not_full( );
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+/* 打印HY */
+int print_HY_not_full( )
+{
+	/*
+	char vrec[3];
+
+	strcpy( vrec,"YY" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL
+	*/
+	vtcp_log("[%s][%d]+++++++++++++++++\n",__FILE__,__LINE__);
+	/****fprintf(fp,"\f"); 更换到开头***/
+	/*fprintf(fp_not_full,"\f");notfull*/
+	line=0;
+	printTail=1;
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+/* 打印HY */
+int print_FF_not_full( )
+{
+	char vrec[3];
+
+	strcpy( vrec,"FF" );
+	ret = Make_yeb_sub_not_full(vrec);
+	ERR_DEAL
+
+		line=0;
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 打印表体 */
+int print_body_not_full( )
+{
+	char vrec[3];
+
+	if ( line+1>PAGE_CNT )
+	{
+		print_tail_not_full();
+		print_HY_not_full();
+		page++;
+		print_head_not_full(1);
+	}
+	strcpy( vrec,"BB" );
+	ret = Make_yeb_sub_not_full(vrec);
+	ERR_DEAL
+		line+=1;
+
+	/**处理 借贷以及余额的总计***/
+	if ( s_acno_hst_log.dc_ind[0]=='1' )
+		dr_sum_amt += s_acno_hst_log.tx_amt;
+	else if ( s_acno_hst_log.dc_ind[0]=='2' )
+		cr_sum_amt += s_acno_hst_log.tx_amt;
+
+	/****处理 借贷 以及余额的总结**/
+
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}
+
+/* 赋值函数 */
+/* 说明：bli 代表变量字符名称 ... bll代表变量占的长度 ... str代表变量值 */
+int get_ratio_lsqd( bli,bll,str )
+	int bli,bll;
+char str[100];
+{
+
+	struct com_branch_c rggjgm;
+	struct note_parm_c  s_note_parm;
+	struct com_item_c  rkmb;
+
+	char vhm[101];
+	char vstr[101];
+	char l_kmm[41];
+	char amt_tmp[41];
+	char tmp_inf[41];
+	char tmp_acc_name[41];
+	char fmt[20];
+	char br_name[71];
+	double tmp_amt;
+	double bal;
+	char brf[21];
+	char tel[5];
+	char note_no[17];
+	char note_type[13];
+	long date;
+	int i=0;
+
+	switch( bli )
+	{
+		case 'Z':
+			strcpy( brf , "内部账户" ) ;
+			pub_base_strpack( brf );
+			sprintf( t_str , "%s" , brf );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'X':	/**户名**/
+			sprintf(fmt,"%%-%ds",bll);
+			sprintf( str , fmt , s_in_mst.name );
+			break;
+		case 'B': /**帐号**/
+			ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&s_mdm_ac_rel,"ac_id = %ld ",s_in_mst.ac_id);
+			if (ret != 0 && ret != 100)
+			{
+				sprintf(acErrMsg,"SELECT COM_BRANCH ERROR !! [%d]",ret);
+				WRITEMSG
+					sprintf(acErrMsg,"br_no=[%s]",s_in_mst.opn_br_no);
+				WRITEMSG
+					goto ErrExit;
+			}
+			else if (ret == 100)
+			{
+				strcpy(s_mdm_ac_rel.ac_no,"");
+			}
+			sprintf( t_str , "%s" , s_mdm_ac_rel.ac_no);
+			sprintf(fmt,"%%-%ds",bll);
+			sprintf( str , fmt , t_str );
+			break;
+		case 'C': /* 机构名称 */
+			ret = Com_branch_Sel(g_pub_tx.reply,&rggjgm,"br_no='%.5s'",s_in_mst.opn_br_no);
+			if (ret != 0 && ret != 100)
+			{
+				sprintf(acErrMsg,"SELECT COM_BRANCH ERROR !! [%d]",ret);
+				WRITEMSG
+					sprintf(acErrMsg,"br_no=[%s]",s_in_mst.opn_br_no);
+				WRITEMSG
+					goto ErrExit;
+			}
+			else if (ret == 100)
+			{
+				strcpy(rggjgm.br_name,"");
+			}
+			memset( str,' ',bll );
+			ldchar( rggjgm.br_name,strlen(rggjgm.br_name),rggjgm.br_name );
+			i=strlen(rggjgm.br_name);
+			strncpy( str,rggjgm.br_name,i );
+			/*add by martin 应银监局要求对对公户增加科目号要求*/
+				{
+					ret = Acc_ac_id_Sel(g_pub_tx.reply,&s_acc_ac_id,"  data_code='0152' and ac_id='%ld'",s_in_mst.ac_id);
+					if (ret != 0 && ret != 100)
+			      {
+			      	sprintf(acErrMsg,"SELECT ACC_AC_ID ERROR !! [%d]",ret);
+			      	WRITEMSG
+			      		sprintf(acErrMsg,"ac_id=[%ld]",s_in_mst.ac_id);
+			      	WRITEMSG
+			      		goto ErrExit;
+			      }
+	
+				}
+			if ( strncmp(vjgbm,"00000",5) )
+			{
+				strncpy( str+i,"(",1 );
+				i++;
+				strncpy( str+i,s_in_mst.opn_br_no,5 );
+				i=i+5;
+				/*add by martin 应银监局要求对对公户增加科目号要求*/
+					{
+						strncpy( str+i," ",1 );/*用空格间隔可以调整*/
+						i=i++;
+						if(strlen(s_acc_ac_id.acc_no)>2 && strlen(s_acc_ac_id.acc_no)<6)
+							{
+						   strncpy( str+i,s_acc_ac_id.acc_no,strlen(s_acc_ac_id.acc_no) );
+				       i=i+5;
+				      }
+					}
+				strncpy( str+i,")",1 );
+			}
+			break;
+		case 'D': /* 页码 */
+			sprintf(fmt,"%%%dld",bll);
+			sprintf(str, fmt, page);
+			break;
+		case 'E': /* 交易日期  */
+			date = s_in_mst.lst_date ;
+			sprintf( t_str , "%ld" , date );
+			sprintf(fmt,"%%-%ds",bll);
+			sprintf( str , fmt , t_str );
+			break;
+		case 'F': /* 摘要 */
+			strcpy( brf , "--------" ) ;
+			pub_base_strpack( brf );
+			sprintf( t_str , "%s" , brf );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'G': /* 凭证号码 */
+				strcpy(note_no,"----------------" );
+				sprintf( t_str , "%s" , note_no );
+				sprintf(fmt, "%%-%ds", bll);
+				sprintf(str, fmt, t_str);
+				break;
+		case 'H': /* 凭证类型 */
+			strcpy( s_note_parm.name,"----------------" );
+			sprintf( t_str , "%s" , s_note_parm.name );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'I': /* 交易柜员 */
+			strcpy( tel , "----" ) ;
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'J': /* 借方发生额 */
+			strcpy( tel , "--------------" ) ;
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'K': /* 贷方发生额 */
+			strcpy( tel , "--------------" ) ;
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'L': /* 余    额 */
+			bal = s_in_mst.bal ;
+			sprintf( amt_tmp, "%.2lf" , bal );
+			pub_rpt_flttomon( amt_tmp,amt_tmp );
+			sprintf(fmt,"%%%ds",bll);
+			if ( strlen(amt_tmp)>bll )
+				sprintf( amt_tmp, "%.2lf" , bal );
+			sprintf( str, fmt, amt_tmp );
+			break;
+		case 'M': /* 结转日期 */
+			if ( tag==1 )
+				date = start_date;
+			else if ( tag==2 )
+				date = end_date;
+			else if ( tag ==3 )
+				date = start_date;
+			else if ( tag ==4)
+				date = start_date;
+			else if ( tag ==8)	/**打印汇总信息**/
+				date = start_date;
+			sprintf( t_str , "%ld" , date );
+			sprintf(fmt,"%%-%ds",bll);
+			sprintf( str , fmt , t_str );
+			break;
+		case 'N': /* 结转字样 */
+			if ( tag==1 )
+				strcpy(brf,"上年结转");
+			else if ( tag==2 )
+				strcpy(brf,"结转下年");
+			else if ( tag==3)
+				strcpy(brf,"首次打印");
+			else if ( tag==4)
+				strcpy(brf,"上年结转");
+			else if ( tag==8)
+				strcpy(brf,"金额汇总");
+	
+			pub_base_strpack(brf);
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, brf);
+			break ;
+		case 'O': /* 结转柜员 */
+			strcpy( tel,"----" );
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'P': /* 结转余额 */
+			if ( tag==1 )
+				s_in_mst.bal;
+			else if ( tag==2 )
+				s_in_mst.bal;
+			else if ( tag==3)
+				s_in_mst.bal;
+			else if ( tag==4)
+				s_in_mst.bal;
+			else if ( tag==8)
+				s_in_mst.bal;
+			else if (tag==3)
+				s_in_mst.bal;
+
+			sprintf( amt_tmp, "%.2lf" , s_in_mst.bal );
+			pub_rpt_flttomon( amt_tmp,amt_tmp );
+			sprintf(fmt,"%%%ds",bll);
+			if ( strlen(amt_tmp)>bll )
+				sprintf( amt_tmp, "%.2lf" , bal );
+			sprintf( str, fmt, amt_tmp );
+			break;
+		case 'U':/**汇总栏 日期*****/
+			date = s_in_mst.lst_date;
+	
+			sprintf( t_str , "%ld" , date );
+			sprintf(fmt,"%%-%ds",bll);
+			sprintf( str , fmt , t_str );
+			break;
+		case 'V':/**汇总信息 摘要***/
+			strcpy(brf,"金额汇总");
+			pub_base_strpack(brf);
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, brf);
+			break ;
+		case 'W':/**汇总信息 借合计值***/
+			strcpy( tel , "--------------" ) ;
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'Y':/**汇总信息 贷合计值***/
+			strcpy( tel , "--------------" ) ;
+			pub_base_strpack( tel );
+			sprintf( t_str , "%s" , tel );
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'R':/**汇总信息 余额合计值***/
+			bal = ye_sum_amt ;
+			sprintf( amt_tmp, "%.2lf" , bal );
+			pub_rpt_flttomon( amt_tmp,amt_tmp );
+			sprintf(fmt,"%%%ds",bll);
+			if ( strlen(amt_tmp)>bll )
+				sprintf( amt_tmp, "%.2lf" , bal );
+			sprintf( str, fmt, amt_tmp );
+			break;
+		default :
+			memset( str,' ',bll );
+			break;
+	}
+	GoodExit:
+		return 0;
+	ErrExit:
+		return 1;
+}

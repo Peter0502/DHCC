@@ -1,0 +1,424 @@
+  <!---转帐页面--->
+  <PAGE NAME="PAGE2">
+  <ITEM NAME="#ACT_LX"  TYPE="%-1s" FUNCTIONS="T()"/>
+  <ITEM LINE="6"  COL="5"   TYPE="%-10s"   FUNCTIONS="T(付款帐号:)"/>
+  <ITEM LINE="6"  COL="47"  TYPE="%-10s"   FUNCTIONS="T(帐户序号:)"  INPUT="LABEL" VISABLE="FALSE" NAME="#S_SEQNO"/>
+  <ITEM LINE="8"  COL="4"   TYPE="%-20s"   FUNCTIONS="T(【付款帐户信息】)"/>
+  <ITEM LINE="9"  COL="5"   TYPE="%-70s"   FUNCTIONS="T(----------------------------------------------------------------------)"/>
+
+  <!--add by luolz 20091017 -->
+  <ITEM NAME="#SELFYN"    TYPE="%-1s"  FUNCTIONS="T(1)"/> <!--同名Item liangqi注--><!--因打凭证需要设此变量,意为是否本人---->
+  <ITEM NAME="#AGENTNAME" TYPE="%-20s" FUNCTIONS=""/>  <!--同名Item liangqi注-->   <!----因打凭证需要设此变量---->
+  <ITEM NAME="#ATCETYPE" TYPE="%-20s" FUNCTIONS=""/>  <!--同名Item liangqi注-->   <!----因打凭证需要设此变量---->
+  <ITEM NAME="#ATCENUM"   TYPE="%-1s"  FUNCTIONS=""/>   <!--同名Item liangqi注-->  <!----因打凭证需要设此变量---->  
+  <ITEM NAME="#TRAN_AC_NO" LINE="6"  COL="15"  TYPE="%-19s"  INPUT="TEXT"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno     as string;
+	dim @tota     as string;
+	dim @tran_bal as string;
+	dim @tmp      as string;
+	dim @tmp_head as string;
+	dim @sel_buf  as string;
+	dim @cnt      as number;
+	dim @totcnt   as number;
+	initfd();
+	@txno  = $TXNO;
+	$FD12  = '2103';
+	$TXNO  = '9731';
+	$FD102 = #TRAN_AC_NO;
+	commsend_001();
+
+	@tota  = callserver();
+	$TXNO  =@txno;
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+  if(atoi(substr($FD102,24,4))!=0)
+  { 
+      #SEQNO_102=substr($FD102,24,4);
+  		show(#SEQNO_102,true);
+  		show(#S_SEQNO,true);
+  }else{
+      show(#SEQNO_102,false);
+  		show(#S_SEQNO,false);
+  #SEQNO_102='0000';
+	@cnt=0;
+	@totcnt=0;
+	@tmp='';
+	@tmp_head='';
+	while(@totcnt &lt; len(@tota))
+	{
+		@tmp=substr(@tota,@totcnt,20);
+		@tmp_head=substr(@tmp,0,4);
+		if(@tmp_head=='1023' or rtrim(@tmp_head)=='')
+		{
+			break;
+		}
+		@totcnt=@totcnt+31;
+	}	
+	if(@totcnt!=0)
+	{
+	  @sel_buf=substr(@tota,0,@totcnt);
+	  setsel(#ZY_TP,@sel_buf,'o5t20o1v3o2');
+	}
+	@sel_buf=substr(@tota,@totcnt,len(@tota)-@totcnt);
+	setsel(#TRAN_CTY,@sel_buf,'o5t20o1v3o2');
+
+	//setsel(#TRAN_CTY,@tota,'o5t20o1v3o2');  凭证种类
+	#TRAN_NAME = substr($FD102,125,60);
+	#TRAN_CUR  = substr($FD102,201,2);
+	@tran_bal  = substr($FD102,185,16);
+	#ACT_LX    = substr($FD102,207,1);
+	#TRAN_BAL  = val(@tran_bal,0.01);
+	#TRAN_PDN  = substr($FD102,313,30);
+	#SPECIAL   = substr($FD102,293,20);  //特殊标志
+	#TRAN_CTY  = substr($FD102,28,3);
+	#TRAN_CNM  = substr($FD102,31,16);
+	#TRAN_PDOT = substr($FD102,48,1);
+	#TRAN_CDOT = substr($FD102,61,1);
+	#TRAN_CET  = substr($FD102,124,1);
+	#TTRAN_CET = #TRAN_CET;            //将证件类型保存起来
+	#TRAN_CNUM = substr($FD102,62,20);
+	#TRAN_SDOT = substr($FD102,82,1);  //印鉴支取标志
+	#TRAN_AMT  = #TXAMT;               //转出金额等于开户金额
+	showblock('TRANSFAR',true,true);
+	show(#TRAN_CUR,true);
+	enable(#TRAN_CUR,false);
+	show(#TRAN_CTY,true);
+	enable(#TRAN_CTY,false);
+	show(#TRAN_CNM,true);
+	enable(#TRAN_CNM,true);
+	show(#TRAN_PDOT,true);
+	enable(#TRAN_PDOT,false);
+	show(#TRAN_CDOT,true);
+	enable(#TRAN_CDOT,false);
+	show(#TRAN_CET,true);
+	enable(#TRAN_CET,false);
+	show(#TRAN_BAL,true);
+	enable(#TRAN_BAL,false);
+	show(#TRAN_AMT,true);
+	enable(#TRAN_AMT,false);
+	if(#ACT_LX=='2')
+	{
+		 #ZY_TP='001';
+	   show(#S_ZY,true);
+	   show(#S_STDAY,true);
+	   show(#ZY_TP,true);
+	   show(#STDAY,true);
+	   show(#TRAN_CTY,true);
+	   show(#TRAN_CNM,true);
+	   enable(#TRAN_CTY,true);
+	   enable(#TRAN_CNM,true);
+	   
+	}else{
+	  show(#S_ZY,false);
+	  show(#S_STDAY,false);
+	  show(#ZY_TP,false);
+	  show(#STDAY,false);
+	  show(#TRAN_CNM,true);
+	  enable(#TRAN_CTY,false);
+	  enable(#TRAN_CNM,false);
+	}
+	
+	if(#TRAN_PDOT == 'Y')
+	{
+			show(#PASSNAME,true);
+			show(#TRAN_PWD,true);
+			enable(#TRAN_PWD,true);
+	}
+	else
+	{
+			show(#PASSNAME,false);
+			show(#TRAN_PWD,false);
+			enable(#TRAN_PWD,false);
+	}
+	//若为证件支取，也不输入证件号码 20070404 
+	if(#TRAN_CDOT == 'Y')
+	{
+			show(#TRAN_CET,true);
+			show(#TRAN_CNUM,true);
+			enable(#TRAN_CET,false);
+			enable(#TRAN_CNUM,false);
+	}
+	else
+	{
+			if(#ACT_LX=='2')
+			{
+			    show(#TRAN_CET,true);
+			    show(#TRAN_CNUM,true);
+			    show(#CERTIFTYPE,true);
+			    show(#CERTIFNUM,true);
+			    enable(#TRAN_CET,false);
+			    enable(#TRAN_CNUM,false);
+			}else{
+			    show(#TRAN_CET,false);
+			    show(#TRAN_CNUM,false);
+			    show(#CERTIFTYPE,false);
+			    show(#CERTIFNUM,false);
+			    enable(#TRAN_CET,false);
+			    enable(#TRAN_CNUM,false);
+			}
+	}
+	
+	}
+
+	if(substr(#TRAN_AC_NO,0,3)=='407' or substr(#TRAN_AC_NO,0,3)=='416'){
+		showmsg('不可以记此科目的帐务!');
+		return(false);
+	}
+	if(substr(#TRAN_AC_NO,0,3)=='408'){
+		if($KINBR!='10001'){
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#SEQNO_102" LINE="6"  COL="57"  TYPE="%4d"  INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno     as string;
+	dim @tota     as string;
+	dim @tran_bal as string;
+	dim @tmp      as string;
+	dim @tmp_head as string;
+	dim @sel_buf  as string;
+	dim @cnt      as number;
+	dim @totcnt   as number;
+    	
+  initfd();
+	@txno  = $TXNO;
+	$FD12  = '2103';
+	$TXNO  = '9847';
+	$FD102 = #TRAN_AC_NO+space(24-len(#TRAN_AC_NO))+#SEQNO_102;
+
+	commsend_001();
+	@tota  = callserver();
+	$TXNO  =@txno;
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	
+	@sel_buf='0000|储蓄卡              |020||';
+	setsel(#TRAN_CTY,@sel_buf,'o5t20o1v3o2');
+
+	//setsel(#TRAN_CTY,@tota,'o5t20o1v3o2');  凭证种类
+	#TRAN_NAME = substr($FD102,125,60);
+	#TRAN_CUR  = substr($FD102,201,2);
+	@tran_bal  = substr($FD102,185,16);
+	#ACT_LX    = substr($FD102,207,1);
+	#TRAN_BAL  = val(@tran_bal,0.01);
+	#TRAN_PDN  = substr($FD102,313,30);
+	#SPECIAL   = substr($FD102,293,20);  //特殊标志
+	#TRAN_CTY  = substr($FD102,28,3);
+	#TRAN_CNM  = substr($FD102,31,16);
+	#TRAN_PDOT = substr($FD102,48,1);
+	#TRAN_CDOT = substr($FD102,61,1);
+	#TRAN_CET  = substr($FD102,124,1);
+	#TTRAN_CET = #TRAN_CET;            //将证件类型保存起来
+//	#TRAN_CNUM = substr($FD102,62,20);
+	#TTRAN_CNUM = substr($FD102,62,20);
+	#TRAN_SDOT = substr($FD102,82,1);  //印鉴支取标志
+	#TRAN_AMT  = #TXAMT;               //转出金额等于开户金额
+	
+	showblock('TRANSFAR',true,true);
+	show(#TRAN_CUR,true);
+	enable(#TRAN_CUR,false);
+	show(#TRAN_CTY,true);
+	enable(#TRAN_CTY,false);
+	show(#TRAN_CNM,true);
+	enable(#TRAN_CNM,false);
+	show(#TRAN_PDOT,true);
+	enable(#TRAN_PDOT,false);
+	show(#TRAN_CDOT,true);
+	enable(#TRAN_CDOT,false);
+	show(#TRAN_CET,true);
+	enable(#TRAN_CET,false);
+	show(#TRAN_BAL,true);
+  	enable(#TRAN_BAL,false);
+  	show(#TRAN_AMT,true);
+	enable(#TRAN_AMT,false);
+  	
+	if(#ACT_LX=='2')
+	{
+		 #ZY_TP='01';
+	   show(#S_ZY,true);
+	   show(#S_STDAY,true);
+	   show(#ZY_TP,true);
+	   show(#STDAY,true);
+	   show(#TRAN_CTY,true);
+	   show(#TRAN_CNM,true);
+	   enable(#TRAN_CTY,true);
+	   enable(#TRAN_CNM,true);
+	   
+	}else{
+	  show(#S_ZY,false);
+	  show(#S_STDAY,false);
+	  show(#ZY_TP,false);
+	  show(#STDAY,false);
+	  show(#TRAN_CNM,true);
+	  enable(#TRAN_CTY,false);
+	  enable(#TRAN_CNM,false);
+	}
+	
+	if(#TRAN_PDOT == 'Y')
+	{
+			show(#PASSNAME,true);
+			show(#TRAN_PWD,true);
+			enable(#TRAN_PWD,true);
+	}
+	else
+	{
+			show(#PASSNAME,false);
+			show(#TRAN_PWD,false);
+			enable(#TRAN_PWD,false);
+	}
+	
+	//若为证件支取，也不输入证件号码 20070404 
+	if(#TRAN_CDOT == 'Y')
+	{
+			show(#TRAN_CET,true);
+			show(#TRAN_CNUM,true);
+			enable(#TRAN_CET,false);
+			enable(#TRAN_CNUM,false);
+	}
+	else
+	{
+			if(ACT_LX=='2')
+			{
+			    show(#TRAN_CET,true);
+			    show(#TRAN_CNUM,true);
+			    enable(#TRAN_CET,false);
+			    enable(#TRAN_CNUM,false);
+			}else{
+		            #TRAN_CNUM = #TTRAN_CNUM;
+			    show(#TRAN_CET,false);
+			    show(#TRAN_CNUM,false);
+			    enable(#TRAN_CET,false);
+			    enable(#TRAN_CNUM,false);
+			}
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+
+  <BLOCK NAME="TRANSFAR" VISABLE="FALSE" LINE="2" COL="0">
+  <ITEM LINE="8"  COL="5"   TYPE="%-10s"  FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9"  COL="5"   TYPE="%-10s"  FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="10" COL="5"   TYPE="%-10s"  FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="11" COL="5"   TYPE="%-10s"  FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="13" COL="5"   TYPE="%-10s"  FUNCTIONS="T(凭证种类:!)"/>
+  <ITEM LINE="13" COL="47"  TYPE="%-10s"  FUNCTIONS="T(凭 证 号:)"/>
+  <ITEM LINE="14" COL="5"   TYPE="%-10s"  FUNCTIONS="T(密码支取:!)"/>
+  <ITEM LINE="14" COL="47"  TYPE="%-10s"  FUNCTIONS="T(证件支取:!)"/>
+
+  <ITEM NAME="#PASSNAME"   LINE="15" COL="5"   TYPE="%-10s"  FUNCTIONS="T(密    码:)"  VISABLE="FALSE"/>
+  <ITEM NAME="#CERTIFTYPE" LINE="15" COL="47"  TYPE="%-10s"  FUNCTIONS="T(证件类型:!)" VISABLE="FALSE"/>
+  <ITEM NAME="#CERTIFNUM"  LINE="16" COL="47"  TYPE="%-10s"  FUNCTIONS="T(证件号码:)"  VISABLE="FALSE"/>
+  <ITEM NAME="#S_ZY"       LINE="17" COL="5"   TYPE="%-10s"  FUNCTIONS="T(摘    要:)"/>
+  <ITEM NAME="#S_STDAY"    LINE="17" COL="47"  TYPE="%-10s"  FUNCTIONS="T(出票日期:)"/>
+  <ITEM LINE="18" COL="5"  TYPE="%-10s"  FUNCTIONS="T(转出金额:)"/>
+
+  <ITEM NAME="#TRAN_NAME"  LINE="8"  COL="15"  TYPE="%-60s"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TRAN_CUR"   LINE="9"  COL="15"  TYPE="%-2s"   INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="V(NB)">
+  <SELECT>
+	<OPTION VALUE="01" TITLE="人民币"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#TRAN_BAL"   LINE="10" COL="15"  TYPE="%17.2f" INPUT="TEXT"    FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TRAN_PDN"   LINE="11" COL="15"  TYPE="%-30s"  VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TRAN_CTY"   LINE="13" COL="15"  TYPE="%-3s"   VISABLE="FALSE" INPUT="SELECT" FUNCTIONS=""/>
+  <ITEM NAME="#TRAN_CNM"   LINE="13" COL="57"  TYPE="%16s"   VISABLE="FALSE" INPUT="TEXT"   FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TTRAN_CCM"  TYPE="%16d"         FUNCTIONS="T(#TRAN_CNM)"/><!---D型凭证号--->
+  <ITEM NAME="#TTRAN_CNM"  TYPE="%16s"         FUNCTIONS="T(#TTRAN_CCM)"/>
+  <ITEM NAME="#TRAN_PDOT"  LINE="14" COL="15"  TYPE="%1s"    VISABLE="FALSE" INPUT="SELECT" FUNCTIONS="">
+  <SELECT>
+	<OPTION VALUE="Y" TITLE="是"/>
+	<OPTION VALUE="N" TITLE="否"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#TRAN_CDOT"  LINE="14" COL="57"  TYPE="%1s"    VISABLE="FALSE" INPUT="SELECT" FUNCTIONS="">
+  <SELECT>
+	<OPTION VALUE="Y" TITLE="是"/>
+	<OPTION VALUE="N" TITLE="否"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#TRAN_PWD" LINE="15" COL="15" TYPE="%6d" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="i()V(NB)">
+  <ONGOTFOCUS>
+  	"{
+  	//add by hxc 20091108
+  		if(#TRAN_AMT &gt; #TRAN_BAL)
+  	{
+  		showmsg('开户转账金额不允许大于账户余额');
+  		return (false);
+  	}
+  	}"
+  </ONGOTFOCUS>
+  </ITEM>  
+
+  <ITEM NAME="#TRAN_CET"   LINE="15" COL="57"  TYPE="%1s"    INPUT="TEXT"    VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#TRAN_CNUM"  LINE="16" COL="57"  TYPE="%-20s"  INPUT="TEXT"    VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#ZY_TP"      LINE="17" COL="15"  TYPE="%-3s"   INPUT="SELECT"  VISABLE="FALSE" FUNCTIONS=""/> <!---改用3位长度--->
+  <ITEM NAME="#ZY"         TYPE="%-20s"        FUNCTIONS="S(#ZY_TP,#ZY_TP)">
+  <ONLOSTFOCUS>
+  "{
+	if(#ZY_TP != '031')
+	{
+		#FZY = #ZY;
+		show(#FZY,true);
+		enable(#FZY,false);
+	}
+	else
+	{
+		#FZY = '';
+		show(#FZY,true);
+		enable(#FZY,true);
+	}	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FZY"      LINE="17" COL="17"  TYPE="%-20s"   INPUT="TEXT"  VISABLE="FALSE" FUNCTIONS=""/>
+
+  <ITEM NAME="#STDAY"      LINE="17" COL="57"  TYPE="%-8s"   INPUT="TEXT"    VISABLE="FALSE" FUNCTIONS="T($HDATE)D()"/>
+  <ITEM NAME="#TRAN_AMT"   LINE="18" COL="15"  TYPE="%17.2f" INPUT="TEXT"    FUNCTIONS=""/>
+
+  <ITEM NAME="#SPECIAL"    TYPE="%20s"         FUNCTIONS=""/><!---特殊标志--->
+  <ITEM NAME="#TRAN_SDOT"  TYPE="%1s"          FUNCTIONS=""/><!---印鉴支取标志--->
+  <ITEM NAME="#TTRAN_CNUM" TYPE="%-20s"        FUNCTIONS=""/><!---转凭证号码--->
+  <ITEM NAME="#TTRAN_CET"  TYPE="%1s"          FUNCTIONS=""/><!---转证件类型--->
+  <ITEM NAME="#VOCTYPE"    TYPE="%-3s"         FUNCTIONS="T(#TRAN_CTY)"/><!---转帐开户时,凭证用--->
+  </BLOCK>
+  <ITEM NAME="#LS" TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+  #TRAN_PWD=#TRAN_PWD+space(6-len(#TRAN_PWD));
+	goitem(#SUBMIT_2);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FPAGE"      LINE="21" COL="49"  TYPE="%6s"    FUNCTIONS="T(上一页)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+   if(#TX_ACT_TYPE=='1') //活期产品
+  {
+	  loadpage('PAGE3');
+	}else if(#TX_ACT_TYPE=='2') //定期产品
+	{
+	  loadpage('PAGE1');
+	}else{
+	  showmsg('产品类型选择错误，请检查前台程序!');
+	  return(false);
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"   NAME="#SUBMIT_2"  FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </PAGE>

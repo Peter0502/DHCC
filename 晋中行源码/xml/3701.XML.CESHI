@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3701 IC卡个人活期开户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(****                          撤销测试)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>   
+  <ITEM NAME="#TXNO"         TYPE="%-4s"  FUNCTIONS="T($TXNO=2101)"/>
+  <ITEM NAME="#MSGTYPE"      TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TX_ACT_TYPE"  TYPE="%-1s"  FUNCTIONS="T(1)"/>
+  
+  
+ 
+	<ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+	<ONLOSTFOCUS>
+			"{
+    	//卡转账开户交易卡处理开户失败时，往神码发送转出卡取款撤销交易 add by hxc 091120
+	
+			
+			
+			initfd();
+			commsend_001();
+			$FD16='7777';
+			$FD12=9999;
+			$FD30='6217800100900000732';
+			$FD39=itoa(#TXAMT*100);
+			$FD43='201203019923474';
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			showmsg('撤销失败!!...');
+			rerun(false);
+			}"
+	</ONLOSTFOCUS>
+	</ITEM>
+
+	
+ <REQUEST>
+ </REQUEST>
+ </VARIABLE>
+ <REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+	CZFY|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|||||@tx_amt1|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no|
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+	print(8,0,'                       账 /卡号:  [24]',@ac_no);
+	print(9,0,'                       账户序号:  [24]',@ac_seqn);
+	#RETACTNO=@ac_no;
+}"
+</PRINT>
+</RESPONSE>
+<IMPORT>CX_QK_VOC.IMP</IMPORT>
+<IMPORT>CXCZ.IMP</IMPORT>
+<IMPORT>CX_CK_VOC.IMP</IMPORT>
+<IMPORT>OPN_PRT_VOC.IMP</IMPORT>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(手续费)" LINESPACE="24" CHECK="#FEEFLAG1=0">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO='00';
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 3101');
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0开卡交易\L1');
+		print( 9,20,'卡号:[19]    户名:[60]',#CARDNO,#CUSTNAME);
+		//print(10,20,'帐户余额:[21]',#TXAMT);
+		//add by luolz 20091026 begin
+		switch( #FEEFLAG ) {
+			case '1' :
+				print(11,20,'缴费方式:现金');	
+				break;
+			case '2' :
+				print(11,20,'缴费方式:转账');
+				break;	
+			default :
+				print(11,20,'缴费方式:不收');	
+				break;
+		}
+		if( delspace(itoa(#YEAR_FEE1,'%16.2f')) != '0.00')
+		{
+			print(12,20,'银行卡年费:[21]',delspace(itoa(#YEAR_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa(#COST_FEE1,'%16.2f')) != '0.00' )	
+		{
+			print(13,20,'银行卡工本费:[21]',delspace(itoa(#COST_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa(#TRAN_FEE1,'%16.2f')) != '0.00' )
+		{
+			print(14,20,'银行卡手续费:[21]',delspace(itoa(#TRAN_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa((#YEAR_FEE1+#COST_FEE1+#TRAN_FEE1),'%16.2f')) != '0.00' )
+		{
+			print(15,20,'收费总额:[21]',delspace(itoa((#YEAR_FEE1+#COST_FEE1+#TRAN_FEE1),'%16.2f')));											
+		}
+		
+		//add by luolz 20091026 end	
+		//printacdtl_1();	
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<!--RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(会计分录)" LINESPACE="24" CHECK="#FEEFLAG1=0">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO='00';
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 3101');
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0开卡交易\L1');
+		print( 9,20,'卡号:[19]    户名:[60]',#CARDNO,#CUSTNAME);
+		switch( #CASHCD ) {
+			case '1' :
+				print(10,20,'存入方式:现金');
+				break;
+			case '2' :
+				print(10,20,'存入方式:转账');
+				break;
+			default :
+				print(10,20,'存入方式:不收');
+				break;
+		}
+		printacdtl_1();	
+		//print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE-->
+<LASTWORK>"{
+if(#JZZL != '0020')
+{
+	showmsg('请按任意键刷存折...');
+	writemsr(#RETACTNO,'');
+}
+}"
+</LASTWORK>
+ </TRANSACTION>

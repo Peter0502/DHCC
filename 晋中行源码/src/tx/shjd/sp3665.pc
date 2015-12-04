@@ -1,0 +1,177 @@
+/*****************************************************
+* 文 件 名:  sp3665.pc
+* 功能描述： 操作员改密,包括自改密码和管理员更改密码两种
+* 作    者:  xyy
+* 完成日期： 2007-1-9 11:06
+* 修改记录： 
+* 修 改 人:  YXJ
+* 日    期:  2007-03-20
+* 修改内容:
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "com_tel_c.h"
+int  sp3665()
+{
+	char cFlg[2];
+	char cTel[5];
+	char c_tel[5];
+	char cOldPwd[7];
+	char cNewPwd[7];
+	char tel_flg;
+	int ret=0;
+  	vtcp_log("[%s][%d] dh110700开始喽\n",__FILE__,__LINE__);
+	memset(cFlg,'\0',sizeof(cFlg));
+	memset(cTel,'\0',sizeof(cTel));
+	memset(c_tel,'\0',sizeof(c_tel));
+	memset(cOldPwd,'\0',sizeof(cOldPwd));
+	memset(cNewPwd,'\0',sizeof(cNewPwd));
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+  	pub_base_sysinit();
+  	/***这里从前台得到数值***/
+  	get_fd_data("0070",cTel);
+  	get_fd_data("0920",c_tel);
+  	get_fd_data("0720",cFlg);
+  	get_fd_data("0790",cOldPwd);
+	get_fd_data("0800",cNewPwd);
+	cNewPwd[6]='\0';
+  	vtcp_log("[%s][%d]cOldPwd=[%.6s]",__FILE__,__LINE__,cOldPwd);
+  	vtcp_log("[%s][%d]cNewPwd=[%.6s]",__FILE__,__LINE__,cNewPwd);
+	switch(cFlg[0]){
+		case '0':/*自改密*/
+			/*
+			ret=check_pwd(cTel,cOldPwd);
+			if(ret) goto ErrExit;
+			*/
+			ret=modify_pwd(cTel,cNewPwd);
+			if(ret) goto ErrExit;
+			break;
+		case '1':/*主管清空*/
+			/*
+			ret=check_tel(c_tel,&tel_flg);
+			if(ret) goto ErrExit;
+			*/
+			memcpy(cNewPwd,"=0839;",sizeof(cNewPwd)-1);
+			ret=modify_pwd(c_tel,cNewPwd);
+			if(ret) goto ErrExit;
+			break;
+		case '2':/*检查密码*/
+			ret=check_pwd(cTel,cOldPwd);
+			if(ret) goto ErrExit;
+			break;
+		case '3':/*检查操作员*/
+			ret=check_tel(cTel,&tel_flg);
+vtcp_log(">>>>>>>>>>>>tel_flg[%c]",tel_flg);
+			if(ret) goto ErrExit;
+			if(tel_flg!='0' || tel_flg!='1'){
+               			vtcp_log("[%s][%d] 只有管理员才能做此操作\n", __FILE__, __LINE__);
+               			sprintf( acErrMsg,"只有管理员才能做此操作");
+               			strcpy(g_pub_tx.reply, "SH00" );
+               			set_zd_data(DC_GET_MSG,acErrMsg);
+               			WRITEMSG
+				goto ErrExit;
+			}
+		default:
+			vtcp_log("错误的操作标志[%c]",cFlg[0]);
+	}
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"SH00",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;
+}
+int check_pwd(char tel[],char pwd[])
+{
+	int ret=0;
+	struct com_tel_c wd_com_tel;
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+	ret=Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s'",tel);
+	if(ret){
+               vtcp_log("[%s][%d] 查操作员表错误ret=[%d]\n", __FILE__, __LINE__,ret);
+               sprintf( acErrMsg,"[%s][%d]查com_tel表出错",__FILE__,__LINE__);
+               strcpy(g_pub_tx.reply, "0120" );
+               set_zd_data(DC_GET_MSG,acErrMsg);
+               WRITEMSG
+	}
+	ret = pub_base_DesChk(g_pub_tx.tx_date,"",pwd,wd_com_tel.pwd);
+	if(ret){
+               vtcp_log("[%s][%d] 输入密码与原密码不符 ret=[%d]\n", __FILE__, __LINE__,ret);
+               sprintf( acErrMsg,"[%s][%d]输入密码与原密码不符",__FILE__,__LINE__);
+               strcpy(g_pub_tx.reply, "0120" );
+               set_zd_data(DC_GET_MSG,acErrMsg);
+               WRITEMSG
+	}
+	return ret;
+}
+int check_tel(char tel[],char *tel_flg)
+{
+	int ret=0;
+	struct com_tel_c wd_com_tel;
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+	ret=Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s'",tel);
+	if(ret){
+               vtcp_log("[%s][%d] 查操作员表错误ret=[%d]\n", __FILE__, __LINE__,ret);
+               sprintf( acErrMsg,"[%s][%d]查com_tel表出错",__FILE__,__LINE__);
+               strcpy(g_pub_tx.reply, "0120" );
+               set_zd_data(DC_GET_MSG,acErrMsg);
+               WRITEMSG
+	}
+vtcp_log(">>>>>>>>>>>>lvl[%s]",wd_com_tel.lvl);
+	if(wd_com_tel.lvl[0]=='7')
+		*tel_flg='0';	/* 超级管理员*/
+	else if(wd_com_tel.lvl[0]=='2')
+		*tel_flg='1';	/* 管理员*/
+	else if(wd_com_tel.lvl[0]=='4')
+		*tel_flg='2';	/*普通柜员*/
+	return ret;
+}
+int modify_pwd(char tel[],char new_pwd[])
+{
+	int ret=0;
+	struct com_tel_c wd_com_tel;
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+	vtcp_log("[%s][%d] tel[%s] new_pwd[%s]",__FILE__,__LINE__,tel,new_pwd);
+	g_reply_int=Com_tel_Dec_Upd(g_pub_tx.reply,"tel='%s'",tel);
+	vtcp_log("[%s][%d]-------",__FILE__,__LINE__);
+   	if(g_reply_int){
+       		sprintf(acErrMsg,"定义游标错误!");
+       		strcpy(g_pub_tx.reply, "P162");
+       		return -1;
+   	}
+	vtcp_log("[%s][%d]-------",__FILE__,__LINE__);
+   	g_reply_int=Com_tel_Fet_Upd(&wd_com_tel,g_pub_tx.reply);
+   	if(g_reply_int && g_reply_int!=100){
+       		sprintf(acErrMsg,"取记录错误!");
+       		strcpy(g_pub_tx.reply, "P162");
+       		return -1;
+   	}
+	vtcp_log("[%s][%d]-------",__FILE__,__LINE__);
+	pub_base_EnDes(g_pub_tx.tx_date,"",new_pwd);
+	memset(wd_com_tel.pwd,'\0',sizeof(wd_com_tel.pwd));
+   	memcpy(wd_com_tel.pwd,new_pwd,sizeof(wd_com_tel.pwd)-1);
+   	wd_com_tel.pwd_date=g_pub_tx.tx_date;
+	vtcp_log("[%s][%d] pwd[%s] [%d]-------",__FILE__,__LINE__,wd_com_tel.pwd,wd_com_tel.pwd_date);
+   	g_reply_int=Com_tel_Upd_Upd(wd_com_tel,g_pub_tx.reply);
+   	if(g_reply_int&&g_reply_int!=100){
+       		sprintf(acErrMsg,"修改密码错误!");
+       		strcpy(g_pub_tx.reply, "P162");
+       		return -1;
+   	}
+   	Com_tel_Clo_Upd();
+	return 0;
+}

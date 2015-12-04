@@ -1,0 +1,136 @@
+/*************************************************************
+* 文 件 名: upd420
+* 功能描述： 将420一级科目的余额(日、月、旬、季、年)改成下面子科目的合计
+*
+* 作    者: power
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+EXEC SQL include "gl_mst_c.h";
+EXEC SQL include "com_item_c.h";
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#define  DEAL	if( sqlca.sqlcode && sqlca.sqlcode!=1403) {sprintf(acErrMsg,"数据库操作错误![%d]",sqlca.sqlcode),WRITEMSG goto ErrExit;}
+
+upd420()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char sql_br_no[6]; int ret=0;long sql_date;
+		double dr_bal,cr_bal,ldd_bal,lcd_bal,tddr_bal,tdcr_bal,mdr_bal,mcr_bal,qdr_bal,qcr_bal,ydr_bal,ycr_bal;
+	EXEC SQL END DECLARE SECTION;
+
+	/*** 把42000更改为不轧差 */
+	EXEC SQL update com_item set roll_ind='N' where acc_hrt='42000';
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"update com_item error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL DECLARE gl_420 cursor for select br_no,sum(dr_bal),sum(cr_bal),sum(ldd_bal),sum(lcd_bal),sum(tddr_bal),sum(tdcr_bal),sum(mdr_bal),sum(mcr_bal),sum(qdr_bal),sum(qcr_bal),sum(ydr_bal),sum(ycr_bal) from gl_sub where substr(acc_hrt,1,3)='420' and acc_hrt !='42000' group by br_no;
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare 420  error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL open gl_420;
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"update com_item error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1){
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		dr_bal=0;cr_bal=0;ldd_bal=0;lcd_bal=0;tddr_bal=0;tdcr_bal=0;mdr_bal=0;mcr_bal=0;
+		qdr_bal=0;qcr_bal=0;ydr_bal=0;ycr_bal=0;
+		EXEC SQL FETCH gl_420 INTO 
+			:sql_br_no,
+			:dr_bal,
+			:cr_bal,
+			:ldd_bal,
+			:lcd_bal,
+			:tddr_bal,
+			:tdcr_bal,
+			:mdr_bal,
+			:mcr_bal,
+			:qdr_bal,
+			:qcr_bal,
+			:ydr_bal,
+			:ycr_bal;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+		EXEC SQL update gl_sub set dr_bal=:dr_bal,cr_bal=:cr_bal,ldd_bal=:ldd_bal,\
+		lcd_bal=:lcd_bal,tddr_bal=:tddr_bal,tdcr_bal=:tdcr_bal,mdr_bal=:mdr_bal,\
+		mcr_bal=:mcr_bal,qdr_bal=:qdr_bal,qcr_bal=:qcr_bal,ydr_bal=:ydr_bal,ycr_bal=:ycr_bal where acc_hrt='42000' and br_no=:sql_br_no;
+		DEAL
+	}
+	EXEC SQL CLOSE gl_420;
+	EXEC SQL truncate table gl_mst;
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare gl_tsub  error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_mst select * from gl_sub where br_no='10000';
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare gl_tsub  error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL DECLARE gl_tsub_cur cursor for select br_no,"date",sum(bt_dr_bal),sum(bt_cr_bal),sum(r_dr_bal),sum(r_cr_bal) from gl_tsub where substr(acc_hrt,1,3)='420' and acc_hrt !='42000' group by br_no,"date";
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare gl_tsub  error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL open gl_tsub_cur;
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"prepare gl_tsub  error [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1){
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		dr_bal=0;cr_bal=0;ldd_bal=0;lcd_bal=0;sql_date=0;
+		EXEC SQL FETCH gl_tsub_cur INTO 
+			:sql_br_no,
+			:sql_date,
+			:dr_bal,
+			:cr_bal,
+			:ldd_bal,
+			:lcd_bal;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+		EXEC SQL update gl_tsub set bt_dr_bal=:dr_bal,bt_cr_bal=:cr_bal,r_dr_bal=:ldd_bal,\
+		r_cr_bal=:lcd_bal where acc_hrt='42000' and br_no=:sql_br_no and "date"=:sql_date;
+		DEAL
+	}
+	EXEC SQL CLOSE gl_tsub_cur;
+OkExit:
+    sql_commit();   /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+    sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 0;
+ErrExit:
+    sql_rollback(); /*--事务回滚--*/
+    sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 1;
+}

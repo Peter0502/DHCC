@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1802       统一支付贷记复核)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1802                        统一支付贷记复核)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1202)"/>
+	<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(统一支付贷记复核)"/>
+	<ITEM TYPE="%-10s" NAME="#Ctind" FUNCTIONS="T()"/>
+	<ITEM NAME="#Busitype" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#Busikind" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#payeracct" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#payeeacct" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#txamt" TYPE="%17.2f" FUNCTIONS="T()"/>
+  	<ITEM NAME="#payername" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#payeename" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#Drawpwd" TYPE="%-16s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#txamt" TYPE="%17.2f" FUNCTIONS="T()"/>
+  	<!--ITEM NAME="#feemode" TYPE="%-8s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#feeamt" TYPE="%-16s" FUNCTIONS="T()"/-->
+  	<ITEM NAME="#feeflag" TYPE="%-4s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#cdtrbnknm" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#dbtraddr" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#cdtraddr" TYPE="%-60s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#remark" TYPE="%-128s" FUNCTIONS="T()"/>
+	<ITEM LINE="5" COL="3" TYPE="%-11s" FUNCTIONS="T(交易  序号:)"/>
+	<ITEM NAME="#TxNo" LINE="5" COL="14" INPUT="TEXT"  TYPE="%-8s"  FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		dim @fNumb as number;
+		initfd();					
+		commsend_001();
+		$FD16='1108';
+		$FD18='pbp';
+		$FD28='sxps';
+		$FD44=#TxNo;
+		$FD29='1202';
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		
+		@fNumb = val($FD39, 1);
+		#Ctind = delspace($FD23);
+		#PayName = $FD25;
+		#PayeName = $FD26;
+		#payername = $FD25;
+		#payeename = $FD26;
+		#RcvBnkNo = $FD59;
+		#currency = itoa($FD48,'%d');
+		#Busitype = $FD81;
+		#Busikind = $FD82;
+		#payeracct = $FD30;
+		#PayerNo = $FD30;
+		#payeeacct = $FD31;
+		//#feemode = $FD64;
+		//#feeamt = $FD43;
+		#cdtrbnknm = $FD118;
+		#dbtraddr = $FD27;
+		#cdtraddr = $FD116;
+		#remark = $FD113;
+		#txamt =@fNumb;
+		
+		setsel(#BusyType,#Busitype,'v4o1t32o1');
+		#BusyType=substr(#Busitype,0,4);
+		setsel(#BusyKind,#Busikind,'v5o1t32o1');
+		#BusyKind=substr(#Busikind,0,5);
+		enable(#BusyType,false);
+		enable(#BusyKind,false);
+		enable(#currency,false);
+		enable(#RcvBnkNo,false);
+		enable(#PayerNo,false);
+		enable(#PayName,false);
+		showall();
+		
+		if(#Ctind == '2')
+		{
+			showblock('block_payerno',true,true);
+			showblock('block_info',true,true);
+			showblock('block_fee', true, true);
+		} 
+		else if(#Ctind == '1')
+		{
+			showblock('block_payerno',false,false);
+			showblock('block_info',true,true);
+			showblock('block_fee', true, true);
+		}
+		refresh();
+
+	}"	
+	</ONLOSTFOCUS>
+	</ITEM>	
+	
+	<BLOCK NAME="block_payerno" LINE="7"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="0" COL="0" TYPE="%-11s" FUNCTIONS="T(付款人账号:)"/>
+	<ITEM NAME="#PayerNo" LINE="0" COL="11" INPUT="TEXT"  TYPE="%-24s"  FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+		}"	
+		</ONLOSTFOCUS>	
+	</ITEM>
+	<ITEM LINE="1" COL="0" TYPE="%-11s" FUNCTIONS="T(付款人姓名:)"/>
+	<ITEM NAME="#PayName" LINE="1" COL="11" INPUT="TEXT"  TYPE="%-60s"  FUNCTIONS="T()V(NB)" />
+	</BLOCK>
+	
+	<BLOCK NAME="block_info" LINE="9"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0" COL="3" TYPE="%-11s" FUNCTIONS="T(收款人账号:)"/>
+	<ITEM NAME="#PayeeNo" LINE="0" COL="14" INPUT="TEXT"  TYPE="%-24s"  FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		if (#PayeeNo != delspace($FD31))
+		{
+			showmsg('收款人账号复核失败');
+			return(false);
+		}
+	}"	
+	</ONLOSTFOCUS>	
+	</ITEM>
+	<ITEM LINE="1" COL="3" TYPE="%-11s" FUNCTIONS="T(收款人姓名:)"/>
+	<ITEM NAME="#PayeName" LINE="1" COL="14" INPUT="TEXT"  TYPE="%-60s"  FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="4" COL="3" TYPE="%-11s" FUNCTIONS="T(接收行行号:)"/>
+	<ITEM NAME="#RcvBnkNo" LINE="4" COL="14" INPUT="TEXT"  TYPE="%-20s"  FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="6" COL="3" TYPE="%-11s" FUNCTIONS="T(交易  金额:)"/>
+	<ITEM NAME="#Amount" LINE="6" COL="14" INPUT="TEXT"  TYPE="%17.2f"  FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+		"{
+			dim @fNumb as number;
+			@fNumb = val($FD39, 1);
+			if (@fNumb != #Amount)
+			{
+				showmsg('交易金额复核失败');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6" COL="43" TYPE="%-11s" FUNCTIONS="T(货币  种类:)"/>
+	<ITEM NAME="#currency" LINE="6" COL="54" INPUT="TEXT"  TYPE="%-20s"  FUNCTIONS="T()V(NB)" >
+	<SELECT>
+		<OPTION VALUE="CNY" TITLE="人民币"/>
+		<OPTION VALUE="USD" TITLE="美元"/>
+		<OPTION VALUE="HKD" TITLE="港元"/>
+		<OPTION VALUE="EUR" TITLE="欧元"/>
+		<OPTION VALUE="GBP" TITLE="澳元"/>
+		<OPTION VALUE="JPY" TITLE="日元"/>
+	</SELECT>
+	</ITEM>
+	<ITEM LINE="8" COL="3" TYPE="%-11s" FUNCTIONS="T(业务  类型:)"/>
+	<ITEM NAME="#BusyType" LINE="8" COL="14" INPUT="SELECT"  TYPE="%-20s"  FUNCTIONS="T()V(NB)" >
+		<SELECT>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="8" COL="43" TYPE="%-11s" FUNCTIONS="T(业务  种类:)"/>
+	<ITEM NAME="#BusyKind" LINE="8" COL="54" INPUT="SELECT"  TYPE="%-20s"  FUNCTIONS="T()V(NB)" >
+		<SELECT>
+		</SELECT>
+	</ITEM>
+	</BLOCK>
+	
+	<BLOCK NAME="block_fee" LINE="18"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="0"  TYPE="%-16s"  FUNCTIONS="T(手续费收取方式:)" />
+	<ITEM LINE="0"  COL="16"  NAME="#FeeWay" TYPE="%-8s" INPUT="SELECT" FUNCTIONS="V(NB)T(0)" >
+		<SELECT>
+			<OPTION VALUE="0" TITLE="现金"/>
+			<OPTION VALUE="1" TITLE="转账"/>
+			<OPTION VALUE="2" TITLE="不收"/>
+		</SELECT>
+		
+		<ONLOSTFOCUS>
+		"{
+			if (#FeeWay != '2')
+			{
+				showblock('block_Cash',true,true);
+				
+				dim @tmpamt as number;
+
+				initfd();
+				commsend_001();
+				$FD16 = '1104';
+				$FD18 = 'app';
+				$FD39 = itoa(#TraceAmount*100, '%16.0f');
+				$FD64 = '1201';
+				$FD34 = #ciftype;
+				$FD65 = 'P_PBP';
+				callagnpbp();
+                		if($FD12!='0000')
+                		{
+                        		showmsg(geterror());
+                        		return(false);
+                		}
+	
+				@tmpamt=val($FD39, 1);
+				#FeeAmt=@tmpamt;
+				enable(#FeeAmt,false);	
+
+			}
+			else
+			{
+				showblock('block_Cash',false,false);
+			}
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+		
+	</ITEM>
+	</BLOCK>
+	<BLOCK NAME="block_Cash" LINE="18"  COL="40" VISABLE="FALSE">
+		<ITEM LINE="0"  COL="0"  TYPE="%-8s"  FUNCTIONS="T(手续费:)" />
+		<ITEM LINE="0"  COL="8"  NAME="#FeeAmt" TYPE="%16.2f" INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	</BLOCK>
+	
+	<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+	"{
+		initfd();
+		commsend_001();
+			
+		$FD16='1202';
+		$FD18='pbp';
+		$FD28='sxps';
+		$FD38=#TxNo;
+		$FD61=#TxDate;
+		$FD57=#Drawpwd;
+		$FD67=#FeeWay;
+		$FD43=itoa(#FeeAmt*100, '%16.0f');
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+			rerun();
+		}	
+		
+		if(delspace(#FeeWay) == '不收' or substr(#payeracct,0,1) == '9')
+		{
+			
+		}
+		else
+		{
+			#feeflag = '9999';
+		}
+		
+		
+		runoutput();
+		showall();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		PrintTxHead();
+		if(#Ctind == '2')
+		{
+			print( 5, 10,'付款人账号:[20]',#payeracct);
+	   		print( 5, 40,'付款人姓名:[60]',#payername);
+   		}
+   		else
+   		{
+   			print( 5, 10,'汇款人姓名:[60]',#payername);
+   		}
+   		print( 7, 10,'收款人账号:[20]',#payeeacct);
+   		print( 7, 40,'收款人姓名:[60]',#payeename);
+   		print( 9, 10,'交易  金额:[20]',ltrim(itoa(#txamt,'%.2f')));
+		print(11, 10,'交易  序号:[10]',#TxNo);
+		
+		if ($FD66 == '2')
+		{
+			print(13,20,'交易金额超限，已滞留等待发送...');
+		}
+			
+		PrintTxTail();
+		
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:1202');
+		print( 5,13,'交易名称:统一支付普通贷记复核');
+		
+		print( 7,20,'委托  日期:[8]                        交易序号:[8]',$HDATE,#TxNo); 
+		
+		print( 9,20,'接收行行号:[12]',#RcvBnkNo);
+		print(10,20,'接收行行名:[60]',#cdtrbnknm);
+		if (#BusyType == 'A108')
+		{
+			print(11,20,'汇款人名称:[60]',#payername);
+			print(12,20,'汇款人地址:[60]',#dbtraddr);
+			print(13,20,'汇款  金额:[21]',ltrim(itoa(#txamt,'%.2f')));
+			print(14,20,'收款人帐号:[32]',#payeeacct);
+			print(15,20,'收款人名称:[60]',#payeename);
+			print(16,20,'收款人地址:[60]',#cdtraddr);
+			print(17,20,'附      言:[60]',#remark);
+		}
+		else
+		{
+			print(11,20,'付款人帐号:[32]',#payeracct);
+			print(12,20,'付款人名称:[60]',#payername);
+			print(13,20,'付款人地址:[60]',#dbtraddr);
+			print(14,20,'交易  金额:[21]',ltrim(itoa(#txamt,'%.2f')));
+			print(15,20,'收款人帐号:[32]',#payeeacct);
+			print(16,20,'收款人名称:[60]',#payeename);
+			print(17,20,'收款人地址:[60]',#cdtraddr);
+			print(18,20,'附      言:[60]',#remark);
+		}
+		
+		if ($FD66 == '2')
+		{
+			print(20,30,'交易金额超限，已滞留等待发送...');
+		}
+
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24, 5,'核心流水:[8]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:1202');
+		print( 5,13,'交易名称:统一支付普通贷记复核');
+		
+		printacdtl_1();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24, 5,'核心流水:[8]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(支付手续费)" CHECK="#feeflag=9999">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+			dim @txtime as string;
+			@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			
+			print( 5,20,'机构名称:[30                  ]',$BRNAME);
+			print( 5, 2,'交易代码:1202');
+			print( 5,13,'交易名称:统一支付普通贷记复核');
+			
+			print( 7,44,'\L0同城清算系统手续费凭证\L1');
+			print( 9,20,'委托  日期:[8       ]',$HDATE);
+			print(10,20,'付款人账号:[32]',#payeracct);
+			print(11,20,'付款人户名:[60]',#payername);
+			print(12,20,'现转  标志:[4]',#FeeWay);
+			print(13,20,'收费  金额:[16]',ltrim(itoa(#FeeAmt,'%.2f')));
+			print(20,80,'客户签名:_____________________');
+			
+			print(24,20,'备注:');
+			print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+			print(24, 5,'柜员:[6]',$FD7);
+			print(24, 5,'核心流水:[8]',$FD4);
+		 
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

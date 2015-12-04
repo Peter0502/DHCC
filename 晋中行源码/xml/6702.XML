@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="6702    再贷款记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+   initfd();
+   $FD31 =#ACTNO;
+   $FD58 =#PROTID;
+   $FD44 =#DATE;
+   $FD67 =#RELOADTYPE;
+   $FD69 =#RATETYPE;
+   $FD84 =getitems('#RATE');
+   $FD100=getitems('#AMT');
+   commsend_001();
+	 $FD16='4802';
+}"
+</COMMSEND>
+<COMMRECV>"{     
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(6702                           再贷款记账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=4802)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="5"   COL="15"  TYPE="%-12s" FUNCTIONS="T(协议  编号:)" />
+  <ITEM LINE="7"   COL="15"  TYPE="%-16s" FUNCTIONS="T(央行准备金帐号:)"/>
+  
+  <ITEM LINE="5" COL="28" NAME="#PROTID" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+    initfd(); 
+    dim @txno_bak as string;
+    @txno_bak=$TXNO; 
+		$FD12='4802';
+		$TXNO='9856';
+		$FD58=#PROTID;
+		commsend_001();
+		
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+	  	$TXNO=@txno_bak;
+
+		#RELOADTYPE=delspace($FD67);
+		enable(#RELOADTYPE,false);
+		if(#RELOADTYPE =='1')
+	    {
+			  #RATETYPE='1';
+			  enable(#RATETYPE,false);
+		}
+		else
+	  	{
+		    #RATETYPE='4';
+		    enable(#RATETYPE,false);
+		}
+		#AMT=val($FD100,0.01);
+		#DATE=delspace($FD44);
+		#RATE=val($FD84,0.000001);
+		
+		enable(#AMT,false);
+		enable(#DATE,false);
+		enable(#RATE,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="7"  COL="30" NAME="#ACTNO" TYPE="%-24s" INPUT="TEXT" FUNCTIONS="V(NB)G(#ACTNO?1234,#BUTTON1)">
+  <ONLOSTFOCUS>
+ "{	
+    initfd();
+    commsend_001();
+ 		$FD16='9731';
+    $FD102=#ACTNO;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#HM=delspace($FD25);
+		show(#HM,true);
+ }"
+ </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="15"   TYPE="%-12s" FUNCTIONS="T(户      名:)"/>
+  <ITEM NAME="#HM" INPUT="LABEL" LINE="8" COL="28" TYPE="%-50s" FUNCTIONS=""/>
+  <ITEM LINE="9"  COL="15"  TYPE="%-60s" FUNCTIONS=
+   "T(-------------------【回显信息】-----------------------)"/>
+
+  <ITEM LINE="11"  COL="15"  TYPE="%-12s"   FUNCTIONS="T(再贷款类型:!)"/>
+  <ITEM LINE="12"  COL="15"  TYPE="%-12s"   FUNCTIONS="T(金      额:)" />
+  <ITEM LINE="13"  COL="15"  TYPE="%-12s"   FUNCTIONS="T(到期  日期:)" />
+  <ITEM LINE="14"  COL="15"  TYPE="%-12s"   FUNCTIONS="T(月  利  率:)" />
+  <ITEM LINE="14"  COL="38"  TYPE="%-2s"   FUNCTIONS="T(‰)" />
+  <ITEM LINE="15"  COL="15"  TYPE="%-12s"   FUNCTIONS="T(计息  类型:!)" />
+
+  <ITEM LINE="11" COL="28" NAME="#RELOADTYPE" TYPE="%1s" INPUT="SELECT"  FUNCTIONS="">
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="1.短期再贷款" />
+			<OPTION VALUE ="2" TITLE="2.发展再贷款" />
+		</SELECT>
+  </ITEM>
+  <ITEM NAME="#SRELOADTYPE" TYPE="%-10s" FUNCTIONS="S(#RELOADTYPE,#RELOADTYPE)"/>
+
+  <ITEM LINE="12" COL="28" NAME="#AMT"       TYPE="%17.2f"   INPUT="TEXT" FUNCTIONS=""/> 
+  <ITEM LINE="13" COL="28" NAME="#DATE"      TYPE="%-8s"     INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM LINE="14" COL="28" NAME="#RATE"      TYPE="%9.6f"    INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM LINE="15" COL="28" NAME="#RATETYPE"  TYPE="%-1s"     INPUT="TEXT" FUNCTIONS=""> 
+	<SELECT>
+		<OPTION VALUE="1" TITLE="1.利随本清"/>
+		<OPTION VALUE="4" TITLE="4.按季结息"/>	
+	</SELECT>
+  </ITEM>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+   
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#DACTNO" TYPE="%-24s" FUNCTIONS=""/>
+
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="BUTTON1" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="再贷款记账">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+	  print( 8, 20,'协  议  编  号 :[20]',#PROTID);
+	}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+ <PACKAGE DEVICE="PRINTER"  DESC="打印业务专用凭证">
+  NOTHING
+ </PACKAGE>
+<PRINT>"{
+$KINDNO = '00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+        print( 5,2,'代码:6702');
+        print( 5,13,'交易:再贷款记账');
+        print( 7,20,'协议编号:[20]',#PROTID);
+        print( 8,20,'再贷款类型:[20]',#SRELOADTYPE);
+        print( 9,20,'准备金户:[20]',#ACTNO);
+        print(10,20,'到期日:[10]',#DATE);
+        print(11,20,'利率:[10]',ltrim(comma(itoa(#RATE,'%9.6f'),8)));
+        printacdtl_1(); 
+	print( 24,20,'备注:');
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+    }"
+</PRINT>
+</RESPONSE>
+<!---------------请把注释符单独放一行,大哥!!!!
+<RESPONSE>
+ <PACKAGE DEVICE="PRINTER"  DESC="打印业务专用凭证">
+  NOTHING
+ </PACKAGE>
+<PRINT>"{
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:6702');
+        print( 5, 13,'交易: 再贷款记账');
+	printacdtl_1();
+	print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+   }"
+</PRINT>
+</RESPONSE>
+----------------->
+</TRANSACTION>
+
+

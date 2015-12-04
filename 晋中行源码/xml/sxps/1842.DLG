@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="业务名称：批量账户管理"
+		xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<INIT>"{
+	list_init(17,75,5,1);
+	list_setcolcnt(7);
+	list_setcol(0,'开户行号',20);
+	list_setcol(1,'账号',20);
+	list_setcol(2,'帐户名称',10);
+	list_setcol(3,'币种',10);
+	list_setcol(4,'账户行业',10);
+	list_setcol(5,'开户日期',10);
+	list_setcol(6,'操作类型',10);
+}"
+</INIT>
+
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+	strfld(@fline,'|',1)+'|'+
+	strfld(@fline,'|',2)+'|'+
+	strfld(@fline,'|',3)+'|'+
+	strfld(@fline,'|',4)+'|'+
+	strfld(@fline,'|',5)+'|'+
+	strfld(@fline,'|',6)+'|';
+}"
+</LOAD>
+
+<SHOW>"{
+	#KHHH=strfld(@line,'|',0);
+	#ZH =strfld(@line,'|',1);
+	#ZHMC    =strfld(@line,'|',2);
+	#BZ =strfld(@line,'|',3);
+	#ZHHY    =strfld(@line,'|',4);
+	#KHRQ    =strfld(@line,'|',5);
+	#CZLX    =strfld(@line,'|',6);
+}"
+</SHOW>
+
+<UPDATE>
+"{
+	@line=#KHHH+'|'+#ZH+'|'+#ZHMC+'|'+#BZ+'|'+#ZHHY+'|'+#KHRQ+'|'+#CZLX;
+}"
+</UPDATE>
+
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+	strfld(@line,'|',1)+'|'+
+	strfld(@line,'|',2)+'|'+
+	strfld(@line,'|',3)+'|'+
+	strfld(@line,'|',4)+'|'+
+	strfld(@line,'|',5)+'|'+
+	strfld(@line,'|',6)+'|';
+}"
+</SAVE>
+
+<VARIABLE>
+
+	<ITEM LINE="01"  COL="03" TYPE="%-40s" FUNCTIONS="T(                批量账户管理)"/>
+	<ITEM NAME="#PAY_QS_NO"  TYPE="%-14s" FUNCTIONS="T()"/>
+	<ITEM NAME="#AcctType"  TYPE="%-8s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#AcctAttr"  TYPE="%-8s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#CustomId" TYPE="%-8s" FUNCTIONS="T()"/>
+	
+	<ITEM LINE="5"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(账号:)" />
+	<ITEM LINE="5"  COL="17"  NAME="#ZH" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="V(NB)T()" >
+		<ONLOSTFOCUS>
+		"{
+			enable(#KHHH, true);
+			enable(#KHRQ, true);
+			enable(#ZHHY, true);
+			initfd();
+			commsend_001();
+			//$FD16='1404';
+			//$FD18='pbp';
+			//$FD30=#ZH;
+			//$FD73='00001000';
+			//callagnpbp();
+			$FD16 = '6232';
+			$FD30 = #ZH;
+			$FD73 = '00001000';
+			$FD68 = 'N';
+			callserver();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#ZHMC=$FD25;/*户名*/
+			if ($KINBR != $FD2)
+			{
+				showmsg('不是本机构账号，不可做该交易');
+				return(false);
+			}
+			//核心账户类型1个人2对公3内部帐
+			if ($FD67 == '2')
+			{	
+				//山西同城账户类型1对公，2个人
+				#AcctType = '1';
+			}
+			else
+			{
+				showmsg('非对公用户，不登记！');
+				return(false);				
+			}
+			refresh();
+			
+			enable(#ZHMC,false);
+			//enable(#KHRQ,false);
+			enable(#AcctType,false);
+			enable(#AcctAttr,false);
+			if(#AcctType == '1')
+			{
+				dim @str1 as string;
+				dim @str2 as string;
+				dim @accattr as string;
+				initfd();
+				commsend_001();
+				
+				$FD16 = '8101';
+				$FD38 = #ZH;
+				@str1 = callserver();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#KHRQ = strfld(@str1, '|',12);
+				#KHHH = strfld(@str1, '|',11);
+				//#ComCode = strfld(@str1, '|',28);
+				#CustomId = strfld(@str1, '|',25); //客户号
+				@accattr = strfld(@str1, '|',17);		
+				
+				initfd();
+				commsend_001();
+				$FD16 = '9896';
+				$FD28 = #CustomId;
+				@str2 = callserver();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				//#ZHHY = $FD68;
+				//#Licence = $FD63;
+				enable(#KHHH, false);
+				enable(#KHRQ, false);
+				//enable(#ComCode, false);
+				//enable(#Licence, false);
+				//enable(#ZHHY, false);
+				refresh();
+			}
+			else 
+			{
+				showmsg('非对公用户，不登记！');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(开户行号:)" />
+	<ITEM LINE="6"  COL="17"  NAME="#KHHH" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="T()" >
+	</ITEM>
+	<ITEM LINE="7"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(账户名称:)" />
+	<ITEM LINE="7"  COL="17"  NAME="#ZHMC" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="V(NB)T()" />
+	<ITEM LINE="8"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(币种:)" />
+	<ITEM LINE="8"  COL="17" NAME="#BZ" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(CNY)V(NB)">
+		<SELECT>
+			<OPTION VALUE ="CNY" TITLE="0.人民币 " />
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="9"  COL="3"  TYPE="%-14s" 		 FUNCTIONS="T(账户行业：)" />
+	<ITEM LINE="9"  COL="17"  NAME="#ZHHY"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="0.农业"/>
+			<OPTION VALUE="2" TITLE="1.林业"/>
+			<OPTION VALUE="3" TITLE="2.畜牧业"/>
+			<OPTION VALUE="4" TITLE="3.渔业"/>
+			<OPTION VALUE="5" TITLE="4.服务业"/>
+			<OPTION VALUE="6" TITLE="5.纺织业"/>
+			<OPTION VALUE="7" TITLE="6.其他"/>				
+		</SELECT>
+	</ITEM>	
+	<ITEM LINE="10"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(开户日期:)" />
+	<ITEM LINE="10"  COL="17"  NAME="#KHRQ" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="V(NB)T()" />
+	<ITEM LINE="11"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(操作类型:)" />
+	<ITEM LINE="11"  COL="17" NAME="#CZLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE ="0" TITLE="0.开户 " />
+			<OPTION VALUE ="1" TITLE="1.修改 " />
+			<OPTION VALUE ="2" TITLE="2.删除 " />
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="15" COL="65"   TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">
+	<ONLOSTFOCUS>
+		"{
+			rerun();
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+</VARIABLE>
+
+</TRANSACTION>

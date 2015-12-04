@@ -1,0 +1,427 @@
+<!-----显示帐号信息的变量组合----------> 
+
+  <!--ITEM LINE="0"  COL="0"  TYPE="%-10s" FUNCTIONS="T(帐    号:)"/-->
+  <ITEM LINE="4"  COL="5"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"  COL="5"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="5"  COL="51"  TYPE="%-10s" FUNCTIONS="T(帐户类型:!)"/>
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  
+  <ITEM LINE="9"  COL="5"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="9"  COL="51"   TYPE="%-09s" FUNCTIONS="T(凭 证 号:)"/>
+  <ITEM LINE="10" COL="5"  TYPE="%-10s" FUNCTIONS="T(出票日期:)"/>
+  <ITEM LINE="10" COL="51"   TYPE="%-09s" FUNCTIONS="T(支付密码:)"/>
+  <ITEM LINE="11" COL="5"  TYPE="%-10s" FUNCTIONS="T(现转标志:)"/>
+  <ITEM LINE="11" COL="51"   TYPE="%-09s" FUNCTIONS="T(输入密码:)" INPUT="LABEL" VISABLE="FALSE" NAME="#S_PWD"/>
+  <ITEM LINE="12" COL="5"  TYPE="%-10s" FUNCTIONS="T(摘    要:!)"/>
+  <ITEM LINE="13" COL="5"  TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+ 
+
+<!--ITEM NAME="#LACTNO" LINE="0"  COL="0" TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(帐    号: )"/>
+<ITEM NAME="#ACTNO" INPUT="TEXT" LINE="0"  COL="10" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS=""-->
+<ITEM NAME="#AAA" TYPE="%-19s" FUNCTIONS="">
+   <ONLOSTFOCUS>
+   "{
+	dim @s as string;
+	dim @tota as string;
+	dim @list1 as string;
+	dim @list2 as string;
+	dim @i as number;
+
+	$FD102=#ACTNO;
+	// showmsg('$FD102==='+$FD102);
+	commsend_001();
+	@tota=callserver();
+	if($FD12!='0000'){
+		//showmsg('帐号输入错误!');
+		showmsg(geterror());
+		return(false);
+	}
+	#ZFDBHWB='';
+	#ZQJEWB=0;
+	setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM_IMP#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+   if($FD68 == '6')
+   {
+   		showmsg('此账户为协定户，请谨慎操作！');
+   }
+ 
+	 @list2=substr(@tota, 0, 30);
+	 setsel(#VOCTYPE,@tota,'o5t20o1v3o2');
+	 #VOCTYPE='001';
+	 #CASHFLAG='1';
+	 #PRINTDATE=$HDATE;
+	
+	 showblock('ACTINFO',true,true);
+	 if(#PWDFLAG2=='Y')
+	 {
+	   show(#S_PWD,true);
+	   show(#DRAW_PWD,true);
+	 }else{
+	   show(#S_PWD,false);
+	   show(#DRAW_PWD,false);
+	 }
+	 enable(#ACCOUNTFLAG,false);
+	
+	// add by chenchao 2011-7-31 16:08:05 增加支取检查 begin 
+	initfd();
+	commsend_001();
+	$FD16='5580';
+	$FD30=#ACTNO;
+	$FD69='1';
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	savefiletxt('../tmp/'+$KINBR+$TLRNO+$HDATE+$TXNO+'.txt',@tota);
+	if(@tota!='')
+	{
+		opendlg('../xml/DRAW_LOAD.DLG'); 
+	}
+	if(#ZFDBHWB!='')
+	{
+		#CASHFLAG = '2';
+		enable(#CASHFLAG,false);
+	}else{
+		enable(#CASHFLAG,true);
+	}
+	// add by chenchao 2011-7-31 16:08:05 增加支取检查 end 
+	//若为贷款还款户,且有未还的本金或利息,提示柜员 20070621
+	if($FD71 == '1')
+	{
+		showhelp(5,60,7,10,'提示', '该户为贷款还款户,且有未还的本金或利息!');
+		return(true);
+	}
+
+	//add by lwb 20141216增加短信欠费提示
+	initfd();
+		commsend_001();
+		$FD16='9597';
+		$FD30=delspace(#ACTNO);
+		callserver();
+		if($FD12 !='0000')
+		{
+		showmsg(geterror());
+		return(false);
+		}
+		if(val($FD40,0.01) &gt; 0.00)
+		{
+		showmsg('该账户签约短信服务已欠费，连续欠费3个月将暂停短信服务，请及时缴清欠费!');
+		
+		}
+	
+	//add end
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM TYPE="%-24s" NAME="#ZFDBHWB"   FUNCTIONS="" />
+  <ITEM NAME="#ZQJEWB" TYPE="%17.2f" FUNCTIONS="V(0000000000000000,9999999999999999)"/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+<ITEM LINE="4" COL="15" NAME="#CUSTNAME"   TYPE="%-60s"  FUNCTIONS=""/>
+<ITEM LINE="5" COL="15" NAME="#CURCD"  TYPE="%-2s" INPUT="LABEL" FUNCTIONS="">
+    <SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  </ITEM>
+<ITEM LINE="5" COL="60" NAME="#ACCOUNTFLAG" TYPE="%-1s"  INPUT="SELECT"  FUNCTIONS="">
+    <SELECT>
+		<OPTION VALUE="1" TITLE="基本户"/>
+		<OPTION VALUE="2" TITLE="一般户"/>
+		<OPTION VALUE="3" TITLE="专用存款户"/>
+		<OPTION VALUE="4" TITLE="临时存款户"/>
+		<OPTION VALUE="5" TITLE="临时存款户"/>
+		<OPTION VALUE="6" TITLE="协定(理财)户"/>
+	</SELECT>
+  </ITEM>
+<ITEM NAME="#AVBAL" TYPE="%17.2f"  FUNCTIONS="J(#XAVBAL)"/>
+<ITEM LINE="6" COL="15" NAME="#XAVBAL"   TYPE="%-16s"  INPUT="LABEL" ENABLE="TRUE" FUNCTIONS="X(#AVBAL)"/>
+<ITEM LINE="7" COL="15" NAME="#PRODNAME" TYPE="%-30s"  FUNCTIONS=""/>
+<ITEM LINE="9" COL="15" NAME="#VOCTYPE"  TYPE="%-3s"   INPUT="SELECT"  ENABLE="TRUE" FUNCTIONS="">
+    <SELECT>
+		<OPTION VALUE="001" TITLE="现金支票"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="9"  COL="60" NAME="#VOCNUM"    TYPE="%16d" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+  	
+</ITEM>
+  <ITEM LINE="10" COL="15"  NAME="#PRINTDATE" TYPE="%-8s" DEVICE="KEYBOARD" MESSAGE="支票有效期限为10天,其它凭证为一天"  
+  INPUT="TEXT" FUNCTIONS="D()">
+   <ONLOSTFOCUS>
+   "{
+      if(atoi(#PRINTDATE) &gt; atoi($HDATE))
+      {
+      		showmsg('时间错误!');
+          return(false);		
+      }
+      if(#VOCTYPE=='001')
+      {
+      		if(func(#PRINTDATE,$HDATE) &gt; 10)
+      		{
+      				showmsg('支票有效期限已过10天!');
+      				return(false);
+      		}
+      }
+   //   else	其他凭证不管
+    //  {
+     //   if(func(#PRINTDATE,$HDATE) &gt; 1)
+      //		{
+      //				showmsg('支票有效期限已过1天!');
+      //				return(false);
+      //		}
+    //  }
+		dim @tota as string;
+		initfd();		
+		commsend_001();
+		$FD16='9982';
+		$FD102=#ACTNO24+#ACTSEQ+#VOCTYPE+#VOCNUM+space(53)+#PRINTDATE;
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+<ITEM LINE="10" COL="60" NAME="#PWDFLAG2"  TYPE="%1s"  INPUT="LABEL"   FUNCTIONS=""/>  
+<ITEM LINE="11" COL="60" NAME="#DRAW_PWD"  TYPE="%6d"  INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="i()V(NB)"  VISABLE="FALSE"/>
+<ITEM LINE="11" COL="15"  NAME="#CASHFLAG"  TYPE="%-1s" INPUT="SELECT"  ENABLE="TRUE" FUNCTIONS="T()">
+    <SELECT>
+		<OPTION VALUE="1" TITLE="现金    "/>
+		<OPTION VALUE="2" TITLE="转帐    "/>
+		<!--
+		<OPTION VALUE="3" TITLE="同城    "/>
+		<OPTION VALUE="4" TITLE="大额    "/>
+		-->
+	</SELECT>
+   <ONLOSTFOCUS>
+  </ITEM>
+  <ITEM   NAME="#CCC"  TYPE="%-1s"  FUNCTIONS="T()">
+   <ONLOSTFOCUS>
+   "{
+		dim @tota as string;
+		if(#VOCTYPE!='001' and #VOCTYPE!='299'){
+			if(#CASHFLAG=='1'){
+				showmsg('该凭证类型不能选择现金取款!');
+				return(false);
+			}
+		}
+		if(#VOCTYPE=='001' and #CASHFLAG!='1'){
+			showmsg('现金支票必须选择现金取款!');
+			return(false);
+		}
+		initfd();		
+		commsend_001();
+		$FD16='9725';
+		$FD102=space(203)+#CASHFLAG;
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setsel(#VOCDSCPT,@tota,'o5t20o1v3o2');
+	}"
+   </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="15" NAME="#VOCDSCPT" TYPE="%-3s" INPUT="SELECT" ENABLE="TRUE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#SVOCDSCPT"  TYPE="%-20s"     FUNCTIONS="S(#VOCDSCPT,#VOCDSCPT)">
+  <ONLOSTFOCUS>
+  "{
+	if(#VOCDSCPT != '031')
+	{
+		#FVOCDSCPT = #SVOCDSCPT;
+		#DESC10    = #SVOCDSCPT;
+		enable(#FVOCDSCPT,false);
+	}
+	else
+	{
+		#FVOCDSCPT = '';
+		show(#FVOCDSCPT,true);
+		enable(#FVOCDSCPT,true);
+		#DESC10    = #FVOCDSCPT;
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="25" NAME="#FVOCDSCPT" TYPE="%-26s" INPUT="TEXT"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	if(#VOCDSCPT != '031')    //mod by lwb 20140903 应该为031  以前是310
+	{
+		#DESC10 = #SVOCDSCPT;
+		//showmsg('q='+#DESC10);
+	}
+	else
+	{
+		#DESC10 = #FVOCDSCPT;
+		//showmsg('w='+#DESC10);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BRF" TYPE="%-20s" FUNCTIONS="T(#FVOCDSCPT)"/> 
+  <ITEM LINE="13"  COL="15" NAME="#TXAMT" TYPE="%17.2f" INPUT="TEXT" ENABLE="TRUE" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)">
+  <ONLOSTFOCUS>
+  "{
+	if((#ZFDBHWB!='') and (#TXAMT!=#ZQJEWB) )
+	{
+		showmsg('支取金额与贷款支付通知单的金额不符');
+		return(false);
+	}
+				//验印 start 20131210 wudawei、、
+			//showmsg('产品：'+substr(#PRODNAME,0,16));
+//		  if((substr(#PRODNAME,0,8) != '委托存款') and (substr(#PRODNAME,0,8)!= '协定存款') and (substr(#PRODNAME,0,16) !='财政集中支付清算')  and (substr(#PRODNAME,0,8) !='应解汇款'))	
+//		 	{
+//					dim @rs as string;
+//					showhelp('系统提示','开始调取验印系统... ');
+//					@rs = judgeone(#ACTNO,#VOCTYPE,#VOCNUM,#PRINTDATE,#TXAMT,'1');
+//					if(@rs=='1')
+//					{
+//						showmsg('验印不通过！');
+//						return(false);
+//					}
+//					else if(@rs=='0')
+//					{       
+//						showmsg('验印通过！');
+//						return(true);			
+//					}else
+//					{       
+//						showmsg('验印失败请重新验印！');
+//						return(false);		
+//					}
+//		  }
+			//验印 end 20131210 wudawei
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#UTXAMT" TYPE="%-21s" FUNCTIONS="X(#TXAMT)">
+  <ONLOSTFOCUS>
+  "{
+  	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+
+
+<!-- 
+#ACTNO24           24         	账号
+#ACTSEQ            4	         账户序号
+#VOCTYPE           3	         凭证种类
+#VOCNUM            16         	凭证号
+#FETCHFLAG         1	         是否任意支取
+#PASSWDFLAG        1	         是否凭密
+#QUE_PWD           6	         查询密码
+#DRAW_PWD          6	          支取密码
+#CERTFLAG          1	         是否凭证件支取
+#CERTNO           20  	       证件号码
+#STAMPFLAG         1	          是否凭印鉴支取
+#PASSWDFLAG        1	        是否支付密码器
+#PASSWD            16         	支付密码
+#PRINTDATE          8	         出票日期
+#TXAMT15             16         	金额
+#CERTTYPE            1	       证件类型
+#CUSTNAME          50         	户名
+#AVBAL             16         	余额
+#CURCD             2	         币种
+#CASHFLAG          1	         现转标志
+#DSCPT             3	         摘要选项
+#ACTTYPE           1	         帐户类型
+#ACTSEQ_2          4	         账户序号2
+#ACCOUNTFLAG       1	         打折标志
+#INTEREST1        16  	       应付利息
+#INTEREST2        16  	       利息税
+#INTEREST3        16  	       保值利息
+#PAYAMOUNT        16  	       应付总额
+#NEWVOCNUM          16         	新凭证号
+#SPEFLAG          20  	       特殊标志
+#PRODNAME          30         	产品名称
+#ACTNO24           24         	账号
+#EDUCREDIT   				1	         教育证明
+#DESC10            20         	摘要 
+--> 
+ <!-- 后台输入项数据   --> 
+   
+  <ITEM NAME="#VOCNUM_IMP" TYPE="%-16s" FUNCTIONS=""/> 
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS="T(#ACTNO)"/>
+  <ITEM NAME="#ACTSEQ"    TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#FETCHFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG"   TYPE="%1s" FUNCTIONS=""/>
+ <!-- <ITEM NAME="#VOCNUM"    TYPE="%-16s" FUNCTIONS=""/>-->
+  <ITEM NAME="#QUE_PWD"   TYPE="%6s" FUNCTIONS=""/>
+<!--  <ITEM NAME="#DRAW_PWD"  TYPE="%6s" FUNCTIONS=""/>-->
+  <ITEM NAME="#CERTFLAG"  TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO"    TYPE="%20s" FUNCTIONS=""/>
+  <ITEM NAME="#STAMPFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWD16"     TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#CERTTYPE"  TYPE="%-1s" FUNCTIONS=""/>   
+  <ITEM NAME="#ACTTYPE"   TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"  TYPE="%-4s" FUNCTIONS=""/>
+  <!-- <ITEM NAME="#ACCOUNTFLAG" TYPE="%-1s" FUNCTIONS=""/> -->
+  <ITEM NAME="#INTEREST1"   TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST2"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#INTEREST3"   TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#PAYAMOUNT"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#NEWVOCNUM"   TYPE="%-16d" FUNCTIONS=""/>
+  <ITEM NAME="#SPEFLAG"     TYPE="%-20s" FUNCTIONS=""/>    
+  <ITEM NAME="#ACTNO_24"    TYPE="%-24s" FUNCTIONS=""/> 
+  <ITEM NAME="#EDUCREDIT"   TYPE="%1s" FUNCTIONS=""/>   
+  <ITEM NAME="#DESC10"    TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#DSCPT"     TYPE="%-3s" FUNCTIONS="T(#VOCDSCPT)"/>

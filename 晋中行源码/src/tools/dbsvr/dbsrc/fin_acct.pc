@@ -1,0 +1,258 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"fin_acct_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int fin_acct_con ( struct fin_acct_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct fin_acct_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->dc_flag);
+	zip_tail(ps->acct_flag);
+}
+int Fin_acct_Debug(struct fin_acct_c *ps){
+	vtcp_log("fin_acct_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("fin_acct_c.tx_date=[%ld]\n",ps->tx_date);
+	vtcp_log("fin_acct_c.fin_date=[%ld]\n",ps->fin_date);
+	vtcp_log("fin_acct_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("fin_acct_c.amt=[%f]\n",ps->amt);
+	vtcp_log("fin_acct_c.dc_flag=[%s]\n",ps->dc_flag);
+	vtcp_log("fin_acct_c.bal=[%f]\n",ps->bal);
+	vtcp_log("fin_acct_c.acct_flag=[%s]\n",ps->acct_flag);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Fin_acct_Sel(reply,fin_acct_c,fmtstr,va_alist)
+char    *reply;
+struct  fin_acct_c *fin_acct_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Fin_acct_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Fin_acct_Fet_Sel( fin_acct_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Fin_acct_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Fin_acct_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,fin_acct.* FROM fin_acct WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE fin_acct_sel FROM :comm;
+	EXEC SQL DECLARE sel_fin_acct CURSOR FOR fin_acct_sel;
+
+	EXEC SQL OPEN sel_fin_acct;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fin_acct_Fet_Sel ( struct fin_acct_c *fin_acct_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_fin_acct INTO :fin_acct_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch fin_acct error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch fin_acct finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(fin_acct_c);
+
+	return 0;
+}
+
+int Fin_acct_Clo_Sel (){
+	EXEC SQL CLOSE sel_fin_acct;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Fin_acct_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,fin_acct.* FROM fin_acct WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE fin_acct_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_fin_acct CURSOR FOR fin_acct_upd;
+
+	EXEC SQL OPEN upd_fin_acct;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fin_acct_Fet_Upd( struct fin_acct_c *fin_acct_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_fin_acct INTO :fin_acct_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH fin_acct finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(fin_acct_c);
+
+	return 0;
+}
+
+int Fin_acct_Upd_Upd( struct fin_acct_c fin_acct_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE fin_acct SET tx_date=:fin_acct_c.tx_date,
+			fin_date=:fin_acct_c.fin_date,
+			ac_no=:fin_acct_c.ac_no,
+			amt=:fin_acct_c.amt,
+			dc_flag=:fin_acct_c.dc_flag,
+			bal=:fin_acct_c.bal,
+			acct_flag=:fin_acct_c.acct_flag
+	WHERE rowid=:fin_acct_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Fin_acct_Del_Upd(struct fin_acct_c fin_acct_c , char * reply  ){
+
+	EXEC SQL DELETE FROM fin_acct WHERE rowid=:fin_acct_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fin_acct_Clo_Upd( ){
+	EXEC SQL CLOSE upd_fin_acct;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Fin_acct_Ins( struct fin_acct_c fin_acct_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO fin_acct VALUES (:fin_acct_c.tx_date,
+			:fin_acct_c.fin_date,
+			:fin_acct_c.ac_no,
+			:fin_acct_c.amt,
+			:fin_acct_c.dc_flag,
+			:fin_acct_c.bal,
+			:fin_acct_c.acct_flag);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT fin_acct error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

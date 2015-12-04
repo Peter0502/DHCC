@@ -1,0 +1,271 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="燃气用户绑定/签约查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(6608                        天燃气用户绑定/签约查询)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6608)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="7" COL="6"  TYPE="%-10s" NAME="#LDQFS" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="7" COL="15" TYPE="%-1s"  NAME="#DQFS"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="读取磁条方式"/>
+      <OPTION VALUE="1" TITLE="读取芯片方式"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+      if(#DQFS=='1')
+      {
+        enable(#ACTNO1,false);
+        enable(#ACTNO2,true);
+        show(#ACTNO1,false);
+        show(#ACTNO2,true);
+      }
+      if(#DQFS=='0')
+      {
+        enable(#ACTNO1,true);
+        enable(#ACTNO2,false);
+        show(#ACTNO1,true);
+        show(#ACTNO2,false);
+      }
+      refresh();
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="41" NAME="#LACTNO" TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM LINE="7" COL="50" TYPE="%-19s"  NAME="#ACTNO1" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+  <ONLOSTFOCUS>
+  "{
+    #AC_NO=#ACTNO1;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7" COL="50" TYPE="%-19s"  NAME="#ACTNO2" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+  <ONLOSTFOCUS>
+  "{
+    #AC_NO=#ACTNO2;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+  <ONLOSTFOCUS>
+  "{
+    //IC卡bin=621780  ,磁条卡bin=621223
+    #MSR2BAK=$MSR2;
+    #MSR3BAK=$MSR3;
+    $MSR2='';
+    $MSR3='';
+
+    //核心查询已绑定卡户名
+    dim @info as string;
+    dim @tmpacid as string;
+    #AC_NAME='';
+    refresh();
+
+    initfd();
+    commsend_001();
+    $FD16='9598';
+    $FD123='select ac_id  from mdm_ac_rel where ac_no='+chr(39)+#AC_NO+chr(39);
+    @info=callserver();
+    if($FD12!='0000')
+    {
+        showmsg(geterror());
+        return(false);
+    }
+    if(@info=='')
+    {
+        showmsg('账号不存在,请核对后重新输入!!');
+        return(false);
+    }
+    @tmpacid=delspace(strfld(@info,'|',0));
+    initfd();
+    commsend_001();
+    $FD16='9598';
+    @info='';
+    $FD123='select name from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+    @info=callserver();
+    if($FD12!='0000')
+    {
+        showmsg(geterror());
+        return(false);
+    }
+    #AC_NAME=delspace(strfld(@info,'|',0));
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="8"  COL="6"  NAME="#LACNAME" TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="8"  COL="15" NAME="#AC_NAME" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="9"  COL="6"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+
+  <ITEM LINE="11" COL="6"  TYPE="%-12s"    FUNCTIONS="T(用户代码:)"/>
+  <ITEM LINE="11" COL="15" NAME="#USER_NO" INPUT="LABEL" TYPE="%-6s"  FUNCTIONS="V(NB)"/>
+  <ITEM LINE="11" COL="41" TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="11" COL="50" NAME="#YHNAME"  INPUT="LABEL" TYPE="%-40s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12" COL="6"  TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="12" COL="15" NAME="#ADDRESS" TYPE="%-64s" INPUT="LABEL" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="14" COL="6"  NAME="#LBI_DATE" INPUT="LABEL" TYPE="%-14s"  FUNCTIONS="T(用户绑定日期:)"/>
+  <ITEM LINE="14" COL="17" NAME="#BI_DATE"  INPUT="LABEL" TYPE="%-8s"   FUNCTIONS="V(NB)"/>
+  <ITEM LINE="14" COL="41" NAME="#LBI_TEL"  INPUT="LABEL" TYPE="%-14s"  FUNCTIONS="T(绑定操作柜员:)"/>
+  <ITEM LINE="14" COL="52" NAME="#BI_TEL"   INPUT="LABEL" TYPE="%-4s"   FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="12" COL="17" NAME="#AG_STS"   INPUT="LABEL" TYPE="%-18s"  FUNCTIONS="V(NB)"/>
+  <ITEM LINE="15" COL="17" NAME="#AG_DATE"  INPUT="LABEL" TYPE="%-8s" VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="15" COL="6"  NAME="#LAG_Q_DATE" INPUT="LABEL" TYPE="%-16s" VISABLE="FALSE" FUNCTIONS="T(代扣签约日期:)" />
+  <ITEM LINE="15" COL="17" NAME="#AG_Q_DATE"  INPUT="LABEL" TYPE="%-8s" VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="15" COL="41" NAME="#LAG_Q_TEL"  INPUT="LABEL" TYPE="%-17s" VISABLE="FALSE" FUNCTIONS="T(代扣签约操作柜员:)" />
+  <ITEM LINE="15" COL="55" NAME="#AG_Q_TEL"   INPUT="LABEL" TYPE="%-4s"  VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="15" COL="6"  NAME="#LAG_J_DATE" INPUT="LABEL" TYPE="%-16s" VISABLE="FALSE" FUNCTIONS="T(代扣解约日期:)" />
+  <ITEM LINE="15" COL="17" NAME="#AG_J_DATE"  INPUT="LABEL" TYPE="%-8s" VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="15" COL="41" NAME="#LAG_J_TEL"  INPUT="LABEL" TYPE="%-17s" VISABLE="FALSE" FUNCTIONS="T(代扣解约操作柜员:)" />
+  <ITEM LINE="15" COL="55" NAME="#AG_J_TEL"   INPUT="LABEL" TYPE="%-4s"  VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+
+  <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>"{
+      initfd();
+      commsend_001();
+
+      $FD16='9040';             //平台用户绑定查询接口
+      $FD60='AGENT';             //平台交易类型
+      $FD31=#AC_NO;             //查询银行卡
+
+      callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        rerun();
+        return(false);
+      }
+
+      #USER_NO=delspace($FD30);  //用户代码
+      #BI_DATE=delspace($FD28);  //用户绑定日期
+      #BI_TEL=delspace($FD26);   //绑定操作柜员
+      #AG_STS=delspace($FD70);   //代扣签/解约状态
+      #AG_DATE=delspace($FD29);  //代扣签/解约日期
+
+      if(#AG_STS=='0'){
+        #AG_Q_DATE=delspace($FD29);  //代扣签约日期
+        #AG_Q_TEL=delspace($FD27);   //代扣签约操作柜员
+      }else{
+        #AG_J_DATE=delspace($FD29);  //代扣解约日期
+        #AG_J_TEL=delspace($FD27);   //代扣解约操作柜员
+      }
+
+      if(#AG_STS=='1' and #AG_DATE=='') //第一次绑定时默认解约不显示
+      {
+          show(#LAG_Q_DATE,false);
+          show(#AG_Q_DATE,false);
+          show(#LAG_Q_TEL,false);
+          show(#AG_Q_TEL,false);
+          show(#LAG_J_DATE,false);
+          show(#AG_J_DATE,false);
+          show(#LAG_J_TEL,false);
+          show(#AG_J_TEL,false);
+      }
+      else
+      {
+        if(#AG_STS=='0')
+        {
+          show(#LAG_Q_DATE,true);
+          show(#AG_Q_DATE,true);
+          show(#LAG_Q_TEL,true);
+          show(#AG_Q_TEL,true);
+        }
+        else
+        {
+          show(#LAG_J_DATE,true);
+          show(#AG_J_DATE,true);
+          show(#LAG_J_TEL,true);
+          show(#AG_J_TEL,true);
+        }
+      }
+
+      initfd();
+      commsend_001();
+      $FD16='1010';                  //平台用户查询接口
+      $FD60='RQDS';                  //平台交易类型
+      $FD30=#USER_NO;
+      callagnpt();
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+      #YHNAME=delspace($FD25);       //用户姓名
+      #ADDRESS=delspace($FD76);      //用户单位及地址
+
+      showmsg('查询成功!!!');
+      runoutput();
+      rerun();
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    print(3,25,'燃气用户绑定/签约查询成功');
+    print(5,20,'绑定卡号：[19]        绑定卡户名：[60]',#AC_NO,#AC_NAME);
+    print(6,20,'用户代码：[6]                     用户名：[60]',#USER_NO,#YHNAME);
+    print(7,20,'地    址：[64]',#ADDRESS);
+    print(8,20,'用户绑定日期：[8]               绑定操作柜员：[4]',#BI_DATE,#BI_TEL);
+
+    if(#AG_STS=='0')
+    {
+      print(9,20,'代扣签约日期：[8]               签约操作柜员：[4]',#AG_Q_DATE,#AG_Q_TEL);
+    }
+    if(#AG_STS=='1' and #AG_DATE!='')
+    {
+      print(9,20,'代扣解约日期：[8]               解约操作柜员：[4]',#AG_J_DATE,#AG_J_TEL);
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(5,20,'机构名称:[30]',$BRNAME);
+    print(5,2,'代码:9922');
+    print(5,13,'交易:燃气用户绑定/签约查询');
+
+    print(7,30,'\L0燃气用户绑定/签约查询\L1');
+    print(9,20,'绑定账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+    print(10,20,'用户代码：[6]                     用户姓名：[60]',#USER_NO,#YHNAME);
+    print(11,20,'地    址：[64]',#ADDRESS);
+    print(12,20,'用户绑定日期：[8]               绑定操作柜员：[4]',#BI_DATE,#BI_TEL);
+
+    if(#AG_STS=='0')
+    {
+      print(13,20,'代扣签约日期：[8]               签约操作柜员：[4]',#AG_Q_DATE,#AG_Q_TEL);
+    }
+    if(#AG_STS=='1' and #AG_DATE!='')
+    {
+      print(13,20,'代扣解约日期：[8]               解约操作柜员：[4]',#AG_J_DATE,#AG_J_TEL);
+    }
+
+    print(23,20,'备注:');
+    print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print(23,5,'柜员:[4]',$FD7);
+    print(23,5,'流水号:[6]',$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

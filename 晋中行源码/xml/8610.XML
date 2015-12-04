@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="8610      批量开户补打存单"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>"{
+  	dim @selid as number;
+  	dim @prtflg as string;
+  	dim @cnt as number;
+  	dim @cmtnobak as string;
+  	dim @tota as string;  	
+  	@prtflg='';	
+  	if(#DOLIST!='')
+  	{
+  		while(true)
+  		{
+  			@selid=list_getselid();
+  			if(@selid &lt; 0)
+  			{
+  				break;
+  			}	
+  	@selid=list_getselid();
+	  #AC_NO=delspace(list_gettext(@selid,2));
+	  $FD116=delspace(list_gettext(@selid,11));
+//showmsg($FD116);
+ 	  list_show();
+	  while(true)
+	  {
+	  		@prtflg=delspace(list_gettext(@selid,10));
+	  		if(@prtflg=='已打印')
+	  		{
+	  		    	if(msgbox('此户已打印!确定重新打印吗!'+chr(10)+
+	  			'    账    号:'+#AC_NO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        		   break;
+	       		}
+	  		}
+	  		else
+	  		{
+						if(msgbox('打印此户吗?'+chr(10)+
+	  			'    账    号:'+#AC_NO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        			break;
+	       	}
+	  		}
+	      		initfd();
+	       		commsend_001();
+	       	 	$FD37=#AC_NO;
+	        	$FD58=delspace(list_gettext(@selid,3));
+	        	$FD116=delspace(list_gettext(@selid,11));	//凭证类型,非汉字
+	        	#JZZL =delspace(list_gettext(@selid,11));
+//showmsg($FD116);
+				$FD92=delspace(list_gettext(@selid,0));
+	        	$FD16='6606';
+						@tota=callserver();
+						if($FD12!='0000')
+						{
+							showmsg(geterror());
+							goitem('#DOLIST',false);
+							return(true);			
+						}
+	        	runoutput(@tota);
+	        	list_rmitem(@selid);	        	        	        
+	        	list_show();
+	      		@selid=list_getselid();
+	      		@cnt=list_getrowcnt();
+	      		if(@cnt==0)
+	      		{
+	        		msgbox('    批量开户打印完毕    '+chr(10)+'─────────────');
+	        		break;
+	        	}
+	  			  #AC_NO=delspace(list_gettext(@selid,2));
+	    	} 
+	    list_del();
+	  	#DOLIST='0';
+	  	return(true);
+	  	}
+  		}
+  		list_del();
+  		#DOLIST='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM NAME="#DOLIST1" TYPE="%-1s" FUNCTIONS="">
+ <ONLOSTFOCUS>"{
+ 	showall();
+  }"
+ </ONLOSTFOCUS>
+ </ITEM>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(8610                     批量开户补打存单（多笔）)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6606)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="7"    COL="10"   TYPE="%-13s" FUNCTIONS="T(单位    编号:)"/>
+  <ITEM LINE="8"    COL="10"   TYPE="%-13s" FUNCTIONS="T(单位    户名:)"/> 
+   <!------------添加个人编号起始号和终止号------------>
+  <ITEM LINE="9"    COL="10"   TYPE="%-13S" FUNCTIONS="T(个人    编号:)"/>
+  <ITEM LINE="9"    COL="44"   TYPE="%-2S"	FUNCTIONS="T(→)"/>
+  <ITEM LINE="11"   COL="10"   TYPE="%-13s" FUNCTIONS="T(批量开户日期:)"/>
+  <ITEM LINE="11"   COL="40"   TYPE="%-14s" FUNCTIONS="T(打印    标志:!)" />
+  <ITEM LINE="7"   COL="24"  NAME="#DWID"        TYPE="%-4s"        INPUT="TEXT"    FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+		"{
+		    dim @txno_bak as string;
+                @txno_bak=$TXNO;
+		    $TXNO='9841';
+		    $FD92=#DWID;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txno_bak;
+		    #DWNAME=delspace($FD25);
+		    enable(#DWNAME,false);
+		   
+		}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="8"    COL="24"  NAME="#DWNAME"        TYPE="%-50s"        INPUT="TEXT"    FUNCTIONS=""/>  
+   <!------------添加个人编号起始号和终止号------------>
+  <ITEM LINE="9"    COL="23"  NAME="#PER_ID"        TYPE="%20d"         INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="9"    COL="48"  NAME="#PER_ID1"       TYPE="%20d"         INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="11"   COL="24"  NAME="#OPNDATE"      TYPE="%8d"          INPUT="TEXT"    FUNCTIONS="D()"/>
+  <ITEM LINE="11"   COL="55"  NAME="#PRTFLAG"       TYPE="%-1s"         INPUT="TEXT"    FUNCTIONS="T(0)V(0,2)">
+       <SELECT>
+             <OPTION VALUE="0 未打印"  TITLE="未打印"/>
+      <!---
+            <OPTION VALUE="1 已打印"  TITLE="1 已打印"/>
+            <OPTION VALUE="2 全  部 " TITLE="2 全  部"/>
+       --->
+       </SELECT>
+  </ITEM>   
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD"      TYPE="%-6s"   FUNCTIONS="T()"/>
+  <ITEM NAME="#AC_NO"       TYPE="%-20s"  FUNCTIONS="T()"/>
+  <ITEM NAME="#LP_FLAG"     TYPE="%-1s"   FUNCTIONS="T(1)"/>
+  <ITEM NAME="#JZZL"        TYPE="%-4s"   FUNCTIONS=""/><!----介质种类---->
+  <ITEM NAME="#SAUTOFLG"    TYPE="%-2s"   FUNCTIONS="T(否)"/><!----自动转存标志---->
+  <ITEM NAME="#TXAMT"       TYPE="%17.2f" FUNCTIONS="J(#UTXAMT)"/><!---存单余额--->
+  <ITEM NAME="#UTXAMT"      TYPE="%-40s"  FUNCTIONS="U(#TXAMT)"/> <!---存单大写余额--->
+  
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+  "{
+        dim @pkgcnt  as number;
+        dim @recdcnt as number;
+        dim @step   as number;
+        dim @tota   as string;
+        dim @relapos as number;
+        dim @pkgcntpos as number; 
+        dim @tmptxamt as string;
+        dim @txamt as string;
+        list_init(18,78,4,1);
+        list_setcolcnt(12);
+        list_setcol(0, '单位编号',8);
+        list_setcol(1, '个人编号',8);
+        list_setcol(2, '个人账号',20);
+        list_setcol(3, '凭证号码',20);
+        list_setcol(4, '凭证种类',8);
+        list_setcol(5, '用户姓名',8);
+        list_setcol(6, '证件类型',8);
+        list_setcol(7, '证件号码',8);
+        list_setcol(8, '开户日期',8);
+        list_setcol(9, '操作柜员',8);
+        list_setcol(10, '打印标志',8);
+        list_setcol(11, '凭证类型',3);
+        initfd();
+        commsend_001();
+        $FD16='6661';
+			$FD92=#DWID;
+     		$FD44=#OPNDATE;
+     		$FD67=#PRTFLAG;
+			$FD62=#PER_ID;
+            $FD63=#PER_ID1;
+     		@tota=callserver();
+     		if($FD12!='0000')
+    	 {
+					showmsg(geterror());
+					return(false);
+    	 }
+    	 
+    	 if(autolist(@tota))
+    	 {
+	    	list_work();
+	 }
+         #DOLIST='1';
+  }"
+ 	</ONCLICK>  
+  </ITEM>
+  
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="批量开户补打凭证"> 
+CZFY|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|||||@tx_amt1|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no|
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+print(4 ,20,'账 /卡号:  [24                       ]',@ac_no);
+print(5 ,20,'客户名称:  [24                       ]',@name);
+print(6 ,20,'客 户 号:  [24                       ]',@cif_no);
+print(8 ,20,'开户日期:  [24                       ]',@opn_date);
+print(09,20,'产品描述:  [24                       ]',@title);
+print(10,20,'交易金额:  [24                       ]',@tx_amt1);
+print(11,20,'操 作 员:  [24                       ]',@tel);
+print(12,20,'账户余额:  [24                       ]',@tx_amt1);
+setitems('#TXAMT',itoa(val(@tx_amt1,100),'%016.0f'));
+}"
+</PRINT>
+</RESPONSE>
+<IMPORT>OPN_PRT_VOC.IMP</IMPORT>
+</TRANSACTION>

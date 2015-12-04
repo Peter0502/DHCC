@@ -1,0 +1,19 @@
+#define DC_TX_CODE "0160"
+#define DC_OPN_BR_NO "0020"
+#define DC_TX_BR_NO "0030"
+#define DC_REPLY "0120"
+#define DC_TRACE_NO "0040"
+#define DC_TEL "0070"
+#define DC_CHK "0080"
+#define DC_TIME "0060"
+#define DC_DATE "0050"
+#define DC_TTY "0100"
+#define DC_FILE_SND "0110"
+#define DC_GET_MSG "0130"
+#define DC_CNT "0010"
+#define DC_AUTH_CODE "0140"
+
+#define DCBT_TX_CODE 16
+#define DCBT_REPLY 12
+#define DCBT_GET_MSG 13
+#define DCBT_CNT 1

@@ -1,0 +1,274 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_manage_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_manage_inf_con ( struct cif_manage_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_manage_inf_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->name);
+	zip_tail(ps->sex);
+	zip_tail(ps->type);
+	zip_tail(ps->id_type);
+	zip_tail(ps->id_no);
+	zip_tail(ps->br_no);
+	zip_tail(ps->tel);
+}
+int Cif_manage_inf_Debug(struct cif_manage_inf_c *ps){
+	vtcp_log("cif_manage_inf_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_manage_inf_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_manage_inf_c.manage_no=[%ld]\n",ps->manage_no);
+	vtcp_log("cif_manage_inf_c.name=[%s]\n",ps->name);
+	vtcp_log("cif_manage_inf_c.sex=[%s]\n",ps->sex);
+	vtcp_log("cif_manage_inf_c.tx_date=[%ld]\n",ps->tx_date);
+	vtcp_log("cif_manage_inf_c.type=[%s]\n",ps->type);
+	vtcp_log("cif_manage_inf_c.id_type=[%s]\n",ps->id_type);
+	vtcp_log("cif_manage_inf_c.id_no=[%s]\n",ps->id_no);
+	vtcp_log("cif_manage_inf_c.up_date=[%ld]\n",ps->up_date);
+	vtcp_log("cif_manage_inf_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("cif_manage_inf_c.tel=[%s]\n",ps->tel);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_manage_inf_Sel(reply,cif_manage_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_manage_inf_c *cif_manage_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_manage_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_manage_inf_Fet_Sel( cif_manage_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_manage_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_manage_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_manage_inf.* FROM cif_manage_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_manage_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_manage_inf CURSOR FOR cif_manage_inf_sel;
+
+	EXEC SQL OPEN sel_cif_manage_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_manage_inf_Fet_Sel ( struct cif_manage_inf_c *cif_manage_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_manage_inf INTO :cif_manage_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_manage_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_manage_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_manage_inf_c);
+
+	return 0;
+}
+
+int Cif_manage_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_manage_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_manage_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_manage_inf.* FROM cif_manage_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_manage_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_manage_inf CURSOR FOR cif_manage_inf_upd;
+
+	EXEC SQL OPEN upd_cif_manage_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_manage_inf_Fet_Upd( struct cif_manage_inf_c *cif_manage_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_manage_inf INTO :cif_manage_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_manage_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_manage_inf_c);
+
+	return 0;
+}
+
+int Cif_manage_inf_Upd_Upd( struct cif_manage_inf_c cif_manage_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_manage_inf SET cif_no=:cif_manage_inf_c.cif_no,
+			manage_no=:cif_manage_inf_c.manage_no,
+			name=:cif_manage_inf_c.name,
+			sex=:cif_manage_inf_c.sex,
+			tx_date=:cif_manage_inf_c.tx_date,
+			type=:cif_manage_inf_c.type,
+			id_type=:cif_manage_inf_c.id_type,
+			id_no=:cif_manage_inf_c.id_no,
+			up_date=:cif_manage_inf_c.up_date,
+			br_no=:cif_manage_inf_c.br_no,
+			tel=:cif_manage_inf_c.tel
+	WHERE rowid=:cif_manage_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_manage_inf_Del_Upd(struct cif_manage_inf_c cif_manage_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_manage_inf WHERE rowid=:cif_manage_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_manage_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_manage_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_manage_inf_Ins( struct cif_manage_inf_c cif_manage_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_manage_inf VALUES (:cif_manage_inf_c.cif_no,
+			:cif_manage_inf_c.manage_no,
+			:cif_manage_inf_c.name,
+			:cif_manage_inf_c.sex,
+			:cif_manage_inf_c.tx_date,
+			:cif_manage_inf_c.type,
+			:cif_manage_inf_c.id_type,
+			:cif_manage_inf_c.id_no,
+			:cif_manage_inf_c.up_date,
+			:cif_manage_inf_c.br_no,
+			:cif_manage_inf_c.tel);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_manage_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

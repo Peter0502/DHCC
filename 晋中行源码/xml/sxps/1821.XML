@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1821 自由格式报文"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <FIRSTWORK RERUN="TRUE">
+	"{
+	dim @tota as string;
+	//@tota='HVPS|大额支付;BEPS|小额支付;';
+	initfd();
+	commsend_001();
+	$FD16='1001';
+	$FD18='pbp';
+	@tota=callagnpbp();
+	if(@tota == '' or @tota == '1')
+	{
+		@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	}
+	//showmsg(@tota);
+	setsel(#SYSCODE,@tota,'v4o1t8o1');
+	}"
+</FIRSTWORK>
+<COMMSEND>
+  "{
+		refresh();
+		initfd();
+		commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+  "{
+		commrecv_001();
+  }"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS="T(1821                         发送自由格式报文)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(───────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1821)"/>
+	<ITEM NAME="#TXNAME"  TYPE="%-30s"  FUNCTIONS="T(自由格式报文发送结果)"/>
+	<ITEM NAME="#BUSNO"  TYPE="%-20s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#RETURNCODE"  TYPE="%-8s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#MSGSTS"  TYPE="%-10s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#SENDBANKNO"  TYPE="%-20s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#SENDBANKNAME"  TYPE="%-70s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#SYSTYPE"  TYPE="%-20s"  FUNCTIONS="T()"/>
+	<ITEM NAME="#MSGTYPE2"  TYPE="%-20s"  FUNCTIONS="T()"/>
+	<ITEM LINE="5"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(系统  编号:)" />
+	<ITEM LINE="5"  COL="15" NAME="#SYSCODE" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(sxps)V(NB)">
+		<SELECT>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#SYSCODE == 'hvps' or #SYSCODE == 'beps')
+			{
+				showblock('BLOCK_RECNODE', true,true);
+			}
+			else
+			{
+				showblock('BLOCK_RECNODE',false,false);
+			}
+			//山西同城显示邮件内容；
+			if(#SYSCODE == 'sxps')
+			{
+				showblock('BLOCK_2',false,true);
+				showblock('BLOCK_1',true,true);
+				#InBankNo = '1600';
+				#InBankName = '清算中心';
+				enable(#InBankNo,false);
+				enable(#InBankName,false);
+			}
+			else
+			{
+				showblock('BLOCK_1',false,true);
+				showblock('BLOCK_2',true,true);
+			}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="BLOCK_RECNODE" LINE="6" COL="3" VISABLE="FALSE">
+		<ITEM LINE="0" COL="0" TYPE="%-12s"  FUNCTIONS="T(接收节点号:)" />
+		<ITEM LINE="0"  COL="12" NAME="#RECNODE" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+			<SELECT>
+				<OPTION VALUE ="0" TITLE="0.NPC国家处理中心" />
+				<OPTION VALUE ="1" TITLE="1.CCPC城市处理中心" />
+				<OPTION VALUE ="2" TITLE="2.参与行" />
+			</SELECT>
+		</ITEM>
+	</BLOCK>
+  <ITEM LINE="7"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(接收行行号:)" />
+	<ITEM LINE="7"  COL="15" NAME="#InBankNo" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" >
+		<ONLOSTFOCUS>
+		"{
+			//调短交易回显行名
+			initfd();
+			commsend_001();
+			$FD16='1101';
+			$FD18='pbp';
+			$FD59=#InBankNo;
+			callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#InBankName=$FD76;
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="8"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(接收行行名:)" />
+	<ITEM LINE="8"  COL="15" INPUT="TEXT" NAME="#InBankName" TYPE="%-60s" FUNCTIONS="" />
+	<ITEM LINE="9"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(信息  类型:)" />
+	<ITEM LINE="9"  COL="15" NAME="#MSGTYPE" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+		<SELECT>
+			<!-- <OPTION VALUE ="0" TITLE="0.不要求回执" />
+			<OPTION VALUE ="1" TITLE="1.要求回执" />-->
+			
+			<!-- 山西同城中  -->
+			<OPTION VALUE ="0" TITLE="0.普通邮件" />
+			<OPTION VALUE ="3" TITLE="3.通知书" /> 
+		</SELECT>
+	</ITEM>
+	<BLOCK NAME="BLOCK_1" LINE="10" COL="3" VISABLE="FALSE">
+		<ITEM LINE="0"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(邮件  标题:)" />
+		<ITEM LINE="0"  COL="12" NAME="#MAILTITLE" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+		<ITEM LINE="1"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(邮件  内容:)" />
+		<ITEM LINE="1"  COL="12" NAME="#MAILCONTENT1" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+		<ITEM LINE="2"  COL="12" NAME="#MAILCONTENT2" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+		<ITEM LINE="3"  COL="12" NAME="#MAILCONTENT3" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+		<ITEM LINE="4"  COL="12" NAME="#MAILCONTENT4" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	</BLOCK>
+	<BLOCK NAME="BLOCK_2" LINE="10" COL="3" VISABLE="FALSE">
+		<ITEM LINE="0"  COL="0"  TYPE="%-12s"  FUNCTIONS="T(信息  内容:)" />
+		<ITEM LINE="0"  COL="12" NAME="#MSGCONTENT1" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+		<ITEM LINE="1"  COL="12" NAME="#MSGCONTENT2" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+		<ITEM LINE="2"  COL="12" NAME="#MSGCONTENT3" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+		<ITEM LINE="3"  COL="12" NAME="#MSGCONTENT4" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+		<ITEM LINE="4"  COL="12" NAME="#MSGCONTENT5" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" />
+	</BLOCK>
+	
+	
+	<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	  <ONCLICK>
+	  "{
+			initfd();
+			commsend_001();
+			$FD16='1301';
+			$FD18='pbp';
+			//$FD58='020020';
+			//$FD25='山西同城';
+			$FD59=#InBankNo;
+			$FD26=#InBankName;
+			$FD28=#SYSCODE;
+			$FD99=#MSGTYPE;
+
+			if('sxps' == #SYSCODE)
+			{
+				$FD81=#MAILTITLE;
+				$FD95=#MAILCONTENT1+#MAILCONTENT2+#MAILCONTENT3+#MAILCONTENT4;
+			}
+			else
+			{
+				$FD95=#MSGCONTENT1+#MSGCONTENT2+#MSGCONTENT3+#MSGCONTENT4+#MSGCONTENT5;
+			}
+			
+			callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+
+			#SENDBANKNO=$FD58;
+			#BUSNO = $FD39;
+			#RETURNCODE = $FD12;
+			#MSGSTS = $FD36;
+			#SENDBANKNAME = $FD25;
+
+			if ('hvps' == #SYSCODE)
+			{
+				#SYSTYPE='大额支付';
+			}
+			else if ('beps' == #SYSCODE)
+			{
+				#SYSTYPE='小额支付';
+			}
+			else if ('nps' == #SYSCODE)
+			{
+				#SYSTYPE='农信银';
+			}
+			else if ('sxps' == #SYSCODE)
+			{
+				#SYSTYPE='山西同城';
+			}
+			else if ('nxps' == #SYSCODE)
+			{
+				#SYSTYPE='宁夏同城';
+			}
+
+			if ('0' == #MSGTYPE)
+			{
+				#MSGTYPE2='0.普通邮件';
+			}
+			else if ('3' == #MSGTYPE)
+			{
+				#MSGTYPE2='3.通知书';
+			}
+
+			//生成核心流水-start
+			dim @bak_fd81 as string;
+			@bak_fd81=$FD81;
+			$FD81=#TXNAME;
+			gethxtraceno();
+			$FD81=@bak_fd81;
+			//生成核心流水-end
+			runoutput();
+			rerun();
+			refresh();
+	  }"
+	  </ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();	
+
+			print( 4, 10,'交易  序号：[20]',atoi(#BUSNO)); 
+			print( 5, 10,'工作  日期：[20]',$FD45); 
+			print( 6, 10,'发起行行号：[20]',#SENDBANKNO); 
+			print( 7, 10,'发起行行名：[60]',#SENDBANKNAME); 
+			print( 8, 10,'接收行行号：[20]',#InBankNo); 
+			print( 9, 10,'接收行行名：[60]',#InBankName); 
+			print(10, 10,'系统  类型：[20]',#SYSTYPE); 
+			print(11, 10,'信息  类型：[20]',#MSGTYPE2); 
+			
+			if(#SYSCODE == 'sxps')
+			{
+				print( 12, 10,'邮件  标题：[20]',#MAILTITLE);
+				print( 13, 10,'发送  内容：[60]',#MAILCONTENT1); 
+				print( 14, 22,'[60]',#MAILCONTENT2); 
+				print( 15, 22,'[60]',#MAILCONTENT3); 
+				print( 16, 22,'[60]',#MAILCONTENT4); 
+			}
+			else
+			{
+				print( 12, 10,'发送  内容：[60]',#MSGCONTENT1); 
+				print( 13, 22,'[60]',#MSGCONTENT2); 
+				print( 14, 22,'[60]',#MSGCONTENT3); 
+				print( 15, 22,'[60]',#MSGCONTENT4); 
+				print( 16, 22,'[60]',#MSGCONTENT5); 
+			}
+			 
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			$KINDNO='00';
+			dim @txtime as string;
+			@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			PrintTxHead();
+			print( 3, 10,'机构名称:[30]',$BRNAME);
+			print( 3, 0,'代码:1301');
+			print( 3, 5,'交易:邮件发送'); 	
+
+			print( 5, 10,'交易  序号：[20]',atoi(#BUSNO)); 
+			print( 6, 10,'工作  日期：[20]',$FD45); 
+			print( 7, 10,'发起行行号：[20]',#SENDBANKNO); 
+			print( 8, 10,'发起行行名：[60]',#SENDBANKNAME); 
+			print( 9, 10,'接收行行号：[20]',#InBankNo); 
+			print( 10, 10,'接收行行名：[60]',#InBankName); 
+			print(11, 10,'系统  类型：[20]',#SYSTYPE); 
+			print(12, 10,'信息  类型：[20]',#MSGTYPE2); 
+			
+			if(#SYSCODE == 'sxps')
+			{
+				print( 13, 10,'邮件  标题：[20]',#MAILTITLE);
+				print( 14, 10,'发送  内容：[60]',#MAILCONTENT1); 
+				print( 15, 22,'[60]',#MAILCONTENT2); 
+				print( 16, 22,'[60]',#MAILCONTENT3); 
+				print( 17, 22,'[60]',#MAILCONTENT4); 
+			}
+			else
+			{
+				print( 13, 10,'发送  内容：[60]',#MSGCONTENT1); 
+				print( 14, 22,'[60]',#MSGCONTENT2); 
+				print( 15, 22,'[60]',#MSGCONTENT3); 
+				print( 16, 22,'[60]',#MSGCONTENT4); 
+				print( 17, 22,'[60]',#MSGCONTENT5); 
+			}
+			 
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

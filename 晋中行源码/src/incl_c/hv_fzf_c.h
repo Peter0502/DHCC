@@ -1,0 +1,54 @@
+#ifndef __hv_fzf_CH__
+#define __hv_fzf_CH__
+struct hv_fzf_c{
+	char      rowid[20];
+	char      otype[2];
+	char      or_br_no[13];
+	char      orderno[9];
+	long      tx_date;
+	long      wt_date;
+	char      br_no[8];
+	char      hv_fzf_sts[2];
+	char      cmtno[4];
+	long      tx_time;
+	char      pay_qs_no[13];
+	char      ac_br_no[13];
+	char      cash_qs_no[13];
+	long      o_wt_date;
+	long      o_tx_date;
+	char      o_or_br_no[13];
+	char      o_ac_br_no[13];
+	char      o_orderno[9];
+	char      o_cur_ind[4];
+	double    o_tx_amt;
+	char      o_cmtno[4];
+	char      o_tx_type[2];
+	char      sendco[5];
+	char      receco[5];
+	long      req_date;
+	char      req_br_no[13];
+	char      req_content[256];
+	char      req_orderno[9];
+	long      res_date;
+	char      res_br_no[13];
+	char      res_content[256];
+	char      res_orderno[9];
+	char      tx_sts[2];
+	char      res_sts[2];
+	char      addid[9];
+	char      refno[21];
+	char      lw_ind[2];
+	char      hv_prt_ind[11];
+	char      hv_brf[61];
+	char      tel[7];
+	long      trace_no;
+	char      send_tel[7];
+	long      send_trace_no;
+	char      reqtype[2];
+	long      o_pack_date;
+	char      o_packid[9];
+	char      resp1[9];
+	char      otxnum[6];
+	char      filler[51];
+};
+#endif 

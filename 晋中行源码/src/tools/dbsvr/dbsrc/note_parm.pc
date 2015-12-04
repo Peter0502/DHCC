@@ -1,0 +1,310 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"note_parm_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int note_parm_con ( struct note_parm_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct note_parm_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->note_type);
+	zip_tail(ps->acc_hrt);
+	zip_tail(ps->name);
+	zip_tail(ps->sell_ind);
+	zip_tail(ps->draw_pwd_ind);
+	zip_tail(ps->dc_ind);
+	zip_tail(ps->ct_ind);
+	zip_tail(ps->ctl_no_ind);
+	zip_tail(ps->order_ind);
+	zip_tail(ps->cur_no);
+	zip_tail(ps->dc_unit_mode);
+	zip_tail(ps->use_ind);
+	zip_tail(ps->cif_type);
+}
+int Note_parm_Debug(struct note_parm_c *ps){
+	vtcp_log("note_parm_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("note_parm_c.note_type=[%s]\n",ps->note_type);
+	vtcp_log("note_parm_c.acc_hrt=[%s]\n",ps->acc_hrt);
+	vtcp_log("note_parm_c.name=[%s]\n",ps->name);
+	vtcp_log("note_parm_c.sell_ind=[%s]\n",ps->sell_ind);
+	vtcp_log("note_parm_c.draw_pwd_ind=[%s]\n",ps->draw_pwd_ind);
+	vtcp_log("note_parm_c.dc_ind=[%s]\n",ps->dc_ind);
+	vtcp_log("note_parm_c.ct_ind=[%s]\n",ps->ct_ind);
+	vtcp_log("note_parm_c.ctl_no_ind=[%s]\n",ps->ctl_no_ind);
+	vtcp_log("note_parm_c.order_ind=[%s]\n",ps->order_ind);
+	vtcp_log("note_parm_c.cur_no=[%s]\n",ps->cur_no);
+	vtcp_log("note_parm_c.unit_amt=[%f]\n",ps->unit_amt);
+	vtcp_log("note_parm_c.dc_unit_mode=[%s]\n",ps->dc_unit_mode);
+	vtcp_log("note_parm_c.use_ind=[%s]\n",ps->use_ind);
+	vtcp_log("note_parm_c.cif_type=[%s]\n",ps->cif_type);
+	vtcp_log("note_parm_c.unit_cnt=[%ld]\n",ps->unit_cnt);
+	vtcp_log("note_parm_c.ocp_cnt=[%ld]\n",ps->ocp_cnt);
+	vtcp_log("note_parm_c.buy_unit=[%ld]\n",ps->buy_unit);
+	vtcp_log("note_parm_c.buy_cnt=[%ld]\n",ps->buy_cnt);
+	vtcp_log("note_parm_c.unit_lmt=[%ld]\n",ps->unit_lmt);
+	vtcp_log("note_parm_c.cnt_lnt=[%ld]\n",ps->cnt_lnt);
+	vtcp_log("note_parm_c.head_len=[%ld]\n",ps->head_len);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Note_parm_Sel(reply,note_parm_c,fmtstr,va_alist)
+char    *reply;
+struct  note_parm_c *note_parm_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Note_parm_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Note_parm_Fet_Sel( note_parm_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Note_parm_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Note_parm_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,note_parm.* FROM note_parm WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE note_parm_sel FROM :comm;
+	EXEC SQL DECLARE sel_note_parm CURSOR FOR note_parm_sel;
+
+	EXEC SQL OPEN sel_note_parm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Note_parm_Fet_Sel ( struct note_parm_c *note_parm_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_note_parm INTO :note_parm_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch note_parm error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch note_parm finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(note_parm_c);
+
+	return 0;
+}
+
+int Note_parm_Clo_Sel (){
+	EXEC SQL CLOSE sel_note_parm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Note_parm_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,note_parm.* FROM note_parm WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE note_parm_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_note_parm CURSOR FOR note_parm_upd;
+
+	EXEC SQL OPEN upd_note_parm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Note_parm_Fet_Upd( struct note_parm_c *note_parm_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_note_parm INTO :note_parm_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH note_parm finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(note_parm_c);
+
+	return 0;
+}
+
+int Note_parm_Upd_Upd( struct note_parm_c note_parm_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE note_parm SET note_type=:note_parm_c.note_type,
+			acc_hrt=:note_parm_c.acc_hrt,
+			name=:note_parm_c.name,
+			sell_ind=:note_parm_c.sell_ind,
+			draw_pwd_ind=:note_parm_c.draw_pwd_ind,
+			dc_ind=:note_parm_c.dc_ind,
+			ct_ind=:note_parm_c.ct_ind,
+			ctl_no_ind=:note_parm_c.ctl_no_ind,
+			order_ind=:note_parm_c.order_ind,
+			cur_no=:note_parm_c.cur_no,
+			unit_amt=:note_parm_c.unit_amt,
+			dc_unit_mode=:note_parm_c.dc_unit_mode,
+			use_ind=:note_parm_c.use_ind,
+			cif_type=:note_parm_c.cif_type,
+			unit_cnt=:note_parm_c.unit_cnt,
+			ocp_cnt=:note_parm_c.ocp_cnt,
+			buy_unit=:note_parm_c.buy_unit,
+			buy_cnt=:note_parm_c.buy_cnt,
+			unit_lmt=:note_parm_c.unit_lmt,
+			cnt_lnt=:note_parm_c.cnt_lnt,
+			head_len=:note_parm_c.head_len
+	WHERE rowid=:note_parm_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Note_parm_Del_Upd(struct note_parm_c note_parm_c , char * reply  ){
+
+	EXEC SQL DELETE FROM note_parm WHERE rowid=:note_parm_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Note_parm_Clo_Upd( ){
+	EXEC SQL CLOSE upd_note_parm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Note_parm_Ins( struct note_parm_c note_parm_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO note_parm VALUES (:note_parm_c.note_type,
+			:note_parm_c.acc_hrt,
+			:note_parm_c.name,
+			:note_parm_c.sell_ind,
+			:note_parm_c.draw_pwd_ind,
+			:note_parm_c.dc_ind,
+			:note_parm_c.ct_ind,
+			:note_parm_c.ctl_no_ind,
+			:note_parm_c.order_ind,
+			:note_parm_c.cur_no,
+			:note_parm_c.unit_amt,
+			:note_parm_c.dc_unit_mode,
+			:note_parm_c.use_ind,
+			:note_parm_c.cif_type,
+			:note_parm_c.unit_cnt,
+			:note_parm_c.ocp_cnt,
+			:note_parm_c.buy_unit,
+			:note_parm_c.buy_cnt,
+			:note_parm_c.unit_lmt,
+			:note_parm_c.cnt_lnt,
+			:note_parm_c.head_len);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT note_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

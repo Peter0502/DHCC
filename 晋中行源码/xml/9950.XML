@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="代收用户绑定/解绑"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<FIRSTWORK>
+"{
+}"
+</FIRSTWORK>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(9950                         代收用户绑定/解绑)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6604)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6" COL="6" TYPE="%-12s"  INPUT="LABEL" FUNCTIONS="T(业务类型:!)"/>
+  <ITEM LINE="6" COL="16" NAME="#YW_TYPE" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="0.绑定"/>
+      <OPTION VALUE="1" TITLE="1.解绑"/>
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="7" COL="6"  TYPE="%-12s" NAME="#LAGENT_TYPE" FUNCTIONS="T(代收费类型: )"/>
+  <ITEM LINE="7" COL="16" TYPE="%-2s"  NAME="#AGENT_TYPE"  INPUT="SELECT"   FUNCTIONS="V(NB)T(01)">
+    <SELECT>
+      <OPTION VALUE="01" TITLE="晋中燃气"/>
+      <OPTION VALUE="02" TITLE="国新洁源天然气"/>
+      <OPTION VALUE="03" TITLE="晋中供水"/>
+      <OPTION VALUE="04" TITLE="瑞阳供热"/>
+      <OPTION VALUE="07" TITLE="国网晋中供电"/>
+    </SELECT>
+	<ONLOSTFOCUS>"{
+		//解绑时，回显当前绑定账户
+		if(#YW_TYPE=='1')
+		{
+		  show(#LDQFS,true);
+		  show(#DQFS,true);
+		  show(#LACTNO,true);
+		  //show(#ACTNO1,true);
+		  //show(#ACTNO2,true);
+		  show(#LACNAME,true);
+		  show(#AC_NAME,true);
+		  show(#LOLDACTNO,false);
+		  show(#OLD_ACNO,false);
+		  show(#LOLDACNAME,false);
+		  show(#OLD_ACNAME,false);
+		  enable(#CARD_TYPE,false);
+		  #CARD_TYPE='';
+		  goitem(#DQFS);
+		}
+		else
+		{
+	  		if(#AGENT_TYPE == '02' or #AGENT_TYPE == '04')
+			{
+				enable(#LCARD_TYPE,true);
+				enable(#CARD_TYPE,true);
+				if(#AGENT_TYPE == '02')
+				{
+					#CARD_TYPE='02';
+				}
+			}else
+			{
+				
+				enable(#LCARD_TYPE,true);
+				enable(#CARD_TYPE,false);
+				#CARD_TYPE = '01';
+			}
+		}
+	 }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8"   COL="6"  TYPE="%-14s" NAME="#LCARD_TYPE"  FUNCTIONS="T(用户介质类型:)"/>
+  <ITEM LINE="8"   COL="16" TYPE="%-2s"  NAME="#CARD_TYPE"   INPUT="SELECT"   FUNCTIONS="V(NB)T()">
+    <SELECT>
+      <OPTION VALUE="01" TITLE="无卡普表"/>
+      <OPTION VALUE="02" TITLE="行业IC卡"/>
+     <!-- <OPTION VALUE="03" TITLE="射频卡"/>-->
+      <OPTION VALUE="04" TITLE="代码表"/>
+    </SELECT>
+	</ITEM>
+ <ITEM NAME="#CCC"     FUNCTIONS="T()">
+    <ONLOSTFOCUS>"{
+    	
+    	if(#YW_TYPE=='0' and #AGENT_TYPE=='02' and #CARD_TYPE=='01')
+			{
+				showmsg('国新洁源天然气没有普表用户');
+				return(false);
+			}
+			
+	if(#AGENT_TYPE=='04' and #CARD_TYPE=='04')
+	{
+		showmsg('瑞阳供热没有代码表');
+		return(false);
+	}	 
+    	
+      		if(#CARD_TYPE == '01' or #CARD_TYPE == '04')
+      		{
+      		  enable(#CARDCONT,false);
+      		  show(#LCARDCONT,false);
+      		  show(#CARDCONT,false);
+      		
+      		  show(#LUSERID,true);
+      		  show(#USERID,true);
+      		  enable(#USERID,true);
+      		}
+      		else
+      		{
+      		  if(#AGENT_TYPE == '04')
+      		  {
+      		  	enable(#USERID,false);
+      		  	show(#LUSERID,false);
+      		  	show(#USERID,false);
+      		  	
+      		  	show(#LCARDCONT,false);
+      		  	show(#CARDCONT1,false);
+      		  	enable(#CARDCONT1,false);
+      		  }
+      		 else
+      		 {
+      		 	enable(#USERID,false);
+      		  	show(#LUSERID,false);
+      		  	show(#USERID,false);
+      		  	
+      		  	show(#LCARDCONT,true);
+      		  	show(#CARDCONT1,true);
+      		  	enable(#CARDCONT1,true);
+      		 }
+      		  
+      		}
+
+	    if(#YW_TYPE=='1')
+	    {
+		    enable(#USERID,false);
+		    enable(#CARDCONT1,false);
+	    }
+	    if(#AGENT_TYPE=='04' and  #CARD_TYPE == '01')
+		{
+			showmsg('用户号中字母请输入大写');
+		}
+			   
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#RYGRCARD"  TYPE="%-48s" FUNCTIONS="T()"/>
+  <ITEM    TYPE="%-12s"     NAME="#RYSS"  FUNCTIONS="" >
+		<ONLOSTFOCUS>
+		"{
+			//瑞阳专用读卡  begin
+			if(#AGENT_TYPE=='04' and #CARD_TYPE == '02')
+			{
+				showmsg('请放好卡，以保证读卡正常');
+				
+				#RYGRCARD=readheatcard();
+				//showmsg('#RYGRCARD='+#RYGRCARD);
+				#CARDCONT = #RYGRCARD;
+				//showmsg('#CARDCONT='+#CARDCONT);
+			}
+			//   end
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+  <ITEM LINE="8"   COL="33" TYPE="%-22s"  NAME="#LUSERID"  VISABLE="FALSE"  FUNCTIONS="T(用户号/代码表号:)"/>
+  <ITEM LINE="8"   COL="46" TYPE="%-20s"  NAME="#USERID"   VISABLE="FALSE"  INPUT="TEXT"   FUNCTIONS="T()V(NB)"/>
+
+  <ITEM LINE="9" COL="6"    TYPE="%-14s"   NAME="#LCARDCONT"  VISABLE="FALSE"  FUNCTIONS="T(用户介质信息:)"/>
+  <ITEM LINE="9" COL="16"   TYPE="%-20s"  NAME="#CARDCONT1"   VISABLE="FALSE"  INPUT="TEXT"  DEVICE="SMARTCARD"  FUNCTIONS="V(NB)M($MSR2,1)">
+    <ONLOSTFOCUS>"{
+			#CARDCONT = $MSR3;
+			$MSR2='';
+			$MSR3='';
+      showmsg('ka内信息：'+#CARDCONT);
+	  if(len(#CARDCONT) == 0){
+			showmsg('没有读到卡信息');
+	  }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CARD_NO"     TYPE="%-30s"      FUNCTIONS="" />
+  <ITEM NAME="#CARDCONT"     TYPE="%-512s" FUNCTIONS="" />
+  <ITEM NAME="#USERQUERY"     FUNCTIONS="T()">
+    <ONLOSTFOCUS>
+    "{
+        initfd();
+        commsend_001();
+        $FD16='6601';             //平台用户查询接口
+        $FD60='AGENT';            //平台交易类型
+        $FD21='01';               //柜面发起标志
+        $FD22=#AGENT_TYPE;        //代收费类型
+        $FD67='2';                //查询模式 用户唯一标识
+        $FD76=#USERID;            //查询内容 用户唯一标识
+       	$FD23=#CARD_TYPE;         //用户介质类型
+        $FD95=#CARDCONT;          //用户介质信息
+        $FD38='100';
+        
+        //瑞阳专用   begin
+	if(#AGENT_TYPE == '04' and #CARD_TYPE == '02')
+	{
+		$FD20='1';   //士达卡标识  1 有卡  0  无卡
+	}
+	else
+	{
+		$FD20='0';
+	}
+	//   end
+
+        callagnpt();
+		if(#AGENT_TYPE!='02' and #AGENT_TYPE!='03' and #AGENT_TYPE!='04' and $FD12!='0000' )
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//国新洁源天然气本次购气量不是100/1000的倍数 报0802错误 但此种情况不卡
+		if(#AGENT_TYPE=='02' and $FD12!='0802' and $FD12!='0000' )
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//自来水欠费超过10W 报0006错误 但此种情况不卡
+		if(#AGENT_TYPE=='03' and $FD12!='0006' and $FD12!='0000' )
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		
+		if(#AGENT_TYPE=='04')
+		{
+		    	#USERID=delspace($FD30);           //用户唯一标识
+			#YHNAME=delspace($FD25);         //用户姓名
+			#ADDRESS=delspace($FD26);          //用户地址
+		}
+		else
+		{
+			#USERID=delspace($FD30);
+			#CARD_NO=delspace($FD37);
+			//showmsg('#USERID=='+#USERID);
+			//showmsg('#CARD_NO=='+#CARD_NO);
+			#YHNAME=delspace($FD25);         //用户姓名
+			#ADDRESS=delspace($FD96);        //用户地址
+		}
+		
+		//瑞阳供热 报0020错误 但此种情况不卡
+		if(#AGENT_TYPE=='04' and  $FD12!='0020' and $FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+			
+		}
+        
+		if(#YW_TYPE=='1'){
+                        //enable(#ACTNO1,false);
+                        //enable(#ACTNO2,false);
+                       //enable(#AC_NO,false);
+			//goitem(#DRAW_PWD);
+			goitem(#AC_NAME1);
+		}
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="11"  COL="6" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="11"  COL="16" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+  <ITEM LINE="12"  COL="6"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="12"  COL="16" NAME="#ADDRESS"  TYPE="%-90s"    INPUT="LABEL" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#BI_STS" TYPE="%-1s"  FUNCTIONS=""/>
+  <ITEM LINE="16" COL="6"  NAME="#LOLDACTNO"  VISABLE="FALSE" INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(原 卡 号:)" />
+  <ITEM LINE="16" COL="15" NAME="#OLD_ACNO"   VISABLE="FALSE" INPUT="LABEL" TYPE="%-19s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="16" COL="41" NAME="#LOLDACNAME" VISABLE="FALSE" INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(原 户 名:)" />
+  <ITEM LINE="16" COL="50" NAME="#OLD_ACNAME" VISABLE="FALSE" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+
+  <ITEM NAME="#BBB" TYPE="%-1s"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+  if(#YW_TYPE=='0'){
+    initfd();
+    commsend_001();
+    $FD16='6608';             //平台绑定及代扣状态查询接口
+    $FD60='AGENT';            //平台交易类型
+    $FD21='01';               //柜面发起标志
+    $FD22=#AGENT_TYPE;        //代收费类型
+	  $FD23=#CARD_TYPE;
+	  $FD37=#CARDCONT1;
+
+    $FD30=#USERID;            //用户唯一标识
+
+    callagnpt();
+    if(($FD12!='0000' and $FD12!='GA07' ) or ($FD12=='GA07' and #YW_TYPE=='1')){
+		if( $FD12!='GC11' and  #YW_TYPE=='0' ){
+			  showmsg(geterror());
+			  return(false);
+		}
+    }
+
+    #BI_STS=delspace($FD69);
+    #OLD_ACNO=delspace($FD31);
+
+//showmsg('#BI_STS='+#BI_STS);
+//showmsg('#OLD_ACNO='+#OLD_ACNO);
+    //未绑定用户不可进行解绑操作
+    if(#BI_STS=='' and #YW_TYPE=='1')
+    {
+      showmsg('您尚未进行用户绑定业务，无法解绑!!');
+      return(false);
+    }
+    //已绑定用户不可进行绑定操作
+    if(#BI_STS=='0' and #YW_TYPE=='0')
+    {
+      showmsg('该用户已与银行卡绑定。');
+      rerun();
+      return(false);
+    }
+    //已解绑用户不可进行解绑操作
+    if(#BI_STS=='1' and #YW_TYPE=='1')
+    {
+      showmsg('您已经进行用户解绑,若有需要可进行绑定!!');
+      return(false);
+    }
+
+    if(#YW_TYPE=='0')
+    {
+      show(#LOLDACTNO,false);
+      show(#OLD_ACNO,false);
+      show(#LOLDACNAME,false);
+      show(#OLD_ACNAME,false);
+    }
+    //解绑时，回显当前绑定账户
+    if(#YW_TYPE=='1')
+    {
+      show(#LDQFS,false);
+      show(#DQFS,false);
+      show(#LACTNO,false);
+      show(#ACTNO1,false);
+      show(#ACTNO2,false);
+      show(#LACNAME,false);
+      show(#AC_NAME,false);
+      show(#LOLDACTNO,true);
+      show(#OLD_ACNO,true);
+      show(#LOLDACNAME,true);
+      show(#OLD_ACNAME,true);
+    }
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="14" COL="6"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+  <ITEM LINE="16" COL="6"  TYPE="%-10s" NAME="#LDQFS" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="16" COL="15" TYPE="%-1s"  NAME="#DQFS"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="读取磁条方式"/>
+      <OPTION VALUE="1" TITLE="读取芯片方式"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+      if(#DQFS=='1')
+      {
+        enable(#ACTNO1,false);
+        enable(#ACTNO2,true);
+        show(#ACTNO1,false);
+        show(#ACTNO2,true);
+      }
+      if(#DQFS=='0')
+      {
+        enable(#ACTNO1,true);
+        enable(#ACTNO2,false);
+        show(#ACTNO1,true);
+        show(#ACTNO2,false);
+      }
+      refresh();
+     }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="16"  COL="41" NAME="#LACTNO" TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM LINE="16" COL="50" TYPE="%-19s"  NAME="#ACTNO1" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+    <ONLOSTFOCUS>
+    "{
+      #AC_NO=#ACTNO1;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="16" COL="50" TYPE="%-19s"  NAME="#ACTNO2" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+    <ONLOSTFOCUS>
+    "{
+      #AC_NO=#ACTNO2;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#OPN_BR_NO"   TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+  <ONLOSTFOCUS>
+  "{
+    //IC卡bin=621780  ,磁条卡bin=621223
+    dim @baktxno as string;
+
+
+    if((substr(#AC_NO,0,6)!='621223' and substr(#AC_NO,0,6)!='621780'))
+    {
+       showmsg('请使用银行卡账号进行用户绑定/解绑业务!');
+       return(false);
+    }
+
+    #MSR2BAK=$MSR2;
+    #MSR3BAK=$MSR3;
+    $MSR2='';
+    $MSR3='';
+
+    //代收账号查询
+    initfd();
+    commsend_001();
+    $FD16='6600';             //平台代收账号查询接口
+    $FD60='AGENT';            //平台交易类型
+    $FD21='01';               //柜面发起标志
+    $FD22=#AGENT_TYPE;        //代收费类型
+    $FD31=#AC_NO;             //账号
+    if(#YW_TYPE=='0'){
+        $FD49='0';            //绑定时校验账户状态
+    }else{
+        $FD49='1';            //解绑时不校验账户状态
+    }
+
+    callagnpt();
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+    }
+
+    #AC_NAME=delspace($FD26);
+    if(#YW_TYPE=='1'){
+        #OLD_ACNAME=delspace($FD26);
+    }
+	  #OPN_BR_NO=delspace($FD77);
+//showmsg('#AC_NAME='+#AC_NAME);
+	if(#YW_TYPE=='1'){
+		initfd();
+		commsend_001();
+		$FD16='6608';             //平台绑定及代扣状态查询接口
+		$FD60='AGENT';            //平台交易类型
+		$FD21='01';               //柜面发起标志
+		$FD22=#AGENT_TYPE;        //代收费类型
+		$FD31=#AC_NO;            //银行卡号
+
+		callagnpt();
+		if(($FD12!='0000' and $FD12!='GA07' ) or ($FD12=='GA07' and #YW_TYPE=='1')){
+			if( $FD12!='GC11' and  #YW_TYPE=='0' ){
+				  showmsg(geterror());
+				  return(false);
+			}
+		}
+		//enable(#DQFS,false);
+		//enable(#ACTNO1,false);
+		//enable(#ACTNO2,false);
+		#BI_STS=delspace($FD69);
+
+    //未绑定用户不可进行解绑操作
+    if(#BI_STS=='' and #YW_TYPE=='1')
+    {
+      showmsg('您尚未进行用户绑定业务，无法解绑!!');
+      return(false);
+    }
+    //已绑定用户不可进行绑定操作
+    if(#BI_STS=='0' and #YW_TYPE=='0')
+    {
+      showmsg('该用户已与银行卡绑定。');
+      return(false);
+    }
+    //已解绑用户不可进行解绑操作
+    if(#BI_STS=='1' and #YW_TYPE=='1')
+    {
+      showmsg('您已经进行用户解绑,若有需要可进行绑定!!');
+      return(false);
+    }
+
+		#CARD_TYPE=delspace($FD23);
+		#USERID=delspace($FD30);
+		#CARDCONT1=delspace($FD37);
+		
+    if(#CARD_TYPE == '01' or #CARD_TYPE == '04')
+    {
+		  show(#LCARDCONT,false);
+		  show(#CARDCONT1,false);
+      show(#LUSERID,true);
+      show(#USERID,true);
+      enable(#USERID,true);
+	    #USERID=delspace($FD30);
+    }
+    else
+    {
+    		if(#AGENT_TYPE == '04')
+		{
+			show(#LCARDCONT,false);
+			  show(#CARDCONT1,false);
+      			show(#LUSERID,true);
+      			show(#USERID,true);
+      			enable(#USERID,true);
+      			#USERID=delspace($FD30);
+      			#CARD_TYPE='01';
+		}
+		else
+		{
+      			 show(#LCARDCONT,true);
+			  show(#CARDCONT1,true);
+      			show(#LUSERID,false);
+      			show(#USERID,false);
+      			enable(#USERID,false);
+		}		 
+	}
+		enable(#CARDCONT1,false);
+		//天然气 IC卡拼卡介质信息
+		if(#AGENT_TYPE=='02' and #CARD_TYPE=='02')
+		{
+			#CARDCONT= delspace(#CARDCONT1)+'|'+delspace(#USERID)+'|||||||'+delspace($FD76)+'||||';
+			showmsg('card message:  '+#CARDCONT);
+		}
+		goitem(#USERQUERY);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="18"  COL="6" NAME="#LACNAME" TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="18" COL="15" NAME="#AC_NAME" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="18" COL="30" NAME="#AC_NAME1" INPUT="TEXT" TYPE="%-1s" Enable="False" VISABLE="FALSE" />
+  <ITEM LINE="18" COL="41" NAME="#LMM" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="18" COL="50" NAME="#DRAW_PWD" TYPE="%6d"  INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+    <ONLOSTFOCUS>
+    "{
+      if(#YW_TYPE=='2')      //解绑时用旧卡号
+      {
+        #AC_NO=#OLD_ACNO;
+      }
+      if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')  //卡验密
+      {
+        initfd();
+        commsend_001();
+        $FD16='6614';         //卡验密接口
+        $FD60='AGENT';        //平台交易类型
+        $FD21='01';           //柜面发起标志
+        $FD22=#AGENT_TYPE;    //代收费类型
+        $FD31=#AC_NO;         //绑定卡号
+        $FD79=#DRAW_PWD;      //卡密码
+        callagnpt();
+         
+        if( $FD12 != '0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+      }
+      else
+      {
+        showmsg('请使用银行卡账户进行用户绑定!!');
+        rerun();
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#AGENTTYPE_NAME"  TYPE="%-20s" FUNCTIONS="S(#AGENT_TYPE,#AGENT_TYPE)"/>
+  <ITEM NAME="#TRACE_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>
+  "{
+      initfd();
+      commsend_001();
+      $FD16='6604';             //平台用户绑定/解绑接口
+      $FD60='AGENT';            //平台交易类型
+      $FD21='01';               //柜面发起标志
+      $FD22=#AGENT_TYPE;        //代收费类型
+   	  $FD30=#USERID;            //用户唯一标识
+   	  $FD23=#CARD_TYPE;         //用户缴费介质类型
+   	  $FD37=#CARD_NO;           //用户缴费介质号
+      $FD31=#AC_NO;             //绑定账户
+      $FD69=#YW_TYPE;           //业务类型
+      $FD71='0';                //非换卡交易
+	    $FD76=strfld(#CARDCONT,'|',8);          //厂商代码
+
+      //将用户代码对应的账户名、姓名、地址信息写入流水记录
+      $FD26=#AC_NAME;           //账户名
+      $FD25=#YHNAME;            //用户姓名
+      $FD96=#ADDRESS;           //用户单位及地址
+
+      callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      #TRACE_NO=delspace($FD32);          //平台流水号
+      runoutput();
+      rerun();
+    }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    if(#YW_TYPE=='0')
+    {
+      print(3,25,'代收用户绑定成功');
+      print(5,20,'用户代码：[20]       用户姓名：[40]',#USERID,#YHNAME);
+      if(#AGENT_TYPE == '07')
+      {
+	      print(6,20,'绑定账号：[19]        绑定账户名：[60]',#AC_NO,#AC_NAME);
+      }
+      else
+      {
+	      print(6,20,'地    址：[90]',#ADDRESS);
+	      print(7,20,'绑定账号：[19]        绑定账户名：[60]',#AC_NO,#AC_NAME);
+      }
+    }
+    if(#YW_TYPE=='1')
+    {
+      print(3,25,'代收用户解绑成功');
+      print(5,20,'用户代码：[20]       用户姓名：[40]',#USERID,#YHNAME);
+      if(#AGENT_TYPE == '07')
+      {
+	      print(6,20,'绑定账号：[19]        绑定账户名：[60]',#AC_NO,#AC_NAME);
+      }
+      else
+      {
+	      print(6,20,'地    址：[90]',#ADDRESS);
+	      print(7,20,'绑定账号：[19]        绑定账户名：[60]',#AC_NO,#AC_NAME);
+      };
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(5,20,'机构名称:[30]',$BRNAME);
+    print(5,2,'代码:9950');
+    print(5,13,'交易:代收用户绑定/解绑');
+
+    print(7,27,'\L0代收用户绑定/解绑\L1');
+    print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,$FD3);
+
+    if(#YW_TYPE=='0'){
+    	if(#AGENT_TYPE == '07')
+    	{
+      	print(10,20,'业务类型：绑定                       代收类型：[12]公司',#AGENTTYPE_NAME);
+    	}
+    	else
+    	{
+      	print(10,20,'业务类型：绑定                       代收类型：[20]',#AGENTTYPE_NAME);
+      }
+      print(11,20,'绑定账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+    }
+    if(#YW_TYPE=='1'){
+    	if(#AGENT_TYPE == '07')
+    	{
+      	print(10,20,'业务类型：解绑                       代收类型：[12]公司',#AGENTTYPE_NAME);
+    	}
+    	else
+    	{
+      	print(10,20,'业务类型：解绑                       代收类型：[20]',#AGENTTYPE_NAME);
+      }
+      print(11,20,'解绑账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+    }
+
+    print(13,20,'用户代码：[20]       用户姓名：[60]',#USERID,#YHNAME);
+    if(#AGENT_TYPE != '07')
+    {
+	    print(14,20,'地    址：[90]',#ADDRESS);
+    }
+	  print(15,20,'平台流水：[12]',#TRACE_NO);
+
+    if(#YW_TYPE=='0' and #AGENT_TYPE=='01'){
+        print(17,22,'本人自愿将晋中银行IC卡账户和晋中燃气用户代码关联绑定，');
+        print(18,20,'通过晋中银行网点柜面及惠民通自助设备主动扣划晋中银行IC卡账户资金');
+    }
+    if(#YW_TYPE=='0' and #AGENT_TYPE=='02'){
+        print(17,22,'本人自愿将晋中银行IC卡账户和国新洁源天然气公司账户关联绑定，');
+        print(18,20,'通过晋中银行网点柜面及惠民通自助设备主动扣划晋中银行IC卡账户资金');
+    }
+     if(#YW_TYPE=='0' and #AGENT_TYPE=='03'){
+        print(17,22,'本人自愿将晋中银行IC卡账户和晋中供水用户代码关联绑定，');
+        print(18,20,'通过晋中银行网点柜面及惠民通自助设备主动扣划晋中银行IC卡账户资金');
+    }
+     if(#YW_TYPE=='0' and #AGENT_TYPE=='04'){
+        print(17,22,'本人自愿将晋中银行IC卡账户和瑞阳供热用户代码关联绑定，');
+        print(18,20,'通过晋中银行网点柜面及惠民通自助设备主动扣划晋中银行IC卡账户资金');
+    }
+     if(#YW_TYPE=='0' and #AGENT_TYPE=='07'){
+        print(17,22,'本人自愿将晋中银行IC卡账户和国网晋中供电用户代码关联绑定，');
+        print(18,20,'通过晋中银行网点柜面及惠民通自助设备主动扣划晋中银行IC卡账户资金');
+    }
+    print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+    print(21,80,'客户签名:_____________________');
+
+    print( 23,20,'备注:');
+    print( 23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print( 23,5,'柜员:[4]',$FD7);
+    print( 23,5,'流水号:[6]',$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

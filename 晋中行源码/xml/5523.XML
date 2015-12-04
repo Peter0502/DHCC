@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111000" TITLE="5523 包明细重发申请"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+      commsend_001();
+      $FD34=#OPACKMSGNO;//报文编号
+      $FD44=#OENDATE;//委托日期
+      $FD47=#OPACKNO;//包流水号
+      $FD60=#OSENDCODE;//发起机构代码
+}"
+</COMMSEND>
+<COMMRECV>"{    
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+  "T(5523                          包明细重发申请)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+ "T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5543)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/> 
+
+<ITEM LINE="7" COL="15" TYPE="%-15s" FUNCTIONS="T(原包 报文 编号:)"/>
+<ITEM LINE="9" COL="15" TYPE="%-15s" FUNCTIONS="T(原发起机构代码:)"/>
+<ITEM LINE="11" COL="15" TYPE="%-15s" FUNCTIONS="T(原 委 托 日 期:)"/>
+<ITEM LINE="13" COL="15" TYPE="%-15s" FUNCTIONS="T(包  流  水  号:)"/>
+
+<!--输入变量-->
+<ITEM NAME="#OPACKMSGNO" LINE="7"  COL="30" TYPE="%-4s"  DEVICE="SELECT"  FUNCTIONS="T(3102)V(NB)"> 
+<HELP>请求下载信息包中的报文编号</HELP>
+<SELECT>
+	<OPTION VALUE="3102" TITLE="0.TIPS转发批量扣税请求"/>
+	<OPTION VALUE="3143" TITLE="1.国库资金清算处理结果"/>
+	<OPTION VALUE="3144" TITLE="2.退款回执"/>
+</SELECT>
+</ITEM>
+<ITEM NAME="#TAXORGTYPE"  TYPE="%1s" FUNCTIONS=""/>
+<ITEM NAME="#OSENDCODE"  LINE="9"  COL="30" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="V(NB)"> 
+<HELP>请求下载信息包中的发起机构代码</HELP>
+<!----------
+ <ONLOSTFOCUS>
+ "{
+    dim @c as string;
+    dim @d as string;
+    dim @a as string;
+    dim @b as string;
+    dim @e as string;
+    dim @f as string;
+    dim @g as string;
+   dim @FullMsg as string;
+   @FullMsg='';
+   initfd();
+   dim @baktxno as string;
+   @baktxno=$TXNO;
+   $TXNO='9410';
+   $FD61=#OSENDCODE;
+   commsend_001();
+   //callserver();
+   calltips();
+   $TXNO=@baktxno;
+   if($FD12!='0000'){
+     showmsg(geterror());
+     return (false);
+   }
+    @d = substr($FD95,12,60);//名称
+    @c =substr($FD95,72,1);//类型
+    @a = substr($FD95,73,1);//级别
+    @b = substr($FD95,74,1);
+    //@FullMsg='户名:'+@d+chr(10)+'类型:'+@c+chr(10)+'征收机关类型:'+@a+chr(10)+'机构级次:'+@b;20090707 RM 
+    //20090707 ADD BY ZHGF
+    if(@c=='1'){
+	@e='国税';
+    }else {
+	@e='地税';
+    }
+    //add by xijie20090708
+    if(@a=='1'){
+    @g='国家';
+    }else if(@a=='2'){
+    @g='省';
+    }else if(@a=='3'){
+    @g='市';
+    }else if(@a=='4'){
+    @g='县';
+    }else{
+    @g='乡';
+    }
+    //20090707 ADD BY ZHGF
+    @FullMsg ='户名:'+@d+chr(10)+'征收机关类型:'+@e+chr(10)+'机构级次:'+@g;
+    //showhelp(6,70,8,3,'征收机关基本信息',@FullMsg);
+    showhelp(5,70,8,3,'征收机关基本信息',@FullMsg);
+    //#TAXORGTYPE=substr(@a,0,1);RM BY ZHGF 20090707
+    #TAXORGTYPE=substr(@c,0,1);
+    //$FD20=@b;REPLACE BY NEXTLINE
+    $FD20=@c;
+}"
+</ONLOSTFOCUS>
+---------------->
+</ITEM>  
+<ITEM NAME="#OENDATE"    LINE="11" COL="30" TYPE="%8d"  INPUT="TEXT" FUNCTIONS="D()V(NB)">
+<HELP>请求下载信息包中的原委托日期</HELP>
+</ITEM>
+<ITEM NAME="#OPACKNO"    LINE="13" COL="30" TYPE="%-8s"  INPUT="TEXT" FUNCTIONS="V(NB)">
+<HELP>请求下载信息包中的包流水号</HELP>
+<!-----
+<ONLOSTFOCUS>
+"{
+ initfd();
+ dim @baktxno as string;
+ @baktxno=$TXNO;
+ $TXNO='5561';
+ $FD34=#OPACKMSGNO;
+ $FD44=#OENDATE;
+ $FD47=#OPACKNO;
+ $FD60=#OSENDCODE;
+ commsend_001();
+ //callserver();
+ calltips();
+ $TXNO=@baktxno;
+ if($FD12!='0000'){
+    showmsg('没有找到此包的信息,可以重新申请包明细');
+ }
+ 
+ else
+ {
+   showmsg('已经找到了该包的信息,接收日期是'+$FD45+，'请到5533交易查询');
+   open('5533.XML','#WTDATE='+$FD45+';#PACKID='+#OPACKNO+';');
+   return(false);
+ }
+}"
+</ONLOSTFOCUS>
+--->
+</ITEM>   
+<ITEM LINE="21" COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+  		"{
+  commsend_001();
+	$FD16='5543';
+	$FD34=#OPACKMSGNO;//报文编号
+  $FD44=#OENDATE;//委托日期
+  $FD47=#OPACKNO;//包流水号
+  $FD60=#OSENDCODE;//发起机构代码
+	calltips();
+	if($FD12!='0000'){
+	  showmsg(geterror());
+	  return(false);
+	}
+	
+	runoutput();
+	rerun();
+  		}"
+</ONCLICK>
+</ITEM> 
+
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键推出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(5,20,'包明细重发申请');
+		print(6,15,'原包报文  编号:[ 4]',#OPACKMSGNO);
+		print(7,15,'原发起机构代码:[12]',#OSENDCODE);
+		print(8,15,'原  委托  日期:[ 8]',#OENDATE);
+		print(9,15,'包  流  水  号:[ 8]',#OPACKNO);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO = '00';
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print(5,20,' 机构名称:[30]',$BRNAME);
+		print(5,2, ' 交易代码:5523');
+		print(5,13,' 交易名称:包明细重发申请');
+
+		print( 7,20,'原包报文  编号:[ 4]',#OPACKMSGNO);
+		print( 8,20,'原发起机构代码:[12]',#OSENDCODE);
+		print( 9,20,'原  委托  日期:[ 8]',#OENDATE);
+		print(10,20,'包  流  水  号:[ 8]',#OPACKNO);
+		print(24,20,'交易日期:[8] [8]',$HDATE,@txtime);
+    print(24,5,' 前置柜员:[8]',substr($FD74,25,8));
+    print(24,5,' 流水号:[6]',$FD4);
+    print(24,5,' 交易机构:[24]',substr($FD74,0,24));
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

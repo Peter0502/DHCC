@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1813 统一支付通兑业务录入"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<COMMSEND>
+		"{
+		commsend_001();
+		}"
+	</COMMSEND>
+	<COMMRECV>
+		"{
+		commrecv_001();
+		}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM NAME="#TraceType" TYPE="%-2s" FUNCTIONS="T(01)"/>
+		<ITEM NAME="#SysCode" TYPE="%-8s" FUNCTIONS="T(sxps)"/>
+		<ITEM NAME="#PayeeAcctType" TYPE="%-1s" FUNCTION="T()"/>
+		<ITEM NAME="#PayNo"   TYPE="%-10s" />
+		<ITEM NAME="#ciftype" TYPE="%-3s" FUNCTIONS="T()"/>
+		<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS="T(1813                       统一支付通兑业务录入)"/>
+		<ITEM LINE="4"  COL="1"  TYPE="%-78s" FUNCTIONS="T(─────────────────────────────────────────────────)"/>
+		<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(统一支付通兑业务录入)"/>
+		<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1813)"/>
+		<ITEM LINE="5"  COL="3"  TYPE="%-12s" FUNCTIONS="T(通兑  方式:)"/>
+		<ITEM LINE="5" COL="15" INPUT="SELECT" NAME="#Ctind" TYPE="%-1s"  FUNCTIONS="T(1)V(NB)">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="现金"/>
+				<OPTION VALUE="2" TITLE="转账"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+				"{
+					if (#Ctind == '2')
+					{
+						showblock('Payee_A1', true, true);
+						showblock('Payee_A2',false, false);
+						showblock('Payee_A3', true, true);
+					}
+					else
+					{
+						showblock('Payee_A2', true,  true);
+						showblock('Payee_A1', false, false);
+						showblock('Payee_A3', false, false);
+					}
+					refresh();
+				}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<BLOCK LINE="6" COL="0" NAME="Payee_A1" VISABLE="FALSE">
+			<ITEM LINE="0"  COL="3"  TYPE="%-11s" FUNCTIONS="T(收款人账号:)" />
+			<ITEM LINE="0"  COL="15" TYPE="%-20s"  NAME="#PayeeAcct" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+				<ONLOSTFOCUS>
+					"{
+						initfd();
+						commsend_001();
+						$FD16 = '1404';
+						$FD18 = 'pbp';
+						$FD30=#PayeeAcct;
+						$FD73='00001000';
+						callagnpbp();
+						if ($FD12 != '0000')
+						{
+						showmsg(geterror());
+						return(false);
+						}
+						#PayeeName = $FD25;
+						#ciftype=$FD67;
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+		</BLOCK>
+		<BLOCK LINE="7" COL="0" NAME="Payee_A3" VISABLE="FALSE">
+			<ITEM LINE="0"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(收款人名称:)"/>
+			<ITEM LINE="0"  COL="15" TYPE="%-20s" NAME="#PayeeName"   INPUT="TEXT" FUNCTIONS="T()V(NB)">
+			</ITEM>
+		</BLOCK>
+		<BLOCK LINE="7" COL="0" NAME="Payee_A2" VISABLE="FALSE">
+			<ITEM LINE="1" COL="3" TYPE="%-15s" FUNCTIONS="T(收款人证件类型:)"/>
+			<ITEM NAME="#IDType" LINE="1" COL="19" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)">
+				<SELECT>
+					<OPTION VALUE="0" TITLE="身份证"/>
+					<OPTION VALUE="1" TITLE="学生证"/>
+					<OPTION VALUE="2" TITLE="其他证"/>
+				</SELECT>
+			</ITEM>
+			<ITEM LINE="1" COL="37" TYPE="%-11s" FUNCTIONS="T(证件  号码:)"/>
+			<ITEM NAME="#IDNo" LINE="1" COL="50" INPUT="TEXT"  TYPE="%-18s"  FUNCTIONS="T()V(NB)">
+				<ONLOSTFOCUS>
+					"{
+						#PayeeAcct='10101';
+						#PayeeName='科目号';
+						
+						initfd();
+						commsend_001();
+						$FD16='1201';
+						$FD18='app';
+						$FD31=#IDNo;
+						callagnpbp();
+						if($FD12 != '0000')
+						{
+							showmsg(geterror());
+							return(false);
+						}
+						showmsg('身份证校验成功');
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+		</BLOCK>
+
+		<BLOCK LINE="9" COL="0" NAME="Payee_B" VISABLE="TRUE">
+			<ITEM LINE="0" COL="3"  TYPE="%-12s" FUNCTIONS="T(付款行行号:)"/>
+			<ITEM LINE="0" COL="15" TYPE="%-20s" NAME="#InBankNo" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+				<ONLOSTFOCUS>
+					"{
+						initfd();
+						commsend_001();
+						$FD16='1101';
+						$FD18='pbp';
+						$FD59=#InBankNo;
+						callagnpbp();
+						if($FD12!='0000')
+						{
+						showmsg(geterror());
+						return(false);
+						}
+						#InBankName=$FD76;
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="0"  COL="37"  TYPE="%-12s" FUNCTIONS="T(付款行行名:)"/>
+			<ITEM LINE="0"  COL="50" TYPE="%-20s" NAME="#InBankName" INPUT="TEXT" FUNCTIONS=""/>
+			<ITEM LINE="1" COL="3" TYPE="%-13s" FUNCTIONS="T(付款账户类型:)" />
+			<ITEM LINE="1" COL="17" TYPE="%-4s" NAME="#PayerAcctType" INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+				<SELECT>
+					<OPTION VALUE="1" TITLE="1.个人"/>
+					<OPTION VALUE="2" TITLE="2.对公"/>
+					<OPTION VALUE="3" TITLE="3.外币"/>
+				</SELECT>
+			</ITEM>
+			<ITEM LINE="2" COL="3" TYPE="%-11s" FUNCTIONS="T(付款人账号:)" />
+			<ITEM LINE="2" COL="15" TYPE="%-20s" NAME="#PayerAcct" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+				<ONLOSTFOCUS>
+				"{
+					if (len(#PayerAcct) &lt; 11)
+					{
+						showmsg('账号错误，请重新输入');
+						return(false);
+					}
+					
+					initfd();
+					commsend_001();
+					$FD16='6232';
+					$FD30=#PayerAcct;
+					$FD73='00001000';
+					callserver();
+					if($FD12 != 'C114')
+					{
+						showmsg('收款人账号不能为行内账号');
+						return(false);
+					}
+					
+				}"
+				</ONLOSTFOCUS>	
+			</ITEM>
+			<ITEM LINE="2" COL="37"  TYPE="%-11s" NAME="#PayerName_L" FUNCTIONS="T(付款人名称:)"/>
+			<ITEM LINE="2" COL="50" TYPE="%-20s" NAME="#PayerName" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+			<ITEM LINE="3" COL="3" TYPE="%-11s" FUNCTIONS="T(认证  方式:)"/>
+			<ITEM LINE="3" COL="15" TYPE="%-4s"  INPUT="SELECT" NAME="#AuthCode" FUNCTIONS="T(AC03)V(NB)">
+				<SELECT>
+					<OPTION VALUE="AC00" TITLE="协议号码" />
+					<OPTION VALUE="AC03" TITLE="支付密码" />
+				</SELECT>
+				<ONLOSTFOCUS>
+					"{
+						if (#AuthCode == '0')
+						{
+							#AuthInfo_L = '协议号码  :';
+						}
+						else if (#AuthCode == '1')
+						{
+							#AuthInfo_L = '支付密码  :';
+						}
+						show(#AuthInfo_L, true);
+						show(#AuthInfo, true);
+						refresh();
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="3" COL="37"  TYPE="%-11s" NAME="#AuthInfo_L" VISABLE="FALSE" FUNCTIONS="T(#AuthInfo_L)"/>
+			<ITEM LINE="3" COL="50" TYPE="%-6s" NAME="#AuthInfo"   VISABLE="FALSE" INPUT="TEXT" FUNCTIONS="V(NB)i()">
+			</ITEM>
+			</BLOCK>
+			<BLOCK LINE="13" COL="0" NAME="Payee_C" VISABLE="TRUE">
+			<ITEM LINE="0" COL="3"  TYPE="%-12s" FUNCTIONS="T(货币  代码:)"/>
+			<ITEM LINE="0" COL="15" TYPE="%-3s"  INPUT="SELECT" NAME="#CurrCode" FUNCTIONS="T(CNY)V(NB)">
+				<SELECT>
+					<OPTION VALUE="CNY" TITLE="人民币" />
+					<OPTION VALUE="USD" TITLE="美元"   />
+					<OPTION VALUE="HKD" TITLE="港币"   />
+					<OPTION VALUE="EUR" TITLE="欧元"   />
+					<OPTION VALUE="GBP" TITLE="英镑"   />
+					<OPTION VALUE="JPY" TITLE="日元"   />
+				</SELECT>
+			</ITEM>
+			<ITEM LINE="0" COL="37"  TYPE="%-11s" FUNCTIONS="T(钞汇类型  :)"/>
+			<ITEM LINE="0" COL="50" NAME="#CurrType" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+				<SELECT>
+					<OPTION VALUE ="0" TITLE="0.丙钞"     />
+					<OPTION VALUE ="2" TITLE="2.企业外汇" />
+					<OPTION VALUE ="3" TITLE="3.乙钞"     />
+					<OPTION VALUE ="4" TITLE="4.乙汇"     />
+					<OPTION VALUE ="6" TITLE="6.丙汇"     />
+				</SELECT>
+				<ONLOSTFOCUS>
+					"{
+						dim @tota as string;
+
+						initfd();
+						commsend_001();
+						$FD16='1104';
+						$FD18='pbp';
+						$FD20='1';
+						$FD35='1211';
+						$FD51=#TraceType;
+						$FD22=#Ctind;
+						$FD59=#InBankNo;
+						$FD67=#ciftype;
+						@tota=callagnpbp();
+						if($FD12!='0000')
+						{
+						showmsg(geterror());
+						return(false);
+						}
+						@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+						setsel(#BusyType,@tota,'v4o1t32o1');
+						//refresh();
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="1" COL="3"  TYPE="%-11s" FUNCTIONS="T(交易  金额:)"/>
+			<ITEM LINE="1" COL="15" TYPE="%12.2f" NAME="#TradeAmt" INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)">
+				<ONLOSTFOCUS>
+					"{
+
+						dim @amt as number;
+						show(#PersonID_L, false);
+						show(#PersonID, false);
+						@amt = #TradeAmt*100;
+						if (#Ctind == '1')
+						{
+						if (@amt > 5000000)
+						{
+						show(#PersonID_L, true);
+						show(#PersonID, true);
+						}
+						}
+						refresh();
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="1"  COL="37"  TYPE="%-13s" NAME="#PersonID_L" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(付款人身份证:)" />
+			<ITEM LINE="1"  COL="50" TYPE="%-26s"  INPUT="TEXT" NAME="#PersonID"  VISABLE="FALSE" FUNCTIONS="T()V(NB)">
+				<ONLOSTFOCUS>
+					"{
+						dim @amt       as number;
+						dim @allstring as string;
+						dim @i         as number;
+						dim @get       as string;
+						dim @len       as number;
+
+						if (len(delspace(#PersonID)) != 18)
+						{
+						if (len(delspace(#PersonID)) != 16)
+						{
+						showmsg('身份证号码位数错误!');
+						return(false);
+						}
+						}
+						@allstring = delspace(#PersonID);
+						@i = 0;
+						@len = len(#PersonID);
+						while (@i &lt; @len)
+						{
+						@get = substr(@allstring, @i, 1);
+						if (@get &gt; '9' or @get &lt; '0')
+						{
+						showmsg('身份证号只包含数字!');
+						#PersonID = '';
+						show(#PersonID, true);
+						return(false);
+						}
+						@i = @i + 1;
+						}
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="2" COL="3" TYPE="%-15s" FUNCTIONS="T(手续费收取方式:)"/>
+			<ITEM LINE="2" COL="19" NAME="#FeeWay" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(2)V(NB)">
+				<SELECT>
+					<OPTION VALUE ="0" TITLE="0.现金 " />
+					<OPTION VALUE ="1" TITLE="1.转账 " />
+					<OPTION VALUE ="2" TITLE="2.不收 " />
+				</SELECT>
+				<ONLOSTFOCUS>
+					"{
+						if(#FeeWay != '2')
+						{
+							show(#FeeAmt_B,true);
+							show(#FeeAmt,true);
+							
+							initfd();
+							commsend_001();
+							$FD16='1104';
+							$FD18='app';
+							$FD39=itoa(#TradeAmt,'%.2f');
+							$FD64='1201';
+							$FD65='P_PBP';
+							callagnpbp();
+							if($FD12 != '0000')
+							{
+								showmsg(geterror());
+								return(false);
+							}
+							#FeeAmt=ltrim(itoa($FD39,'%.2f'));
+							enable(#FeeAmt,false);
+						}
+						else
+						{
+							show(#FeeAmt_B,false);
+							show(#FeeAmt,false);
+						}
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="2" COL="37"  TYPE="%-11s" NAME="#FeeAmt_B" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(手续费金额:)V(0000000000000001,9999999999999999)"/>
+			<ITEM LINE="2" COL="50" TYPE="%15.2f" NAME="#FeeAmt" INPUT="TEXT" VISABLE="FALSE"  FUNCTIONS="V(NB)"/>
+
+			<ITEM LINE="3" COL="3" TYPE="%-9s" FUNCTIONS="T(业务类型:)"/>
+			<ITEM NAME="#BusyType" LINE="3" COL="13" INPUT="SELECT"  TYPE="%-4s" FUNCTIONS="T()V(NB)">
+				<SELECT>
+				</SELECT>
+				<ONLOSTFOCUS>
+					"{
+						initfd();
+						dim @tota as string;
+						commsend_001();
+						$FD16='1105';
+						$FD18='pbp';
+						$FD34=#BusyType;
+						@tota=callagnpbp();
+						if($FD12!='0000')
+						{
+						showmsg(geterror());
+						return(false);
+						}
+						@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+						setsel(#BusyKind,@tota,'v5o1t32o1');
+						refresh();
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="3" COL="37" TYPE="%-11s" FUNCTIONS="T(业务种类  :)"/>
+			<ITEM NAME="#BusyKind" LINE="3" COL="50" INPUT="SELECT"  TYPE="%-5s"  FUNCTIONS="T()V(NB)">
+				<SELECT>
+				</SELECT>
+				<ONLOSTFOCUS>
+					"{
+						initfd();
+						dim @tota as string;
+						commsend_001();
+						$FD16='1109';
+						$FD18='pbp';
+						$FD19='P_PBP';
+						$FD28='sxps';
+						$FD35='1211';
+						//业务种类
+						$FD64= #BusyKind;
+						//业务类型
+						$FD34= #BusyType;
+						//交易类型
+						$FD65=#TraceType;
+						//现转标志
+						$FD23=#Ctind;
+						//借贷标志
+						$FD36='1';
+						//客户类型
+						$FD67=#PayerAcctType;
+
+						@tota=callagnpbp();
+						if($FD12 != '0000')
+						{
+						showmsg(geterror());
+						return(false);
+						}
+						@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+						setsel(#BillType,@tota,'v2o1t60o1');
+
+						refresh();
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+			<ITEM LINE="4"  COL="3"  TYPE="%-9s" FUNCTIONS="T(票据种类:)"/>
+			<ITEM LINE="4"  COL="13" TYPE="%-2s" NAME="#BillType" INPUT="SELECT" FUNCTIONS="T()V(NB)">
+				<SELECT>
+				</SELECT>
+			</ITEM>
+
+			<ITEM LINE="5" COL="3"  TYPE="%-9s" FUNCTIONS="T(票据号码:)"/>
+			<ITEM LINE="5" COL="13" TYPE="%-14s" NAME="#CertNo" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+			</ITEM>
+			<ITEM LINE="5" COL="37"  TYPE="%-11s" FUNCTIONS="T(票据日期  :)"/>
+			<ITEM LINE="5" COL="50" TYPE="%-8s" NAME="#Issuedate" INPUT="TEXT" FUNCTIONS="D()"/>
+
+			<ITEM LINE="7"  COL="3"  TYPE="%-12s"  FUNCTIONS="T(事由用途:)" />
+			<ITEM LINE="7"  COL="13" NAME="#Purp" TYPE="%-54s" INPUT="TEXT" FUNCTIONS="T()">
+				<ONLOSTFOCUS>
+					"{
+						initfd();
+						commsend_001();
+						
+						$FD16='1202';
+						$FD18='app';
+						$FD25=#PayerName;
+						$FD26=#PayeeName;
+						$FD103=#Purp;
+						$FD112='';    //无地址信息输入空
+						$FD116='';
+						callagnpbp();
+						if($FD12!='0000')
+						{
+							showmsg(geterror());
+							return(false);
+						}
+						showmsg('中文字符校验通过');
+					}"
+				</ONLOSTFOCUS>
+			</ITEM>
+		</BLOCK>
+
+		<ITEM LINE="21"  COL="57" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+			<ONLOSTFOCUS>
+				"{
+					dim @s_num as string;
+					dim @num as number;
+					initfd();
+					commsend_001();
+					$FD16 = '1211';
+					$FD18 = 'pbp';
+					$FD28 = 'sxps';
+
+					$FD34  = #BusyType;
+					$FD64  = #BusyKind;
+
+					$FD25  = #PayerName;
+					$FD27  = #InBankName;
+					$FD30  = #PayerAcct;
+					$FD59  = #InBankNo;
+
+					$FD26  = #PayeeName;
+					$FD31  = #PayeeAcct;
+
+					$FD48  = #CurrCode;
+					$FD49  = #CurrType;
+					@num   = #TradeAmt*100;
+					@s_num  = itoa(@num,'%.2f');
+					$FD39 = @s_num;
+					$FD92  = #BillType;
+					$FD60  = #CertNo;
+					$FD29 = #Issuedate;
+					$FD67  = #FeeWay;
+					@num   = #FeeAmt*100;
+					@s_num  = itoa(@num,'%.2f');
+					$FD40  = @s_num;
+					$FD70=#Ctind;
+
+					$FD82 = #IDNo;
+					$FD79 = #IDType;
+					$FD57 = #AuthInfo;
+					$FD105 = #Purp;
+					callagnpbp();
+					if ($FD12 != '0000')
+					{
+					showmsg(geterror());
+					return(false);
+					}
+					
+					runoutput();
+					rerun();
+					refresh();
+				}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	</VARIABLE>
+	<RESPONSE>
+		<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+			NOTHING
+		</PACKAGE>
+		<PRINT>
+			"{
+				PrintTxHead();
+				if (#Ctind == '2')
+				{
+					print(3,11,'收款人账号:[20]',#PayeeAcct);
+					print(4,11,'收款人姓名:[60]',#PayeeName);
+				}
+				print(5, 11, '付款人账号:[20]',#PayerAcct);
+				print(6, 11, '付款人姓名:[60]',#PayerName);
+				print(7, 11, '交易金额  :[20]',ltrim(itoa(#TradeAmt,'%.2f')));
+				
+				print(9,11,'交易序号:[20]',itoa(atoi($FD41)));
+				print(9,41,'交易日期:[8]',$FD45);
+				PrintTxTail();
+			}"
+		</PRINT>
+	</RESPONSE>
+	
+	<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+			$KINDNO='00';
+			dim @txtime as string;
+			@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			
+			print( 3, 10,'机构名称:[30]',$BRNAME);
+			print( 3, 0,'代码:1211');
+			print( 3, 5,'交易:通兑交易');
+			
+			if (#Ctind == '2')
+			{
+				print(5,10,'收款人账号:[20]',#PayeeAcct);
+	   			print(5,10,'收款人姓名:[60]',#PayeeName);
+	   		}
+	   			print( 7, 10,'付款人账号:[20]',#PayerAcct);
+	   			print(7, 10,'付款人姓名:[60]',#PayerName);
+	   		print(9,10,'交易金额:[20]',ltrim(itoa(#TradeAmt,'%.2f')));
+			print( 11, 10,'交易序号:[10]',itoa(atoi($FD41)));
+			print(11,20,'交易日期:[8]',$FD45);
+			
+			printacdtl_1();
+			print(23,10,'交易日期:[8] [8]',$HDATE,@txtime);
+			print(23,5,'柜员:[4]',$FD7);
+			print(23,5,'流水号:[6]',itoa(atoi($FD56)));				
+		}"
+		</PRINT>
+	</RESPONSE>
+</TRANSACTION>

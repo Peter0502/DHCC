@@ -1,0 +1,777 @@
+/*************************************************************
+* 文 件 名: rpt054.c
+* 功能描述：综合业务量统计表月报
+*
+* 作    者: jane
+* 完成日期: 2003年10月08日
+*
+* 注：格式文件为zhywltjbyb.tbl
+*     卡报表
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+static struct com_sys_parm_c sComSysParm;
+static struct com_branch_c sComBranch;
+static struct com_branch_c sComBranch1;
+/*业务笔数小计|对公|储蓄|现金收付收|取|发卡总户数9400|0元户|100元下|千元下|万元下|万元上|年新增100元上|
+发卡总户数4302*/
+EXEC SQL BEGIN DECLARE SECTION;
+static int cnt1,cnt2,cnt3,cnt4,cnt5,cnt6,cnt7,cnt8,cnt9,cnt10,cnt11;
+static int zh_cnt1,zh_cnt2,zh_cnt3,zh_cnt4,zh_cnt5,zh_cnt6,zh_cnt7,zh_cnt8,zh_cnt9,zh_cnt10,zh_cnt11;
+static int qh_cnt1,qh_cnt2,qh_cnt3,qh_cnt4,qh_cnt5,qh_cnt6,qh_cnt7,qh_cnt8,qh_cnt9,qh_cnt10,qh_cnt11;
+/*现金收付收|现金收付取|月末卡余额*/
+static double amt1,amt2,amt3,zh_amt1,zh_amt2,zh_amt3,qh_amt1,qh_amt2,qh_amt3;
+static long date_min,date_max;    /*天数*/
+static int ac_seqn_v;
+EXEC SQL END DECLARE SECTION;
+
+int get_ratio_zhywltjbyb(int bli,int bll,char str[100]);
+rpt054()
+{
+	int line, opncnt;
+	char vpfm[21];
+	char fname[10];
+	char pre_br_type[2];
+	char pre_br_no[6];
+	char pre_up_br_no[6];
+	FILE *fp; 
+	char zh_br_no[6];    /*总行机构号*/
+	int br_cnt;
+	
+	memset( pre_br_no, 0x00, sizeof( pre_br_no ) );
+	memset( pre_up_br_no, 0x00, sizeof( pre_up_br_no ) );
+
+	zh_cnt1=zh_cnt2=zh_cnt3=zh_cnt4=zh_cnt5=zh_cnt6=zh_cnt7=zh_cnt8=zh_cnt9=zh_cnt10=zh_cnt11=0;
+	zh_amt1=zh_amt2=zh_amt3=0.00;
+	qh_cnt1=qh_cnt2=qh_cnt3=qh_cnt4=qh_cnt5=qh_cnt6=qh_cnt7=qh_cnt8=qh_cnt9=qh_cnt10=qh_cnt11=0;
+	qh_amt1=qh_amt2=qh_amt3=0.00;
+
+    g_reply_int = pub_base_CurToSeqn( "01", &ac_seqn_v );
+	if ( g_reply_int )
+	{
+		sprintf(acErrMsg,"调用函数根据币种生成账户序号错误!");
+		WRITEMSG
+		return -1;
+	}
+
+    g_reply_int = sql_begin(); /*打开事务*/
+    if( g_reply_int != 0 )
+    {
+        sprintf( acErrMsg, "BEGIN WORK error!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+    
+	strcpy( fname, "BMzhywltjbyb" );
+	g_reply_int = pub_rpt_rmfile_all( fname );
+	if ( g_reply_int != 0)
+	{
+		sprintf(acErrMsg,"删除综合业务量统计表月报错误!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	memset( &sComSysParm, 0x00, sizeof( struct com_sys_parm_c ) );
+	g_reply_int = Com_sys_parm_Sel( g_pub_tx.reply , &sComSysParm , "sys_date=%ld" , g_pub_tx.tx_date );
+	if( g_reply_int ) 
+	{ 
+		sprintf(acErrMsg, "SUM com_sys_parm error![%d]", g_reply_int ); 
+		WRITEMSG 
+		goto ErrExit; 
+	}
+
+	date_min = sComSysParm.lst_date / 100;
+	date_min = date_min * 100;
+	date_max = sComSysParm.lst_date;
+
+	strcpy(vpfm, "zhywltjbyb");
+
+	/*删除临时索引*/
+	EXEC SQL drop view tmp_trace_log_rz;
+	/*建立临时视图*/
+TRACE;
+	g_reply_int = sql_execute2("create view tmp_trace_log_rz(trace_no_tx_date,tx_br_no,ac_no,amt,ct_ind,add_ind) as select trace_no*100000000+tx_date,tx_br_no,ac_no,amt,ct_ind,add_ind from trace_log_rz where tx_date>=%ld and tx_date<=%ld and sts!='1' and substr(ac_no,1,4) in ('9400','4302')", date_min, date_max );
+TRACE;
+	if(g_reply_int)
+	{
+		vtcp_log( "g_reply_int = [%d]", g_reply_int );
+		WRITEMSG
+		return -1;
+	}
+TRACE;
+	/*
+	g_reply_int = sql_execute2("create index tmp_trace_log_idx on tmp_trace_log_rz (trace_no_tx_date)");
+	if(g_reply_int)
+	{
+		vtcp_log( "[%d]", g_reply_int );
+		WRITEMSG
+		return -1;
+	}
+	g_reply_int = sql_execute2("create index tmp_trace_log_idx2 on tmp_trace_log_rz (tx_br_no)");
+	if(g_reply_int)
+	{
+		vtcp_log( "[%d]", g_reply_int );
+		WRITEMSG
+		return -1;
+	}
+	*/
+
+
+	memset( &sComBranch, 0x00, sizeof( struct com_branch_c ) );
+	g_reply_int = Com_branch_Sel( g_pub_tx.reply, &sComBranch, "br_type='6'" );
+	if( g_reply_int )
+	{
+		sprintf( acErrMsg,"取总行机构号错[%ld]", g_reply_int );
+		WRITEMSG
+		goto ErrExit;
+	}
+	strcpy( zh_br_no, sComBranch.br_no );
+
+	g_reply_int = pub_rpt_openfile( &fp, sComBranch.br_no , fname );
+	if( g_reply_int )
+	{
+		sprintf( acErrMsg,"RPT OPEN FILE [%s]error![%d]", fname, g_reply_int );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "HH", &opncnt, get_ratio_zhywltjbyb );
+	if( g_reply_int )
+	{
+		sprintf( acErrMsg,"RPT READ PFM HH error![%d]", g_reply_int );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	g_reply_int = Com_branch_Dec_Sel( g_pub_tx.reply, "br_type in ('6','7') ORDER BY br_no" );
+	if( g_reply_int ) 
+	{ 
+		sprintf(acErrMsg, "DECLARE com_branch CUR error![%d]", g_reply_int ); 
+		WRITEMSG 
+		goto ErrExit; 
+	}
+
+	while(1) 
+	{ 
+		memset( &sComBranch, 0x00, sizeof( struct com_branch_c ) );
+		g_reply_int = Com_branch_Fet_Sel( &sComBranch, g_pub_tx.reply );
+		if( g_reply_int && g_reply_int != 100 )
+		{
+			sprintf( acErrMsg,"FETCH com_branch CUR error![%d]", g_reply_int );
+			WRITEMSG
+			goto ErrExit;
+		}
+		else if( g_reply_int == 100 )
+		{
+			/*全行合计值*/
+			g_reply_int = get_br_value( zh_br_no, 0 );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"取全行各项统计值出错" );
+				WRITEMSG
+				goto ErrExit;
+			}
+	
+			g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "ZZ", &opncnt,  
+				get_ratio_zhywltjbyb );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM ZZ error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			break;
+		}
+		vtcp_log( "xxxxx %s ", sComBranch.br_no );
+
+		br_cnt = 0;
+		g_reply_int = Com_branch_Dec_Sel1( g_pub_tx.reply,  
+			"up_br_no='%s' and br_type in ('4','5') ORDER BY br_type,br_no",  
+			sComBranch.br_no );
+		if( g_reply_int ) 
+		{ 
+			sprintf(acErrMsg, "DECLARE com_branch1 CUR error![%d]", g_reply_int ); 
+			WRITEMSG 
+			goto ErrExit; 
+		} 
+		while(1)
+		{
+			memset( &sComBranch1, 0x00, sizeof( struct com_branch_c ) );
+			g_reply_int = Com_branch_Fet_Sel1( &sComBranch1, g_pub_tx.reply );
+			if( g_reply_int && g_reply_int != 100 )
+			{
+				sprintf( acErrMsg,"FETCH com_branch CUR1 error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			else if( g_reply_int == 100 )
+			{
+				if( br_cnt < 2 ) break;    /*如果是下属机构小于两个不打印支行合计值*/
+
+				/*支行合计值*/
+				g_reply_int = get_br_value( sComBranch.br_no, 1 );
+				if( g_reply_int )
+				{
+					sprintf( acErrMsg,"取[%s]机构各项统计值出错", sComBranch.br_no );
+					WRITEMSG
+					goto ErrExit;
+				}
+	
+				g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "AA", &opncnt,  
+					get_ratio_zhywltjbyb );
+				if( g_reply_int )
+				{
+					sprintf( acErrMsg,"RPT READ PFM AA error![%d]", g_reply_int );
+					WRITEMSG
+					goto ErrExit;
+				}
+				zh_cnt1=zh_cnt2=zh_cnt3=zh_cnt4=zh_cnt5=zh_cnt6=zh_cnt7=zh_cnt8=zh_cnt9=zh_cnt10=zh_cnt11=0;
+				zh_amt1=zh_amt2=zh_amt3=0.00;
+				break;
+			}
+
+			cnt1=cnt2=cnt3=cnt4=cnt5=cnt6=cnt7=cnt8=cnt9=cnt10=cnt11=0;
+			amt1=amt2=amt3=0.00;
+			g_reply_int = get_br_value( sComBranch1.br_no, 2 );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"取[%s]机构各项统计值出错", sComBranch1.br_no );
+				WRITEMSG
+				goto ErrExit;
+			}
+
+			g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "AA", &opncnt,  
+				get_ratio_zhywltjbyb );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM AA error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			br_cnt ++;
+		}
+		Com_branch_Clo_Sel1();
+
+		g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "BB", &opncnt,  
+			get_ratio_zhywltjbyb );
+		if( g_reply_int )
+		{
+			sprintf( acErrMsg,"RPT READ PFM BB error![%d]", g_reply_int );
+			WRITEMSG
+			goto ErrExit;
+		}
+	}
+	
+	Com_branch_Clo_Sel();
+
+	/*删除临时索引*/
+	EXEC SQL drop view tmp_trace_log_rz;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg, "删除临时索引错误![%ld]", sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成综合业务量统计表月报成功![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成综合业务量统计表月报失败![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int get_ratio_zhywltjbyb( bli,bll,str )
+int bli,bll;
+char str[100];
+{
+	char vstr[101]; 
+	char fmt[10]; 
+	
+	switch( bli ) 
+	{ 
+		case 'X': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sComSysParm.lst_date/10000 ); 
+			break; 
+		case 'Y': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sComSysParm.lst_date/100%100 ); 
+			break; 
+		case 'v': 
+			sprintf(vstr, "%s", sComBranch1.br_no );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'a': 
+			sprintf(vstr, "%ld", cnt1 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'b': 
+			sprintf(vstr, "%ld", cnt2 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'c': 
+			sprintf(vstr, "%ld", cnt3 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'd': 
+			sprintf(vstr, "%.2lf", amt1/10000 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'e': 
+			sprintf(vstr, "%.2lf", amt2/10000 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'f': 
+			sprintf(vstr, "%.2lf", amt3/10000 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'g': 
+			sprintf(vstr, "%ld", cnt4 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'h': 
+			sprintf(vstr, "%ld", cnt5 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'i': 
+			sprintf(vstr, "%ld", cnt6 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'j': 
+			sprintf(vstr, "%ld", cnt7 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'k': 
+			sprintf(vstr, "%ld", cnt8 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'l': 
+			sprintf(vstr, "%ld", cnt9 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'm': 
+			sprintf(vstr, "%ld", cnt10 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'n': 
+			sprintf(vstr, "%ld", cnt11 );
+			sprintf( fmt, "%%%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		default : 
+			memset( str,' ',bll ); 
+			break; 
+	}
+	
+	return 0; 
+}
+
+/*把机构各项统计值取进变量*/
+int get_br_value( br_no_v, flagv )
+EXEC SQL BEGIN DECLARE SECTION;
+char *br_no_v;
+EXEC SQL END DECLARE SECTION;
+int flagv;
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		int cnt_v;
+		short flagc;
+		double amt_v;
+		long datev;
+	EXEC SQL END DECLARE SECTION;
+
+	switch( flagv )
+	{
+		case 0:    /*全行*/
+			cnt1=qh_cnt1; cnt2=qh_cnt2; cnt3=qh_cnt3; cnt4=qh_cnt4; cnt5=qh_cnt5;
+			cnt6=qh_cnt6; cnt7=qh_cnt7; cnt8=qh_cnt8; cnt9=qh_cnt9; cnt10=qh_cnt10;
+			cnt11=qh_cnt11;
+			vtcp_log("cnt1[%d]",cnt1);
+			strcpy( sComBranch1.br_no, br_no_v );
+			return 0;
+			break;
+		case 1:    /*支行*/
+			cnt1=zh_cnt1; cnt2=zh_cnt2; cnt3=zh_cnt3; cnt4=zh_cnt4; cnt5=zh_cnt5;
+			cnt6=zh_cnt6; cnt7=zh_cnt7; cnt8=zh_cnt8; cnt9=zh_cnt9; cnt10=zh_cnt10;
+			cnt11=zh_cnt11;
+			strcpy( sComBranch1.br_no, br_no_v );
+			vtcp_log("cnt1[%d]",cnt1);
+			return 0;
+			break;
+		case 2:    /*网点*/
+			break;
+		default:
+			return 1;
+			break;
+	}
+TRACE;
+	EXEC SQL select count(distinct trace_no_tx_date) into :cnt_v:flagc from tmp_trace_log_rz where
+		tx_br_no=:br_no_v;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt1=cnt_v;
+
+TRACE;
+	EXEC SQL select count(distinct trace_no_tx_date) into :cnt_v:flagc  
+	from tmp_trace_log_rz a,mdm_ac_rel b  
+	where tx_br_no=:br_no_v and b.ac_no=a.ac_no  
+	and b.ac_id in (select ac_id from dd_mst where cal_code='1');
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt2+=cnt_v;
+	EXEC SQL select count(distinct trace_no_tx_date) into :cnt_v:flagc  
+	from tmp_trace_log_rz a,mdm_ac_rel b  
+	where tx_br_no=:br_no_v and b.ac_no=a.ac_no  
+	and b.ac_id in (select ac_id from td_mst where cal_code='1');
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt2+=cnt_v;
+TRACE;
+
+	EXEC SQL select count(distinct trace_no_tx_date) into :cnt_v:flagc  
+	from tmp_trace_log_rz a,mdm_ac_rel b  
+	where tx_br_no=:br_no_v and b.ac_no=a.ac_no  
+	and b.ac_id in (select ac_id from dd_mst where cal_code!='1');
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt3+=cnt_v;
+	EXEC SQL select count(distinct trace_no_tx_date) into :cnt_v:flagc  
+	from tmp_trace_log_rz a,mdm_ac_rel b  
+	where tx_br_no=:br_no_v and b.ac_no=a.ac_no  
+	and b.ac_id in (select ac_id from td_mst where cal_code!='1');
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt3+=cnt_v;
+
+TRACE;
+	EXEC SQL select sum(amt) into :amt_v:flagc from tmp_trace_log_rz  
+	where tx_br_no=:br_no_v and ct_ind='1' and add_ind='1';
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) amt_v=0;
+	amt1=amt_v;
+
+TRACE;
+	EXEC SQL select sum(amt) into :amt_v:flagc from tmp_trace_log_rz  
+	where tx_br_no=:br_no_v and ct_ind='1' and add_ind='0';
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) amt_v=0;
+	amt2=amt_v;
+
+TRACE;
+	/*月末卡余额AMT3*/
+	EXEC SQL select sum(b.bal) INTO :amt_v:flagc
+		from mdm_ac_rel a,dd_mst b where b.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) amt_v=0.00;
+	amt3=amt_v;
+	EXEC SQL select sum(b.bal) INTO :amt_v:flagc
+		from mdm_ac_rel a,td_mst b where b.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) amt_v=0.00;
+	amt3+=amt_v;
+TRACE;
+
+	/*发卡总户数9400*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel where opn_br_no=:br_no_v and note_sts!='*'  
+		and substr(ac_no,1,4)='9400'  
+		and beg_date<=:date_max;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt4=cnt_v;
+TRACE;
+
+	/*发卡总户数4302*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel where opn_br_no=:br_no_v and note_sts!='*'  
+		and substr(ac_no,1,4)='4302'  
+		and beg_date<=:date_max;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt11=cnt_v;
+TRACE;
+
+	/*发卡0元户数*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and b.bal=0;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt5=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and b.bal=0;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt5+=cnt_v;
+TRACE;
+	
+	/*发卡100元以下户数*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>0 and bal<100;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt6=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>0 and bal<100;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt6+=cnt_v;
+
+	/*发卡千元以下户数*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>100 and bal<1000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt7=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>100 and bal<1000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt7+=cnt_v;
+
+	/*发卡万元以下户数*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>1000 and bal<10000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt8=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>1000 and bal<10000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt8+=cnt_v;
+
+	/*发卡万元以上户数*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>10000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt9=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date<=:date_max
+		and bal>10000;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt9+=cnt_v;
+
+	datev = date_min / 10000;
+	datev = datev * 10000;
+	/*年新增100以上*/
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,dd_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date >= :datev and bal>100;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt10=cnt_v;
+	EXEC SQL select count(*) INTO :cnt_v:flagc
+		from mdm_ac_rel a,td_mst b where a.opn_br_no=:br_no_v and b.ac_sts!='*'  
+		and substr(a.ac_no,1,4) in ('9400','4302') and b.ac_id=a.ac_id 
+		and b.opn_date >= :datev and bal>100;
+	if( sqlca.sqlcode<0 )
+	{
+		vtcp_log( "[%s],[%d]", br_no_v, sqlca.sqlcode );
+		WRITEMSG
+		return -1;
+	}
+	if( flagc ) cnt_v=0;
+	cnt10+=cnt_v;
+
+vtcp_log("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",cnt1,cnt2,cnt3,cnt4,cnt5,cnt6,cnt7,cnt8,cnt9,cnt10);
+	/*累加合计值*/
+	zh_cnt1+=cnt1; zh_cnt2+=cnt2; zh_cnt3+=cnt3; zh_cnt4+=cnt4; zh_cnt5+=cnt5;
+	zh_cnt6+=cnt6; zh_cnt7+=cnt7; zh_cnt8+=cnt8; zh_cnt9+=cnt9; zh_cnt10+=cnt10;
+	zh_cnt11+=cnt11;
+	zh_amt1+=amt1; zh_amt2+=amt2; zh_amt3+=amt3;
+	qh_cnt1+=cnt1; qh_cnt2+=cnt2; qh_cnt3+=cnt3; qh_cnt4+=cnt4; qh_cnt5+=cnt5;
+	qh_cnt6+=cnt6; qh_cnt7+=cnt7; qh_cnt8+=cnt8; qh_cnt9+=cnt9; qh_cnt10+=cnt10;
+	qh_cnt11+=cnt11;
+	qh_amt1+=amt1; qh_amt2+=amt2; qh_amt3+=amt3;
+
+	return 0;
+}

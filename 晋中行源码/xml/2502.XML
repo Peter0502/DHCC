@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111001" TITLE="2502 黑名单信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{
+    commsend_001();
+    $FD68=#OPNO;
+    $FD28=#CUSTNO;
+    $FD67=#INSOU;
+    $FD81=#HANRE;
+   }"
+</COMMSEND>
+<COMMRECV>
+  "{ commrecv_001();
+   }"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-45s" FUNCTIONS=
+	 "T(2502                         黑名单信息维护)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+	 "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=1502)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="8" COL="15" TYPE="%-10s" FUNCTIONS="T(操 作 码:!)"/>
+  <ITEM NAME="#OPNO" INPUT="TEXT" LINE="8" COL="25" TYPE="%-1s" FUNCTIONS="T(1)">
+    <SELECT>
+      <OPTION VALUE="1" TITLE="修改"/>
+      <OPTION VALUE="2" TITLE="删除"/>
+	  </SELECT>
+  </ITEM>
+  <ITEM NAME="#SOPNO"  TYPE="%-4s"          FUNCTIONS="S(#OPNO,#OPNO)"/>
+
+	<!--<ITEM LINE="8" COL="3" TYPE="%-74s" FUNCTIONS=
+	"T(--------------------------------------------------------------------------)"/>-->
+	<ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+	<ITEM LINE="12" COL="15" TYPE="%-10s" FUNCTIONS="T(信息来源:!)"/>
+	<ITEM LINE="14" COL="15" TYPE="%-10s" FUNCTIONS="T(上单原因:)"/>
+	<ITEM NAME="#CUSTNO" INPUT="TEXT" LINE="10" COL="25" TYPE="%-8s" FUNCTIONS="h()V(NB)"/>
+	<ITEM NAME="#INSOU" INPUT="SELECT" LINE="12" COL="25" TYPE="%-1s" FUNCTIONS="T(1)">
+	  <SELECT>
+      <OPTION VALUE="1" TITLE="坏帐"/>
+      <OPTION VALUE="2" TITLE="法院起诉"/>
+      <OPTION VALUE="3" TITLE="外部信息"/>
+      <OPTION VALUE="4" TITLE="冻结"/>
+	 </SELECT>
+	 <ONLOSTFOCUS>
+	   "{initfd();
+ 	  	 dim @txno_bak as string;
+ 	 	   dim @tota as string;
+		   @txno_bak=$TXNO;
+ 	 	   $TXNO='9853';
+ 	 	   $FD28=#CUSTNO;
+ 	 	   $FD67=#INSOU;
+ 	   	 commsend_001();
+ 	  	 @tota=callserver();
+ 	  	 $TXNO=@txno_bak;
+		   if($FD12!='0000'){
+			 showmsg(geterror());
+			 return(false);
+		   } 
+		   #HANRE=delspace($FD81);
+		   show(#HANRE,true);
+		   if(#OPNO == '2')
+		   {
+			enable(#HANRE,false);
+		   }
+		   else
+		   {
+			enable(#HANRE,true);
+		   }
+		 }"	 	
+   </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SINSOU" TYPE="%-8s" FUNCTIONS="S(#INSOU,#INSOU)"/>
+
+  <ITEM NAME="#HANRE" INPUT="TEXT" LINE="14" COL="25" TYPE="%-50s" FUNCTIONS="T()V(NB)"/>
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错------------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="20" COL="60"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="黑名单维护">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		if(#OPNO == '1')
+		{
+			print( 3,30,'黑名单信息[4]',#SOPNO);
+			print( 5,22,'客 户 号: [ 8]',#CUSTNO);
+			print( 6,22,'信息来源: [ 8]',#SINSOU);
+			print( 7,22,'上单原因: [50]',#HANRE);
+		}
+		else
+		{
+			print( 3,30,'黑名单信息[4]',#SOPNO);
+			print( 5,22,'客 户 号: [ 8]',#CUSTNO);
+			print( 6,22,'信息来源: [ 8]',#SINSOU);
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

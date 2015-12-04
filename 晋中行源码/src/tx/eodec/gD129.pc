@@ -1,0 +1,501 @@
+/***************************************************************
+* 文 件 名: gD129.pc
+* 功能描述: 季末提营业税 晋中改为每个月提,提汇总数记到清算,支行不记
+* 作    者: ligl
+* 完成日期: 2006-12-20 11:22
+*
+* 修改记录： 20150130 财务部要求计提的五项费用分别加一个数据 等2016再改回来  武大为
+*    日    期:
+*    修 改 人:
+*    修改内容:
+*
+**************************************************************/
+#define MYRETERR if( ret ) { \
+		sprintf(acErrMsg,"DO DATABASE ERROR[%d]",ret ); \
+		WRITEMSG \
+		strcpy( g_pub_tx.reply,"D103" ); \
+		goto ErrExit;\
+		}
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "com_parm_c.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "gl_sub_c.h"
+#include "com_item_c.h"
+#include "com_parm_c.h"
+char  def_br_no[6];
+char  def_tel[5];
+#define CJFJSL_CP 0.07            /*常平园城建税*/
+#define  CJFJSL_LK  0.07          /*城建税(潞矿营业部自己使用)*/
+#define  YYSL	0.05		            /* 营业税 */
+#define  CJFJSL	0.07		          /* 城建税 */
+#define  JYFJSL	0.03		          /* 教育费附加 */
+#define  JGTKJJ	0.00		          /* 价格调控基金 *//* 20150413 武大为 由原来0.015改成0 */
+#define DFJYFSL 0.02              /* 地方教育费附加 */
+EXEC SQL include sqlca;
+long num_cnt;
+double tot_amt=0;				/* 为了 打出的合计数=明细数的和 */
+static char Qs_ind[2];
+gD129()
+{
+	int ret=0;
+	double c_bal=0.00, d_bal=0.00;
+	char dc_ind;
+	struct com_parm_c sCom_parm;
+	struct com_branch_c sCom_branch;
+	struct com_sys_parm_c sCom_sys_parm;
+	struct gl_sub_c sGl_sub;
+	struct com_item_c sCom_item;
+	struct com_parm_c g_com_parm;
+	long quarter=0;
+	FILE * fp1=NULL;
+	FILE * fp2=NULL;
+	FILE * fp3=NULL;
+	FILE * fp4=NULL;
+	char filename1[64],filename2[64],filename3[64],filename4[64],jidu[3];
+	char tmp_cxamt[21],vstr[60],vstr1[79],vstr2[79];
+	char tmp_jyf[21];
+	char tmp_yyf[21];
+	char tmp_cjf[21];
+	char tmp_jgtk[21];
+	char tmp_dfjyf[21];
+
+	double vsrje=0.00,vsrjejs=0.00,vsrjejj=0.00,d529_amt=0.00,c529_amt=0.00,d5_amt=0.00,c5_amt=0.00;
+	memset(&g_com_parm,0x00,sizeof(struct com_parm_c));
+	memset(&sGl_sub , 0 , sizeof(sGl_sub));
+	memset(&sCom_parm , 0 , sizeof(sCom_parm));
+	memset(&sCom_branch, 0  ,sizeof(sCom_branch));
+	memset(&sCom_sys_parm, 0 , sizeof(sCom_sys_parm));
+	memset(&sCom_item, 0 , sizeof(sCom_item));
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*** 初始化全局变量 ***/
+	if(pub_base_sysinit())
+	{
+		strcpy(acErrMsg,"初始化全局变量出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "得到交易日期失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/ 
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/ 
+	strcpy( g_pub_tx.ac_wrk_ind,"000" ); /*不核对凭证号，零金额不计流水、明细*/ 
+	strcpy( g_pub_tx.end_note_no,g_pub_tx.beg_note_no); 
+	strcpy( g_pub_tx.prt_ind,"0" ); /*不登折*/ 
+	g_pub_tx.svc_ind=9001;  /*内部帐存取*/ 
+	strcpy(g_pub_tx.prt_ind,"0"); 
+	strcpy(g_pub_tx.hst_ind,"1"); /*日间入明细*/
+	g_pub_tx.tx_date = sCom_sys_parm.sys_date;
+	/**得到季度**/
+	memset(jidu,0x00,sizeof(jidu));
+	quarter=pub_base_quarter_year(g_pub_tx.tx_date);
+	switch(quarter)
+	{
+		case 1:
+			strcpy(jidu,"一");
+			break;
+		case 2:
+			strcpy(jidu,"二");
+			break;
+		case 3:
+			strcpy(jidu,"三");
+			break;
+		case 4:
+			strcpy(jidu,"四");
+			break;
+	}
+	/*ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type not in('0','6') and wrk_sts!='*' order by br_no");
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type ='1' or city_no<>0 ");*/
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type ='1'");/*add by martin 2009/12/19 23:00:14 增加*/
+	if(ret)/*期待 10001 11501*/
+	{
+		strcpy(acErrMsg,"定义机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	num_cnt=1;
+	while(1)
+	{
+		vsrje=0.00;
+		vsrjejs=0.00;
+		vsrjejj=0.00;
+		d5_amt=0.00;
+		c5_amt=0.00;
+		d529_amt=0.00;
+		c529_amt=0.00;tot_amt=0;
+		ret=Com_branch_Fet_Sel(&sCom_branch,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+		strcpy(acErrMsg,"读取机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+		}
+		/*add by martin 是否划入清算 0 划入清算，1划入本行 2009/12/18 17:23:21*/
+		memset(Qs_ind,0, sizeof(Qs_ind));
+		if(sCom_branch.city_no == 0 )
+		{ 
+		
+			strcpy(Qs_ind,"0");
+		
+		}else
+		{/****晋中要求县域两个支行也划入清算中心  20120419
+			strcpy(Qs_ind,"1");
+			****/
+			strcpy(Qs_ind,"0");
+		}
+		
+		memcpy(g_pub_tx.tel,sCom_branch.br_no+1,2);
+		memcpy(g_pub_tx.tel+2,"99",2);
+		set_zd_data(DC_TEL,g_pub_tx.tel);
+		if(memcmp(sCom_branch.br_no,QS_BR_NO,5)==0)
+		{/*清算去掉 city_no==0 | opn_br_no in (select br_no from com_branch where city_no=0 and br_type not in('0','6')) */
+			/****晋中要求县域两个支行也划入清算中心  20120419
+			EXEC SQL select sum(cr_bal) into :vsrje   from gl_sub where acc_hrt in ('51100','50100','51300','51200','51400') and br_no in (select br_no from com_branch where city_no=0 and br_type not in('0','6'));
+			EXEC SQL select sum(dr_bal) into :vsrjejs from gl_sub where acc_hrt='53301' and br_no in (select br_no from com_branch where city_no=0 and br_type not in('0','6'));
+			****/
+			/** 按照财务要求 去掉了514科目 wudawei 20130930**/
+			/*EXEC SQL select sum(cr_bal) into :vsrje   from gl_sub where acc_hrt in ('51100','50100','51300','51200') and br_no in (select br_no from com_branch where  br_type not in('0','6')); mod by lwb 20150526   增加分行*/
+			/*EXEC SQL select sum(dr_bal) into :vsrjejs from gl_sub where acc_hrt='53301' and br_no in (select br_no from com_branch where  br_type not in('0','6'));*/
+			EXEC SQL select sum(cr_bal) into :vsrje   from gl_sub where acc_hrt in ('51100','50100','51300','51200') and br_no in (select br_no from com_branch where  br_type not in('0','6','7'));
+			EXEC SQL select sum(dr_bal) into :vsrjejs from gl_sub where acc_hrt='53301' and br_no in (select br_no from com_branch where  br_type not in('0','6','7'));
+
+			vtcp_log("5的合计数余额[%.2f],53301余额[%.2f]\n",vsrje,vsrjejs);
+			/* 汇总5*发生额 */
+			/****晋中要求县域两个支行也划入清算中心  20120419
+			ret = sql_sum_double("dc_log", "amt", &d5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512', '514')  and dc_ind='1' and sts='0' and tx_opn_br_no in (select br_no from com_branch where city_no=0 and br_type not in('0','6'))");
+			MYRETERR
+			ret = sql_sum_double("dc_log", "amt", &c5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512', '514')  and dc_ind='2' and sts='0' and tx_opn_br_no in (select br_no from com_branch where city_no=0 and br_type not in('0','6'))");
+			MYRETERR
+			****/
+			ret = sql_sum_double("dc_log", "amt", &d5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512')  and dc_ind='1' and sts='0' and tx_opn_br_no in (select br_no from com_branch where br_type not in('0','6','7'))"); /*mod by lwb 20150526 增加分行 */
+			MYRETERR
+			ret = sql_sum_double("dc_log", "amt", &c5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512')  and dc_ind='2' and sts='0' and tx_opn_br_no in (select br_no from com_branch where br_type not in('0','6','7'))");
+			MYRETERR
+		}/****晋中要求县域两个支行也划入清算中心  20120419
+		else
+			{*city_no<>0 |and br_no=:sCom_branch.br_no*
+				EXEC SQL select sum(cr_bal) into :vsrje   from gl_sub where acc_hrt in ('51100','50100','51300','51200','51400') and br_no=:sCom_branch.br_no;
+				EXEC SQL select sum(dr_bal) into :vsrjejs from gl_sub where acc_hrt='53301' and br_no=:sCom_branch.br_no;
+				vtcp_log("5的合计数余额[%.2f],53301余额[%.2f]\n",vsrje,vsrjejs);
+				* 汇总5*发生额 *
+				ret = sql_sum_double("dc_log", "amt", &d5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512', '514')  and dc_ind='1' and sts='0' and tx_opn_br_no='%s'",sCom_branch.br_no);
+				MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &c5_amt,"substr(acc_hrt,1,3) in('501','511','513', '512', '514')  and dc_ind='2' and sts='0' and tx_opn_br_no='%s'",sCom_branch.br_no);
+				MYRETERR
+			}
+		****/
+		vsrje=vsrje+c5_amt-d5_amt;/**汇总金额**/
+			/**营业税记账**/
+			/**当季营业税**/
+			ret=sub_acct("53301","2650101",vsrje*YYSL-vsrjejs+3423980.21,"营业税",sCom_branch.br_no);
+			MYRETERR
+			/**城建税记账**/		
+			/**当季城建税**/
+			if(memcmp(sCom_branch.br_no,"52001",5)==0)/**常平园**/
+			{
+				ret=sub_acct("53302","2650102",(vsrje*YYSL-vsrjejs)*CJFJSL_CP,"城建税",sCom_branch.br_no);
+				MYRETERR
+			}
+			else if(memcmp(sCom_branch.br_no,"51401",5)==0)/**潞矿**/
+			{
+				ret=sub_acct("53302","2650102",(vsrje*YYSL-vsrjejs)*CJFJSL_LK,"城建税",sCom_branch.br_no);
+				MYRETERR
+			}
+			else /**其他机构**/
+			{
+				ret=sub_acct("53302","2650102",(vsrje*YYSL-vsrjejs)*CJFJSL+239678.62,"城建税",sCom_branch.br_no);
+				MYRETERR
+			}			
+
+			/**教育费及附加税**/
+			ret=sub_acct("53303","2650103",(vsrje*YYSL-vsrjejs)*JYFJSL+102719.41,"教育税",sCom_branch.br_no);
+			MYRETERR
+			/**价格调控基金=营业税*1.5% gujy JinZ 060425**/
+			ret=sub_acct("53304","2650104",(vsrje*YYSL-vsrjejs)*JGTKJJ,"价格调控基金",sCom_branch.br_no);
+			MYRETERR
+			/* 地方教育费附加=营业税*2%  2012-2-28 liuxuan */
+			ret=sub_acct("53305","2650105",(vsrje*YYSL-vsrjejs)*DFJYFSL+68479.61,"地方教育附加",sCom_branch.br_no);
+			MYRETERR
+			/*	 根据裴总指示 变成每个季度提了 
+			if(quarter==4)
+			*/
+			/****打印营业税借方传票****/
+			memset(filename1,0x0,sizeof(filename1));
+			sprintf(filename1,"%s/report/%s/gD129.txt",getenv("HOME"),sCom_branch.br_no);
+    	fp1 = fopen( filename1,"w" ); 
+    	if( fp1==NULL )
+    	{
+        sprintf(acErrMsg," open file [%s] error ",filename1 );
+        WRITEMSG
+        strcpy( g_pub_tx.reply,"S047" );
+        goto ErrExit;
+    	}
+			memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+			memset(vstr,0x00,sizeof(vstr));
+			if(memcmp(sCom_branch.br_no,"52001",5)==0)/**常平园**/
+			{
+ 	  		double dTmpamt=0.00;
+ 	  		/**常平圆的税**/
+ 	  		dTmpamt=(vsrje*YYSL-vsrjejs)*(1+CJFJSL_CP+JYFJSL+JGTKJJ);
+			dTmpamt=tot_amt;
+ 	  		sprintf( tmp_cxamt, "%.2f" ,dTmpamt);
+  			pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+				numtomoney(dTmpamt, vstr);	/* 大写金额 */
+				sprintf(tmp_yyf,"%.2lf",vsrje*YYSL-vsrjejs);/**营业税**/
+				pub_rpt_flttomon(tmp_yyf,tmp_yyf);
+				sprintf(tmp_cjf,"%.2lf",(vsrje*YYSL-vsrjejs)*CJFJSL_CP);/**城建税**/
+				pub_rpt_flttomon(tmp_cjf,tmp_cjf);
+				sprintf(tmp_jyf,"%.2lf",(vsrje*YYSL-vsrjejs)*JYFJSL);/**教育附加费**/
+				pub_rpt_flttomon(tmp_jyf,tmp_jyf);
+			}
+			else if(memcmp(sCom_branch.br_no,"51401",5)==0)/**潞矿**/
+			{
+ 	  		double dTmpamt=0.00;
+ 	  		memset(vstr1,0x00,sizeof(vstr1));
+ 	  		memset(vstr2,0x00,sizeof(vstr2));
+ 	  		/**潞矿的税**/
+ 	  		
+ 	  		dTmpamt=(vsrje*YYSL-vsrjejs)*(1+CJFJSL_LK+JYFJSL+JGTKJJ);
+			dTmpamt=tot_amt;
+ 	  		sprintf( tmp_cxamt, "%.2f" ,dTmpamt);
+  			pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+				numtomoney(dTmpamt, vstr1);	/* 大写金额 */
+				strcat (vstr1,"    ￥");
+				strcat (vstr1,tmp_cxamt);
+				sprintf(vstr2,"%-78s",vstr1);
+				sprintf(tmp_yyf,"%.2lf",vsrje*YYSL-vsrjejs);/**营业税**/
+				pub_rpt_flttomon(tmp_yyf,tmp_yyf);
+				sprintf(tmp_cjf,"%.2lf",(vsrje*YYSL-vsrjejs)*CJFJSL_LK);/**城建税**/
+				pub_rpt_flttomon(tmp_cjf,tmp_cjf);
+				sprintf(tmp_jyf,"%.2lf",(vsrje*YYSL-vsrjejs)*JYFJSL);/**教育附加费**/
+				pub_rpt_flttomon(tmp_jyf,tmp_jyf);
+			}
+			else
+			{
+ 	  		double dTmpamt=0.00;
+ 	  		memset(vstr1,0x00,sizeof(vstr1));
+ 	  		memset(vstr2,0x00,sizeof(vstr2));
+ 	  		/**其他机构的税**/
+ 	  		dTmpamt=(vsrje*YYSL-vsrjejs)*(1+CJFJSL+JYFJSL+JGTKJJ+DFJYFSL);
+			dTmpamt=tot_amt;
+ 	  		sprintf( tmp_cxamt, "%.2f" ,dTmpamt);
+  			pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+				numtomoney(dTmpamt, vstr1);	/* 大写金额 */
+			strcat (vstr1,"    ￥");
+			strcat (vstr1,tmp_cxamt);
+			
+			sprintf(vstr2,"%-78s",vstr1);
+				sprintf(tmp_yyf,"%.2lf",vsrje*YYSL-vsrjejs+3423980.21);/**营业税**/
+				pub_rpt_flttomon(tmp_yyf,tmp_yyf);
+				sprintf(tmp_cjf,"%.2lf",(vsrje*YYSL-vsrjejs)*CJFJSL+239678.62);/**城建税**/
+				pub_rpt_flttomon(tmp_cjf,tmp_cjf);
+				sprintf(tmp_jyf,"%.2lf",(vsrje*YYSL-vsrjejs)*JYFJSL+102719.41);/**教育附加费**/
+				pub_rpt_flttomon(tmp_jyf,tmp_jyf);
+			}
+			
+				sprintf(tmp_jgtk,"%.2lf",(vsrje*YYSL-vsrjejs)*JGTKJJ); /* 调控基金 */
+				pub_rpt_flttomon(tmp_jgtk,tmp_jgtk);	
+				sprintf(tmp_dfjyf,"%.2lf",(vsrje*YYSL-vsrjejs)*DFJYFSL+68479.61); /* 地方教育附加 */
+				pub_rpt_flttomon(tmp_dfjyf,tmp_dfjyf);							
+			/*	fprintf(fp1,"%c%c%c%c",0x1b,0x67,0x1c,0x0E);**/
+			fprintf(fp1,"\n\n\n\n\n\n\n");
+			fprintf(fp1, "                          晋中银行 %02d月份计提营业税及附加 (借方)传票\n",g_pub_tx.tx_date%10000/100);
+			fprintf(fp1, "         ------------------------------------------------------------------------\n");
+			fprintf(fp1,"\n");
+			fprintf(fp1, "  营业机构: %-12s(%s)                      交易日期: %ld         流水号: %ld\n",sCom_branch.br_name,sCom_branch.br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+			fprintf(fp1, "┌─────┬──────────────┬──────┬──────────────────┐\n");
+			fprintf(fp1, "│科目(借)  │533         营业税及附加    │对方科目(贷)│26501                               │\n");
+			fprintf(fp1, "├─────┴┬─────────────┴──────┴──────────────────┤\n");
+			fprintf(fp1, "│金额  (大写)│%s│\n",vstr2);
+			fprintf(fp1, "├──┬───┴─────────────────────┬──┬──────────────┤\n");
+			fprintf(fp1, "│    │ 税种       科目号             金额               │    │                            │\n");
+			fprintf(fp1, "│　　├─────────────────────────┤　　│　　                    　　│\n");
+			fprintf(fp1, "│ 明 │营业税      53301   ￥ %-21s      │ 摘 │                            │\n",tmp_yyf);
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│　　 计提营业税及附加 　　　│\n");
+			fprintf(fp1, "│ 细 │城建税      53302   ￥ %-21s      │ 要 │                            │\n",tmp_cjf);                 
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│                            │\n");
+			fprintf(fp1, "│ 科 │教育附加    53303   ￥ %-21s      │    │                            │\n",tmp_jyf);
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│                            │\n");
+			fprintf(fp1, "│ 目 │价格调控基金53304   ￥ %-21s      │    │                            │\n",tmp_jgtk);
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│                            │\n");
+			fprintf(fp1, "│    │地方教育附加53305   ￥ %-21s      │    │                            │\n",tmp_dfjyf);
+			fprintf(fp1, "└──┴─────────────────────────┴──┴──────────────┘\n");
+			fprintf(fp1, "             会    计:                    复    核:                      记    帐: %s\n",g_pub_tx.tel);
+			fprintf(fp1,"\n\n\n\n\n");
+
+		/*	fprintf(fp1,"%c%c%c%c",0x1b,0x67,0x1c,0x0E);*/
+			fprintf(fp1,"\n\n\n\n\n\n\n");
+			fprintf(fp1, "                          晋中银行 %02d月份计提营业税及附加 (贷方)传票\n",g_pub_tx.tx_date%10000/100);
+			fprintf(fp1, "         -----------------------------------------------------------------------\n");
+			fprintf(fp1,"\n");
+			fprintf(fp1, "  营业机构: %-12s(%s)                      交易日期: %ld         流水号: %ld\n",sCom_branch.br_name,sCom_branch.br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+			fprintf(fp1, "┌─────┬──────────────┬──────┬──────────────────┐\n");
+			fprintf(fp1, "│科目(借)  │533         营业税及附加    │对方科目(贷)│26501                               │\n");
+			fprintf(fp1, "├─────┴┬─────────────┴──────┴──────────────────┤\n");
+			fprintf(fp1, "│金额  (大写)│%s│\n",vstr2);
+			fprintf(fp1, "├──┬───┴─────────────────────┬──┬──────────────┤\n");
+			fprintf(fp1, "│    │ 税种       科目号             金额               │    │                            │\n");
+			fprintf(fp1, "│　　├─────────────────────────┤　　│　　                    　　│\n");
+			fprintf(fp1, "│ 明 │营业税      2650101   ￥ %-21s    │ 摘 │                            │\n",tmp_yyf);
+			fprintf(fp1, "│　　│                          ┄┄┄┄┄┄┄┄┄┄    │　　│　　　计提营业税及附加　　　│\n");
+			fprintf(fp1, "│ 细 │城建税      2650102   ￥ %-21s    │ 要 │                            │\n",tmp_cjf);                 
+			fprintf(fp1, "│　　│                          ┄┄┄┄┄┄┄┄┄┄    │　　│                            │\n");
+			fprintf(fp1, "│ 科 │教育附加    2650103   ￥ %-21s    │    │                            │\n",tmp_jyf);
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│                            │\n");
+			fprintf(fp1, "│ 目 │价格调控基金2650104   ￥ %-21s    │    │                            │\n",tmp_jgtk);
+			fprintf(fp1, "│　　│                        ┄┄┄┄┄┄┄┄┄┄      │　　│                            │\n");
+			fprintf(fp1, "│    │地方教育附加2650105   ￥ %-21s    │    │                            │\n",tmp_dfjyf);
+			fprintf(fp1, "└──┴─────────────────────────┴──┴──────────────┘\n");
+			fprintf(fp1, "             会    计:                    复    核:                      记    帐: %s\n",g_pub_tx.tel);
+			fprintf(fp1,"\n\n\n\n\n");
+			fclose(fp1);
+	}
+	Com_branch_Clo_Sel();
+OkExit:
+    sql_commit();   /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"处理成功![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+    sql_rollback(); /*--事务回滚--*/
+	sprintf(acErrMsg,"处理失败![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}
+int sub_acct( acc_jf,acc_df,amt,brf,br_no)
+ char *acc_jf;
+ char *acc_df;
+ double amt;
+ char *brf;
+ char *br_no;
+{
+	int ret=0;
+    char tmp_amt[21];
+
+    sprintf(tmp_amt,"%.0f",amt*100);
+    amt=atof(tmp_amt)/100;
+    vtcp_log("借方记帐科目[%s][%.2lf]",acc_jf,amt);
+
+	strcpy( g_pub_tx.tx_code, "D129");
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"0" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_jf );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy( g_pub_tx.brf,brf );
+	strcpy( g_pub_tx.no_show,"0" );
+
+	num_cnt++;
+	set_zd_long( DC_TRACE_CNT,num_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1204","01" );
+		set_zd_data("1205","2" );
+        set_zd_double("1208",amt);
+
+		ret = pubf_acct_proc("A016");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+	vtcp_log("贷方记帐科目[%s][%.2lf]",acc_df,amt);
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	if(Qs_ind[0]=='0')
+	{
+		strcpy(g_pub_tx.opn_br_no,QS_BR_NO);
+	}else
+		{
+			strcpy(g_pub_tx.opn_br_no,br_no);
+		}
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"1" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_df );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy(g_pub_tx.brf,brf);
+	strcpy( g_pub_tx.no_show,"0" );
+
+	num_cnt++;
+	set_zd_long( DC_TRACE_CNT,num_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1214","01" );
+		set_zd_data("1215","2" );
+        set_zd_double("1218",amt);
+
+        ret = pubf_acct_proc("A017");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+		set_zd_data("1204","" );
+		set_zd_data("1205","" );
+    set_zd_double("1208",0.00 );
+		set_zd_data("1214","" );
+		set_zd_data("1215","" );
+    set_zd_double("1218",0.00 );
+	tot_amt +=amt;
+	return 0;
+ErrExit:
+	return 1;
+}

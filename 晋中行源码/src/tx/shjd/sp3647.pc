@@ -1,0 +1,138 @@
+/*****************************************************
+* 文 件 名:  sp3647.pc
+* 功能描述： 事后监督定性程序     (前台:?.XML)
+* 作    者:  刘杨  (开封写) 
+* 完成日期： 2004/08/29
+* 修 改 人:  xyy
+* 修改记录： 改造成适应新系统的事后监督主程序
+* 日    期:  2007-1-16 13:58
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+#include "tranpara_c.h"
+#include "shjdcode_c.h"
+#include "xdtl_main_c.h"
+EXEC SQL INCLUDE sqlca;
+
+extern char * pcGetWorkday();
+int  sp3647()
+{
+    FILE *fp=NULL;
+    int      i = 0;
+    
+    char      text_ls    [2];
+    char      filename   [256];
+    char      cShtrancode[5];
+    char      cShsubtxcode[5]; 
+    char      cShtranname[21];
+    char      cShtxcode  [4];
+    char      cShtext    [201];
+    struct shjdcode_c shjdcode;
+    
+    memset(filename   , 0 , sizeof(filename));
+    memset(cShtrancode, 0 , sizeof(cShtrancode));
+    memset(cShsubtxcode, 0 , sizeof(cShsubtxcode)); 
+    memset(cShtranname, 0 , sizeof(cShtranname));
+    memset(cShtxcode  , 0 , sizeof(cShtxcode));
+    memset(cShtext    , 0 , sizeof(cShtext));
+    memset(text_ls    , 0 , sizeof(text_ls));
+    memset(&shjdcode  , 0 , sizeof(shjdcode));
+
+    EXEC SQL DECLARE c1 CURSOR FOR select * from shjdcode order by trancode;
+    EXEC SQL OPEN c1;
+    if(sqlca.sqlcode!=0)
+    {
+        sprintf( acErrMsg,"[%s][%d]打开游标出错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while(1)
+    {
+        memset(cShtrancode, 0 , sizeof(cShtrancode));
+        memset(cShsubtxcode, 0 , sizeof(cShsubtxcode)); 
+        memset(cShtranname, 0 , sizeof(cShtranname));
+        memset(cShtxcode  , 0 , sizeof(cShtxcode));
+        memset(cShtext    , 0 , sizeof(cShtext));
+        
+        EXEC SQL FETCH c1
+            INTO :cShtrancode,:cShsubtxcode,:cShtranname,:cShtxcode,:cShtext;
+        if(sqlca.sqlcode==1403)
+        {
+          if(i==0)
+          {
+             sprintf( acErrMsg,"[%s][%d]未找到所要记录[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+             strcpy( g_pub_tx.reply, "P015" );
+             set_zd_data(DC_GET_MSG,acErrMsg);
+             WRITEMSG
+             goto ErrExit;
+          }
+          break;
+        }
+        text_ls[0] = cShtext[0];
+        switch(text_ls[0]){
+          case '1':
+            memcpy(cShtext,"需要监督",sizeof(cShtext)-1);
+            break;
+          case '2':
+            memcpy(cShtext,"无需监督",sizeof(cShtext)-1);
+            break;
+          default :
+            memcpy(cShtext,"初始值",sizeof(cShtext)-1);
+            break;
+        }
+        if(!i)
+        {
+              pub_base_AllDwnFilName( filename );
+              fp = fopen( filename,"w" );
+              if( fp==NULL )
+              {
+                  sprintf(acErrMsg," open file [%s] error ",filename );
+                  strcpy( g_pub_tx.reply,"S047" );
+                  set_zd_data(DC_GET_MSG,acErrMsg);
+                  WRITEMSG
+                  goto ErrExit;
+              }
+              /**显示列标题**/
+              fprintf( fp,"~交易代号|子交易代码|交易名称|TXNO|备注字段|\n" );
+        }
+        i++;
+        fprintf(fp,"%s|%s|%s|%s|\n",cShtrancode,cShsubtxcode,cShtranname,cShtxcode,cShtext);  
+        vtcp_log("[%s][%d] i===[%d] ",__FILE__,__LINE__,i);
+    
+    }
+    EXEC SQL close c1;
+    vtcp_log("[%s][%d] 关闭游标喽!",__FILE__,__LINE__);
+    if( !i )
+	  {
+	  	strcpy( g_pub_tx.reply,"S049" );
+	  	goto ErrExit;
+	  }
+	  else
+	  {
+	  	fclose(fp);
+	  	set_zd_data(DC_FILE_SND,"1" );
+	  }
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1; 
+}

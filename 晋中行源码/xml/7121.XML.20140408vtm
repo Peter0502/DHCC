@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11001100000011000000000000000000" TITLE="7121    待确认凭证处理 "
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+		"T(7121                             待确认凭证处理)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+	<ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=5118)"/>
+	<ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(待确认凭证处理)"/>
+	
+	<ITEM LINE="8" COL="20" TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"/>
+	<ITEM LINE="8" COL="30" NAME="#PZZL" INPUT="SELECT" TYPE="%-3s" FUNCTIONS="T(020)V(NB)">
+		<SELECT>
+			<OPTION VALUE="020" TITLE="储蓄卡"/>
+			<OPTION VALUE="024" TITLE="金融IC卡"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#PZZL,#PZZL)"/>
+	
+	<ITEM LINE="9" COL="20" TYPE="%-10s" FUNCTIONS="T(起始号码:)"/>
+	<ITEM LINE="9" COL="30" NAME="#QSHM" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()V(NB)"/>
+	
+	<ITEM LINE="10" COL="20" TYPE="%-10s" FUNCTIONS="T(终止号码:)"/>
+	<ITEM LINE="10" COL="30" NAME="#ZZHM" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+				if(#ZZHM &lt; #QSHM)
+				{
+					showmsg('终止号码必须大于起始号码');
+					return(false);
+				}
+				
+				initfd();
+				commsend_001();
+				$FD16='9204';
+				$FD58=#QSHM;
+				$FD59=#ZZHM;
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#PZSL=$FD60;
+				show(#PZSL,true);
+				enable(#PZSL,false);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="11" COL="20" TYPE="%-10s" FUNCTIONS="T(凭证数量:)"/>
+	<ITEM LINE="11" COL="30" NAME="#PZSL" INPUT="TEXT" TYPE="%12s" FUNCTIONS="T(0)"/>
+	
+	<ITEM LINE="12" COL="20" TYPE="%-10s" FUNCTIONS="T(调整状态:!)"/>
+	<ITEM LINE="12" COL="30" NAME="#TZZT" INPUT="SELECT" TYPE="%-1s" FUNCTIONS="T(I)V(NB)">
+		<SELECT>
+			<OPTION VALUE="P" TITLE="作废"/>
+			<OPTION VALUE="Q" TITLE="正常"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#TZZT_TEXT"  TYPE="%-20s" FUNCTIONS="S(#TZZT,#TZZT)"/>
+	
+	<ITEM NAME="#OK" LINE="21" COL="65"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='5118';
+			$FD52=#PZSL;
+			$FD58=#QSHM;
+			$FD59=#ZZHM;
+			$FD67=#TZZT;
+			$FD89=#PZZL;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			runoutput();
+			closeall();
+			return(true);
+		}"
+		</ONCLICK>
+	</ITEM>
+	
+	<ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($HDATE,1,4)"/>
+	<ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($HDATE,5,2)"/>
+	<ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($HDATE,7,2)"/>
+	
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="待确认凭证处理">
+ NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			print( 2,  24,'交易名称:待确认凭证处理');
+			print( 4,  20,'交易机构:[5]',$FD2);
+			print( 5,  20,'交易日期:[4]年[2]月[2]日',#YEAR,#MON,#DAY);
+			print( 6,  20,'流水号码:[6]',$FD4);
+			print( 7,  20,'操作员号:[4]',$FD7);
+			
+			print( 9,  20,'凭证种类:[20 ]',#NAME2);
+			print( 11, 20,'起始号码:[16 ] 终止号码1:[16 ]',#QSHM,#ZZHM);
+			print( 13, 20,'凭证数量:[12 ]',#PZSL);
+			print( 14, 20,'调整状态:[20 ]',#TZZT_TEXT);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印普通凭证(1/2打印纸[单层])" LINESPACE="24">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME); 
+		print( 5, 2,'代码:7121'); 
+		print( 5,20,'交易:待确认凭证处理');
+		print( 7,20,'凭证种类:[20 ]',#NAME2);
+		print( 9,20,'起始号码:[16 ] 终止号码:[16 ]',#QSHM,#ZZHM);
+		print( 11,20,'凭证数量:[12 ]',ltrim(#PZSL));
+		print( 12,20,'调整状态:[20 ]',#TZZT_TEXT);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,15,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

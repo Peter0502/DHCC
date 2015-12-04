@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1859         定期交易登记查询"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		refresh();
+		initfd();
+		commsend_001();
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+		commrecv_001();
+	}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s" FUNCTIONS=
+  	"T(1859                           定期交易登记查询)"/>
+	<ITEM LINE="4" COL="3"   TYPE="%-74s" FUNCTIONS=
+	"T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXNAME"        TYPE="%-30s"  FUNCTIONS="T(定期交易登记查询)" />
+	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+		dim @selid as number;
+		if(#DOLIST=='1')
+		{
+			@selid=list_work();     
+			if(@selid &lt; 0)       
+			{                     
+				list_del();            
+				rerun();               
+				return(true);          
+			}           
+			@selid=list_getselid();
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+		}
+		#DOLIST='';
+		list_del();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6" COL="3"  TYPE="%-12s" FUNCTIONS="T(交易  日期：)"/>
+	<ITEM LINE="6" COL="15" NAME="#TxDt" TYPE="%-8s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()D()"/>
+	<ITEM LINE="6" COL="35"  TYPE="%-12s" FUNCTIONS="T(批次  序号：)"/>
+	<ITEM LINE="6" COL="47" NAME="#BatNo" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	<ITEM LINE="7" COL="3"  TYPE="%-12s" FUNCTIONS="T(交易总笔数：)"/>
+	<ITEM LINE="7" COL="15" NAME="#TxSum" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	<ITEM LINE="7" COL="35"  TYPE="%-12s" FUNCTIONS="T(交易总金额：)"/>
+	<ITEM LINE="7" COL="47" NAME="#TxSumAmt" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+
+	<ITEM LINE="8" COL="3"  TYPE="%-12s" FUNCTIONS="T(操作  柜员：)"/>
+	<ITEM LINE="8" COL="15" NAME="#CzTel" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	
+	<!--ITEM LINE="8" COL="35"  TYPE="%-12s" FUNCTIONS="T(手续费金额：)"/>
+	<ITEM LINE="8" COL="47" NAME="#FeeAmt" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/-->
+
+	<ITEM LINE="9" COL="3"  TYPE="%-12s" FUNCTIONS="T(付款人账号：)"/>
+	<ITEM LINE="9" COL="15" NAME="#PayerAcct" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	<ITEM LINE="10" COL="3"  TYPE="%-12s" FUNCTIONS="T(付款人名称：)"/>
+	<ITEM LINE="10" COL="15" NAME="#PayerName" TYPE="%-40s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	<ITEM LINE="11" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人账号：)"/>
+	<ITEM LINE="11" COL="15" NAME="#PayeeAcct" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+	<ITEM LINE="12" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人名称：)"/>
+	<ITEM LINE="12" COL="15" NAME="#PayeeName" TYPE="%-40s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+
+	<ITEM LINE="20"  COL="59" TYPE="%-6s" FUNCTIONS="T(确定)" INPUT="BUTTON" NAME="#OK" DEVICE="KEYBOARD" >
+		<ONCLICK>
+			"{			
+				initfd();
+				commsend_001();
+				//$FD3 ='01002';
+				//$FD10 =$TTYNAME;
+				$FD16 ='1120';
+				$FD18 ='pbp';
+				
+				$FD44 =#TxDt;
+				$FD53 =#TxSum; //原$FD69
+				$FD60 =#BatNo;
+				$FD41 =#TxSumAmt;
+				//$FD39 =#FeeAmt;
+				$FD30 =#PayerAcct;
+				$FD37 =#CzTel;
+				$FD25 =#PayerName;
+				$FD31 =#PayeeAcct;
+				$FD26 =#PayeeName;
+				
+				dim @rcvbuffer as string;
+				dim @filename1 as string;
+				dim @ret as number;
+				
+				@rcvbuffer =callagnpbp();
+				@rcvbuffer=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+				
+				
+				if(@rcvbuffer =='')
+				{
+					showmsg('读取回传文件失败！');
+					return(false);
+				}
+				
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+					
+				
+				autolist('~'+@rcvbuffer);
+				#DOLIST='1';
+				goitem('#DOLIST');
+				
+				return(true);
+
+			}"
+		</ONCLICK>	
+	</ITEM>	
+	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			dim @data as string;
+			dim @file as file;
+			dim @count as number;
+			dim @line as string;
+			dim @a0 as string;
+			dim @a1 as string;
+			dim @a2 as string;
+			dim @a3 as string;
+			dim @a4 as string;
+			dim @a5 as string;
+			dim @a6 as string;
+			dim @a7 as string;
+			dim @a8 as string;
+			dim @a9 as string;
+			dim @a10 as string;
+			dim @a11 as string;
+			dim @a12 as string;
+			dim @a13 as string;
+			dim @a14 as string;
+			
+			if(#DOLIST =='1')
+			{
+				@selid=list_work();
+				if(@selid &lt; 0)
+				{
+					list_del();
+					rerun();
+					return(true);
+				}
+				@selid=list_getselid();
+				if(@selid &lt; 0)
+				{
+					list_del();
+					rerun();
+					return(true);
+				}
+				@a0=ltrim(list_gettext(@selid,0));
+				@a1=ltrim(list_gettext(@selid,1));
+				@a2=ltrim(list_gettext(@selid,2));
+				@a3=ltrim(list_gettext(@selid,3));
+				@a4=ltrim(list_gettext(@selid,4));
+				@a5=ltrim(list_gettext(@selid,5));
+				@a6=ltrim(list_gettext(@selid,6));
+				@a7=ltrim(list_gettext(@selid,7));
+				@a8=ltrim(list_gettext(@selid,8));
+				@a9=ltrim(list_gettext(@selid,9));
+				@a10=ltrim(list_gettext(@selid,10));
+				@a11=$FD7;
+				@a12=$FD5;
+				@a13=$FD56;
+				open('1859_1.XML','#TxDt='+@a0+';#BatNo='+@a1+';#TxTp='+@a2+';#BusKind='+@a3+';#TxSum='+@a4+';#TxSumAmt='+@a5+';#CreNo='+@a6+';#RspDays='+@a7+';#PayerAcct='+@a8+';#PayerName='+@a9+';#PayerAdd='+@a10+';#Teller='+@a11+';#Date='+@a12+';#Trace='+@a13+';');
+
+				return(true);
+			}
+				list_del();
+				#DOLIST='';
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	</VARIABLE>	
+</TRANSACTION>

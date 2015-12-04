@@ -1,0 +1,212 @@
+/*************************************************************
+* 文 件 名: gT005.c
+* 功能描述：根据czcust表中的企业代码证所对应的新客户号,
+*           在cif_id_code_rel中查找相关代码证是否存在,如果存在将其客户号更新为czcust中的客户号
+*           否则，以企业代码证和新客户号插入到czcust表中
+* 作    者: 
+* 完成日期: 2007-2-27 9:31
+*
+* 修改记录：
+* 日    期: 2007-2-27 9:31
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+EXEC SQL include sqlca;
+#include "dc_log_bk_c.h"
+#include "cif_basic_inf_c.h"
+#include "cif_alias_inf_c.h"
+#include "cif_id_code_rel_c.h"
+#include "cif_email_inf_c.h"
+#include "cif_addr_inf_c.h"
+#include "dd_mst_c.h"
+
+#include "td_mst_c.h"
+#include "ln_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "prdt_ac_id_c.h"
+
+static struct cif_id_code_rel_c  cif_id_code_rel;
+
+gT005()
+{
+	int ret = 0;
+	int cnt=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	char cId    [21];
+	char cIdtype[2];
+	char cName  [81];
+	int  iTotCnt=0;
+	char cOld_Id    [21];
+	char cOld_Idtype[2];
+	char cOld_Name  [81];
+	int iCif_cnt=0;
+	char cAc_no[20];
+	long lAc_id;
+	char cCrd_no[21];
+	long lNcif_no=0;
+	EXEC SQL END DECLARE SECTION;
+	memset(cCrd_no, 0 , sizeof(cCrd_no));
+	memset(cId    , 0 , sizeof(cId    ));
+	memset(cIdtype, 0 , sizeof(cIdtype));
+	memset(cName  , 0 , sizeof(cName  ));
+	memset(cOld_Id    , 0 , sizeof(cOld_Id    ));
+	memset(cOld_Idtype, 0 , sizeof(cOld_Idtype));
+	memset(cOld_Name  , 0 , sizeof(cOld_Name  ));
+	memset(cAc_no, 0 , sizeof(cAc_no));
+	memset(&cif_id_code_rel, 0x00, sizeof(struct cif_id_code_rel_c));
+	memset(&cif_id_code_rel, 0 ,sizeof(struct cif_id_code_rel_c));
+
+	ret=sql_begin();
+	if( ret )
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL UPDATE CZCUST SET name=trim(name);
+	EXEC SQL update czcust set id_no=trim(id_no);
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	EXEC SQL DECLARE CUR_CNT CURSOR FOR select id_no,id_type,name,ac_no,ac_id,crd_no,ncif_no from czcust order by id_type,id_no ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	EXEC SQL OPEN CUR_CNT;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(cId    , 0 , sizeof(cId    ));
+		memset(cIdtype, 0 , sizeof(cIdtype));
+		memset(cName  , 0 , sizeof(cName  ));
+    memset(cAc_no , 0 , sizeof(cAc_no ));
+		memset(cCrd_no, 0 , sizeof(cCrd_no));
+		memset(&cif_id_code_rel, 0 , sizeof(cif_id_code_rel));
+		lAc_id=0;
+		lNcif_no=0;
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+		EXEC SQL FETCH CUR_CNT INTO :cId,:cIdtype,:cName,:cAc_no,lAc_id,:cCrd_no,:lNcif_no;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			goto ErrExit;
+		}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+		pub_base_strpack(cId);
+		pub_base_strpack(cIdtype);
+		pub_base_strpack(cName);
+		pub_base_strpack(cAc_no);
+		pub_base_strpack(cCrd_no);
+		if(strlen(cIdtype)==0) cIdtype[0]='A';/* 默认为营业执照号码 */
+		if(strlen(cId)<=1) continue;
+		if(strlen(cCrd_no)<=1) continue;
+		if(lNcif_no==0) continue;
+	vtcp_log("%s,%d crd_no=[%s]",__FILE__,__LINE__,cCrd_no);
+		ret=Cif_id_code_rel_Dec_Upd(g_pub_tx.reply,"id_type='8' and id_no='%s' ",cCrd_no);
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	vtcp_log("%s,%d crd_no=[%s]",__FILE__,__LINE__,cCrd_no);
+		if(ret !=100 && ret !=0)
+		{
+			vtcp_log("%s,%d name=[%s],ac_no=[%s]cId=[%s]",__FILE__,__LINE__,cName,cAc_no,cId);
+			sprintf(acErrMsg,"查询cif_id_code_rel表错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+		}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	vtcp_log("%s,%d crd_no=[%s]",__FILE__,__LINE__,cCrd_no);
+		ret=Cif_id_code_rel_Fet_Upd(&cif_id_code_rel,g_pub_tx.reply);
+	vtcp_log("%s,%d crd_no=[%s]",__FILE__,__LINE__,cCrd_no);
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+		if(ret!=0 && ret !=100)
+		{
+			vtcp_log("%s,%d name=[%s],ac_no=[%s]cId=[%s]",__FILE__,__LINE__,cName,cAc_no,cId);
+			sprintf(acErrMsg,"查询cif_id_code_rel表错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+		}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+		if(ret==100)
+		{
+			cif_id_code_rel.cif_no = lNcif_no ;
+			vtcp_log("%s,%d cif_no=[%ld]",__FILE__,__LINE__,cif_id_code_rel.cif_no);
+			cif_id_code_rel.id_type[0]='8';
+	vtcp_log("%s,%d crd_no=[%s]strlen(crd_no)=[%d]",__FILE__,__LINE__,cCrd_no,strlen(cCrd_no));
+			memcpy(cif_id_code_rel.id_no,cCrd_no,strlen(cCrd_no));
+	vtcp_log("%s,%d id_no=[%s]crd_no=[%s]",__FILE__,__LINE__,cif_id_code_rel.id_no,cCrd_no);
+			vtcp_log("%s,%d id_no=[%s]",__FILE__,__LINE__,cif_id_code_rel.id_no);
+			ret=Cif_id_code_rel_Ins( cif_id_code_rel , g_pub_tx.reply );
+			if(ret)
+			{
+			vtcp_log("%s,%d name=[%s],ac_no=[%s]cId=[%s]",__FILE__,__LINE__,cName,cAc_no,cId);
+			sprintf(acErrMsg,"insert into cif_id_code_rel表错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+			}
+		}
+		else if(ret==0)
+		{
+			/* 找到企业代码证，按新表中的更新 */
+			cif_id_code_rel.cif_no = lNcif_no ;	
+			ret=Cif_id_code_rel_Upd_Upd(cif_id_code_rel,g_pub_tx.reply);
+			if(ret)
+			{
+				vtcp_log("%s,%d name=[%s],ac_no=[%s]cId=[%s]",__FILE__,__LINE__,cName,cAc_no,cId);
+				sprintf(acErrMsg,"update if_id_code_rel表错误![%d]",ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+			}
+		}
+		else
+		{
+			sprintf(acErrMsg,"%s,%d 错误,find cif_id_code_rel error sqlcode=[%d]",__FILE__,__LINE__,ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+		}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+		cnt++;
+	}
+	EXEC SQL CLOSE CUR_CNT;
+	vtcp_log("%s,%d ===== end =========",__FILE__,__LINE__);
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"测试程序执行成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	strcpy(g_pub_tx.reply,"D008");
+	sprintf(acErrMsg,"测试程序执行失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

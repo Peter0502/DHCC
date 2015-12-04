@@ -1,0 +1,186 @@
+#include "bal.h"
+#include "global.h"
+EXEC SQL INCLUDE SQLCA;
+void _balmain( TPSVCINFO* ptpinfo )
+{
+	char sVal12[5];
+	memset( sVal12,0x00,sizeof( sVal12 ) ) ; 
+	T_BTR		*bal_req;
+	T_BTR		*bal_rply;
+	int			reply_len;
+	char		result;
+	vtcp_log("%s,%d chenqiufeng ",__FILE__,__LINE__);
+	vtcp_log("%s,%d chenqiufeng 调用完成",__FILE__,__LINE__);
+	struct timeval tvBeginTime;
+	struct timeval tvEndTime;
+	sqlca.sqlcode=0;
+
+
+	/** Debug **/
+	if( g_balinfo.debug_mode >= BALDEBUG_LVL1 )
+	{
+		gettimeofday(&tvBeginTime, NULL);
+	}
+
+	bal_req = (T_BTR*)(ptpinfo->data);
+	g_balinfo.reqversion = bal_get_req_version(bal_req);
+
+	/*** DEBUG **/
+	if( g_balinfo.debug_mode >= BALDEBUG_LVL2 )
+	{
+		bal_dumpmesg("Receive Request:", (char*)bal_req, ptpinfo->len);
+	}
+
+	/** set lock wait time **/
+	if ( bal_set_lockwaittime() != CSuccess )
+	{
+		bal_return_error(bal_req);
+	}
+	
+	/** if necessary, bal begin transaction **/
+	if( CSuccess != bal_begin_tx(&g_balinfo) )
+	{
+		userlog("ERROR(%d): bal_begin_tx - %s",
+				balerrno,
+		    	balstrerror(balerrno));
+		bal_return_error(bal_req);
+	}
+	
+	/** convert request to internal datastructure, and init txcom **/	
+	if ( CSuccess != bal_conv_in(bal_req) )
+	{
+
+		userlog("ERROR(%d): convert to internal - %s",
+		        balerrno,
+		        balstrerror(balerrno));
+		userlog("after bal_conv_in -----abort");
+
+		bal_return_error(bal_req);
+	}
+	/***在转换之后清空13域****/
+	set_zd_data("0130","");
+#ifdef __GL_LOG__
+	{
+		/**add by SSH,20131025,批量方式记日志****/
+		char tx_br_no[9];
+		char tel[9];
+		memset(tx_br_no,'\0',sizeof(tx_br_no));
+		memset(tel,'\0',sizeof(tel));
+		get_zd_data("0030",tx_br_no);
+		get_zd_data("0070",tel);
+		nOpenGlLog(tx_br_no,tel);	
+	}
+#endif
+	/** process request ***/
+	if( CSuccess != bal_process_tx( bal_req ) )
+	{
+		userlog("ERROR(%d): process request - %s",
+		        balerrno,
+		        balstrerror(balerrno));
+#ifdef __GL_LOG__
+		nCloseGlLog();
+#endif
+		bal_return_error(bal_req);
+	}
+#ifdef __GL_LOG__
+	nCloseGlLog();
+#endif
+
+	/** convert app response to reply **/
+	if( CSuccess != bal_conv_out( bal_req, &reply_len, &bal_rply ) )
+	{
+		userlog("ERROR(%d): put response - %s",
+		        balerrno,
+		        balstrerror(balerrno));
+		bal_return_error(bal_req);
+	}
+	result = bal_rply->head.result;
+
+	/** DEBUG **/
+	if( g_balinfo.debug_mode >= BALDEBUG_LVL2 )
+	{
+		bal_dumpmesg("Send Reply:", (char*)bal_rply, reply_len);
+	}
+	/****Add by SSH,2006.8.22,借用reqtype表示有没有文件****/
+	{
+		char curno[2];
+		memset(curno,'\0',sizeof(curno));
+		get_zd_data("0110",curno);
+		vtcp_log("zyc[%s]",curno);
+		if(curno[0]=='1' || curno[0]=='2')
+		{
+			bal_rply->head.reqtype='9';/****有文件附件****/
+		}
+		else
+		{
+			bal_rply->head.reqtype='0';
+		}
+
+
+	}
+	
+	get_zd_data("0120",sVal12);
+	
+
+	/*** Encryption Data ***/
+	if( CSuccess != bal_encrypt(bal_rply) )
+	{
+		bal_return_error(bal_req);
+	}
+		
+	/*** return to reply ***/
+	if ( CBALTxnSucc == result )
+	{
+		if( CSuccess != bal_commit_tx(&g_balinfo) )
+		{
+			bal_return_error(bal_req);
+		}
+               /*--add by houyi 20110908--*/
+                  userlog("----------------------- modbosend--------------------------");
+                  mobdo();
+               /*--end add--*/
+		/** Debug  **/
+		if( g_balinfo.debug_mode >= BALDEBUG_LVL1 )
+		{
+			gettimeofday(&tvEndTime, NULL);
+
+			userlog("[%s:%s:%s:%ld]:[%f]:SUCCESS",
+					it_txcom.kinbr,
+					g_balinfo.tlrno,
+					g_balinfo.txno,
+					it_txcom.tlsrno,
+					(( tvEndTime.tv_sec  - tvBeginTime.tv_sec ) * 1000000.0 +
+					(tvEndTime.tv_usec - tvBeginTime.tv_usec )) / 1000000.0 
+			       );
+		}
+		pubf_comm_free_buf();
+		vtcp_log("TODO1,reply_len=%d\n",reply_len);
+		vtcp_log("结束[%s]",sVal12);
+		
+		tpreturn( TPSUCCESS, 0, (char*)bal_rply, reply_len, 0 );   
+	}
+	else
+	{
+     	if( bal_abort_tx(&g_balinfo) != CSuccess )
+		{
+			bal_return_error(bal_req);
+		}
+
+		/** Debug  **/
+		if( g_balinfo.debug_mode >= BALDEBUG_LVL1 )
+		{
+			gettimeofday(&tvEndTime, NULL);
+			userlog("[%s:%s:%s:%ld]:[%s],[%f]:FAIL",
+					it_txcom.kinbr,
+					g_balinfo.tlrno,
+					g_balinfo.txno, it_txcom.tlsrno,RtCode,
+					(( tvEndTime.tv_sec  - tvBeginTime.tv_sec ) * 1000000.0 +
+					(tvEndTime.tv_usec - tvBeginTime.tv_usec )) / 1000000.0 
+			       );
+		}
+		pubf_comm_free_buf();
+		vtcp_log("TODO2,reply_len=%d\n",reply_len);
+		
+		tpreturn( TPSUCCESS, 0, (char*)bal_rply, reply_len, 0 );   
+	}
+}

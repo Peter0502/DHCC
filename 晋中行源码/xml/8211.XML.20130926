@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="8211 柜面通取款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+
+<FIRSTWORK RETURN="TRUE">"{   //柜员一进入交易就检查签到状态 20100708
+
+	commsend_001();
+	$FD16 = '9803';
+	$FD92 = $TLRNO; //本柜员
+	callserver();
+
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if($FD70!='0')
+	{
+		showmsg('此柜员尚未签到!');
+		return(false);
+	}
+	
+	$FD26='';
+	$FD91='';
+	$FD70='';
+	$FD92='';
+	
+//	$MSR2='6224210123007493519=1710120204354580';
+//	$MSR3='996224210123007493519=1561560500050000000013458608120000017101=23007493515=032665580=1000000204351000';
+}"
+</FIRSTWORK>
+<USERFUN NAME="saveprint">
+"{      
+        //用于补打凭证
+  	    dim @coretraceno as string;
+        dim @svtxtime as string;
+        dim @file as file;
+        
+       	dim @line as string;
+       	       	
+       	//写文件，用于补打流水
+       	@coretraceno=$FD4;
+       	@svtxtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+       	 	
+       	//格式 8211+卡号+受理行行号+发卡行行号+户名+受理行日期+发卡行日期+取款金额+余额+受理行流水+发卡行流水+核心流水
+       	
+	      @file=openfile('../dat/UNICARD_'+$HDATE+'_'+$TLRNO+'_'+#ACBKSQ+'.dat','ab');
+	      @line = '8211'+'|'+ #CARDNO + '|' +  #ACBKNO + '|' + #ISBKNO + '|' + #ACCTNA + '|' + #ACBKDT + '|' + #ISBKDT + '|' + ltrim(comma(#TRANAM,20)) + '|' + ltrim(comma(#ONLNBL,20))  + '|' + #ISBKSQ + '|'+ #ACBKSQ +'|' + @coretraceno + '|';
+	      writeline(@file, @line);
+       	closefile(@file);	
+				
+}"
+</USERFUN>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+  "T(8211                           柜面通取款)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+
+  <ITEM ITEM="#TXNO" TYPE="%4d"  FUNCTIONS="T($TXNO=8211)"/>
+  <ITEM LINE="6"  COL="15"    TYPE="%-10s" FUNCTIONS="T(开户机构:)"/>
+  <ITEM NAME="#INBRNO" INPUT="SELECT" LINE="6" COL="25" TYPE="%-2s" FUNCTIONS="T(01)V(NB)">
+  <SELECT>
+  	<OPTION VALUE="01" TITLE="融信村镇"/>
+  	<OPTION VALUE="02" TITLE="亿通村镇"/>
+  	<OPTION VALUE="03" TITLE="汇通村镇"/>
+	<OPTION VALUE="04" TITLE="华丰村镇"/>
+	<OPTION VALUE="05" TITLE="兴泰村镇"/>
+	<!----
+	---->
+  </SELECT>
+  </ITEM>
+  <ITEM LINE="8"  COL="15"   TYPE="%-10s"  FUNCTIONS="T(账    号: )"/>
+  <ITEM LINE="10"  COL="15"   TYPE="%-10s"  FUNCTIONS="T(密    码: )"/>
+  <ITEM LINE="18" COL="15"   TYPE="%-10s" NAME="#B1" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(取款金额: )"/>
+   <ITEM LINE="12" COL="15"   TYPE="%-10s" NAME="#B4" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(开户行名:)"/>
+  <ITEM LINE="14" COL="15"   TYPE="%-10s" NAME="#B2" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(户    名: )"/>
+  <ITEM LINE="16" COL="15"   TYPE="%-10s" NAME="#B3" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(余    额: )"/>
+
+  <ITEM LINE="14" COL="15"   TYPE="%-10s" NAME="#A1" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(证件类型: )"/>
+  <ITEM LINE="16" COL="15"   TYPE="%-10s" NAME="#A2" VISABLE="FALSE"  INPUT="LABEL" FUNCTIONS="T(证件号码: )"/>
+  <ITEM LINE="18" COL="15"   TYPE="%-10s" NAME="#A3" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(授 权 人: )"/>
+  <ITEM LINE="18" COL="45"   TYPE="%-12s" NAME="#A4" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(授权人密码: )"/>
+
+
+  <ITEM LINE="8"  COL="25"   NAME="#CARDNO1"  TYPE="%-19s"   DEVICE="MSR" FUNCTIONS="V(NB)M($MSR2,1)"> 
+  <ONLOSTFOCUS>
+  "{
+	if(substr(#CARDNO1,0,6) == '621223')
+	{
+		showmsg('暂不支持卡办理此业务!');
+        	return(false);
+	}
+	 if(substr(#CARDNO1,0,1) == '5')
+	{
+		showmsg('暂不支持对公账户办理此业务!');
+        	return(false);
+	}
+	 if(substr(#CARDNO1,0,1) == '9') //加对内部帐户的处理 20100628
+	{
+		showmsg('暂不支持内部账户办理此业务!');
+        	return(false);
+	}
+
+	 if (substr(#CARDNO1,0,2)=='10' or substr(#CARDNO1,0,2)=='11')
+	{
+		showmsg('本行客户不支持此业务!');
+        	return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#PASSWD" LINE="10" COL="25" TYPE="%6d" DEVICE="PINPAD" FUNCTIONS="V(NB)i()"/>
+  
+  <ITEM LINE="12" COL="25"   TYPE="%-50s" NAME="#KHH" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T($FD76)"/>	
+  <ITEM LINE="14" COL="25"   TYPE="%-50s" NAME="#HM" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS=""/>
+  <ITEM LINE="16" COL="25"   TYPE="%17.2f" NAME="#YE" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(#onlnbl)"/>
+  
+
+  <ITEM LINE="14"  COL="25" NAME="#ZJLX"    TYPE="%-1s" INPUT="SELECT" VISABLE="FALSE"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+        <SELECT LINE="16" COL="52">
+                <OPTION VALUE="A" TITLE="身份证"/>
+                <OPTION VALUE="B" TITLE="护照  "/>
+                <OPTION VALUE="C" TITLE="户口薄"/>
+                <OPTION VALUE="D" TITLE="港澳居民通行证"/>
+                <OPTION VALUE="E" TITLE="还乡证"/>
+                <OPTION VALUE="F" TITLE="边民出入境通行证"/>
+                <OPTION VALUE="G" TITLE="军官证"/>
+                <OPTION VALUE="H" TITLE="士兵证"/>
+                <OPTION VALUE="I" TITLE="军事院校学员证"/>
+                <OPTION VALUE="J" TITLE="军队离休干部荣誉证"/>
+                <OPTION VALUE="K" TITLE="军官退休证"/>
+                <OPTION VALUE="L" TITLE="军人文职干部退休证"/>
+                <OPTION VALUE="M" TITLE="营业执照"/>
+                <OPTION VALUE="N" TITLE="文号"/>
+                <OPTION VALUE="P" TITLE="长通物流会员号"/>
+                <OPTION VALUE="Z" TITLE="无"/>
+        </SELECT>
+  </ITEM>
+  <ITEM LINE="16"  COL="25" NAME="#ZJHM"     TYPE="%-40s"  INPUT="TEXT" VISABLE="FALSE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="18"  COL="25" NAME="#SQTLR"    TYPE="%4d"    INPUT="TEXT" VISABLE="FALSE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <!--ONLOSTFOCUS>"{
+      dim @tota as string;
+	    commsend_001();
+      $FD16='9598';
+			$FD123='select tel from com_tel where br_no='+chr(39)+$KINBR+chr(39)+' and tel='+chr(39)+#SQTLR+chr(39)+' and lvl='+chr(39)+'4'+chr(39); 
+	    @tota=callserver();
+	    if($FD12!='0000')
+	    {
+	  	  showmsg(geterror());
+	  	  return(false);
+	    }
+	    if(@tota=='')
+	    {
+	  	  showmsg('该柜员非此机构授权柜员!!!');
+	  	  return(false);
+	    }
+   }"
+   </ONLOSTFOCUS>
+  </ITEM-->  
+  <ITEM NAME="#FD79_PWD"  TYPE="%16s"  FUNCTIONS="T()"/><!------侯毅$FD79扩展20091024--------->
+  <ITEM LINE="18"  COL="57" NAME="#SQPASWD"  TYPE="%6d"    INPUT="TEXT" VISABLE="FALSE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)i()"/>
+   <!--ONLOSTFOCUS>"{
+  	dim @tota as string;
+	dim @txno as string;
+	@txno=$TXNO;
+	initfd();//jkjkjk
+	commsend_001();
+	ucgmup_pack();
+	$FD16='8220';
+	$FD24='gmt';
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	ucgmup_unpack();
+	$TXNO=@txno;
+	runoutput();
+	rerun();		
+  }"
+   </ONLOSTFOCUS>
+  </ITEM-->
+	 <ITEM NAME="#JGH"  TYPE="%-10s"    FUNCTIONS="T()"/>
+	 <!-- 中心结构 -->
+  <ITEM NAME="#PKHEAD"  TYPE="%-6s"    FUNCTIONS="T(ucgmup)"/>
+  <ITEM NAME="#SPBKNO"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#TRANCD"  TYPE="%-6s"    FUNCTIONS="T(ucmedw)"/>
+  <ITEM NAME="#CARDNO"  TYPE="%-20s"    FUNCTIONS="T(#CARDNO1)"/>
+  <ITEM NAME="#TRANPW"  TYPE="%-16s"    FUNCTIONS="T(#PASSWD)">
+  <ONLOSTFOCUS>"{
+	dim @tota as string;
+	dim @txno as string;
+	@txno=$TXNO;
+	initfd();//jkjkjk
+	commsend_001();
+	ucgmup_pack();
+	$FD16='8220';
+	$FD22=#INBRNO;
+	$FD24='gmt';
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+		ucgmup_unpack();
+	$TXNO=@txno;
+	show(#B1,true);
+	show(#B2,true);
+	show(#B4,true);
+	show(#FTXAMT,true);
+	show(#HM,false);
+	show(#HM,true);
+	showmsg(#ACCTNA);
+	#HM=#ACCTNA;
+	//#HM='456';
+	showmsg(#HM);
+	if(substr(#CARDNO1,0,1) != '5')
+	{
+		show(#B3,true);
+		show(#YE,false);
+		show(#YE,true);
+	}
+	show(#KHH,false);
+	show(#KHH,true);
+	#YE=atoi(#ONLNBL);
+	#JGH=$FD91;
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#TRANAM"  TYPE="%-21s"    FUNCTIONS=""/>
+  <ITEM NAME="#TSTIME"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#INPUTP"  TYPE="%-3s"    FUNCTIONS="T(021)"/>
+  <ITEM NAME="#IDTFTP"  TYPE="%-1s"    FUNCTIONS="T(#ZJLX)"/>
+  <ITEM NAME="#IDTFNO"  TYPE="%-40s"    FUNCTIONS="T(#ZJHM)"/>
+  <ITEM NAME="#ACBKDT"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ACBKNO"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ACBKSQ"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ISBKDT"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ISBKNO"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ISBKSQ"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#CENTDT"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#CENTSQ"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#TRACK2"  TYPE="%-39s"    FUNCTIONS="T($MSR2)"/>
+  <ITEM NAME="#TRACK3"  TYPE="%-107s"    FUNCTIONS="T($MSR3)"/>
+  <ITEM NAME="#ACCTNA"  TYPE="%-40s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#ONLNBL"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#AVALBL"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#HANDFE"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#CORRDT"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#CORRSQ"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#EXTDT1"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#EXTDT2"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#EXTDT3"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#EXTDT4"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#EXTDT5"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#RSPSCD"  TYPE="%-2s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#RTERTX"  TYPE="%-80s"    FUNCTIONS="T()"/>
+
+
+
+	<ITEM NAME="#LIMAMT" TYPE="%16.2f" FUNCTIONS="T(000000004999999)"/>
+  <ITEM LINE="18"  COL="25" NAME="#FTXAMT"   TYPE="%17.2f" INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE" FUNCTIONS="V(0000000000000001,9999999999999999)">
+  <ONLOSTFOCUS>
+  "{
+		if(#FTXAMT &gt; #YE)
+	{
+		showmsg('取款金额不得大于余额!');
+        return(false);
+	}
+
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+  	//add by wudawei 20130319 按财务部要求加5W以上 转账 授权
+  	if(#FTXAMT &gt; 49999)
+    {
+							showmsg('需要授权！');
+        		  initfd();
+      			  commsend_001();
+  	  			  $FD16='3369';
+  					  callserver();
+  	  			  if($FD12 !='0000')
+  					  {
+  			 		  	showmsg(geterror());
+   						  return(false);
+  					  }
+  	}
+  	// add end 20130319
+	dim @tota as string;
+	dim @txno as string;
+	#cardno=#CARDNO1;
+	#tranpw=#PASSWD;
+	initfd();//jkjkjk
+	commsend_001();
+	@txno=$TXNO;
+	$FD24='gmt';
+	$FD22=#INBRNO;
+	$FD71='1';
+	$FD2=#JGH;
+	//$FD19='100000000001001';
+	#tranam=itoa(#FTXAMT,'%-21.2f');
+	ucgmup_pack();
+	$FD16='8221';
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		if($FD12=='COMM' or $FD12=='999a'){
+			//showmsg('通讯失败,按任意键发送冲正...');
+			//首先取得最后一笔平台流水号
+			commsend_001();
+			$FD16='9598';
+			$FD123='select sys_date,max(sys_ejfno) from tracelog where sys_date=(select sys_date from swstat) and tel='+chr(39)+$TLRNO+chr(39)+' and tx_code='+chr(39)+'6301'+chr(39)+' group by sys_date';
+			//@tota=callagn();
+			if(@tota!=''){
+				#CORRDT=strfld(@tota,'|',0);
+				#CORRSQ=strfld(@tota,'|',1);
+				commsend_001();
+				$FD16='9598';
+				$FD123='select ac_no from tracelog where sys_date=(select sys_date from swstat) and sys_date='+chr(39)+#CORRDT+chr(39)+' and sys_ejfno='+chr(39)+#CORRSQ+chr(39);
+				//@tota=callagn();
+				if(delspace(strfld(@tota,'|',0))!=delspace(#CARDNO)){
+					//showmsg('未找到原交易!');
+					rerun();
+					return(true);
+				}
+				showmsg(#CORRDT+'|'+#CORRSQ);
+				#TRANCD='ucmedc';	
+				commsend_001();
+				ucgmup_pack();
+				//@tota=callagn();
+				if($FD12!='0000'){
+					showmsg(geterror());
+				}else{
+					//showmsg('冲正成功');
+				}	
+				rerun();
+				return(true);
+			}else{
+				//showmsg('访问数据库失败,请手工冲正!');
+				rerun();
+				return(true);
+			}	
+		}else{
+			showmsg(geterror());
+			return(false);
+		}
+	}
+	ucgmup_unpack();
+	//saverpt(@tota);
+	
+	//saveprint();  //增加补打 090601
+	
+	runoutput();
+	rerun();		
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(6,5,'账    号:[20]',#CARDNO);
+print(7,5,'户    名:[40]',#ACCTNA);
+print(8,5,'取款金额:[21]',#TRANAM);
+//print(9,5,'余    额:[21]',#ONLNBL);
+//print(11,5,'受理行行号:[10      ]             开户行行号:[10      ]',#ACBKNO,#ISBKNO);
+print(10,5,'受理行日期:[8     ]               开户行日期:[8     ]',#ACBKDT,#ISBKDT);
+print(11,5,'受理行流水:[12        ]           开户行流水:[12        ]',#ACBKSQ,#ISBKSQ);
+//print(14,5,'报文返回码:  \[[2]\]',#RSPSCD);
+//print(15,5,'报文返回信息:[40]',substr(#RTERTX,0,40));
+//print(16,5,'             [40]',substr(#RTERTX,40,40));
+print(12,5,'机    构:[7     ]                  操作员:[6    ]',$KINBR,$TLRNO);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印异地取款凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+ 	dim @txtime as string;
+	@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 15,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:8211');
+	print( 5, 12,'交易:柜面通取款(现金)');
+
+	print(07,15,'账    号:[20]   开户行名称:[50]',#CARDNO,$FD76);
+	print(08,15,'户    名:[50] ',#acctna);  
+	print(09,15,'受理行日期:[8       ]             开户行日期:[8]  ',#ACBKDT,#ISBKDT);
+	print(10,15,'取款金额:[20                  ]   开户行流水:[12]  ',ltrim(comma(#TRANAM,20)),#ISBKSQ);
+	print(11,15,'机构编号:[20                  ]   操作  柜员:[6]           ',$KINBR,$TLRNO);
+	print_sq(); 
+	print(19,80,'\H0本人已确认银行打印记录正确无误\H1');                
+	print(21,80,'客户签名:_____________________');
+	print(23,15,'备注:');
+	print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(23,5,'柜员:[4]',$TLRNO);
+	print(23,5,'流水号:[6]',#ACBKSQ);
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

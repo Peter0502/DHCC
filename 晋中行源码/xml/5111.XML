@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5111 申请汇票兑付录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD3 =$KINBR;
+	$FD44=$HDATE;
+	$FD7=$TLRNO;
+	$FD20='1';
+	$FD39=itoa(#REAL_JS_AMT*100, '%016.0f');
+	$FD68=#PASFLG;
+	commsend_123();
+	setvfile(true,true);
+
+	addvfile(getitems('#PJ_DATE#PJ_NUM#HP_TYPE#HP_MIYA')+itoa(#CP_AMT*100,'%15.0f')+itoa(#REAL_JS_AMT*100,'%15.0f')+itoa(#DY_AMT*100,'%15.0f')+getitems('#LAST_AC_NO#LAST_NAME#RETURN_DATE#PAY_OPN_BR_NO#CASH_OPN_BR_NO'));
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	commrecv_v123();
+}"
+</COMMRECV>
+<VARIABLE>
+   <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+     "T(5111                        申请汇票兑付录入)"/>
+   <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5811)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   
+   <ITEM LINE="5"   COL="3"    TYPE="%-16s"    FUNCTIONS="T(票  据  日  期:)"/>
+   <ITEM LINE="6"   COL="3"    TYPE="%-16s"    FUNCTIONS="T(票  据  号  码:)"/>
+   <ITEM LINE="8"   COL="3"    TYPE="%-16s"    FUNCTIONS="T(付款人开户行号:)"/>
+   <ITEM LINE="9"   COL="3"    TYPE="%-16s"    FUNCTIONS="T(优  先  级  别:!)"/>
+   <ITEM LINE="10"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(汇  票  类  别:!)"/>
+   <ITEM LINE="11"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(汇  票  密  押:)"/>
+   <ITEM LINE="12"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(出  票  金  额:)"/>
+   <ITEM LINE="13"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(实际结算金  额:)"/>
+   <ITEM LINE="14"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(核  押  方  式:!)"/>
+   <ITEM LINE="14"  COL="39"   TYPE="%-10s"    NAME="#UCHECKPASS" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(汇票密押:)"/>
+   <ITEM LINE="15"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(收款人开户行号:)"/>
+   <ITEM LINE="16"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(最后持票人帐号:)"/>
+   <ITEM LINE="17"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(最后持票人名称:)"/>
+   <ITEM LINE="18"  COL="3"    TYPE="%-16s"    FUNCTIONS="T(附          言:)"/>
+   
+   
+   <ITEM LINE="5"  COL="19" NAME="#PJ_DATE" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="V(20060101,$HDATE)D()"/>
+   <ITEM LINE="6"  COL="19" NAME="#PJ_NUM"  TYPE="%8d"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM LINE="8"  COL="19"  NAME="#PAY_OPN_BR_NO" TYPE="%-12s" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+   <ONLOSTFOCUS>
+   "{
+        dim @baktxno as string;
+        initfd();
+        @baktxno=$TXNO;
+        $TXNO='9553';
+        $FD32=#PAY_OPN_BR_NO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+        	showmsg(geterror());
+        	return(false);
+     }
+     showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+    }"
+   </ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="9"  COL="19"  NAME="#OPERLEVEL" TYPE="%-1s"  DEVICE="KEYBOARD" FUNCTIONS="V(0,2)T(0)">
+   	<SELECT>
+          <OPTION VALUE="0 普通" TITLE="0 普通"/>
+          <OPTION VALUE="1 紧急" TITLE="1 紧急"/>
+          <OPTION VALUE="2 特急" TITLE="2 特急"/>
+   	</SELECT>
+   </ITEM>
+   <ITEM NAME="#S_OPERLEVEL" TYPE="%-10s" FUNCTIONS="S(#OPERLEVEL,#OPERLEVEL)"/>
+
+    <ITEM LINE="10" COL="19"  NAME="#HP_TYPE" TYPE="%-1s" DEVICE="KEYBOARD"   FUNCTIONS="V(0,2)T(0)">
+    <SELECT>
+    		<OPTION VALUE="0可转让汇票"   TITLE="0.可转让汇票"/>
+    		<OPTION VALUE="1不可转让汇票" TITLE="1.不可转让汇票"/>
+    		<OPTION VALUE="2现金汇票"     TITLE="2.现金汇票"/>
+  	</SELECT>
+   </ITEM>
+   <ITEM NAME="#SHP_TYPE" TYPE="%-14s" FUNCTIONS="S(#HP_TYPE,#HP_TYPE)"/>
+    <ITEM LINE="11" COL="19"  NAME="#HP_MIYA" TYPE="%-10s"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+   <ITEM LINE="12" COL="19"  NAME="#CP_AMT"  TYPE="%16.2f" DEVICE="KEYBOARD"  FUNCTIONS="V(000000000000001,999999999999999)"/>
+   <ITEM LINE="13" COL="19"  NAME="#REAL_JS_AMT" TYPE="%16.2f" DEVICE="KEYBOARD"  FUNCTIONS="V(000000000000001,999999999999999)">
+    <ONLOSTFOCUS>
+     "{
+        if(#CP_AMT &lt; #REAL_JS_AMT)
+         {
+         	showmsg('实际结算金额不能大于出票金额!');
+         	return(false);
+         }
+      }"
+    </ONLOSTFOCUS> 
+   </ITEM>
+   <ITEM LINE="14"  COL="19" NAME="#PASFLG"  TYPE="%-1s"  DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0,1)">
+     <SELECT>
+         <OPTION VALUE="0 机器核押"     TITLE="0.机器核押"/><!--- 把这个值赋值给$FD68--->
+         <OPTION VALUE="1 人工核押"     TITLE="1.人工核押"/>
+     </SELECT>
+     <ONLOSTFOCUS>
+     "{
+      	if(#PASFLG=='1')
+      	{
+      		show(#UCHECKPASS,true);
+      		show(#CHECKPASS,true);
+      	}else{
+      		show(#UCHECKPASS,false);
+      		show(#CHECKPASS,false);
+      	}
+     }"
+     </ONLOSTFOCUS>
+   </ITEM>
+   <ITEM NAME="#SPASFLG" TYPE="%-10s" FUNCTIONS="S(#PASFLG,#PASFLG)"/>
+   <ITEM LINE="14" COL="49" NAME="#CHECKPASS"  INPUT="TEXT" VISABLE="FALSE"  TYPE="%-10s" DEVICE="KEYBOARD">
+      <ONLOSTFOCUS><!---------JUST 比较并没有往后台传---------->
+      "{
+      	if(#CHECKPASS!=#HP_MIYA)
+      	{
+      		showmsg('手工核押错误!');
+      		return(false);
+      	}
+      }"
+      </ONLOSTFOCUS>
+    </ITEM>
+	
+   <ITEM LINE="15" COL="19"  NAME="#CASH_OPN_BR_NO"  TYPE="%-12s"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+   <ONLOSTFOCUS>
+   "{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9553';
+        $FD32=#CASH_OPN_BR_NO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+    }"
+   </ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="16" COL="19"  NAME="#LAST_AC_NO"  TYPE="%-32s"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+   <ONLOSTFOCUS>"{
+	dim @a     as string;
+	dim @name  as string; //户名
+	dim @avbal as string; //余额
+	dim @PACNO as string;
+	dim @prdt_name as string;//产品名称
+	dim @actype as string;//帐户类型
+
+	$MSGTYPE = '03001';
+	commsend_001();
+	$FD16    = '9731';
+	$FD102    = #LAST_AC_NO;	
+	callserver();
+	if($FD12 == '0000')
+	{
+		@name  =  substr($FD102,125,60); 
+		@avbal = itoa(val(substr($FD102,185,16),0.01),'%017.2f');
+		showhelp(4,58,5,20,'帐户信息','户名:'+@name+' 余额:'+@avbal);
+		#LAST_NAME=delspace(@name);
+	}
+	show(#LAST_NAME,true);
+}"
+</ONLOSTFOCUS>
+</ITEM>
+    
+   <ITEM LINE="17" COL="19"  NAME="#LAST_NAME"   TYPE="%-60s"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+    "{
+      if (strfldcnt(#LAST_NAME,':') != 1 or strfldcnt(#LAST_NAME,'{') != 1 or strfldcnt(#LAST_NAME,'}') != 1) 
+      {
+          showmsg('输入内容中不能含有半角:{}字符,请修改为全角其它字符');
+          return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="18" COL="19"  NAME="#BRF"    TYPE="%-60s"  DEVICE="KEYBOARD"  FUNCTIONS="T()">
+    <ONLOSTFOCUS>
+     "{
+  	if (strfldcnt(#BRF,':') != 1 or strfldcnt(#BRF,'{') != 1 or strfldcnt(#BRF,'}') != 1) 
+        {
+  		showmsg('输入内容中不能含有半角:{}字符,请修改为全角其它字符');
+		return(false);
+        }
+      }"
+     </ONLOSTFOCUS>
+    </ITEM>
+  
+  <!-----占位字段---------------> 
+  <ITEM NAME="#REC_BR_NO" 	TYPE="%12s"    FUNCTIONS=""/>  <!--汇票原指定兑付行-->
+  <ITEM NAME="#DY_AMT"          TYPE="%16.2f"  FUNCTIONS="E(#CP_AMT-#REAL_JS_AMT)"/> <!--多余金额-->
+  <ITEM NAME="#RETURN_DATE"     TYPE="%8s"     FUNCTIONS="T($HDATE)"/>  <!--提示付款日期-->
+  <ITEM NAME="#CMTNO"           TYPE="%-3s"    FUNCTIONS="T(721)"/><!--原cmt编号-->
+  <ITEM NAME="#O_CMTNO"         TYPE="%-3s"    FUNCTIONS="T()"/><!--原cmt编号-->
+  <ITEM NAME="#PAY_QS_NO"       TYPE="%-12s"   FUNCTIONS=""/><!--(原)发起清算行行号-->
+  <ITEM NAME="#OR_BR_NO"        TYPE="%-12s"   FUNCTIONS=""/><!--发起行号 原发起行号 申请撤销行号 退回行号-->
+  <ITEM NAME="#RECECO"          TYPE="%-4s"    FUNCTIONS=""/><!--收报中心代码-->
+  <ITEM NAME="#SENDCO"          TYPE="%-4s"    FUNCTIONS=""/><!--发报中心代码-->
+  <ITEM NAME="#PAY_AC_NO"       TYPE="%-32s"   FUNCTIONS=""/><!--付款人帐号(原收款人帐号)-->
+  <ITEM NAME="#PAY_NAME"        TYPE="%-60s"   FUNCTIONS=""/><!--付款人名称(原收款人名称)-->
+  <ITEM NAME="#PAY_ADDR"        TYPE="%-60s"   FUNCTIONS=""/><!--付款人地址(原收款人地址)-->
+  <ITEM NAME="#NOTPAY_CONTENT"  TYPE="%-255s"  FUNCTIONS=""/>
+  <ITEM NAME="#AC_BR_NO"        TYPE="%-12s"   FUNCTIONS=""/><!--接受行号-->
+  <ITEM NAME="#CASH_QS_NO"      TYPE="%-12s"   FUNCTIONS=""/><!--接受清算行号-->
+  <ITEM NAME="#CASH_AC_NO"      TYPE="%-32s"   FUNCTIONS=""/><!--收款人帐号,原付款人帐号-->
+  <ITEM NAME="#CASH_NAME"       TYPE="%-60s"   FUNCTIONS=""/><!--收款人姓名,原付款人姓名-->
+  <ITEM NAME="#CASH_ADDR"       TYPE="%-60s"   FUNCTIONS=""/><!--收款人地址-->
+  
+  <ITEM NAME="#YW_TYPE"         TYPE="%-2s"    FUNCTIONS=""/><!--业务种类-->
+  <ITEM NAME="#ORDERNO"         TYPE="%-8s"    FUNCTIONS=""/><!--支付交易序号   撤销支付交易序号-->
+  <ITEM NAME="#CONTENT"		  TYPE="%-60s"   FUNCTIONS=""/><!--附言-->
+  <ITEM NAME="#RATE"              TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+  <ITEM NAME="#RATEDATE"	  TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+  <ITEM NAME="#OORDERNO"          TYPE="%-8s"       FUNCTIONS=""/><!--原支付交易序号-->
+  <ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/><!--处理码-->
+  <ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/><!--查复日期-->
+  <ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查复行号-->
+  <ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--查复书号-->
+  <ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查询行号  原查询行号-->
+  <ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--原查询书号 查询书号-->
+  <ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/><!--原交易种类-->
+  <ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/><!--撤销申请号   退回申请号-->
+  <ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/><!--原撤销申请号  原退回申请号-->
+  <ITEM NAME="#RESP1"             TYPE="%-1s"       FUNCTIONS=""/><!--撤销应答 退回应答-->
+<!--  <ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/><!----><!--同名ITEM liangq注-->
+  <ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/><!---->
+
+  <ITEM NAME="#TX_AMT"            TYPE="%16.2f"    FUNCTIONS="T(#REAL_JS_AMT)"/>
+  <ITEM NAME="#O_PACKID"          TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#OPCD"              TYPE="%-2s"      FUNCTIONS="T(10)"/>
+  <ITEM NAME="#NOTE_NO"           TYPE="%-16s"     FUNCTIONS=""/>
+  <ITEM NAME="#LW_IND"            TYPE="%-1s"      FUNCTIONS="T(1)"/>
+  <ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#PACKID"            TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#PACK_DATE"         TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#O_PACK_DATE"       TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#TXNUM"         	  TYPE="%5d"       FUNCTIONS=""/>
+  <ITEM NAME="#O_TXNUM"       	  TYPE="%5d"       FUNCTIONS=""/>
+  <ITEM NAME="#LV_YW_IND"         TYPE="%12s"      FUNCTIONS=""/>
+  <ITEM NAME="#RESP_DATE"         TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#RCP_STS"           TYPE="%2d"       FUNCTIONS=""/>
+  <ITEM NAME="#RESP2"             TYPE="%8s"       FUNCTIONS=""/>
+  <ITEM NAME="#RETCODE"        	  TYPE="%2d"       FUNCTIONS=""/>
+  <ITEM NAME="#YW_DTL_ID"         TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#ACC_IND"           TYPE="%1d"       FUNCTIONS=""/>
+  <ITEM NAME="#REQ_TYPE"          TYPE="%1d"       FUNCTIONS=""/>
+  <ITEM NAME="#DF_FREEAMT"        TYPE="%16s"      FUNCTIONS=""/>
+  <ITEM NAME="#PROTNO"            TYPE="%60s"      FUNCTIONS=""/>
+  <ITEM NAME="#PO_NO"         	  TYPE="%8d"       FUNCTIONS=""/>
+  <ITEM NAME="#PO_TYPE"           TYPE="%1d"       FUNCTIONS=""/>
+  <ITEM NAME="#OTYPE"         	  TYPE="%1d"       FUNCTIONS="T(1)"/><!-- 表示大额 -->
+  
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+    <PACKAGE>
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print(6,25,'申请汇票兑付发送成功!');
+        print(8,25,'申请序号:[8]!',#ORDERNO);
+        }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 		print( 5, 20,'机构名称:[30]',$BRNAME);  
+		print( 5, 2,'代码:5111');
+		print( 5, 13,'交易:申请汇票兑付录入');
+		
+		print( 6, 20,'票  据  日  期:[8]         票据号码:[8]       申请号码:[8]',#PJ_DATE,#PJ_NUM,#ORDERNO);
+	  print( 7, 20,'付款人开户行号:[12]     优先级别:[10]     汇票类别:[14]',#PAY_OPN_BR_NO,#S_OPERLEVEL,#SHP_TYPE); 
+	  print( 8, 20,'汇  票  密  押:[10]       核  押  方  式:[10]',#HP_MIYA,#SPASFLG);
+	  print( 9, 20,'出  票  金  额:[16] 实际结算金额:[16]',ltrim(comma(itoa(#CP_AMT,'%16.2f'),16)),ltrim(comma(itoa(#REAL_JS_AMT,'%16.2f'),16)));
+	  print(10, 20,'收款人开户行号:[12]     最后持票人帐号:[32]',#CASH_OPN_BR_NO,#LAST_AC_NO);
+	  print(11, 20,'最后持票人名称:[60]',#LAST_NAME);
+	  print(13, 20,'附          言:[60]',#BRF);
+		
+		print( 24,20,'备注:');
+		print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print( 24,5,'柜员:[4]',$FD7);
+		print( 24,5,'流水号:[6]',$FD4);
+        }"
+    </PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

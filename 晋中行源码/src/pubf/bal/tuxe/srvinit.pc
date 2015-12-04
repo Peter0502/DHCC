@@ -1,0 +1,171 @@
+#include "bal.h"
+EXEC SQL INCLUDE SQLCA;
+int tpsvrinit( int argc, char **argv )
+{
+	int              c = 0;
+	int              flag = 0;
+
+	__argc = argc;
+	__argv = argv;
+
+	if ( (-1) == bal_open_database() )
+	{
+		userlog( "ERROR: open database err[%d] ",sqlca.sqlcode);
+		return CFailure; 
+	}
+	userlog("***********Has opened database!!******************");
+/****
+	if ( (-1) == tpopen() )
+	{
+		userlog( "ERROR(%d): tpopen - %s", tperrno, tpstrerror(tperrno));
+		return CFailure; 
+	}
+****/
+	/*** get bal info ***/
+	if( CFailure == bal_initinfo(&g_balinfo, argc, argv) )
+	{
+		userlog("ERROR(%d): init balinfo - %s",
+		        balerrno,
+		        balstrerror(balerrno));
+		return CFailure;
+	}
+	   
+	/*** open database ***
+	if ( NULL != g_balinfo.user_opendb )
+	{
+		if ( CSuccess != g_balinfo.user_opendb() )
+		{
+			userlog( "ERROR: user open database failed" );
+			return CFailure;
+		}
+	}
+	else
+	{
+		if ( (-1) == tpopen() )
+		{
+			userlog( "ERROR(%d): tpopen - %s", tperrno, tpstrerror(tperrno));
+			return CFailure; 
+		}
+	} 
+	*******************/
+
+#ifdef FOR_APCTL
+	if ( NULL != Pre_Server_Call )
+	{
+		(*Pre_Server_Call)();
+	}
+#endif
+
+	/*** user service init ***/
+	if ( NULL != g_balinfo.user_svrinit )
+	{
+		if ( CSuccess == g_balinfo.user_svrinit() )
+		{
+			userlog( "ERROR: Server init: fail to user init" );
+			return CFailure;
+		}
+	}
+
+	/*** set lock wait time ***/
+	if ( CSuccess != bal_set_lockwaittime() )
+	{
+		userlog("ERROR(%d): set lockwait time - %s",
+		        balerrno,
+		        balstrerror(balerrno));
+		return CFailure;
+	}
+	/*** Advertise service ***/
+	if ( (-1) == tpadvertise( g_balinfo.svcname, _balmain ) )
+	{
+		userlog("ERROR--1-(%d): tpadvertise(%s) - %s",
+		        tperrno,
+		        g_balinfo.svcname,
+		        tpstrerror(tperrno));
+		return CFailure;
+	}
+
+	/*** if necessary, advertise callback service ***/
+	if( g_balinfo.callback_flg )
+	{
+		userlog("callback_svc [%s]",g_balinfo.callback_svc);
+		if ( (-1) == tpadvertise(tp_backcallname, bal_callback) )
+		{
+			userlog("ERROR--2-(%d): tpadvertise(%s) - %s",
+			        tperrno,
+			        g_balinfo.callback_svc,
+		    	    tpstrerror(tperrno));
+			return CFailure;
+		}
+/*
+		if( -1 == tpacall( g_balinfo.callback_svc,  NULL,
+							   0, TPNOTRAN | TPNOREPLY ))
+		{
+			userlog("ERROR--2-(%d): tpacall(%s) - %s",
+			        tperrno,
+			        g_balinfo.callback_svc,
+		    	    tpstrerror(tperrno));
+			return CFailure;
+		}
+*/
+	}
+    
+	/*** if necessary, advertise pollcall service ***/
+	if( g_balinfo.pollcall_flg )
+	{
+		userlog("pollcall [%s]",g_balinfo.pollcall_svc);
+		if ( (-1) == tpadvertise( g_balinfo.pollcall_svc, bal_pollcall ) )
+		{
+				userlog("ERROR--3-(%d): tpadvertise(%s) - %s",
+				        tperrno,
+				        g_balinfo.callback_svc,
+			    	    tpstrerror(tperrno));
+				return CFailure;
+		}
+		userlog("pollcall ok  ****[%s]",g_balinfo.pollcall_svc);
+	
+		sleep(1);
+/*
+		tpforward( g_balinfo.pollcall_svc, NULL ,0l,0l );
+		userlog(" tpforward ok ");
+*/
+		if ( (-1) == tpacall( g_balinfo.pollcall_svc, NULL ,0,TPNOTRAN|TPNOREPLY ) )
+		{
+				userlog("ERROR--4-(%d): tpacall pollcall(%s) - %s",
+				        tperrno,
+				        g_balinfo.callback_svc,
+			    	    tpstrerror(tperrno));
+				return CFailure;
+		}
+
+/*
+		sleep(5);
+		{
+			TPEVCTL evctl;
+
+			evctl.flags = TPEVSERVICE;
+			strcpy(evctl.name1,g_balinfo.pollcall_svc);
+			sub_serv = tpsubscribe(BAL_REGPOLL_EVENT,NULL,&evctl,TPSIGRSTRT);
+			if (sub_serv == -1){
+			userlog("ERROR(%d): tpsubscribe - %s",
+			        tperrno,
+			        tpstrerror(tperrno));
+			return CFailure;
+			}
+		}
+		userlog(" tpsubscribe  ok ******");
+
+		if( CFailure == bal_register_pollcall(g_balinfo.svcdigit,
+		                                g_balinfo.pollcall_interval) )
+		{
+			userlog("ERROR(%d): register_pollcall - %s",
+			        balerrno,
+			        balstrerror(balerrno));
+			return CFailure;
+		}
+*/
+
+	}
+	userlog("%s,%d,>>>>>>>>>>>>>>>>>>>balmain∆Ù∂Ø≥…π¶,sqlcode=[%d]\n",
+			__FILE__,__LINE__,sqlca.sqlcode);
+	return CSuccess;
+}

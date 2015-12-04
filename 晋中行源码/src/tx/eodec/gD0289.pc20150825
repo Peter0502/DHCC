@@ -1,0 +1,1247 @@
+/*************************************************************
+* 文 件 名: gD0289.c
+* 功能描述：每旬提取准备金
+
+注意：请在汇总支行总帐(gl_sub)后使用
+.
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "com_branch_c.h"
+#include "com_item_c.h"
+#include "dc_acc_rel_c.h"
+#include "com_sys_parm_c.h"
+#include "zjgl_mst_c.h"
+#include "zjgl_hst_c.h"
+#include "gl_sub_c.h"
+#include "com_cur_no_code_c.h"
+#include "com_parm_c.h"
+
+struct com_sys_parm_c com_sys_parm_c;
+struct com_branch_c com_branch;
+struct com_cur_no_code_c wp_com_cur_no_code;
+
+int ret;
+double tot_amt = 0;    /** 总行存款合计 **/
+double tot_bal = 0;    /** 总行已缴存一级准备金 **/
+double tot_bal2 = 0;   /** 总行二级准备金 **/
+double bfj_amt = 0;    /** 本次补缴(退回)金额 <即本次发生额>   **/
+double bfj_amt2 = 0;   /** 本次补缴(退回)金额 <即本次发生额>   **/
+double d201_bal=0;     /** 201下的所有科目总和 **/
+double d20101_bal=0;   /** 以下是各项存款,请根据科目号自行判断 **/
+double d20102_bal=0;
+double d20103_bal=0;
+double d20104_bal=0;
+double d20105_bal=0;
+double d20106_bal=0;
+double d20107_bal=0;
+double d20108_bal=0;
+double d20109_bal=0;
+double d20110_bal=0;
+double d20111_bal=0;
+double d20112_bal=0;
+double d20120_bal=0;
+double d205_bal=0;
+double d211_bal=0;
+double d215_bal=0;
+double d251_bal=0;
+double d221_bal=0;
+double d202_bal=0;
+double d217_bal=0;
+double d222_bal=0;
+double d223_bal=0;
+double d243_bal=0;
+
+/****add 20130925***/
+double d203_bal=0;
+double d225_bal=0;
+double d401_bal=0;
+double d403_bal=0;
+double d406_bal=0;
+/****20130925 end***/
+
+double td_bal = 0;       /** 一级准备金应缴金额 <即本次补缴(退回)后余额> **/
+double td_bal2 = 0;      /** 二级准备金应缴金额 <即本次补缴(退回)后余额> **/
+double dbfj_rate = 0;    /** 缴存一级准备金比例 **/
+double dbfj_rate2 = 0;   /** 缴存二级准备金比例 **/
+
+char   dr_ac_no[8];      /** 借方记帐科目 **/
+char   cr_ac_no[8];      /** 贷方记帐科目 **/
+char   dr_ac_hrt[6];     /** 借方记帐科目控制字 **/
+char   cr_ac_hrt[6];     /** 贷方记帐科目控制字 **/
+
+int get_ratio_zbjpz(int bli,int bll,char str[100]);
+int get_ratio_zbjcp(int bli,int bll,char str[100]);
+int get_ratio_zbjcp1(int bli,int bll,char str[100]);/**二级储备金 20131125 zgf **/
+char *pubf_acct_acctoact(char *,char *);
+
+gD0289()
+{
+  /** 打开事务 **/
+  sql_begin(); 
+	MYSQLERR
+
+  /** 取流水号 **/
+  if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+  {
+        sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+        WRITEMSG
+        goto ErrExit;
+  }
+  set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+  set_zd_long( DC_TRACE_CNT,1 );
+
+
+  /** 初始化全局变量 **/
+  ret = 0;
+	pub_base_sysinit();
+	
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+	
+	sprintf(acErrMsg,"计算一级准备金[%d]!",com_sys_parm_c.sys_date);
+	WRITEMSG
+	
+	g_pub_tx.tx_date = com_sys_parm_c.sys_date;
+
+	int dd=0;
+	dd=com_sys_parm_c.sys_date%100;
+	if(dd!=11 && dd!=21 && dd!=1){
+		vtcp_log("不是计提准备金日期[%ld]",com_sys_parm_c.sys_date);
+		goto OkExit;
+	}
+
+	/*ret = Com_branch_Dec_Sel1(g_pub_tx.reply,"br_type in ('3','4','5','6') and br_no<>'%s'  and wrk_sts<>'*' order by br_type,br_no",CW_BR_NO);    lwb 20150526 增加分行 */
+	ret = Com_branch_Dec_Sel1(g_pub_tx.reply,"br_type in ('3','4','5','6','7') and br_no<>'%s'  and wrk_sts<>'*' order by br_type,br_no",CW_BR_NO); 
+	MYRETERR
+	while(1)
+	{
+	  ret = Com_branch_Fet_Sel1(&com_branch,g_pub_tx.reply);
+	  if(ret==100) break;
+	  MYRETERR
+	  
+	  ret = igD0289_Predata();
+	  MYRETERR
+	  
+	}
+	Com_branch_Clo_Sel1();
+
+	
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int igD0289_Predata()
+{
+    int    cur_cnt = 0;
+    char   tabname[41];
+    
+    /** 按币种分类统计 **/
+    ret = Com_cur_no_code_Dec_Sel(g_pub_tx.reply,"use_ind='Y'");
+    MYRETERR
+    
+    while(1)
+    {
+        ret = Com_cur_no_code_Fet_Sel(&wp_com_cur_no_code,g_pub_tx.reply);
+        if(ret==100) break;
+        MYRETERR
+        
+        memset(tabname,0,sizeof(tabname));
+        if(com_branch.br_type[0] == '6')  /** 总行 **/
+            sprintf(tabname,"gl_mst");
+        else
+        	  sprintf(tabname,"gl_sub");
+        	  
+        cur_cnt = sql_count( tabname, "cur_no='%s'" ,\
+                              wp_com_cur_no_code.cur_no );
+        if(cur_cnt==0)
+            continue;
+            
+        ret=gD0289_Insert(tabname); 
+        MYRETERR
+    }
+    Com_cur_no_code_Clo_Sel();
+    
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}
+
+int gD0289_Insert(char *tabnm)
+{
+
+   
+   struct zjgl_mst_c wd_zjgl_mst;
+   struct com_parm_c wd_com_parm;
+   
+   d201_bal=0;     /** 201下的所有科目总和 **/
+   d20101_bal=0;
+   d20102_bal=0;
+   d20103_bal=0;
+   d20104_bal=0;
+   d20105_bal=0;
+   d20106_bal=0;
+   d20107_bal=0;
+   d20108_bal=0;
+   d20109_bal=0;
+   d20110_bal=0;
+   d20111_bal=0;
+   d20112_bal=0;
+   d20120_bal=0;
+   d202_bal=0;
+   d203_bal=0;
+   d205_bal=0;
+   d211_bal=0;
+   d215_bal=0;
+   d251_bal=0;
+   d221_bal=0;
+   d217_bal=0;
+   d222_bal=0;
+   d223_bal=0;
+   d243_bal=0;
+   
+   /****add 20130925***/
+	 d225_bal=0;
+	 d401_bal=0;
+	 d403_bal=0;
+	 d406_bal=0;
+	/****20130925 end***/
+   
+   td_bal = 0;
+   td_bal2 = 0;
+   dbfj_rate = 0;
+   dbfj_rate2 = 0;
+   bfj_amt = 0;
+   bfj_amt2 = 0;
+   
+   /** 20101 工业存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20101_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20101' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20102 商业存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20102_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20102' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20103 建筑企业存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20103_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20103' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 20104 农业 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20104_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20104' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 20105 乡镇企业存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20105_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20105' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20106 三资 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20106_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20106' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20107 私营企业及个体户存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20107_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20107' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20108 其他企业及个体户存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20108_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20108' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 20110 保险公司 */
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20110_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20110' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20111 行政事业单位存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20111_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20111' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 20120 单位其他存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d20120_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20120' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 202 通知存款**/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d202_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20200' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 203 协定存款  add by wudawei 20131010 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d203_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20300' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 205 定期存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d205_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='20500' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 211 储蓄活期存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d211_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='21100' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /** 215 储蓄定期存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d215_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='21500' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 217 信用卡存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d217_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='21700' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 221 财政性存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d221_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='22100' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 222 地方财政款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d222_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='22200' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 223 待结算财政 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d223_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='22300' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 243 临时存款款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d243_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='24300' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+
+   /** 251 保证金存款 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d251_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='25100' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+/***add 20130925**/  
+   
+      /** 225 电子现金 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d225_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='22500' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+      /** 401 代理证券业务轧差后贷方余额 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d401_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='40100' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+      /** 403 其他代理业务轧差后贷方余额 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d403_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='40300' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+      /** 406 委托业务轧差后贷方余额 **/
+   ret = sql_sum_double( tabnm,"cr_bal-dr_bal",&d406_bal,\
+   " br_no='%s' and cur_no='%s' and acc_hrt='40600' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+/****20130925 end****/   
+   
+   
+   /** 取得一级准备金比率 **/
+   ret = Com_parm_Sel(g_pub_tx.reply,&wd_com_parm,"parm_code='BFJBL' and parm_seqn=1");
+   MYRETERR
+   dbfj_rate = atof(wd_com_parm.val);
+   
+   /** 取得二级准备金比率 **/
+   ret = Com_parm_Sel(g_pub_tx.reply,&wd_com_parm,"parm_code='2JZBJ' and parm_seqn=1");
+   MYRETERR
+   dbfj_rate2 = atof(wd_com_parm.val);
+   
+   /** 已缴存一级准备金 **/
+   ret = sql_sum_double( "zjgl_mst","dr_bal-cr_bal",&tot_bal,\
+   " opn_br_no='%s' and cur_no='%s' and acc_hrt='40721' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   /** 二级准备金 **/
+   ret = sql_sum_double( "zjgl_mst","dr_bal-cr_bal",&tot_bal2,\
+   " opn_br_no='%s' and cur_no='%s' and acc_hrt='40722' ", com_branch.br_no,wp_com_cur_no_code.cur_no);
+   MYRETERR
+   
+   /***根据财务要求，201下的所有科目归集成一个科目***/
+   d201_bal = d20101_bal+d20102_bal+d20103_bal+d20104_bal+d20105_bal+d20106_bal+d20107_bal+d20108_bal+d20110_bal+d20111_bal+d20120_bal;
+   
+  /**根据财务部要求，去掉每旬一级法定存款准备金的缴存基数与财政存款的缴存范围有重复的科目（221,222,223）.by jk 201203531 begin   tot_amt = d20101_bal+d20102_bal+d20103_bal+d20104_bal+d20105_bal+d20106_bal+d20107_bal+d20108_bal+d20110_bal+d20111_bal+d20120_bal+ \            d202_bal+d205_bal+d211_bal+d215_bal+d217_bal+d221_bal+d222_bal+d223_bal+d243_bal+d251_bal;   根据财务部要求，去掉每旬一级法定存款准备金的缴存基数与财政存款的缴存范围有重复的科目（221,222,223）.by jk 201203531 end 
+**/ 
+   tot_amt = d20101_bal+d20102_bal+d20103_bal+d20104_bal+d20105_bal+d20106_bal+d20107_bal+d20108_bal+d20110_bal+d20111_bal+d20120_bal+ \
+            d202_bal+d203_bal+d205_bal+d211_bal+d215_bal+d217_bal+d243_bal+d251_bal + d225_bal + d401_bal + d403_bal + d406_bal;
+   td_bal = pub_base_PubDround_1(tot_amt*dbfj_rate/100);
+   td_bal2 = pub_base_PubDround_1(tot_amt*dbfj_rate2/100);
+   
+   sprintf(acErrMsg,"[%s][%d]机构:[%s] 币种:[%s]",__FILE__,__LINE__,com_branch.br_no,wp_com_cur_no_code.cur_no);
+	 WRITEMSG
+   sprintf(acErrMsg,"[%s][%d]20101工业存款合计:[%f]",__FILE__,__LINE__,d20101_bal);
+	 WRITEMSG	 
+	 sprintf(acErrMsg,"[%s][%d]20102商业存款合计:[%f]",__FILE__,__LINE__,d20102_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20103建筑存款合计:[%f]",__FILE__,__LINE__,d20103_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20105城镇集体企业存款合计:[%f]",__FILE__,__LINE__,d20105_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20106乡镇存款合计:[%f]",__FILE__,__LINE__,d20106_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20108私营企业及个体户存款合计:[%f]",__FILE__,__LINE__,d20108_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20109其他企业及个体户存款合计:[%f]",__FILE__,__LINE__,d20109_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20111行政事业单位存款:[%f]",__FILE__,__LINE__,d20111_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]20120单位其他存款合计:[%f]",__FILE__,__LINE__,d20120_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]205定期存款合计:[%f]",__FILE__,__LINE__,d205_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]211储蓄个人存款合计:[%f]",__FILE__,__LINE__,d211_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]215定期储蓄存款合计:[%f]",__FILE__,__LINE__,d215_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]251保证存款合计:[%f]",__FILE__,__LINE__,d251_bal);
+	 WRITEMSG
+	 
+	 	 sprintf(acErrMsg,"[%s][%d]225电子现金合计:[%f]",__FILE__,__LINE__,d225_bal);
+	 WRITEMSG
+	 	 sprintf(acErrMsg,"[%s][%d]401代理证券业务轧差后贷方余额合计:[%f]",__FILE__,__LINE__,d401_bal);
+	 WRITEMSG
+	 	 sprintf(acErrMsg,"[%s][%d]403其他代理业务轧差后贷方余额合计:[%f]",__FILE__,__LINE__,d403_bal);
+	 WRITEMSG
+	 	 sprintf(acErrMsg,"[%s][%d]406 委托业务轧差后贷方余额合计:[%f]",__FILE__,__LINE__,d406_bal);
+	 WRITEMSG
+	 
+	 sprintf(acErrMsg,"[%s][%d]221财政存款合计:[%f]",__FILE__,__LINE__,d221_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]221一级准备比例:[%f]",__FILE__,__LINE__,dbfj_rate);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]221二级准备比例:[%f]",__FILE__,__LINE__,dbfj_rate2);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]221一级准备金:[%f]",__FILE__,__LINE__,td_bal);
+	 WRITEMSG
+	 sprintf(acErrMsg,"[%s][%d]221二级准备金:[%f]",__FILE__,__LINE__,td_bal2);
+	 WRITEMSG
+
+   /** 更新登记薄 **/
+   ret = ipubf_acct_zjgl_trance(com_branch.br_no,wp_com_cur_no_code.cur_no,"4070201",&bfj_amt,&td_bal);
+   MYRETERR
+  vtcp_log("[%s][%d]计算出的备付金是[%.2f]\n",__FILE__,__LINE__,bfj_amt);
+       ret = ipubf_acct_zjgl_trance(com_branch.br_no,wp_com_cur_no_code.cur_no,"4070202",&bfj_amt2,&td_bal2);
+       MYRETERR
+  /** 出记帐传票 **/
+  ret = igD0289_prt_cp();
+  MYRETERR
+  /** 出二级储备金记帐传票 20131125 zgf start**/
+  ret = igD0289_prt_cp1();
+  MYRETERR
+  /** 出二级储备金记帐传票 20131125 zgf end**/
+  
+  /** 如果是总行，记帐，打印存款划拨凭证 **/
+  if(com_branch.br_type[0] == '6')
+  {
+  	  /** 判断借贷标志 **/
+  	  memset(dr_ac_no,0,sizeof(dr_ac_no));
+  	  memset(cr_ac_no,0,sizeof(cr_ac_no));
+  	  memset(dr_ac_hrt,0,sizeof(dr_ac_hrt));
+  	  memset(cr_ac_hrt,0,sizeof(cr_ac_hrt));
+  	  if(pub_base_CompDblVal(bfj_amt,0.00)>=0)
+  	  {
+  	  	strcpy(dr_ac_no,"112");  	 
+  	  	strcpy(cr_ac_no,"110"); 
+  	  	strcpy(dr_ac_hrt,"11200");  	 
+  	  	strcpy(cr_ac_hrt,"11000"); 	
+  	  }else{
+  	  	strcpy(dr_ac_no,"110");  	 
+  	  	strcpy(cr_ac_no,"112");
+  	  	strcpy(dr_ac_hrt,"11000");  	 
+  	  	strcpy(cr_ac_hrt,"11200");
+  	  }
+
+      /* 借方－分户记帐 */
+			strcpy( g_pub_tx.ac_no, pubf_acct_acctoact(dr_ac_no,QS_BR_NO) );	/*缴存央行一般存款准备金*/ 
+			vtcp_log("[%s][%d]取出的借方帐号是[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no);
+			g_pub_tx.ac_id='';
+			
+      strcpy( g_pub_tx.cur_no, "01" );
+      vtcp_log("[%s][%d] gD0289借before--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+			memcpy( g_pub_tx.ct_ind, "2" ,1);
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ct_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ct_ind,g_pub_tx.ct_ind);
+			strcpy( g_pub_tx.brf, "提旬准备金" );
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.brf--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.brf,g_pub_tx.brf);
+	  	
+			strcpy( g_pub_tx.tx_br_no, QS_BR_NO );
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	
+			strcpy( g_pub_tx.opn_br_no, QS_BR_NO );
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	
+			memcpy( g_pub_tx.ac_id_type,"9" ,1); /*账户类型为内部*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_id_type--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type);
+	  	
+			strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+			
+			strcpy(g_pub_tx.ac_wrk_ind,"000001001"); 
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_wrk_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_wrk_ind,g_pub_tx.ac_wrk_ind);
+	  	
+			memcpy(g_pub_tx.add_ind,"0",1);	/*借方标志*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.add_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.add_ind,g_pub_tx.add_ind);
+	  	
+			strcpy( g_pub_tx.prt_ind,"0" ); /*不登折*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	
+			g_pub_tx.svc_ind=9001;  	/*内部帐存取*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.svc_ind--[%p],[%d]\n",__FILE__,__LINE__,g_pub_tx.svc_ind,g_pub_tx.svc_ind);
+	  	
+			strcpy(g_pub_tx.prt_ind,"0");
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	
+			strcpy(g_pub_tx.hst_ind,"1"); /*日间入明细*/
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.hst_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.hst_ind,g_pub_tx.hst_ind);
+	  	
+			strcpy( g_pub_tx.sub_tx_code, "A016" );
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+	  	
+			g_pub_tx.tx_amt1 = fabs(bfj_amt);
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_amt1--[%p],[%f]\n",__FILE__,__LINE__,g_pub_tx.tx_amt1,g_pub_tx.tx_amt1);
+	  	
+			vtcp_log("[%s][%d] aaaaaaaaaaaaaaaaaaaaaaaaaa\n",__FILE__,__LINE__);
+	  	
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.trace_no--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.trace_no,g_pub_tx.trace_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.trace_cnt--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.trace_cnt,g_pub_tx.trace_cnt);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_date--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.tx_date,g_pub_tx.tx_date);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_time--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.tx_time,g_pub_tx.tx_time);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_code,g_pub_tx.tx_code);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tty--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tty,g_pub_tx.tty);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.file_snd--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.file_snd,g_pub_tx.file_snd);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.old_trace_no--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.old_trace_no,g_pub_tx.old_trace_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.id_type--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.id_type,g_pub_tx.id_type);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.id_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.id_no,g_pub_tx.id_no);			
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.cif_no--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.cif_no,g_pub_tx.cif_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.crd_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.crd_no,g_pub_tx.crd_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no,g_pub_tx.ac_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_no1--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no1,g_pub_tx.ac_no1);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_id--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.ac_id,g_pub_tx.ac_id);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_seqn--[%p],[%d]\n",__FILE__,__LINE__,g_pub_tx.ac_seqn,g_pub_tx.ac_seqn);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.name--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.name,g_pub_tx.name);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.cif_type--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cif_type,g_pub_tx.cif_type);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_type--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_type,g_pub_tx.ac_type);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_id_type--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+			vtcp_log("[%s][%d] bbbbbbbbbbbbbbbbbbbbbbbbbb\n",__FILE__,__LINE__);
+			
+			vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_id--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.ac_id,g_pub_tx.ac_id);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ct_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ct_ind,g_pub_tx.ct_ind[0],g_pub_tx.ct_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.brf--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.brf,g_pub_tx.brf);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_id_type--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type[0],g_pub_tx.ac_id_type[1]);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.ac_wrk_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_wrk_ind,g_pub_tx.ac_wrk_ind);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.add_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.add_ind,g_pub_tx.add_ind[0],g_pub_tx.add_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.hst_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.hst_ind,g_pub_tx.hst_ind);
+	  	vtcp_log("[%s][%d] gD0289借before--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+			ret = pub_acct_trance();
+			vtcp_log("[%s][%d] gD0289借after--g_pub_tx.ac_id--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.ac_id,g_pub_tx.ac_id);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.ct_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ct_ind,g_pub_tx.ct_ind[0],g_pub_tx.ct_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.brf--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.brf,g_pub_tx.brf);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.ac_id_type--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type[0],g_pub_tx.ac_id_type[1]);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.ac_wrk_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_wrk_ind,g_pub_tx.ac_wrk_ind);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.add_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.add_ind,g_pub_tx.add_ind[0],g_pub_tx.add_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.hst_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.hst_ind,g_pub_tx.hst_ind);
+	  	vtcp_log("[%s][%d] gD0289借after--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+      MYRETERR
+
+      
+      /* 借方－会计记帐 */
+      set_zd_data( "1204", "01" );   /* 币种 */
+      set_zd_data( "1205", "2" );    /* 1-现金 2-转帐 */
+      set_zd_data( "0152", dr_ac_hrt );    /* 科目控制字 */
+      set_zd_double( "1208", g_pub_tx.tx_amt1 );
+      strcpy( g_pub_tx.sub_tx_code, "A016" );
+      ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+      if (ret != 0)
+      {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+      }
+			vtcp_log("[%s][%d]借方记帐结束，下面开始贷方记帐\n",__FILE__,__LINE__);
+        		
+      /* 贷方一分户记帐 */
+     
+      strcpy( g_pub_tx.ac_no, pubf_acct_acctoact(cr_ac_no,QS_BR_NO) );   /* 存放中央银行备付金 */
+			vtcp_log("[%s][%d]取出的贷方帐号是[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no);
+			g_pub_tx.ac_id='';	
+		  strcpy( g_pub_tx.cur_no, "01" );
+			strcpy( g_pub_tx.ct_ind, "2" );
+			strcpy( g_pub_tx.brf, "提旬准备金" );
+		  strcpy( g_pub_tx.tx_br_no, QS_BR_NO );
+			strcpy( g_pub_tx.opn_br_no, QS_BR_NO );
+			strcpy( g_pub_tx.ac_id_type,"9" );     /*账户类型为内部*/
+			strcpy( g_pub_tx.ac_get_ind,"00" );    /*本程序未读取分户*/
+			strcpy(g_pub_tx.ac_wrk_ind,"000001001"); 
+			strcpy(g_pub_tx.add_ind,"1");          /*贷方标志*/
+			strcpy( g_pub_tx.prt_ind,"0" );        /*不登折*/
+			g_pub_tx.svc_ind=9001;                 /*内部帐存取*/
+			strcpy(g_pub_tx.prt_ind,"0");
+			strcpy(g_pub_tx.hst_ind,"1");          /*日间入明细*/
+		  strcpy( g_pub_tx.sub_tx_code, "A017" );
+		  g_pub_tx.tx_amt1 = fabs(bfj_amt);
+		  	
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.ac_id--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.ac_id,g_pub_tx.ac_id);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.ct_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ct_ind,g_pub_tx.ct_ind[0],g_pub_tx.ct_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.brf--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.brf,g_pub_tx.brf);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.ac_id_type--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type[0],g_pub_tx.ac_id_type[1]);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.ac_wrk_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_wrk_ind,g_pub_tx.ac_wrk_ind);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.add_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.add_ind,g_pub_tx.add_ind[0],g_pub_tx.add_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.hst_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.hst_ind,g_pub_tx.hst_ind);
+	  	vtcp_log("[%s][%d] gD0289贷before--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+			ret = pub_acct_trance();
+			vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.ac_id--[%p],[%ld]\n",__FILE__,__LINE__,g_pub_tx.ac_id,g_pub_tx.ac_id);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.cur_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.cur_no,g_pub_tx.cur_no);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.ct_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ct_ind,g_pub_tx.ct_ind[0],g_pub_tx.ct_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.brf--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.brf,g_pub_tx.brf);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.tx_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.tx_br_no,g_pub_tx.tx_br_no);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.opn_br_no--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.opn_br_no,g_pub_tx.opn_br_no);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.ac_id_type--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.ac_id_type,g_pub_tx.ac_id_type[0],g_pub_tx.ac_id_type[1]);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.ac_get_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_get_ind,g_pub_tx.ac_get_ind);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.ac_wrk_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_wrk_ind,g_pub_tx.ac_wrk_ind);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.add_ind--[%p],[%c],[%c]\n",__FILE__,__LINE__,g_pub_tx.add_ind,g_pub_tx.add_ind[0],g_pub_tx.add_ind[1]);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.prt_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.prt_ind,g_pub_tx.prt_ind);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.hst_ind--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.hst_ind,g_pub_tx.hst_ind);
+	  	vtcp_log("[%s][%d] gD0289贷after--g_pub_tx.sub_tx_code--[%p],[%s]\n",__FILE__,__LINE__,g_pub_tx.sub_tx_code,g_pub_tx.sub_tx_code);
+			MYRETERR
+			
+			/* 贷方－会计记帐 */
+      set_zd_data( "1214", "01" );   /* 币种 */
+      set_zd_data( "1215", "2" );    /* 1-现金 2-转帐 */
+      set_zd_data( "0152", cr_ac_hrt );    /* 科目控制字 */
+      set_zd_double( "1218", g_pub_tx.tx_amt1 );
+      strcpy( g_pub_tx.sub_tx_code, "A017" );
+      ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+      if (ret != 0)
+      {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+      }
+			
+			/** 打印划款凭证 **/
+			ret = igD0289_prt_pz();
+      MYRETERR
+  }
+  
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}
+
+int igD0289_prt_cp()
+{
+	int line=0;
+	int opncnt=0;
+	FILE *fp;
+
+	ret = pub_rpt_rmfile( com_branch.br_no ,"gD0289_cp" , 0 );
+	MYRETERR
+	
+	ret = pub_rpt_openfile( &fp, com_branch.br_no , "gD0289_cp" );
+	MYRETERR
+
+  ret=pub_rpt_read_pfm_qd(fp,&line,"gD0289_cp","0001","AA",&opncnt,get_ratio_zbjcp);
+	MYRETERR
+	
+	fclose(fp);
+	
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+/**二级储备金 20131125 zgf start**/
+int igD0289_prt_cp1()
+{
+	int line=0;
+	int opncnt=0;
+	FILE *fp;
+
+	ret = pub_rpt_rmfile( com_branch.br_no ,"gD0289_cp1" , 0 );
+	MYRETERR
+	
+	ret = pub_rpt_openfile( &fp, com_branch.br_no , "gD0289_cp1" );
+	MYRETERR
+
+  ret=pub_rpt_read_pfm_qd(fp,&line,"gD0289_cp1","0001","AA",&opncnt,get_ratio_zbjcp1);
+	MYRETERR
+	
+	fclose(fp);
+	
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+/**二级储备金 20131125 zgf end**/
+
+int igD0289_prt_pz()
+{
+	int line=0;
+	int opncnt=0;
+	FILE *fp;
+	
+	/* 删除原文件 */
+	ret = pub_rpt_rmfile( com_branch.br_no ,"gD0289_pz" , 0 );
+	MYRETERR
+
+	/* 打开文件 */	
+	ret = pub_rpt_openfile( &fp, com_branch.br_no , "gD0289_pz" );
+	MYRETERR
+
+  ret=pub_rpt_read_pfm_qd(fp,&line,"gD0289_pz","0001","AA",&opncnt,get_ratio_zbjpz);
+	MYRETERR
+	
+	fclose(fp);
+	
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+/* 赋值函数 */
+/* 说明：bli 代表变量字符名称 ... bll代表变量占的长度 ... str代表变量值 */
+int get_ratio_zbjcp( bli,bll,str )
+int bli,bll;
+char str[100];
+{ 
+	char amt_tmp[41];
+	char fmt[20];
+
+	switch( bli ) 
+	{
+		 case 'B':
+		 	    sprintf( amt_tmp , "%s" , com_branch.br_no ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'C':
+		 	    sprintf( amt_tmp , "%s" , com_branch.br_name ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'D':
+		 	    sprintf( amt_tmp , "%d" , com_sys_parm_c.lst_date ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'E':
+		 	    sprintf( amt_tmp , "%.2lf" , fabs(bfj_amt)); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  fabs(bfj_amt) );
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'F':
+		 	    if(bfj_amt>0)
+		 	        sprintf( amt_tmp , "借"); 
+		 	    else
+		 	    	  sprintf( amt_tmp , "贷");  
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'G':
+		 	    if(bfj_amt>0)
+		 	        sprintf( amt_tmp , "贷"); 
+		 	    else
+		 	    	  sprintf( amt_tmp , "借"); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+	}
+
+GoodExit: 
+	return 0; 
+ErrExit: 
+	return 1;
+}
+/**二级储备金 20131125 zgf start***/
+/* 赋值函数 */
+/* 说明：bli 代表变量字符名称 ... bll代表变量占的长度 ... str代表变量值 */
+int get_ratio_zbjcp1( bli,bll,str )
+int bli,bll;
+char str[100];
+{ 
+	char amt_tmp[41];
+	char fmt[20];
+
+	switch( bli ) 
+	{
+		 case 'B':
+		 	    sprintf( amt_tmp , "%s" , com_branch.br_no ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'C':
+		 	    sprintf( amt_tmp , "%s" , com_branch.br_name ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'D':
+		 	    sprintf( amt_tmp , "%d" , com_sys_parm_c.lst_date ); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'E':
+		 	    sprintf( amt_tmp , "%.2lf" , fabs(bfj_amt2)); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  fabs(bfj_amt2) );
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'F':
+		 	    if(bfj_amt2>0)
+		 	        sprintf( amt_tmp , "借"); 
+		 	    else
+		 	    	  sprintf( amt_tmp , "贷");  
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'G':
+		 	    if(bfj_amt2>0)
+		 	        sprintf( amt_tmp , "贷"); 
+		 	    else
+		 	    	  sprintf( amt_tmp , "借"); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+	}
+
+GoodExit: 
+	return 0; 
+ErrExit: 
+	return 1;
+}
+/**二级储备金 20131125 zgf end***/
+
+/* 赋值函数 */
+/* 说明：bli 代表变量字符名称 ... bll代表变量占的长度 ... str代表变量值 */
+int get_ratio_zbjpz( bli,bll,str )
+int bli,bll;
+char str[100];
+{ 
+	char amt_tmp[41];
+	char fmt[20];
+	char buf[41];
+	double tmp_bal=0;
+
+  memset(amt_tmp,0,sizeof(amt_tmp));
+  memset(buf,0,sizeof(buf));
+	switch( bli ) 
+	{
+		 case 'B':
+		 	    sprintf( buf , "%ld" , com_sys_parm_c.lst_date ); 
+		 	    memcpy(amt_tmp,buf,4);
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'C':
+		 	    sprintf( buf , "%ld" , com_sys_parm_c.lst_date ); 
+		 	    memcpy(amt_tmp,buf+4,2);
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'D':
+		 	    sprintf( buf , "%ld" , com_sys_parm_c.lst_date ); 
+		 	    memcpy(amt_tmp,buf+6,2); 
+			    sprintf(fmt, "%%-%ds", bll);
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'E':
+		 	    sprintf( amt_tmp , "%.2lf" , d201_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d201_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+/*
+		 case 'F':
+		 	    sprintf( amt_tmp , "%.2lf" , d20102_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20102_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'G':
+		 	    sprintf( amt_tmp , "%.2lf" , d20103_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20103_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'a':
+		 	    sprintf( amt_tmp , "%.2lf" , d20104_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20104_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'H':
+		 	    sprintf( amt_tmp , "%.2lf" , d20105_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20105_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'I':
+		 	    sprintf( amt_tmp , "%.2lf" , d20106_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20106_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'b':
+		 	    sprintf( amt_tmp , "%.2lf" , d20107_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20107_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'J':
+		 	    sprintf( amt_tmp , "%.2lf" , d20108_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20108_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'K':
+		 	    sprintf( amt_tmp , "%.2lf" , d20110_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20110_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'X':
+		 	    sprintf( amt_tmp , "%.2lf" , d20111_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20111_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'L':
+		 	    sprintf( amt_tmp , "%.2lf" , d20120_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d20120_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+*/
+		 case 'c':
+		 	    sprintf( amt_tmp , "%.2lf" , d202_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d202_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'i': /**增加203协定存款统计 20131010***/
+		 	    sprintf( amt_tmp , "%.2lf" , d203_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d203_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'M':
+		 	    sprintf( amt_tmp , "%.2lf" , d205_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d205_bal );
+			    sprintf(str, fmt, amt_tmp);
+				break;
+		 case 'N':
+		 	    sprintf( amt_tmp , "%.2lf" , d211_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d211_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'O':
+		 	    sprintf( amt_tmp , "%.2lf" , d215_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d215_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'd':
+		 	    sprintf( amt_tmp , "%.2lf" , d217_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d217_bal );
+			    sprintf(str, fmt, amt_tmp);
+				break;
+		 case 'Q':
+		 	    sprintf( amt_tmp , "%.2lf" , d221_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d221_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'e':
+		 	    sprintf( amt_tmp , "%.2lf" , d222_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d222_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'f':
+		 	    sprintf( amt_tmp , "%.2lf" , d223_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d223_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'g':
+		 	    sprintf( amt_tmp , "%.2lf" , d243_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d243_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'P':
+		 	    sprintf( amt_tmp , "%.2lf" , d251_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d251_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 	    
+		 	    
+		 case 'r':
+		 	    sprintf( amt_tmp , "%.2lf" , d225_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d225_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'z':
+		 	    sprintf( amt_tmp , "%.2lf" , d401_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d401_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'x':
+		 	    sprintf( amt_tmp , "%.2lf" , d403_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d403_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'y':
+		 	    sprintf( amt_tmp , "%.2lf" , d406_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  d406_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 	    
+		 	    
+		 	    		 	    		 	    		 	    
+		 case 'R':
+		 	    sprintf( amt_tmp , "%.2lf" , tot_amt); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tot_amt );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'S':
+		 	    sprintf( amt_tmp , "%.2lf" , td_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  td_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'T':
+		 	    sprintf( amt_tmp , "%.2lf" , tot_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tot_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 's':
+		 	    sprintf( amt_tmp , "%.2lf" , td_bal2); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  td_bal2 );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 't':
+		 	    sprintf( amt_tmp , "%.2lf" , tot_bal2); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tot_bal2 );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'U':
+		 	    if (bfj_amt<0)
+            {
+                tmp_bal = 0;
+            }
+            else
+            {
+                tmp_bal=bfj_amt;
+            }
+		 	    sprintf( amt_tmp , "%.2lf" , tmp_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tmp_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'V':
+		 	    if (bfj_amt<0)
+                tmp_bal = 0-bfj_amt;
+            else
+                tmp_bal = 0;
+		 	    sprintf( amt_tmp , "%.2lf" , tmp_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tmp_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'u':
+		 	    if (bfj_amt2<0)
+            {
+                tmp_bal = 0;
+            }
+            else
+            {
+                tmp_bal=bfj_amt2;
+            }
+		 	    sprintf( amt_tmp , "%.2lf" , tmp_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tmp_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'v':
+		 	    if (bfj_amt2<0)
+                tmp_bal = 0-bfj_amt2;
+            else
+                tmp_bal = 0;
+		 	    sprintf( amt_tmp , "%.2lf" , tmp_bal); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  tmp_bal );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		 case 'W':
+		 	    sprintf( amt_tmp , "%.2lf" , dbfj_rate); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  dbfj_rate );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+		case 'w':/* add by martin 2009/1/21 10:07:07*/
+		 	    sprintf( amt_tmp , "%.2lf" , dbfj_rate2); 
+		 	    pub_rpt_flttomon( amt_tmp,amt_tmp );
+		 	    sprintf(fmt,"%%%ds",bll);
+			    if( strlen(amt_tmp)>bll ) 
+				        sprintf( amt_tmp, "%.2lf" ,  dbfj_rate2 );
+			    sprintf(str, fmt, amt_tmp);
+		 	    break;
+	}
+
+GoodExit: 
+	return 0; 
+ErrExit: 
+	return 1;
+}

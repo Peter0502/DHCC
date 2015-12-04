@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3351  银联柜面通余额查询"
+xmlns="http://www.otd.org/MENU" xmlns3CNS="HTTP://WWW.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3" COL="3" TYPE="%-52s" FUNCTIONS=
+"T(3351                       银联柜面通余额查询)"/>
+<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"     TYPE="%-4s"  FUNCTIONS="T(3351)"/>
+<ITEM NAME="#MSGTYPE"  TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM NAME="#LDQFS" LINE="6"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+<ITEM NAME="#FLAG"  TYPE="%-1s"  FUNCTIONS=""/>
+<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<ITEM NAME="#CARD_SEQ_ID"     TYPE="%-3s"   FUNCTIONS=""/>
+<!--
+<ITEM  TYPE="%-1s"  NAME="#DQFS"   FUNCTIONS="V(NB)T(0)">
+-->
+<ITEM LINE="6" COL="25" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);  
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+<ITEM LINE=" 8"  COL="15" TYPE="%-10s" FUNCTIONS="T(账户卡号:)"/>
+<ITEM LINE="10"  COL="15" TYPE="%-10s" FUNCTIONS="T(账户密码:)"/>
+<ITEM LINE="12"  COL="15" TYPE="%-10s" FUNCTIONS="T(交易币种:)"/>
+<ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="8" COL="25" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="8"  COL="25" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+	#MSR2BAK=$MSR2;
+	#MSR3BAK=$MSR3;
+	if('' == $MSR2)
+	{
+		showmsg('二磁道信息为空,请注意账户介质是否为卡或是确定卡是否为可用！');
+		return(false);
+	}
+	dim @tmplen as number;
+	@tmplen = len(#AC_NO);
+	<!--
+	if(@tmplen != 19)
+	{
+	showmsg('刷卡错误，请重刷！');
+	return(false);
+	}-->
+	if('621223' == substr(#AC_NO,0,6) or '621780' == substr(#AC_NO,0,6))
+	{
+		showmsg('本行卡不允许做该交易!');
+		return(false);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#REAL_BAL"  TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#USE_BAL"   TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#XREAL_BAL" TYPE="%-20s"  FUNCTIONS="X(#REAL_BAL)"/>
+<ITEM NAME="#XUSE_BAL"  TYPE="%-20s"  FUNCTIONS="X(#USE_BAL)"/>
+<ITEM NAME="#DTEMP"  TYPE="%-3d"  FUNCTIONS=""/>
+<ITEM NAME="#CTEMP"  TYPE="%-3s"  FUNCTIONS=""/>
+<ITEM LINE="10" COL="25"  NAME="#PWD"    TYPE="%-6s" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="i()V(NB)"/>
+<ITEM LINE="12" COL="25"  NAME="#CUR_NO" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="T(156)V(NB)">
+	<SELECT>
+		<OPTION VALUE="156" TITLE="01.人民币"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#CARD_TRACENO_TRAN" TYPE="%-16s" FUNCTIONS=""/>
+<ITEM NAME="#F55_ICC_DATA" TYPE="%-512s" FUNCTIONS=""/>
+<ITEM NAME="#F55_ICC_DATA_JB" TYPE="%-512s" FUNCTIONS=""/>
+<ITEM NAME="#RESP_CODE" TYPE="%-10s" FUNCTIONS=""/>
+<ITEM LINE="21" COL="60" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONLOSTFOCUS>
+"{
+	dim @shuju as string;
+	dim @update as string;
+	dim @resp_code as string;
+	initfd();
+	commsend_001();
+	$FD16='7838';//余额查询
+	$FD30=#AC_NO;
+	$FD75=$MSR2;
+	$FD76=$MSR3;
+	$FD94=#DQFS; //读取标志
+	$FD79=#PWD;
+	$FD90=#CUR_NO;
+	if(#DQFS == '1')
+	{
+		@shuju=initiccard();
+		#CARD_SEQ_ID=strfld(@shuju,'|',4);
+		//showmsg('#CARD_SEQ_ID='+#CARD_SEQ_ID);
+		$FD23 ='0'+#CARD_SEQ_ID;//IC卡序列号
+		#F55_ICC_DATA=$FD95;  //IC卡55域初始化后自动被放在95域中
+		showmsg('$FD95='+$FD95);
+	}
+	<!--优化流程不上送55域-->
+	//$FD95='';
+	callagn();
+	@resp_code=$FD12;
+	if('0000' != $FD12 and 'CE92' != $FD12)//密码错误时也需要发脚本通知
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#REAL_BAL=val($FD41,1);//账面金额
+	#USE_BAL=val($FD42,1);//可用金额
+	#XREAL_BAL=comma(itoa(#REAL_BAL,'%-17.2f'),20);
+	#XUSE_BAL=comma(itoa(#USE_BAL,'%-17.2f'),20);
+	//#CARD_TRACENO_TRAN=substr($FD43,1,15);
+	#CARD_TRACENO_TRAN=$FD75;
+	showmsg('111111111111111111111');
+	if(#DQFS == '1' and len($FD108)  &gt; 34)
+	{
+	@update=updateiccard($FD108);
+	showmsg('@update='+@update);
+	<!--调用脚本处理结果通知-->
+	initfd();
+	commsend_001();
+	$FD16='jbtz';
+	$FD12=@update;
+	$FD30=#AC_NO;
+	$FD79=#PWD;
+	#RESP_CODE='DF3102'+@update;
+	restruc_fd55_jb();//脚本处理结果通知按要求重组银联55域
+	$FD95=#F55_ICC_DATA_JB;
+	$FD23 ='0'+#CARD_SEQ_ID;//IC卡序列号
+	$FD43=#CARD_TRACENO_TRAN;
+	$FD75=#MSR2BAK;
+	$FD76=#MSR3BAK;
+	$FD94=#DQFS; //读取标志
+	callagn();
+	if(@update != '9000|9000')
+	{
+		showmsg('脚本执行错误！返回码：'+@update);
+		//return (false);
+	}
+	showmsg('脚本通知返回成功！！！');
+	<!--调用脚本处理结果通知-->
+	}
+	if('CE92' == @resp_code)
+	{
+		$FD12=@resp_code;
+		showmsg(geterror());
+		return (false);//密码错误时虽然也发脚本停止但是是失败的交易不打凭证
+	}
+	runoutput();
+	rerun();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通余额查询成功,按任意键继续">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 3,30,'银联柜面通余额查询');
+	print( 5,20,'账户卡号:[24]',#AC_NO);
+	print( 7,20,'账面余额:[20]',ltrim(#XREAL_BAL));
+	print( 9,20,'可用余额:[20]',ltrim(#XUSE_BAL));
+	print(11,20,'平台流水:[12]',#CARD_TRACENO_TRAN);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="银联柜面通余额查询成功,请打印业务专用凭证(1/2打印纸)">
+NOTHING
+</PACKAGE>
+<PRINT>
+<!--"{
+		dim @txday  as string;
+		dim @txtime as string;
+		
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:3351');
+		print( 5,13,'交易名称:银联柜面通余额查询');
+		print( 7,30,'\L0银联柜面通余额查询凭条\L1');
+		print( 9, 20,'账户卡号:[24                        ] 平台流水:[12]',#AC_NO,#CARD_TRACENO_TRAN);
+		print(10, 20,'账面余额:[20                    ]     可用余额:[20                    ]',ltrim(#XREAL_BAL),ltrim(#XUSE_BAL));
+		
+		print(23,20,'备注:');
+		print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[4]',$FD7);
+		print(23,5,'流水号:[6]',$FD4);
+}"-->
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

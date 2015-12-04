@@ -1,0 +1,335 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"sub_dd_mst_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int sub_dd_mst_con ( struct sub_dd_mst_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct sub_dd_mst_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->sub_ac_no);
+	zip_tail(ps->name);
+	zip_tail(ps->paper_type);
+	zip_tail(ps->paper_no);
+	zip_tail(ps->telephone);
+	zip_tail(ps->ac_sts);
+	zip_tail(ps->rate_type);
+	zip_tail(ps->intst_type);
+	zip_tail(ps->bar_code);
+	zip_tail(ps->filler);
+	zip_tail(ps->filler1);
+	zip_tail(ps->filler2);
+}
+int Sub_dd_mst_Debug(struct sub_dd_mst_c *ps){
+	vtcp_log("sub_dd_mst_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("sub_dd_mst_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("sub_dd_mst_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("sub_dd_mst_c.sub_ac_seqn=[%ld]\n",ps->sub_ac_seqn);
+	vtcp_log("sub_dd_mst_c.sub_ac_no=[%s]\n",ps->sub_ac_no);
+	vtcp_log("sub_dd_mst_c.bal=[%f]\n",ps->bal);
+	vtcp_log("sub_dd_mst_c.ys_bal=[%f]\n",ps->ys_bal);
+	vtcp_log("sub_dd_mst_c.intst_acm=[%f]\n",ps->intst_acm);
+	vtcp_log("sub_dd_mst_c.opn_date=[%ld]\n",ps->opn_date);
+	vtcp_log("sub_dd_mst_c.ic_date=[%ld]\n",ps->ic_date);
+	vtcp_log("sub_dd_mst_c.lst_date=[%ld]\n",ps->lst_date);
+	vtcp_log("sub_dd_mst_c.hst_cnt=[%ld]\n",ps->hst_cnt);
+	vtcp_log("sub_dd_mst_c.hst_pg=[%ld]\n",ps->hst_pg);
+	vtcp_log("sub_dd_mst_c.name=[%s]\n",ps->name);
+	vtcp_log("sub_dd_mst_c.paper_type=[%s]\n",ps->paper_type);
+	vtcp_log("sub_dd_mst_c.paper_no=[%s]\n",ps->paper_no);
+	vtcp_log("sub_dd_mst_c.telephone=[%s]\n",ps->telephone);
+	vtcp_log("sub_dd_mst_c.ac_sts=[%s]\n",ps->ac_sts);
+	vtcp_log("sub_dd_mst_c.zf_bal=[%f]\n",ps->zf_bal);
+	vtcp_log("sub_dd_mst_c.rate_type=[%s]\n",ps->rate_type);
+	vtcp_log("sub_dd_mst_c.intst_type=[%s]\n",ps->intst_type);
+	vtcp_log("sub_dd_mst_c.rate=[%f]\n",ps->rate);
+	vtcp_log("sub_dd_mst_c.xq_num=[%ld]\n",ps->xq_num);
+	vtcp_log("sub_dd_mst_c.lp_num=[%ld]\n",ps->lp_num);
+	vtcp_log("sub_dd_mst_c.dy_num=[%ld]\n",ps->dy_num);
+	vtcp_log("sub_dd_mst_c.fj_num=[%ld]\n",ps->fj_num);
+	vtcp_log("sub_dd_mst_c.bar_code=[%s]\n",ps->bar_code);
+	vtcp_log("sub_dd_mst_c.filler=[%s]\n",ps->filler);
+	vtcp_log("sub_dd_mst_c.filler1=[%s]\n",ps->filler1);
+	vtcp_log("sub_dd_mst_c.filler2=[%s]\n",ps->filler2);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Sub_dd_mst_Sel(reply,sub_dd_mst_c,fmtstr,va_alist)
+char    *reply;
+struct  sub_dd_mst_c *sub_dd_mst_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Sub_dd_mst_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Sub_dd_mst_Fet_Sel( sub_dd_mst_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Sub_dd_mst_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Sub_dd_mst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,sub_dd_mst.* FROM sub_dd_mst WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE sub_dd_mst_sel FROM :comm;
+	EXEC SQL DECLARE sel_sub_dd_mst CURSOR FOR sub_dd_mst_sel;
+
+	EXEC SQL OPEN sel_sub_dd_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sub_dd_mst_Fet_Sel ( struct sub_dd_mst_c *sub_dd_mst_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_sub_dd_mst INTO :sub_dd_mst_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch sub_dd_mst error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch sub_dd_mst finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(sub_dd_mst_c);
+
+	return 0;
+}
+
+int Sub_dd_mst_Clo_Sel (){
+	EXEC SQL CLOSE sel_sub_dd_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Sub_dd_mst_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,sub_dd_mst.* FROM sub_dd_mst WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE sub_dd_mst_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_sub_dd_mst CURSOR FOR sub_dd_mst_upd;
+
+	EXEC SQL OPEN upd_sub_dd_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sub_dd_mst_Fet_Upd( struct sub_dd_mst_c *sub_dd_mst_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_sub_dd_mst INTO :sub_dd_mst_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH sub_dd_mst finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(sub_dd_mst_c);
+
+	return 0;
+}
+
+int Sub_dd_mst_Upd_Upd( struct sub_dd_mst_c sub_dd_mst_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE sub_dd_mst SET br_no=:sub_dd_mst_c.br_no,
+			ac_no=:sub_dd_mst_c.ac_no,
+			sub_ac_seqn=:sub_dd_mst_c.sub_ac_seqn,
+			sub_ac_no=:sub_dd_mst_c.sub_ac_no,
+			bal=:sub_dd_mst_c.bal,
+			ys_bal=:sub_dd_mst_c.ys_bal,
+			intst_acm=:sub_dd_mst_c.intst_acm,
+			opn_date=:sub_dd_mst_c.opn_date,
+			ic_date=:sub_dd_mst_c.ic_date,
+			lst_date=:sub_dd_mst_c.lst_date,
+			hst_cnt=:sub_dd_mst_c.hst_cnt,
+			hst_pg=:sub_dd_mst_c.hst_pg,
+			name=:sub_dd_mst_c.name,
+			paper_type=:sub_dd_mst_c.paper_type,
+			paper_no=:sub_dd_mst_c.paper_no,
+			telephone=:sub_dd_mst_c.telephone,
+			ac_sts=:sub_dd_mst_c.ac_sts,
+			zf_bal=:sub_dd_mst_c.zf_bal,
+			rate_type=:sub_dd_mst_c.rate_type,
+			intst_type=:sub_dd_mst_c.intst_type,
+			rate=:sub_dd_mst_c.rate,
+			xq_num=:sub_dd_mst_c.xq_num,
+			lp_num=:sub_dd_mst_c.lp_num,
+			dy_num=:sub_dd_mst_c.dy_num,
+			fj_num=:sub_dd_mst_c.fj_num,
+			bar_code=:sub_dd_mst_c.bar_code,
+			filler=:sub_dd_mst_c.filler,
+			filler1=:sub_dd_mst_c.filler1,
+			filler2=:sub_dd_mst_c.filler2
+	WHERE rowid=:sub_dd_mst_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Sub_dd_mst_Del_Upd(struct sub_dd_mst_c sub_dd_mst_c , char * reply  ){
+
+	EXEC SQL DELETE FROM sub_dd_mst WHERE rowid=:sub_dd_mst_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Sub_dd_mst_Clo_Upd( ){
+	EXEC SQL CLOSE upd_sub_dd_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Sub_dd_mst_Ins( struct sub_dd_mst_c sub_dd_mst_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO sub_dd_mst VALUES (:sub_dd_mst_c.br_no,
+			:sub_dd_mst_c.ac_no,
+			:sub_dd_mst_c.sub_ac_seqn,
+			:sub_dd_mst_c.sub_ac_no,
+			:sub_dd_mst_c.bal,
+			:sub_dd_mst_c.ys_bal,
+			:sub_dd_mst_c.intst_acm,
+			:sub_dd_mst_c.opn_date,
+			:sub_dd_mst_c.ic_date,
+			:sub_dd_mst_c.lst_date,
+			:sub_dd_mst_c.hst_cnt,
+			:sub_dd_mst_c.hst_pg,
+			:sub_dd_mst_c.name,
+			:sub_dd_mst_c.paper_type,
+			:sub_dd_mst_c.paper_no,
+			:sub_dd_mst_c.telephone,
+			:sub_dd_mst_c.ac_sts,
+			:sub_dd_mst_c.zf_bal,
+			:sub_dd_mst_c.rate_type,
+			:sub_dd_mst_c.intst_type,
+			:sub_dd_mst_c.rate,
+			:sub_dd_mst_c.xq_num,
+			:sub_dd_mst_c.lp_num,
+			:sub_dd_mst_c.dy_num,
+			:sub_dd_mst_c.fj_num,
+			:sub_dd_mst_c.bar_code,
+			:sub_dd_mst_c.filler,
+			:sub_dd_mst_c.filler1,
+			:sub_dd_mst_c.filler2);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT sub_dd_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

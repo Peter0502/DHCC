@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100000000000000000000000000" TITLE="5632 划款/退款报文重发"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	 
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+	"T(5632                   划款/退款报文重发)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5617)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-29s" FUNCTIONS="T(划款/退款报文重发)"/><!---交易名称--->
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(5632)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <BLOCK LINE="4" COL="10" >
+
+  <ITEM LINE="6" COL="8" TYPE="%-12s" FUNCTIONS="T(报文流水号:)"/>
+  <ITEM LINE="6" COL="20" TYPE="%-8s" NAME="#PACKNO" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="7" COL="8" TYPE="%-12s" FUNCTIONS="T(报文  类型:)"/>
+  <ITEM LINE="7" COL="20" TYPE="%-1s" NAME="#PKG_TYPE" INPUT="SELECT" FUNCTIONS="V(NB)">
+    <SELECT>
+  	  <OPTION VALUE="4"  TITLE="1.划款申请" />
+  	  <OPTION VALUE="5"  TITLE="2.退款请求" />
+  	</SELECT>
+  	</ITEM>
+  </BLOCK>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+    "{
+        dim @tota as string; 
+        dim @filename as string;
+        initfd();
+        commsend_001();
+        $FD16=#TXNO;
+        $FD58=#PKG_TYPE;
+        $FD86=#PACKNO;
+        @tota=calltips();
+        if( $FD12!='0000' )
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        runoutput();
+        call('fview '+@filename);  
+
+    }"
+  </ONCLICK> 
+  </ITEM> 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+		NOTHING
+	</PACKAGE>
+		<PRINT>
+		"{
+		    print( 5,5,'柜员:[4]',$FD7);	
+		    print( 7,20,'报文流水号: [8]',#PACKNO);
+				if(#PKG_TYPE == '1')
+				{
+					print( 11,20,'报文  类型: [12]','退款请求');	
+				}
+				else
+				{
+					print( 11,20,'报文  类型: [12]','划款申请');
+				}
+		}"
+		</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印凭证" LINESPACE="24" >
+NOTHING
+</PACKAGE>
+<PRINT>
+"{	
+		$KINDNO='00';
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:[4]',#TXNUMBER);
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0划款/退款报文重发凭条\L1');
+		print(9,20,'报文 流水号:[8]',#PackNo);	
+		if(#PKG_TYPE == '1')
+		{
+			print( 11,20,'报文  类型: [12]','退款请求');	
+		}
+		else
+		{
+			print( 11,20,'报文  类型: [12]','划款申请');
+		}
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

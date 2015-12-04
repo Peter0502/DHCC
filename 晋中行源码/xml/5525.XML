@@ -1,0 +1,143 @@
+<TRANSACTION RIGHTS="11111111000000000000000000000000" TITLE="5525 申请重发3113核对包信息"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+    initfd();
+    commsend_001();
+    $FD44=$HDATE;
+    $FD3 =$KINBR;
+    $FD7 =$TLRNO;
+    $FD49=#ORIPACKMSGNO;    //4原包报文编号
+    $FD46=#CHKDATE;	    //8原对帐日期
+    $FD47=#PACKNO;	    //8原包流水号
+    $FD61=#SENDCODE;  //发起行行号
+}"
+</COMMSEND>
+<COMMRECV>"{
+	//showmsg($FD4);
+}"
+</COMMRECV>
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+  "T(5525                       申请重发3113核对包信息)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"  FUNCTIONS="T($TXNO=5545)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="6"  COL="13" TYPE="%-10s" FUNCTIONS="T(发起机构:)"/>
+  <ITEM LINE="8"  COL="13" TYPE="%-14s" FUNCTIONS="T(原包报文编号:)"/>
+  <ITEM LINE="10" COL="13" TYPE="%-12s" FUNCTIONS="T(原对帐日期:)"/>
+  <ITEM LINE="12" COL="13" TYPE="%-12s" FUNCTIONS="T(原包流水号:)"/>
+  <ITEM LINE="6" COL="22" NAME="#SENDCODE"   TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <HELP>商业银行发起，则填清算支付行号；征收机关发起，则填征收机关代码</HELP>
+<!--
+  <ONLOSTFOCUS>
+  "{
+	dim @h as string;
+	dim @i as string;
+	dim @j as string;
+	dim @FMsg2 as string;
+	dim @baktxno as string;
+	initfd();
+	@FMsg2='';
+	@baktxno=$TXNO;
+	$TXNO='9411';
+	$FD33=#SENDCODE;
+	commsend_001();
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000'){
+	showmsg(geterror());
+	return (false);
+	}
+	@h = substr($FD95,12,60);
+	@i = substr($FD95,72,1);
+	@j = substr($FD95,73,12);
+	@FMsg2='行名:'+@h+chr(10)+'清算渠道:'+@i+chr(10)+'所属节点:'+@j;
+	showhelp(5,70,8,3,'付款开户行基本信息',@FMsg2);
+  }"
+  </ONLOSTFOCUS>
+-->
+  </ITEM>
+
+  <ITEM NAME="#WTDATE" TYPE="%-8s"     FUNCTIONS="T($HDATE)V(NB)D()"/>
+  <ITEM LINE="8"  COL="26" NAME="#ORIPACKMSGNO" TYPE="%-4s" INPUT="LABEL" DEVICE="KEYBOARD"  FUNCTIONS="T(3113)V(NB)">
+  <HELP>请求下载信息包的报文编号</HELP>
+  </ITEM>
+  <ITEM LINE="10"  COL="24" NAME="#CHKDATE" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)D()">
+  <HELP>原对帐日期</HELP>
+  </ITEM>
+  <ITEM LINE="12" COL="24" NAME="#PACKNO" TYPE="%-8s"  DEVICE="KEYBOARD" FUNCTIONS="T()">
+  <HELP>如不知道原包流水号，可不填</HELP>
+  </ITEM>
+<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)"  INPUT="BUTTON">
+	<ONCLICK>
+  		"{
+  initfd();
+  commsend_001();
+	$FD16='5545';
+	$FD44=$HDATE;
+  $FD3 =$KINBR;
+  $FD7 =$TLRNO;
+  $FD49=#ORIPACKMSGNO;    //4原包报文编号
+  $FD46=#CHKDATE;	    //8原对帐日期
+  $FD47=#PACKNO;	    //8原包流水号
+  $FD61=#SENDCODE;  //发起行行号
+	calltips();
+	if($FD12!='0000'){
+	  showmsg(geterror());
+	  return(false);
+	}
+	
+	runoutput();
+	rerun();
+  		}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键推出">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+dim @txtime as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print(5,25,'申请重发核对包信息成功');
+print( 7,10,'发 起  机 构:[12          ]    委托  日期:[8       ]',#SENDCODE,#WTDATE);
+print( 8,10,'原包报文编号:[4   ]            原对帐日期:[8       ]',#ORIPACKMSGNO,#CHKDATE);
+print( 9,10,'原 包 流水号:[8]',#PACKNO);
+print(10,10,'时        间:[10        ]      操作 员 号:[24]',@txtime,substr($FD74,0,24));
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+dim @txtime as string;
+$KINDNO='00';
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print(5,20,'机构名称:[30]',$BRNAME);
+print(5,2,'交易代码:5525');
+print(5,13,'交易名称:申请重发核对包信息成功');
+print( 7,20,'    发起机构:[12          ]',#SENDCODE);
+print( 8,20,'    委托日期:[8       ]',#WTDATE);
+print( 9,20,'原包报文编号:[4  ]',#ORIPACKMSGNO);
+print(10,20,'  原对帐日期:[8       ]',#CHKDATE);
+print(11,20,'  原包流水号:[8]',#PACKNO);
+print(24,20,'交易日期:[8][8]',$HDATE,@txtime);
+print(24,5,' 前置柜员:[8]',substr($FD74,25,8));
+print(24,5,' 流水号:[6]',$FD4);
+print(24,5,' 交易机构:[24]',substr($FD74,0,24));
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,36 @@
+#ifndef __in_stok_CH__
+#define __in_stok_CH__
+struct in_stok_c{
+	char      rowid[20];
+	char      stokno[19];
+	char      ostokno[19];
+	char      name[61];
+	char      stcktype[4];
+	char      idtype[3];
+	char      idno[21];
+	char      addr[61];
+	double    stokquant;
+	double    stokamt;
+	double    bal;
+	char      stat[2];
+	char      losssts[2];
+	char      holdsts[2];
+	double    ctlamt;
+	char      txcode[3];
+	char      txtype[2];
+	double    bookbal;
+	long      nowcnt;
+	long      bookcnt;
+	long      unprtcnt;
+	char      pactno[20];
+	char      tactno[20];
+	char      opndate[9];
+	char      txdate[9];
+	char      drawpwdflag[9];
+	char      pwd[9];
+	char      notenum[13];
+	char      txbrno[8];
+	char      tel[7];
+	char      cifno[11];
+};
+#endif 

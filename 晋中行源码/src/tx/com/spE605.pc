@@ -1,0 +1,662 @@
+/*************************************************
+* 文 件 名:  spE605.c
+* 功能描述： 网点完工交易
+*
+* 作    者:  andy
+* 完成日期： 2004年3月9日
+*
+* 修改记录： 
+*   日   期:20110824
+*   修 改 人:gongliangliang	
+*   修改内容:修改借据号所在机构的取值方法
+*   日   期:20110901
+*   修 改 人:yanqq	
+*   修改内容:修改网点签退检查大小额是否对账条件
+*************************************************/
+#include <stdio.h>
+#include <math.h>
+#define  EXTERN
+#include "public.h"
+#include "note_mst_c.h"
+#include "note_mst_hst_c.h"
+#include "com_tel_c.h"
+#include "com_tel_connect_c.h"
+#include "com_branch_c.h"
+#include "dc_log_c.h"
+#include "mo_city_c.h"
+#include "com_parm_c.h"
+#include "mbfe_pub.h"
+#include "trace_log_c.h"
+#include "ln_mst_c.h"
+#include "ctl_accountreg_c.h"
+#include "accountreg_c.h"
+#include "hvstat_c.h"
+#include "lv_sysctl_c.h"
+#include "gl_sub_c.h"
+EXEC SQL include sqlca;
+
+int spE605()
+{
+	int	ret,i;
+	int mcnt=0, zcnt=0;
+	char tmp_str[50],tmp[2];
+        char tmp_seqno[14];
+	double tmp_amt1=0.00,tmp_amt2=0.00, d_amt=0.00, c_amt=0.00;
+	double tmp_amt3=0.00,tmp_amt4=0.00, accountreg_amt=0.00;
+	long   max_trace_no=0;
+	int iCount=0;
+
+	struct	com_tel_c			g_com_tel;
+	struct	com_tel_connect_c	g_com_tel_connect;
+	struct	com_branch_c		g_com_branch;
+	struct	dc_log_c			g_dc_log;
+	struct  mo_city_c       	sMo_city;
+	struct  com_parm_c      	sCom_parm;
+	struct  mbfebrbkno_c      	brbkno_v;
+	struct  trace_log_c 		sTrace_log;
+	struct  ln_mst_c      g_ln_mst;
+	struct  accountreg_c   aCcountreg;
+	struct  ctl_accountreg_c sCtl_accountreg_c;
+	struct lv_sysctl_c lv_sysctl;
+	struct hvstat_c hvstat;	struct gl_sub_c gl_sub;
+
+	memset(&lv_sysctl, 0 , sizeof(lv_sysctl));
+	memset(&hvstat, 0 , sizeof(hvstat));
+	memset(tmp_str,0,sizeof(tmp_str));
+	memset(&g_com_tel,0x00,sizeof(struct com_tel_c));
+	memset(&g_com_tel_connect,0x00,sizeof(struct com_tel_connect_c));
+	memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+	memset(&g_dc_log,0x00,sizeof(struct dc_log_c));
+	memset(&sMo_city, 0x0, sizeof(struct mo_city_c));
+	memset(&sCom_parm, 0x0, sizeof(struct com_parm_c));
+	memset(&sTrace_log, 0x0, sizeof(struct trace_log_c));
+	memset(&g_ln_mst,0x0,sizeof(struct ln_mst_c));
+	memset(&aCcountreg, 0x0,sizeof(struct accountreg_c));
+        memset(&sCtl_accountreg_c, 0x0,sizeof(struct ctl_accountreg_c));	
+	
+	get_zd_data("0020",aCcountreg.br_no);
+	get_zd_long("0050",&aCcountreg.tx_date);
+
+	/* 初始化结构 */
+	pub_base_sysinit();
+	/* add by LiuHuafeng 检查是否有未复核未发送的数据 */
+	{
+		char cKin_br[BRNO_LEN+1];
+		memset(cKin_br, 0 , sizeof(cKin_br));
+		int iCnt=0;
+		int iCnt1=0,iCnt2=0;
+		get_zd_data("0030",cKin_br);
+		iCnt=sql_count("hv_zf","cmtno in('100','101','102','103','105','108','121') and hv_sts='0' and br_no='%s'",cKin_br);
+		if(iCnt>0)
+		{
+			memset(acErrMsg, 0 , sizeof(acErrMsg));
+			sprintf( acErrMsg,"您存在%d笔复核未发送大额业务,请撤销或发送",iCnt);
+			set_zd_data("0130",acErrMsg);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O155");
+			goto ErrExit;
+		}
+/***对未接收大小额来帐是否可以签退进行控制   add by amelia 20061130***		
+		iCnt1=sql_count("hv_zf","cmtno in('100','101','102','105','108','122','123','124','725','802') and hv_prt_ind='0' lw_ind='2' and br_no='%s'",cKin_br);
+		if(iCnt1>0)
+		{
+			memset(acErrMsg, 0 , sizeof(acErrMsg));
+			sprintf( acErrMsg,"您存在%d笔未接收的大额业务",iCnt1);
+			set_zd_data("0130",acErrMsg);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O155");
+			goto ErrExit;
+		}
+		iCnt2=sql_count("lv_pkgreg","brprtflag='0' and lw_ind='2' and br_no='%s'",cKin_br);
+		if(iCnt2>0)
+		{
+			memset(acErrMsg, 0 , sizeof(acErrMsg));
+			sprintf( acErrMsg,"您存在%d笔未接收的小额业务",iCnt2);
+			set_zd_data("0130",acErrMsg);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O155");
+			goto ErrExit;
+		}
+***add over***/		
+		if(!memcmp(cKin_br,QS_BR_NO,BRNO_LEN))
+		{
+			char cTxday[9];
+			memset(cTxday, 0 , sizeof(cTxday));
+			get_zd_data(DC_DATE,cTxday);
+			/***20070820 
+			iCount = sql_count("lv_chk842_m","dz_date=%ld",aCcountreg.tx_date);
+			****/
+			/* add beg by yanqq 20110901 调整网点签退检查大小额是否对账条件 */
+			iCount = sql_count("lv_chk842_m","dz_date=%ld",aCcountreg.tx_date);
+			if(iCount !=0)
+			{
+				/** 需要检查小额是否对帐 */
+				g_reply_int=Lv_sysctl_Sel(g_pub_tx.reply,&lv_sysctl,"1=1");
+				if(g_reply_int)
+				{
+					sprintf( acErrMsg,"查询小额业务信息表错误");
+					vtcp_log("%s %d %s",__FILE__,__LINE__,acErrMsg);
+					strcpy(g_pub_tx.reply,"P084");
+					goto ErrExit;
+				}
+				if(lv_sysctl.checkstat[0]!='0' && lv_sysctl.stat[0]!='0')
+				{
+					sprintf( acErrMsg,"小额没有对帐不可签退");
+					vtcp_log("%s %d %s",__FILE__,__LINE__,acErrMsg);
+					strcpy(g_pub_tx.reply,"P084");
+					goto ErrExit;
+				}
+			}
+			iCount=0;
+			/* add end by yanqq 20110901 */
+			iCount = sql_count("lv_c254r","wt_date=%ld",aCcountreg.tx_date);
+			if(iCount !=0)
+			{
+				/** 需要检查大额是否对帐 */
+				g_reply_int=Hvstat_Sel(g_pub_tx.reply,&hvstat,"1=1");
+				if(g_reply_int)
+				{
+					sprintf( acErrMsg,"查询大额业务信息表错误");
+					vtcp_log("%s %d %s",__FILE__,__LINE__,acErrMsg);
+					strcpy(g_pub_tx.reply,"P084");
+					goto ErrExit;
+				}
+				if(hvstat.stat[0]!='0')
+				{
+					sprintf( acErrMsg,"大额没有对帐不可签退");
+					vtcp_log("%s %d %s",__FILE__,__LINE__,acErrMsg);
+					strcpy(g_pub_tx.reply,"P084");
+					goto ErrExit;
+				}
+			}
+		}
+		/** add  by chenchao 20120119 有信贷审批记录必须处理  begin**/
+		{
+			char br_no_tmp[6];
+			memset(br_no_tmp,0x00,sizeof(br_no_tmp));
+   		  
+			memcpy(br_no_tmp,cKin_br,5);
+   		  
+			iCnt=sql_count("ln_auth","sts in('X','x') and substr(pact_no,2,5)='%s' and type='01' ",br_no_tmp); 
+			if(iCnt>0)
+			{
+				memset(acErrMsg, 0 , sizeof(acErrMsg));
+				sprintf( acErrMsg,"您存在%d笔贷款需要维护并放款",iCnt); 
+				set_zd_data("0130",acErrMsg);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"T078");
+				goto ErrExit;
+			}
+		}
+		/** add  by chenchao 20120119 有信贷审批记录必须处理  end**/
+	}
+	/* end by LiuHuafeng 20061229 */
+
+	/** 检查是否有到期的承兑汇票 **/
+	{
+		ret = pub_acct_LogOutChkForCDHP();
+		if(ret)
+		{
+			vtcp_log("%s %d %s",__FILE__,__LINE__,acErrMsg);
+			strcpy(g_pub_tx.reply,"B359");
+			goto ErrExit;
+		}
+	}
+
+
+	/*取今日借方发生额总数*/
+	tmp_amt1 = 0.00;
+	tmp_amt2 = 0.00;
+	tmp_amt3 = 0.00;
+	tmp_amt4 = 0.00;
+	ret=Dc_log_Dec_Sel(g_pub_tx.reply,
+		"dc_ind='1' and tx_tx_br_no='%s' and sts='0' and substr(acc_hrt,1,1)<'6'",
+		g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare dc_log error!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		ret=Dc_log_Fet_Sel(&g_dc_log,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			sprintf( acErrMsg, "Fetch dc_log record error!!" );
+			WRITEMSG
+			goto ErrExit;
+		}
+
+		if( g_dc_log.ct_ind[0]=='1' ) tmp_amt3+=g_dc_log.amt;
+		tmp_amt1+=g_dc_log.amt;
+	}
+
+	Dc_log_Clo_Sel();
+
+	/*取今日贷方发生额总数*/
+	ret=Dc_log_Dec_Sel(g_pub_tx.reply,
+		"dc_ind='2' and tx_tx_br_no='%s' and sts='0' and substr(acc_hrt,1,1)<'6'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare dc_log error!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		ret=Dc_log_Fet_Sel(&g_dc_log,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			sprintf( acErrMsg, "Fetch dc_log record error!!" );
+			WRITEMSG
+			goto ErrExit;
+		}
+
+		if( g_dc_log.ct_ind[0]=='1' ) tmp_amt4+=g_dc_log.amt;
+		tmp_amt2+=g_dc_log.amt;
+	}
+
+	Dc_log_Clo_Sel();
+
+	/*检查会计分录借贷是否平衡*/
+	ret=pub_base_CompDblVal(tmp_amt1,tmp_amt2);
+	if(ret==1)
+	{
+		sprintf(tmp_str,"%.2lf>%.2lf",tmp_amt1,tmp_amt2,tmp_amt1-tmp_amt2);
+		set_zd_data(DC_GET_MSG,tmp_str);
+		sprintf( acErrMsg, "本日借方发生额大于贷方发生额!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O255");
+		goto ErrExit;
+	}
+	else if(ret==-1)
+	{
+		sprintf(tmp_str,"%.2lf<%.2lf",tmp_amt1,tmp_amt2,tmp_amt1-tmp_amt2);
+		set_zd_data(DC_GET_MSG,tmp_str);
+		sprintf( acErrMsg, "本日借方发生额小于贷方发生额!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O255");
+		goto ErrExit;
+	}
+	
+	/*检查会计分录借贷是否平衡*/
+	ret=pub_base_CompDblVal(tmp_amt3,tmp_amt4);
+	if(ret==1)
+	{
+		sprintf(tmp_str,"%.2lf>%.2lf",tmp_amt3,tmp_amt4,tmp_amt3-tmp_amt4);
+		set_zd_data(DC_GET_MSG,tmp_str);
+		sprintf( acErrMsg, "本日现金借方发生额大于贷方发生额!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O256");
+		goto ErrExit;
+	}
+	else if(ret==-1)
+	{
+		sprintf(tmp_str,"%.2lf<%.2lf",tmp_amt3,tmp_amt4,tmp_amt3-tmp_amt4);
+		set_zd_data(DC_GET_MSG,tmp_str);
+		sprintf( acErrMsg, "本日现金借方发生额小于贷方发生额!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O256");
+		goto ErrExit;
+	}
+
+  /*********LN add by martin at 20061014 对于贷款户状态的检查**********
+  ret=Ln_mst_Sel(g_pub_tx.reply,&g_ln_mst,"opn_br_no='%s'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare出错!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	
+	ret=sql_count("ln_mst","bal=0 and intst_acm=0 and in_lo_intst=0 and in_lo_acm=0 and out_lo_intst=0 and \
+	                     out_lo_acm=0 and cmpd_lo_intst=0 and cmpd_lo_acm=0 and ac_sts in('1','2','3','4','5') \
+	                     and opn_br_no='%s'",g_pub_tx.tx_br_no);
+	if( ret )
+	{
+		sprintf( acErrMsg, "该机构有未销户的贷款帐户!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"T054");
+		goto ErrExit;
+	}
+  
+  ******************add end of LN  ********************/ 
+
+	/*检查柜员交接登记簿是否存在"未取"和"现金调出代收"状态记录*/
+	ret=Com_tel_connect_Dec_Sel(g_pub_tx.reply,"br_no='%s'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare出错!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		ret=Com_tel_connect_Fet_Sel(&g_com_tel_connect,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			sprintf( acErrMsg, "Fetch柜员交接登记簿出错!!" );
+			WRITEMSG
+			goto ErrExit;
+		}
+
+		if(g_com_tel_connect.ind[0]=='0')
+		{
+			sprintf( acErrMsg, "[%s]柜员交接登记簿中还存在付出但未收入记录!!",g_com_tel_connect.tel);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O250");
+			goto ErrExit;
+		}
+
+		if(g_com_tel_connect.ind[0]=='A')
+		{
+			sprintf( acErrMsg, "[%s]柜员交接登记簿中还存在现金调出代收记录!!",g_com_tel_connect.tel );
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O251");
+			goto ErrExit;
+		}
+	}
+
+	Com_tel_connect_Clo_Sel();
+
+	/*
+	ret=Cash_book_Dec_Sel(g_pub_tx.reply,"tw_br_no='%s'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare出错!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	
+	while(1)
+	{
+		ret=Cash_book_Fet_Sel(&g_cash_book,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			sprintf( acErrMsg, "Fetch现金收付登记簿出错!!" );
+			WRITEMSG
+			goto ErrExit;
+		}
+
+		if(g_cash_book.ind[0]=='0')
+		{
+			sprintf( acErrMsg, "现金收付登记簿中还有现金未收入记录!!" );
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O252");
+			goto ErrExit;
+		}
+	}
+	*/
+
+	/*检查网点是否已签退*/
+	ret=Com_branch_Sel(g_pub_tx.reply,&g_com_branch,"br_no='%s'",
+						g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "查询公共机构表出错!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	if(g_com_branch.wrk_sts[0]=='0')
+	{
+		sprintf( acErrMsg, "网点已经签退!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O050");
+		goto ErrExit;
+	}
+
+	if(g_com_branch.wrk_sts[0]=='*')
+	{
+		sprintf( acErrMsg, "该网点已被关闭!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O068");
+		goto ErrExit;
+	}
+
+	/*--- hao ---- 检查是否有现金付出没收，有现金应收没收*/
+/*	ret=sql_count("cash_book","tx_date=%ld and ind='0' and  br_no='%s' ",g_pub_tx.tx_date,g_pub_tx.tx_br_no);
+	if( ret )
+	{
+		sprintf( acErrMsg, "该机构有付出但对方网点没有作收入交易的现金!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O248");
+		goto ErrExit;
+	}*/
+	/** add by martin 增加判断取消流水 20071121**/
+	ret=sql_count("cash_book","tx_date=%ld and ind='0' and  tw_br_no='%s' and \
+	trace_no not in (select trace_no from trace_log where sts='1') ",g_pub_tx.tx_date,g_pub_tx.tx_br_no);
+	if( ret )
+	{
+		
+		sprintf( acErrMsg, "该机构有应该收入现金没有作现金收入交易!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O249");
+		goto ErrExit;
+	}
+	
+/***对同城提入的金额进行控制   add by amelia 20061023***/
+        ret = sql_sum_double("accountreg","amt",&accountreg_amt,"put_flag='2' and \
+         stat='2' and tx_date='%ld' and br_no='%s'",aCcountreg.tx_date,aCcountreg.br_no);
+	if (ret)
+	{
+		sprintf(acErrMsg, "统计查询簿错误!! [%d]", ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+  
+	sprintf(sCtl_accountreg_c.seqno,"%.5s%8d",g_pub_tx.tx_br_no,g_pub_tx.tx_date);
+
+	ret = Ctl_accountreg_Sel(g_pub_tx.reply,&sCtl_accountreg_c,"seqno='%s'",sCtl_accountreg_c.seqno);
+	if(ret==100)
+	{
+	}
+	if(ret!=0&&ret!=100)
+	{
+		vtcp_log("ctl_seqno[%s]\n",sCtl_accountreg_c.seqno);
+		sprintf(acErrMsg, "统计查询登记簿错误!! [%d]", ret);
+		WRITEMSG
+		goto ErrExit;
+	}	
+	if(ret==0)
+	{	
+		ret = pub_base_CompDblVal(sCtl_accountreg_c.amt,accountreg_amt);
+		if ( ret )
+		{
+			sprintf(tmp_str,"[清算录入%.2lf][实际录入%.2lf]", sCtl_accountreg_c.amt ,accountreg_amt);
+			set_zd_data( DC_GET_MSG,tmp_str);
+			sprintf(acErrMsg,"清算录入的提入金额与实际提入的金额不符[清算录入%.2lf][实际录入%.2lf]", sCtl_accountreg_c.amt ,accountreg_amt );
+			WRITEMSG
+			strcpy( g_pub_tx.reply, "T055" );
+			goto ErrExit;
+		}
+	}
+/***add over***/	
+
+	/* 提出票据 对网点的控制 */
+	/* 提入对清算的控制 */
+	ret=0;
+	if(memcmp(g_pub_tx.tx_br_no,QS_BR_NO,sizeof(g_pub_tx.tx_br_no)-1)!=0)
+		ret = sql_count("accountreg", "br_no='%s' and put_flag='1' and stat='2' ", g_pub_tx.tx_br_no);
+	else
+		ret = sql_count("accountreg", " put_flag='1' and stat='2' ");
+	if (ret < 0)
+	{
+		sprintf(acErrMsg, "统计查询登记簿错误!! [%d]", ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	else if ( ret > 0)
+	{
+		sprintf(acErrMsg, "网点还有同城提出未复核交易");
+		WRITEMSG
+		strcpy(g_pub_tx.reply, "D194");
+		goto ErrExit;
+	}
+
+	/* 对网点的控制 */
+	ret = sql_count("com_tx_br_rel", "br_no='%s' and \
+		rel_type=3", g_pub_tx.tx_br_no);
+	if (ret < 0)
+	{
+		sprintf(acErrMsg, "sql_count com_tx_br_rel error !! [%d]", ret);
+		WRITEMSG
+		strcpy(g_pub_tx.reply, "D101");
+		goto ErrExit;
+	}
+	else if (ret > 0)
+	{
+		ret = sql_count("mo_city", "tx_br_no='%s' and sts='2'",
+			g_pub_tx.tx_br_no);
+		if (ret < 0)
+		{
+			sprintf(acErrMsg, "统计同城登记簿错误!! [%d]", ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		else if (ret > 0)
+		{
+			sprintf(acErrMsg, "还有手工提出票据没有核销!!");
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D194");
+			goto ErrExit;
+
+		}
+	}
+
+	/*检查大额来帐凭证是否已全部打印*/
+	memset( &brbkno_v, 0x00, sizeof( struct mbfebrbkno_c ) );
+	g_reply_int = Mbfebrbkno_Sel( g_pub_tx.reply, &brbkno_v, "brno='%s'", g_pub_tx.tx_br_no );
+	if( g_reply_int && g_reply_int != 100 )
+	{
+		sprintf( acErrMsg, "大额查询机构号对应行号数据库操作出错[%d]", g_reply_int );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if( g_reply_int == 0 )
+	{
+		g_reply_int = sql_count( "mbfeghvrecvlist", "cnapsrdfi='%s' and printno=0", mbfetran.cnapsodfi );
+		if( g_reply_int < 0 )
+		{
+			sprintf( acErrMsg, "大额往账明细表数据库操作失败[%d]", g_reply_int );
+			WRITEMSG
+			goto ErrExit;
+		}
+		if( g_reply_int > 0 )
+		{
+			sprintf( acErrMsg, "还有未打印的来帐业务%ld笔!", g_reply_int );
+			MBFEWRITEMSG
+			goto ErrExit;
+		}
+	}
+
+	/*检查所有柜员是否都已签退*/
+	ret=Com_tel_Dec_Sel(g_pub_tx.reply,"br_no='%s' and lvl!='6' and lvl!='9'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "Declare出错!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	
+	while(1)
+	{
+		ret=Com_tel_Fet_Sel(&g_com_tel,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			sprintf( acErrMsg, "Fetch柜员信息表出错!!" );
+			WRITEMSG
+			goto ErrExit;
+		}
+
+		if(g_com_tel.csts[0]=='0'||g_com_tel.csts[0]=='1')
+		{
+			sprintf( acErrMsg, "还有柜员未签退!!" );
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O051");
+			goto ErrExit;
+		}
+	}
+
+	Com_tel_Clo_Sel();
+
+	double amt_101=0;
+	EXEC SQL select sum(amt*(2-dc_ind))-sum(amt*(dc_ind-1)) into :amt_101 from dc_log \
+		 where acc_hrt='10101' and sts=0  and tx_tx_br_no=:g_pub_tx.tx_br_no;
+	if(sqlca.sqlcode){
+		sprintf( acErrMsg, "sum 101 出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;
+	}
+	double tel_bal=0;
+	ret = sql_sum_double("cash_mst","bal",&tel_bal,"br_no='%s' and sts='0'",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "统计柜员cash_mst合计错[%d]",ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	memset(&gl_sub,'\0',sizeof(gl_sub));
+	ret=Gl_sub_Sel(g_pub_tx.reply,&gl_sub,"acc_hrt='10101' and br_no='%s'",g_pub_tx.tx_br_no);
+	if(ret&&ret!=100)
+	{
+		sprintf( acErrMsg, "查询gl_sub 现金余额错[%d]",ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=pub_base_CompDblVal(tel_bal,gl_sub.dr_bal+amt_101);
+	if(ret)
+	{
+		sprintf(tmp_str,"柜员%.2lf,101余额%.2lf",tel_bal,gl_sub.dr_bal+amt_101);
+		set_zd_data(DC_GET_MSG,tmp_str);
+		sprintf( acErrMsg, "柜员余额[%.2f],101合计[%.2f]",tel_bal,gl_sub.dr_bal+amt_101);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"P312");
+		goto ErrExit;
+	}
+
+
+	/*修改网点状态为签退*/
+	ret=sql_execute("update com_branch set wrk_sts='%s' where br_no='%s'",
+					 "0",g_pub_tx.tx_br_no);
+	if(ret)
+	{
+		sprintf( acErrMsg, "更新网点状态出错!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O049");
+		goto ErrExit;
+	}
+
+	if( g_com_branch.spe_ind[9]=='1' )
+	{
+		TRACE
+		strcpy(g_pub_tx.reply,"S100");
+		goto ErrExit;
+	}
+
+OkExit:
+	/************
+	sprintf( acErrMsg,"科技部通知：下班后请不要关闭主机和网络设备");
+	set_zd_data(DC_GET_MSG,acErrMsg);
+	************/
+    strcpy( g_pub_tx.reply, "0000" );
+    sprintf(acErrMsg,"Before OK return: reply is[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    sprintf(acErrMsg,"Before return: reply is[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}

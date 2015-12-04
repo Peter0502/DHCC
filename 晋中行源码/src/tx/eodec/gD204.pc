@@ -1,0 +1,178 @@
+/***************************************************************
+* 文件名: testy.ec
+* 作  者: zyl
+* 描  述: 测试远程oracle
+*         参照dbsvc.pc by ssh
+*
+**************************************************************/
+#define MYRETERR if(ret){ \
+        sprintf(acErrMsg,"sql erro!! [%d]",ret); \
+        WRITEMSG \
+		    goto ErrExit;\
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+
+gD204()
+{
+  int ret = 0;
+EXEC SQL BEGIN DECLARE SECTION;
+	int sum = 0;
+EXEC SQL END DECLARE SECTION;
+#if 0
+	{	
+		/**create table**/
+		EXEC SQL create table test_tb as select opn_br_no,ac_id,cif_no from dd_mst;
+		if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"create table fault![%d]",sqlca.sqlcode);
+			WRITEMSG
+			goto ErrExit;
+		}
+		EXEC SQL insert into test_tb select opn_br_no,ac_id,cif_no from dd_mst \
+		 where prdt_no in ( select prdt_no from td_parm where cif_type='2' ) and bal!=0 ;
+		if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"insert values fault![%d]",sqlca.sqlcode);
+			WRITEMSG
+			goto ErrExit;
+		}
+		EXEC SQL select count(*) into :sum from test_tb;
+		if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"sum fault![%d]",sqlca.sqlcode);
+			WRITEMSG
+			goto ErrExit;
+		}
+		EXEC SQL select count(*) into :sum from test_tb where opn_br_no='10101';
+		if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"sum fault![%d]",sqlca.sqlcode);
+			WRITEMSG
+			goto ErrExit;
+		}
+		vtcp_log("[%s][%d] zylsee sum=[%d]",__FILE__,__LINE__,sum);
+		EXEC SQL drop table test_tb;
+		if (sqlca.sqlcode)
+		{
+			sprintf(acErrMsg,"drop table error! %d",sqlca.sqlcode);
+			WRITEMSG
+			strcpy (g_pub_tx.reply,"D103");
+			WRITEMSG
+			goto ErrExit;
+		}
+	}
+#endif
+	FILE *fp=NULL;
+	char str[256];
+	memset(str,0x00,sizeof(str));
+	fp = fopen("/home/devht/usr/zyl/22.txt","ab+");
+	strcpy(str,"This is a test...\n");
+	fputs(str,fp);
+	fclose(fp);
+	vtcp_log("[%s][%d] This is a test....",__FILE__,__LINE__);
+
+OkExit:
+    strcpy(g_pub_tx.reply,"0000");
+		sprintf(acErrMsg,"转入处理成功![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+		sprintf(acErrMsg,"转入处理失败![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}
+
+int testy_open()
+{
+/****Modified by SSH,支持远程连接数据库****/
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[256];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	strcpy(sql_username,"archive");
+	strcpy(sql_passwd,"password");
+	strcpy(sql_dbname,"  (DESCRIPTION =\
+    (ADDRESS_LIST =\
+      (ADDRESS = (PROTOCOL = TCP)(HOST = 172.168.78.167)(PORT = 1521))\
+    )\
+    (CONNECT_DATA =\
+      (SERVER = DEDICATED)\
+      (SID = arch)\
+    )\
+  )\
+");
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	
+	EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+	
+	if(sqlca.sqlcode)
+	{
+		printf("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		vtcp_log("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		return -1;
+	}
+	return (0);
+}
+int testy_close()
+{
+	EXEC SQL COMMIT WORK RELEASE;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("zyc aaaaaaaaa[%s][%d][%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		return -1;
+	}
+	return (0);
+}
+/**
+*  testy.pc  by zyl 20110324
+   不行啊..郁闷啊.
+   一直是  -12154
+ORA-12154: TNS:could not resolve service name
+   
+   hahaha...可以了.
+	 
+	 
+**/
+
+int dbl_commit()
+{
+	EXEC SQL COMMIT WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "保存事务错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}
+
+int dbl_rollback()
+{
+	EXEC SQL ROLLBACK WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "回滚事务错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}

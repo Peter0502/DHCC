@@ -1,0 +1,632 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3317  金太阳卡亲子关联签约/解约" 
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<COMMSEND>
+	"{
+	  initfd();
+	  commsend_001();
+	  
+	  $FD21=#YW_TYPE;
+	  $FD30=#ACNO_CHILD_N;
+	  $FD31=#ACNO_PART_N;
+	  $FD49=#QYBAL;
+	  $FD72=#HZ_RQ;
+	  if(#YW_TYPE == '0')
+	  {
+	     $FD16='2317';
+	  }
+	  else if(#YW_TYPE == '1')
+	  {
+	     $FD16='2318';
+	  }
+	  else
+	  {
+	      showmsg('不存在此业务类型!');
+	      return(false);
+	  }
+	}"
+	</COMMSEND>
+	<COMMRECV>"{
+		commrecv_001();   
+	}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+		 "T(3317                       金太阳卡亲子关联签约/解约      )"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		 "T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=0)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#ACNO_CHILD_N"    TYPE="%-24s" FUNCTIONS="T()"/>
+		<ITEM NAME="#ACNO_PART_N"    TYPE="%-24s" FUNCTIONS="T()"/>
+		<ITEM NAME="#ACTYPE"  TYPE="%-1s"  FUNCTIONS="T()"/>
+		<ITEM NAME="#WORK_TYPE"  TYPE="%-1s"  FUNCTIONS="T()"/>
+		<ITEM NAME="#PASSWD_JY"  TYPE="%-6s"  FUNCTIONS="T()"/>	
+		<PAGE NAME="DEFAULT">
+		<ITEM NAME="#TXCD" TYPE="%-4s"  FUNCTIONS="T(2317)"/>           <!---交易代码--->
+		<ITEM NAME="#TXNAME"  TYPE="%-35s" FUNCTIONS="T(金太阳卡亲子关联签约/解约)"/>       <!---交易名称--->
+		<!--输入变量-->
+		<ITEM NAME="#MSR2BAK" TYPE="%-37s"  FUNCTIONS=""/>
+  	<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+		<BLOCK NAME="COMMON" LINE="5" COL="7">
+		<ITEM LINE="1"  COL="2"   TYPE="%-18s" 	INPUT="LABEL" FUNCTIONS="T(金太阳卡读取方式:)"/>
+		<ITEM LINE="2"  COL="2"   TYPE="%-14s"  INPUT="LABEL" FUNCTIONS="T(金太阳卡账号:)"/>
+		<ITEM LINE="2"  COL="38"  TYPE="%-14s"  INPUT="LABEL" FUNCTIONS="T(金太阳卡户名:)"/>
+		<ITEM LINE="3"  COL="2"   TYPE="%-16s" 	INPUT="LABEL" FUNCTIONS="T(家长卡读取方式:)"/>
+		<ITEM LINE="4"  COL="2"   TYPE="%-12s"  INPUT="LABEL" FUNCTIONS="T(家长卡账号:)"/>  
+		<ITEM LINE="4"  COL="38"  TYPE="%-12s"  INPUT="LABEL" FUNCTIONS="T(家长卡户名:)"/>
+		<ITEM LINE="6"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(业务类型:)"/>
+		<ITEM LINE="7"  COL="2"   TYPE="%-16s"  INPUT="LABEL" FUNCTIONS="T(家长卡证件类型:)"/>
+		<ITEM LINE="7"  COL="38"  TYPE="%-16s"  INPUT="LABEL" FUNCTIONS="T(家长卡证件号码:)"/>
+		<ITEM LINE="9"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(签约金额:)" NAME="#QYBT" VISABLE="FALSE"/>
+		<ITEM LINE="10"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(签约转账日:)" NAME="#HZRQ" VISABLE="FALSE"/>
+		<ITEM LINE="11" COL="2"   TYPE="%-16s"  INPUT="LABEL" FUNCTIONS="T(家长卡支取密码: )" NAME="#ZQMM" VISABLE="FALSE"/>
+		
+		<ITEM NAME="#NOTETYPE" TYPE="%3s"  FUNCTIONS="" />  
+		<ITEM NAME="#NOTENO" TYPE="%16s"  FUNCTIONS="" />  
+		<ITEM NAME="#BAL" TYPE="%17.2f"  FUNCTIONS="" /> 
+		
+		<ITEM LINE="1"  COL="15" TYPE="%-1s"  NAME="#CHILD_DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取芯片方式"/>
+				<OPTION VALUE="1" TITLE="读取磁条方式"/>
+			</SELECT>
+		  <ONLOSTFOCUS>"{
+		     if(#CHILD_DQFS=='0')
+		     {
+			     enable(#CHILD_ACNO_CT,false);
+			     enable(#CHILD_ACNO_IC,true);
+			     show(#CHILD_ACNO_IC,true);
+			     show(#CHILD_ACNO_CT,false);
+		     }
+		     if(#CHILD_DQFS=='1')
+		     {
+			     enable(#CHILD_ACNO_IC,false);
+			     enable(#CHILD_ACNO_CT,true);
+			     show(#CHILD_ACNO_CT,true);
+			     show(#CHILD_ACNO_IC,false); 
+		     }
+		   }"
+		  </ONLOSTFOCUS>
+	  </ITEM>
+	  <ITEM LINE="2"  COL="15" NAME="#CHILD_ACNO_CT"  TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	  <ITEM LINE="2"  COL="15" NAME="#CHILD_ACNO_IC"  TYPE="%-19s" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+		<ITEM NAME="#AC_NO_CHILD" TYPE="%-19s"  FUNCTIONS="">
+			<ONLOSTFOCUS> 	
+			"{
+				dim @note_sts as string;
+				dim @name as string;
+				dim @pwd_ind as string;
+				dim @actype as string;
+				dim @js_lx   as string;
+				dim @mdm_code as string;
+				dim @tota as string;
+				dim @baktxno as string;
+				
+				//showmsg('#AC_NO_CHILD='+#AC_NO_CHILD);
+				//showmsg('#CHILD_DQFS='+#CHILD_DQFS);
+				if(#CHILD_DQFS=='0')
+				{
+					#AC_NO_CHILD=#CHILD_ACNO_IC;
+				}
+				if(#CHILD_DQFS=='1')
+				{
+					#AC_NO_CHILD=#CHILD_ACNO_CT;
+				}
+				//showmsg('#AC_NO_CHILD='+#AC_NO_CHILD);
+				initfd();
+				commsend_001();
+				$FD16='9331';
+				$FD102=getitems('#AC_NO_CHILD');
+				callserver();
+				if($FD12 != '0000')
+				{
+				 showmsg(geterror());
+				 return(false);
+				}
+				#ACNO_CHILD_N=delspace($FD32);
+				#Name_CHILD=delspace($FD25);
+				#BAL=$FD43;
+				
+				@js_lx = $FD70;
+				@pwd_ind=substr($FD102,48,1);
+				@actype=substr($FD102,227,1);
+				#NOTETYPE=substr($FD102,28,3);
+				#NOTENO=substr($FD102,31,16);
+				
+				if( substr(#AC_NO_CHILD,6,2) != '10' and substr(#AC_NO_CHILD,6,2) != '44') 
+				{
+					showmsg('请输入金太阳卡卡号!');
+					return(false);
+				}
+				
+				if( $FD99 != '1')
+				{
+				 	showmsg('该账户处于非正常状态!');
+				 	return(false);
+				}
+				if( $FD71 == '1' or $FD71 == '2' or $FD71 == '3')
+				{
+				 	showmsg('该账户处于完全冻结或只进不出状态或部分冻结!');
+				 	return(false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="3"  COL="15" TYPE="%-1s"  NAME="#PART_DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取芯片方式"/>
+				<OPTION VALUE="1" TITLE="读取磁条方式"/>
+			</SELECT>
+		  <ONLOSTFOCUS>"{
+		     if(#PART_DQFS=='0')
+		     {
+			     enable(#PART_ACNO_CT,false);
+			     enable(#PART_ACNO_IC,true);
+			     show(#PART_ACNO_IC,true);
+			     show(#PART_ACNO_CT,false);
+		     }
+		     if(#PART_DQFS=='1')
+		     {
+			     enable(#PART_ACNO_IC,false);
+			     enable(#PART_ACNO_CT,true);
+			     show(#PART_ACNO_CT,true);
+			     show(#PART_ACNO_IC,false); 
+		     }
+		   }"
+		  </ONLOSTFOCUS>
+	  </ITEM>
+	  <ITEM LINE="4"  COL="15" NAME="#PART_ACNO_CT"  TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	  <ITEM LINE="4"  COL="15" NAME="#PART_ACNO_IC"  TYPE="%-19s" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+		<ITEM NAME="#AC_NO_PART"  TYPE="%-19s"  FUNCTIONS="">
+			<ONLOSTFOCUS> 	
+			"{
+				dim @note_sts as string;
+				dim @name as string;
+				dim @pwd_ind as string;
+				dim @actype as string;
+				dim @js_lx   as string;
+				dim @mdm_code as string;
+				dim @tota as string;
+				dim @baktxno as string;
+				
+				if(#PART_DQFS=='0')
+				{
+					#AC_NO_PART=#PART_ACNO_IC;
+				}
+				if(#CHILD_DQFS=='1')
+				{
+					#AC_NO_PART=#PART_ACNO_CT;
+				}
+				if( substr(#AC_NO_PART,6,2) == '10' ) 
+				{
+					showmsg('请插入家长卡!');
+					return(false);
+				}
+				initfd();
+				commsend_001();
+				$FD16='9331';
+				$FD102=getitems('#AC_NO_PART');
+				callserver();
+				if($FD12 != '0000')
+				{
+				 showmsg(geterror());
+				 return(false);
+				}
+				#ACNO_PART_N=delspace($FD32);
+				#Name_PART=delspace($FD25);
+				#BAL=$FD43;
+				
+				#zj_type_re=substr($FD102,124,1);
+				#zj_num_re=delspace(substr($FD102,62,20));
+				#zj_type  = #zj_type_re;
+				@js_lx = $FD70;
+				@pwd_ind=substr($FD102,48,1);
+				@actype=substr($FD102,207,1);
+				#NOTETYPE=substr($FD102,28,3);
+				#NOTENO=substr($FD102,31,16);
+				
+				if( substr($FD92,0,3)!='002' ) 
+				{
+					showmsg('请输入卡号!');
+					return(false);
+				}
+				//if( $FD98 != '0')
+				//{
+				// 	showmsg('介质状态异常!');
+				// 	return(false);
+				//}
+				if( $FD99 != '1')
+				{
+				 	showmsg('该账户处于非正常状态!');
+				 	return(false);
+				}
+				if( $FD71 == '1' or $FD71 == '2' or $FD71 == '3')
+				{
+				 	showmsg('该账户处于完全冻结或只进不出状态或部分冻结!');
+				 	return(false);
+				}
+						
+				//检查是否需要输入密码
+				if(@pwd_ind == 'Y')
+				{
+				    #DRAW_PWD='';
+				    show(#ZQMM,true);
+				    show(#DRAW_PWD,true);
+				}
+				else
+				{      
+					#DRAW_PWD=''; 
+				    show(#ZQMM,false);
+				    show(#DRAW_PWD,false);
+				}
+				//查询个人证件类型
+				@tota = '';
+				initfd();
+				commsend_001();
+				$FD16='9799';
+				$FD67='1';
+				@tota=callserver();
+				if($FD12 != '0000')
+				{
+				     showmsg(geterror());
+				     return(false);
+				}
+				setsel(#zj_type,@tota,'o5t20o1v1o2');	
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		
+		<ITEM LINE="6" COL="15"  NAME="#YW_TYPE" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="0.签约"/>
+				<OPTION VALUE="1" TITLE="1.解约"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				if(#YW_TYPE == '0')
+				{
+					show(#QYBT,true);
+					show(#QYBAL,true);
+					show(#HZRQ,true);
+					show(#HZ_RQ,true);
+				}
+				else if(#YW_TYPE == '1')
+				{
+					show(#QYBT,false);
+					show(#QYBAL,false);
+					show(#HZRQ,false);
+					show(#HZ_RQ,false);
+				}
+				//检查金太阳卡介质状态
+				initfd();
+				commsend_001();
+				$FD16='9331';
+				$FD102=getitems('#AC_NO_CHILD');
+				callserver();
+				if($FD12 != '0000')
+				{
+				 showmsg(geterror());
+				 return(false);
+				}
+				
+				if(#YW_TYPE == '0')
+	 		 	{
+	     		if( $FD98 != '0')
+					{
+				 		showmsg('金太阳卡介质状态异常，不能签约!');
+				 		return(false);
+					}
+	 		 	}
+	 		 	else if(#YW_TYPE == '1')
+	 		 	{
+	    		if( $FD98 != '0' and $FD98 != '1')
+					{
+				 		showmsg('金太阳卡介质状态异常，不能解约!');
+				 		return(false);
+					}
+	  		}
+				//检查家长卡介质状态
+				initfd();
+				commsend_001();
+				$FD16='9331';
+				$FD102=getitems('#AC_NO_PART');
+				callserver();
+				if($FD12 != '0000')
+				{
+				 showmsg(geterror());
+				 return(false);
+				}
+				
+				if(#YW_TYPE == '0')
+	 		 	{
+	     		if( $FD98 != '0')
+					{
+				 		showmsg('家长卡介质状态异常，不能签约!');
+				 		return(false);
+					}
+	 		 	}
+	 		 		else if(#YW_TYPE == '1')
+	 		 	{
+	    		if( $FD98 != '0' and $FD98 != '1')
+					{
+				 		showmsg('家长卡介质状态异常，不能解约!');
+				 		return(false);
+					}
+	  		}
+	  		
+				initfd();
+				commsend_001();
+				$FD16='2320';//校验是否签约亲子关联
+				$FD68='1';
+				$FD30=#ACNO_CHILD_N;//新旧账号转换后的账号
+				$FD31=#ACNO_PART_N;//新旧账号转换后的账号
+				callserver();
+				if($FD12!='0000')
+				{
+				    showmsg(geterror());
+				    return(false);
+				}
+				if($FD69 == '0' and #YW_TYPE == '1')
+	      {
+		      showmsg('该对亲子账户未签约！');
+		      return(false);
+	      }
+	      if($FD69 == '1' and #YW_TYPE == '0')
+	      {
+		      showmsg('该对亲子账户已签约！');
+		      return(false);
+	      }
+	      if($FD69 == '2' and #YW_TYPE == '0')
+	      {
+		      showmsg('该家长卡已签约三个金太阳卡，无法签约更多金太阳卡！');
+		      return(false);
+	      }
+	      if($FD69 == '3' and #YW_TYPE == '0')
+	      {
+		      showmsg('该金太阳卡已签约家长卡，无法签约其他家长卡！');
+		      return(false);
+	      }
+	      if($FD69 == '4' and #YW_TYPE == '1')
+	      {
+		      showmsg('该家长卡与金太阳卡已解约！');
+		      return(false);
+	      }
+				
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#SRLX" TYPE="%1s"  FUNCTIONS="" />
+		<ITEM LINE="2"  COL="51" NAME="#Name_CHILD" TYPE="%-60s" INPUT="LABEL" FUNCTIONS=""/>
+		<ITEM LINE="4"  COL="51" NAME="#Name_PART"  TYPE="%-60s" INPUT="LABEL" FUNCTIONS=""/>
+		<ITEM LINE="7"  COL="15" NAME="#zj_type" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="身份证"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+			    if(#zj_type_re != #zj_type)
+			    {
+			     	showmsg('证件类型错误!原证件类型为【'+#zj_type_re+'】!');
+			     	return(false);
+			    }
+			    <!-- 
+			    dim @a as number;
+			    dim @stra as string;
+			    dim @iden as string;
+			   
+			    if('1'==#zj_type)
+			    {
+			    	@a = msgbox('请先将身份证放好，然后选择是否使用刷卡器?','提示','ok|cancel');
+			    	if(0 == @a)
+			    	{
+			    		if(not readiden())
+			    		{
+			    			showmsg('读卡失败!');
+			    			return(false);
+			    		}
+			    		
+			    		@stra=fetchiden('id');
+			    		@iden=getconfig($TLRNO+'.'+'IDEN');
+			    		//idcheck(@iden,@stra);
+			    		#zj_num=@stra;
+			    		#SRLX='0';
+			    		setrdly(#zj_num);
+			    		show(#zj_num,true);
+			    	}
+			    	else
+			    	{
+			    		
+			    		#zj_num='';
+			    		#SRLX='1';				
+			    		setnormal(#zj_num);
+			    		show(#zj_num,true);
+			    	}
+			    }-->
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#zj_type_str" TYPE="%-20s" FUNCTIONS="S(#zj_type,#zj_type)"/>
+		<ITEM NAME="#zj_type_re" TYPE="%-1s" FUNCTIONS=""/>
+		<ITEM NAME="#zj_num_re" TYPE="%-20s" FUNCTIONS=""/>
+		<ITEM LINE="7"  COL="55" NAME="#zj_num" TYPE="%-20s"  INPUT="TEXT"  FUNCTIONS="T()V(NB)">
+			<ONLOSTFOCUS>
+			"{
+				dim @idno as string;
+				@idno=delspace(#zj_num);
+				if(#zj_num_re != @idno)
+				{
+					showmsg('证件号码错误!原证件号码为【'+#zj_num_re+'】!');
+					return(false);
+				}
+				dim @tota as string;
+				dim @txno_bak as string;
+				if(#zj_type=='1')
+				{
+					if(len(#zj_num)!=15 and len(#zj_num)!=18)
+					{
+						showmsg('身份证号码位数错误,必须为15或18位!');
+						return(false);
+					}
+					else
+					{
+						if(#SRLX!='0')
+						{
+						//	idcheck(#zj_num,#Name_PART);
+						}
+					}
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="9"  COL="15"  NAME="#QYBAL" DEVICE="KEYBOARD" INPUT="TEXT" TYPE="%17.2f"  FUNCTIONS="V(0000000000000001,9999999999999999)"  VISABLE="FALSE"/>
+    <ITEM LINE="10" COL="15" TYPE="%-1s"  NAME="#HZ_RQ" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" VISABLE="FALSE">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="每月8日"/>
+				<OPTION VALUE="2" TITLE="每月18日"/>
+				<OPTION VALUE="3" TITLE="每月28日"/>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="11" COL="15"  NAME="#DRAW_PWD"  DEVICE="PINPAD"  INPUT="TEXT"  TYPE="%-6d"    FUNCTIONS="V(NB)i()"  VISABLE="FALSE">
+			<ONLOSTFOCUS>
+			"{
+				if(substr(#AC_NO_PART,0,6) != '621223' and substr(#AC_NO_PART,0,6)!='621780')
+		    {
+			    initfd();
+			    commsend_001();
+			    $FD16='9317';
+			    $FD30=#AC_NO_PART;
+			    $FD79=getitems('#DRAW_PWD');
+			    callserver();
+			    if($FD12!='0000')
+			    {
+				    showmsg(geterror());
+				    #DRAW_PWD = '';
+				    return (false);
+					}
+				}
+				else if(substr(#AC_NO_PART,0,6) == '621223' or substr(#AC_NO_PART,0,6)=='621780')
+		    {
+					initfd();
+					commsend_001();
+					$FD16='7007';
+					$FD30=#AC_NO_PART;
+					$FD68='4';   //#OPTION ='04'
+					$FD79=#DRAW_PWD;
+					callagn();
+					if( $FD12 != '0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		</BLOCK>
+		</PAGE>	
+		<ITEM LINE="21"  COL="65" NAME="#CONFIRM" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+	</VARIABLE>
+	<REQUEST>
+	</REQUEST>
+	
+	<RESPONSE>
+		<PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="金太阳卡亲子关联签约/解约成功">
+			NOTHING
+		</PACKAGE>
+		<INIT>
+    "{
+        $KINDNO='00';
+    }"
+		</INIT>
+		<PRINT>
+    "{
+      dim @hzdate  as number;
+      if(#HZ_RQ=='1'){@hzdate=8;}
+			if(#HZ_RQ=='2'){@hzdate=18;}
+			if(#HZ_RQ=='3'){@hzdate=28;}
+			
+    	if(#YW_TYPE == '0')
+			{
+	      print( 3,30,'金太阳卡签约');
+				print( 5,22,'金太阳卡卡号:[19]',#AC_NO_CHILD);
+				print( 6,22,'金太阳卡户名:[60]',#Name_CHILD);
+				print( 7,22,'家长卡  卡号:[19]',#AC_NO_PART);
+				print( 8,22,'家长卡  户名:[60]',#Name_PART);
+				print(10,22,'业 务  类 型:签约');
+				print(11,22,'签 约  金 额:[30]',#QYBAL);
+				print(12,22,'转 账  日 期:每月[3]号',@hzdate);
+			}
+			else if(#YW_TYPE == '1')
+			{
+				print( 3,30,'金太阳卡解约');
+				print( 5,22,'金太阳卡卡号:[19]',#AC_NO_CHILD);
+				print( 6,22,'金太阳卡户名:[60]',#Name_CHILD);
+				print( 7,22,'家长卡  卡号:[19]',#AC_NO_PART);
+				print( 8,22,'家长卡  户名:[60]',#Name_PART);
+				print(10,22,'业 务  类 型:解约');
+			}
+			print(13,22,'流  水  号:[ 6]',$FD4);
+    }"
+		</PRINT>
+	</RESPONSE>
+	
+	<RESPONSE>
+		<PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务凭证">
+			NOTHING
+		</PACKAGE>
+		<PRINT>
+		"{
+			dim @txtime  as string;
+			dim @hzdate  as number;
+			@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			
+			if(#HZ_RQ=='1'){@hzdate=8;}
+			if(#HZ_RQ=='2'){@hzdate=18;}
+			if(#HZ_RQ=='3'){@hzdate=28;}
+			
+			print( 5,20,'机构名称:[30]',$BRNAME);
+			print( 5, 2,'代码:[4]',#TXCD);
+			print( 5,13,'交易:[35]',#TXNAME);
+			
+			if(#YW_TYPE=='0')
+			{
+				print( 7,30,'\L0 金太阳卡亲子关联签约\L1');
+				print( 9,20,'交易  机构: [30]',$BRNAME);
+				print(10,20,'交易  类型: 签 约');
+				print(11,20,'金太阳卡号:[20                  ]     金太阳卡户名:[20]',#AC_NO_CHILD,#Name_CHILD);
+				print(12,20,'家长卡卡号:[20                  ]     家  长卡户名:[20]',#AC_NO_PART,#Name_PART);
+				print(13,20,'签约  金额:[21  ]',#QYBAL);
+				print(14,20,'转  账  日:每月[3  ]号',@hzdate);
+				print(15,20,'家长卡证件类型:[20                  ]',#zj_type_str);
+				print(16,20,'家长卡证件号码:[50                  ]',#zj_num);
+				print(19,80,'\H0本人已确认银行打印记录正确无误\H1');
+				print(21,80,'\L0客户签名\L1:  _________________');
+				print(23,20,'备注:');
+				print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+				print(23, 5,'柜员:[6]',$TLRNO);
+				print(23, 5,'流水号:[6]',$FD4);
+			}
+			else
+			{
+				print( 7,35,'\L0 金太阳卡亲子关联解约\L1');
+				print( 9,15,'机构名称: [30]',$BRNAME);
+				print(10,15,'交易类型: 解 约');
+				print(11,15,'金太阳卡号:[20                  ]     金太阳卡户名:[20]',#AC_NO_CHILD,#Name_CHILD);
+				print(12,15,'家长卡卡号:[20                  ]     家  长卡户名:[20]',#AC_NO_PART,#Name_PART);
+				print(15,15,'家长卡证件类型:[20                  ]',#zj_type_str);
+				print(16,15,'家长卡证件号码:[50                  ]',#zj_num);
+				print(19,80,'\H0本人已确认银行打印记录正确无误\H1');
+				print(21,80,'\L0客户签名\L1:  _________________');
+				print(23,20,'备注:');
+				print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+				print(23, 5,'柜员:[6]',$TLRNO);
+				print(23, 5,'流水号:[6]',$FD4);
+			}
+		}"
+		</PRINT>
+	</RESPONSE>
+	
+	<OUTPUT>
+	</OUTPUT>
+</TRANSACTION>

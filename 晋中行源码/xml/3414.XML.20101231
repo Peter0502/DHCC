@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3414    存折写磁"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+   $FD31=#ACTNO;
+   $FD62=#CERTINUM;
+   $FD67=#PWDTYPE;
+   $FD68=#CERTYPE;
+   $FD71=#AAAA;
+   commsend_001();
+   callserver();
+   $FD16 = '2414';
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+}"
+</COMMRECV>
+
+<LASTWORK>"{
+    if(#FLAG8609=='1'){
+        close();
+    }
+}"
+</LASTWORK>
+
+
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(3414                            存折写磁)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2414)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="5"      COL="20"   TYPE="%-5s"  FUNCTIONS="T(帐号:)" />
+  <ITEM LINE="7"      COL="30"   TYPE="%-16s"  FUNCTIONS="T(【校验支取信息】)" />
+  <ITEM LINE="8"      COL="5"   TYPE="%-70s"  FUNCTIONS="T(----------------------------------------------------------------------)" />
+  
+  
+  <ITEM LINE="5" COL="26" NAME="#ACTNO" TYPE="%-19s"   INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+		"{
+      dim @baktxno as string;
+      initfd();  //都把8583初始化一遍
+      @baktxno=$TXNO;
+      $TXNO='9763';
+      $FD31=#ACTNO;
+      commsend_001();
+      callserver();
+      $TXNO=@baktxno;
+      if($FD12!='0000')
+      {
+            showmsg(geterror());
+            return(false);
+      }
+      #PWDTYPE=delspace($FD67);
+      #CERTYPE=delspace($FD68);
+      #CERTITYPE=delspace($FD69);
+      #AAAA=delspace($FD71);
+      enable(#PWDTYPE,false);
+      enable(#CERTYPE,false);
+      enable(#CERTITYPE,false);
+      if(#PWDTYPE=='Y')
+      {
+         showblock('RESULT1',true,true);
+      }
+      if(#CERTYPE=='Y')
+      {
+         showblock('RESULT2',true,true);
+      }
+	#ACTNO=$FD31;
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+ <BLOCK NAME="RESULT1" LINE="0" COL="0" VISABLE="FALSE">
+  <ITEM LINE="10"     COL="15"    TYPE="%-10s"  FUNCTIONS="T(密码支取:!)"/>
+  <ITEM LINE="10"     COL="40"   TYPE="%-10s"  FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="10" COL="26" NAME="#PWDTYPE" TYPE="%1s"  INPUT="SELECT"  FUNCTIONS="T(Y)">
+		<SELECT>
+			<OPTION VALUE ="Y" TITLE="Y.是" />
+			<OPTION VALUE ="N" TITLE="N.否" />
+		</SELECT>
+  </ITEM>
+  <ITEM LINE="10" COL="50" NAME="#PWD" TYPE="%6d" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="i()V(NB)"> 
+  <ONLOSTFOCUS>
+  "{
+      dim @baktxno as string;
+      @baktxno=$TXNO;
+      $TXNO='9317';
+      commsend_001();
+      $FD30=#ACTNO;
+      $FD79=getitems('#PWD');
+      callserver();
+      $TXNO=@baktxno;
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return (false);
+      }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  </BLOCK>
+  <BLOCK NAME="RESULT2" LINE="0" COL="0" VISABLE="FALSE">
+  <ITEM LINE="12"       COL="15"  TYPE="%-10s"  FUNCTIONS="T(证件支取:!)"/>
+  <ITEM LINE="14"       COL="15"  TYPE="%-10s"  FUNCTIONS="T(证件类型:!)"/>
+  <ITEM LINE="14"       COL="40" TYPE="%-10s"  FUNCTIONS="T(证件号码:)"/>
+  <ITEM LINE="12" COL="26" NAME="#CERTYPE" TYPE="%1s"  INPUT="SELECT"  FUNCTIONS="T(Y)">
+		<SELECT>
+			<OPTION VALUE ="Y" TITLE="Y.是" />
+			<OPTION VALUE ="N" TITLE="N.否" />
+		</SELECT>
+  </ITEM>
+   <ITEM LINE="14" COL="26" NAME="#CERTITYPE" TYPE="%1s"  INPUT="SELECT"  FUNCTIONS="T(1)">
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="0.身份证" />
+			<OPTION VALUE ="2" TITLE="1.户口簿" />
+			<OPTION VALUE ="3" TITLE="2.护照" />
+			<OPTION VALUE ="4" TITLE="3.军官证" />
+			<OPTION VALUE ="5" TITLE="4.回乡证" />
+			<OPTION VALUE ="8" TITLE="7.企业代码证" />
+			<OPTION VALUE ="9" TITLE="8.组织机构号" />
+			<OPTION VALUE ="A" TITLE="9.营业执照" />
+			<OPTION VALUE ="B" TITLE="A.经营许可证" />
+			<OPTION VALUE ="C" TITLE="B.事业法人证书" />
+		</SELECT>
+  </ITEM>
+  <ITEM LINE="14" COL="50" NAME="#CERTINUM" TYPE="%-20s"   INPUT="TEXT" FUNCTIONS=""/> 
+  </BLOCK>
+  <ITEM NAME="#PASSWD"   TYPE="%-6s" FUNCTIONS="T(#PWD)"/>
+  <ITEM NAME="#AAAA"   TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#FLAG8609" TYPE="%-1s"/>
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+<REQUEST>
+
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="存折写磁!">
+      NOTHING
+	</PACKAGE>
+	    <!-- 打印格式还需要格式调整 -->
+	<PRINT>"{
+	  showmsg('请按任意键刷存折...');
+	  if(writemsr(#ACTNO,'')){
+		  print(8,30,' 存折写磁成功!');
+	  }else{
+		  print(8,30,' 存折写磁失败!');
+	  }	
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

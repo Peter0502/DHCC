@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1833 下载手续费汇总信息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE=" 3"  COL="3"    TYPE="%-60s"  FUNCTIONS="T(1833                         下载手续费汇总信息 )"/>
+	<ITEM LINE=" 4"  COL="3"    TYPE="%-74s"  FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1833)"/>
+	<ITEM NAME="#TXNAME"        TYPE="%-30s"  FUNCTIONS="T(下载手续费汇总信息)" />
+	
+	<ITEM LINE="7"  COL="30"   TYPE="%-30s"  FUNCTIONS="T(下载手续费汇总信息)" />
+	<ITEM LINE="10"  COL="25"   TYPE="%-9s"  FUNCTIONS="T(机构选择:)" />
+	<ITEM LINE="10"  COL="35"   TYPE="%-9s"  NAME="#BRNO" TYPE="%-8s"  INPUT="TEXT"  FUNCTIONS="T()V()" />
+	
+	<ITEM LINE="12"  COL="25"   TYPE="%-9s"   FUNCTIONS="T(月份选择:)" />
+	<ITEM NAME="#Month" LINE="12" COL="35" INPUT="SELECT"  TYPE="%-2s"  FUNCTIONS="T(1)V(NB)">
+	    	<SELECT>
+			<OPTION VALUE="1" TITLE="一月"/>
+			<OPTION VALUE="2" TITLE="二月"/>
+			<OPTION VALUE="3" TITLE="三月"/>
+			<OPTION VALUE="4" TITLE="四月"/>
+			<OPTION VALUE="5" TITLE="五月"/>
+			<OPTION VALUE="6" TITLE="六月"/>
+			<OPTION VALUE="7" TITLE="七月"/>
+			<OPTION VALUE="8" TITLE="八月"/>
+			<OPTION VALUE="9" TITLE="九月"/>
+			<OPTION VALUE="10" TITLE="十月"/>
+			<OPTION VALUE="11" TITLE="十一月"/>
+			<OPTION VALUE="12" TITLE="十二月"/>		
+	  	</SELECT>
+	</ITEM>
+	<ITEM NAME="#Ttlcnt"        TYPE="%-30s"  FUNCTIONS="T()" />
+	<ITEM NAME="#Ttlamt"        TYPE="%-30s"  FUNCTIONS="T()" />
+	<ITEM LINE="21"  COL="59"   TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+
+ 		<ONCLICK>
+ 		"{ 		 
+			
+			dim @buffer as string; 
+			initfd();
+			commsend_001();
+			$FD16 = '2310';
+			$FD18 = 'pbp';
+			$FD28 = 'sxps';
+			$FD95 = #Month;
+			$FD58 = #BRNO;
+			callagnpbp();
+			
+			if($FD12!='0000')
+			{
+				  showmsg(geterror());
+				  return(false);
+			}
+			#Ttlcnt = val($FD55);
+			#Ttlamt = val($FD39);
+			@buffer=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			if(@buffer == '')
+			{
+				showmsg('未找到记录!');
+				return(false);
+			}
+		
+			autolist('~'+@buffer);
+			runoutput();
+			#DOLIST='1';
+			goitem('#DOLIST');
+			return(true);
+			rerun();
+			refresh();
+
+ 		}"
+ 		</ONCLICK>   
+ 	 </ITEM> 
+ 	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			if(#DOLIST=='1')
+			{
+				@selid=list_work();     
+				if(@selid &lt; 0)       
+				{                     
+					list_del();            
+					rerun();               
+					return(true);          
+				}           
+				@selid=list_getselid();
+				if(@selid &lt; 0)
+				{
+					list_del();
+					rerun();
+					return(true);
+				}
+				
+				//生成核心流水-start
+				dim @bak_fd81 as string;
+				@bak_fd81=$FD81;
+				$FD81=#TXNAME;
+				gethxtraceno();
+				$FD81=@bak_fd81;
+				//生成核心流水-end
+				runoutput();
+				showall();
+				rerun();
+				refresh();
+			}
+			#DOLIST='';
+			list_del();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  LINESPACE="24" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+<PRINT>
+	"{       
+		PrintTxHead();
+		//list_print();
+		if (#BRNO != '')
+		{
+			print(5, 25,'开户机构:[20]',#BRNO);
+		}
+		print(7, 25,'月份选择:[20]', getseltitle(#Month,#Month));
+		print(9, 25,'汇总笔数:[20]',#Ttlcnt);
+		print(11, 25,'汇总金额:[20]',#Ttlamt);
+		PrintTxTail();
+	}" 
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

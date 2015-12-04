@@ -1,0 +1,299 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"fn_flt_radio_parm_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int fn_flt_radio_parm_con ( struct fn_flt_radio_parm_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct fn_flt_radio_parm_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->prdt_code);
+	zip_tail(ps->ctl_flag);
+	zip_tail(ps->cif_lvl);
+	zip_tail(ps->reg_tel);
+	zip_tail(ps->upd_tel);
+}
+int Fn_flt_radio_parm_Debug(struct fn_flt_radio_parm_c *ps){
+	vtcp_log("fn_flt_radio_parm_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("fn_flt_radio_parm_c.prdt_code=[%s]\n",ps->prdt_code);
+	vtcp_log("fn_flt_radio_parm_c.ctl_flag=[%s]\n",ps->ctl_flag);
+	vtcp_log("fn_flt_radio_parm_c.cif_lvl=[%s]\n",ps->cif_lvl);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio1=[%f]\n",ps->flt_radio1);
+	vtcp_log("fn_flt_radio_parm_c.buy_amt=[%f]\n",ps->buy_amt);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio2=[%f]\n",ps->flt_radio2);
+	vtcp_log("fn_flt_radio_parm_c.buy_amt1=[%f]\n",ps->buy_amt1);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio21=[%f]\n",ps->flt_radio21);
+	vtcp_log("fn_flt_radio_parm_c.buy_amt2=[%f]\n",ps->buy_amt2);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio22=[%f]\n",ps->flt_radio22);
+	vtcp_log("fn_flt_radio_parm_c.buy_amt3=[%f]\n",ps->buy_amt3);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio23=[%f]\n",ps->flt_radio23);
+	vtcp_log("fn_flt_radio_parm_c.buy_amt4=[%f]\n",ps->buy_amt4);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio24=[%f]\n",ps->flt_radio24);
+	vtcp_log("fn_flt_radio_parm_c.total_amt=[%f]\n",ps->total_amt);
+	vtcp_log("fn_flt_radio_parm_c.flt_radio3=[%f]\n",ps->flt_radio3);
+	vtcp_log("fn_flt_radio_parm_c.reg_date=[%ld]\n",ps->reg_date);
+	vtcp_log("fn_flt_radio_parm_c.reg_tel=[%s]\n",ps->reg_tel);
+	vtcp_log("fn_flt_radio_parm_c.upd_date=[%ld]\n",ps->upd_date);
+	vtcp_log("fn_flt_radio_parm_c.upd_tel=[%s]\n",ps->upd_tel);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Fn_flt_radio_parm_Sel(reply,fn_flt_radio_parm_c,fmtstr,va_alist)
+char    *reply;
+struct  fn_flt_radio_parm_c *fn_flt_radio_parm_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Fn_flt_radio_parm_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Fn_flt_radio_parm_Fet_Sel( fn_flt_radio_parm_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Fn_flt_radio_parm_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Fn_flt_radio_parm_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,fn_flt_radio_parm.* FROM fn_flt_radio_parm WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE fn_flt_radio_parm_sel FROM :comm;
+	EXEC SQL DECLARE sel_fn_flt_radio_parm CURSOR FOR fn_flt_radio_parm_sel;
+
+	EXEC SQL OPEN sel_fn_flt_radio_parm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fn_flt_radio_parm_Fet_Sel ( struct fn_flt_radio_parm_c *fn_flt_radio_parm_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_fn_flt_radio_parm INTO :fn_flt_radio_parm_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch fn_flt_radio_parm error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch fn_flt_radio_parm finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(fn_flt_radio_parm_c);
+
+	return 0;
+}
+
+int Fn_flt_radio_parm_Clo_Sel (){
+	EXEC SQL CLOSE sel_fn_flt_radio_parm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Fn_flt_radio_parm_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,fn_flt_radio_parm.* FROM fn_flt_radio_parm WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE fn_flt_radio_parm_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_fn_flt_radio_parm CURSOR FOR fn_flt_radio_parm_upd;
+
+	EXEC SQL OPEN upd_fn_flt_radio_parm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fn_flt_radio_parm_Fet_Upd( struct fn_flt_radio_parm_c *fn_flt_radio_parm_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_fn_flt_radio_parm INTO :fn_flt_radio_parm_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH fn_flt_radio_parm finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(fn_flt_radio_parm_c);
+
+	return 0;
+}
+
+int Fn_flt_radio_parm_Upd_Upd( struct fn_flt_radio_parm_c fn_flt_radio_parm_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE fn_flt_radio_parm SET prdt_code=:fn_flt_radio_parm_c.prdt_code,
+			ctl_flag=:fn_flt_radio_parm_c.ctl_flag,
+			cif_lvl=:fn_flt_radio_parm_c.cif_lvl,
+			flt_radio1=:fn_flt_radio_parm_c.flt_radio1,
+			buy_amt=:fn_flt_radio_parm_c.buy_amt,
+			flt_radio2=:fn_flt_radio_parm_c.flt_radio2,
+			buy_amt1=:fn_flt_radio_parm_c.buy_amt1,
+			flt_radio21=:fn_flt_radio_parm_c.flt_radio21,
+			buy_amt2=:fn_flt_radio_parm_c.buy_amt2,
+			flt_radio22=:fn_flt_radio_parm_c.flt_radio22,
+			buy_amt3=:fn_flt_radio_parm_c.buy_amt3,
+			flt_radio23=:fn_flt_radio_parm_c.flt_radio23,
+			buy_amt4=:fn_flt_radio_parm_c.buy_amt4,
+			flt_radio24=:fn_flt_radio_parm_c.flt_radio24,
+			total_amt=:fn_flt_radio_parm_c.total_amt,
+			flt_radio3=:fn_flt_radio_parm_c.flt_radio3,
+			reg_date=:fn_flt_radio_parm_c.reg_date,
+			reg_tel=:fn_flt_radio_parm_c.reg_tel,
+			upd_date=:fn_flt_radio_parm_c.upd_date,
+			upd_tel=:fn_flt_radio_parm_c.upd_tel
+	WHERE rowid=:fn_flt_radio_parm_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Fn_flt_radio_parm_Del_Upd(struct fn_flt_radio_parm_c fn_flt_radio_parm_c , char * reply  ){
+
+	EXEC SQL DELETE FROM fn_flt_radio_parm WHERE rowid=:fn_flt_radio_parm_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Fn_flt_radio_parm_Clo_Upd( ){
+	EXEC SQL CLOSE upd_fn_flt_radio_parm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Fn_flt_radio_parm_Ins( struct fn_flt_radio_parm_c fn_flt_radio_parm_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO fn_flt_radio_parm VALUES (:fn_flt_radio_parm_c.prdt_code,
+			:fn_flt_radio_parm_c.ctl_flag,
+			:fn_flt_radio_parm_c.cif_lvl,
+			:fn_flt_radio_parm_c.flt_radio1,
+			:fn_flt_radio_parm_c.buy_amt,
+			:fn_flt_radio_parm_c.flt_radio2,
+			:fn_flt_radio_parm_c.buy_amt1,
+			:fn_flt_radio_parm_c.flt_radio21,
+			:fn_flt_radio_parm_c.buy_amt2,
+			:fn_flt_radio_parm_c.flt_radio22,
+			:fn_flt_radio_parm_c.buy_amt3,
+			:fn_flt_radio_parm_c.flt_radio23,
+			:fn_flt_radio_parm_c.buy_amt4,
+			:fn_flt_radio_parm_c.flt_radio24,
+			:fn_flt_radio_parm_c.total_amt,
+			:fn_flt_radio_parm_c.flt_radio3,
+			:fn_flt_radio_parm_c.reg_date,
+			:fn_flt_radio_parm_c.reg_tel,
+			:fn_flt_radio_parm_c.upd_date,
+			:fn_flt_radio_parm_c.upd_tel);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT fn_flt_radio_parm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

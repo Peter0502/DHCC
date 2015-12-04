@@ -1,0 +1,35 @@
+#ifndef __sub_dd_mst_CH__
+#define __sub_dd_mst_CH__
+struct sub_dd_mst_c{
+        char      rowid[20];
+        char      br_no[6];
+        char      ac_no[25];
+        long      sub_ac_seqn;
+        char      sub_ac_no[25];
+        double    bal;
+        double    ys_bal;
+        double    intst_acm;
+        long      opn_date;
+        long      ic_date;
+        long      lst_date;
+        long      hst_cnt;
+        long      hst_pg;
+        char      name[51];
+        char      paper_type[2];
+        char      paper_no[21];
+        char      telephone[21];
+        char      ac_sts[2];
+        double    zf_bal;
+        char      rate_type[2];
+        char      intst_type[2];
+        double    rate;
+        long      xq_num;
+        long      lp_num;
+        long      dy_num;
+        long      fj_num;
+        char      bar_code[17];
+        char      filler[62];
+        char      filler1[62];
+        char      filler2[62];
+};
+#endif 

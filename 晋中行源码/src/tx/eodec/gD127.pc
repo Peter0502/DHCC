@@ -1,0 +1,282 @@
+/*************************************************************
+* 文 件 名: gD127.c
+* 功能描述：日终报表特殊处理
+**************************************************************/
+#define MYDBERR if( sqlca.sqlcode ) { \
+		sprintf(acErrMsg,"DO DATABASE ERROR[%d]",sqlca.sqlcode ); \
+		WRITEMSG \
+		strcpy( g_pub_tx.reply,"D103" ); \
+		goto ErrExit;\
+		}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+EXEC SQL include sqlca;
+#include "com_branch_c.h"
+#include "gl_rpt_c.h"
+
+gD127()
+{
+	int ret = 0;
+	struct com_sys_parm_c s_com_sys_parm;
+
+    ret=sql_begin(); /*打开事务*/
+    if( ret )
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+	ret = Com_sys_parm_Sel( g_pub_tx.reply,&s_com_sys_parm, "1=1" );
+	if( ret ) goto ErrExit;
+	g_pub_tx.tx_date=s_com_sys_parm.lst_date;
+
+	ret=sql_execute("delete from gl_rpt where \"date\"=%d",g_pub_tx.tx_date);
+	if( ret ) goto ErrExit;
+
+	/*储蓄账户存款*/
+	ret=get_sub( "M001_11311B110" ,
+		"select opn_br_no,sum(ys_bal) from dd_mst where prdt_no in('101','102') and sttl_type!='D' group by opn_br_no" 
+		);
+	if( ret ) goto ErrExit;
+
+	ret=get_sub( "M001_11311B110" ,
+		"select opn_br_no,sum(bal) from td_mst_bk where prdt_no='241' group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+	/*银行卡外个人结算账户存款*/
+	ret=get_sub( "M001_11311B120",
+		"select opn_br_no,sum(ys_bal) from dd_mst where prdt_no in('101','102') and sttl_type='D' and ac_id not in(select ac_id from mdm_ac_rel where mdm_code='0020') group by opn_br_no" 
+		);
+	if( ret ) goto ErrExit;
+
+	/*银行卡外个人结算账户存款*/
+	ret=get_sub( "M001_1131B200",
+		"select opn_br_no,sum(ys_bal) from dd_mst where ac_id in(select ac_id from mdm_ac_rel where mdm_code='0020') and prdt_no in('101','102') group by opn_br_no" 
+		);
+	if( ret ) goto ErrExit;
+
+	ret=get_sub( "M001_1131B200",
+		"select opn_br_no,sum(ys_bal) from td_mst where ac_id in(select ac_id from mdm_ac_rel where mdm_code='0020') and prdt_no='241' group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+
+	/*短期存款*/
+	ret = get_sub( "M002_47",
+		"select opn_br_no,sum(bal) from dd_mst_bk where prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) in('201','202','217')) group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+	ret = get_sub( "M002_47",
+		"select opn_br_no,sum(bal) from td_mst_bk where prdt_no in ( select prdt_no from td_parm where ((term_type='M' and term<12) or (term_type='Y' and term<1) or (term_type='D') ) and substr(dc_code,1,3) in('201','202','217','205')) group by opn_br_no" 
+		);
+	if( ret ) goto ErrExit;
+
+	/*短期储蓄存款*/
+	ret = get_sub( "M002_48",
+	 	"select opn_br_no,sum(bal) from dd_mst_bk where prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) in('211','215')) group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+	ret = get_sub( "M002_48",
+		"select opn_br_no,sum(ys_bal) from td_mst where prdt_no in (select prdt_no from td_parm where ((term_type='M' and term<12) or (term_type='Y' and term<1) or (term_type='D') ) and substr(dc_code,1,3) in('211','215')) group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+	/*长期存款*/
+	ret = get_sub( "M002_71",
+		"select opn_br_no,sum(ys_bal) from td_mst where prdt_no in (select prdt_no from td_parm where ((term_type='M' and term>=12) or (term_type='Y' and term>=1) ) and substr(dc_code,1,3) in('201','202','205','217')) group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+	/*长期储蓄存款*/
+	ret = get_sub( "M002_72",
+		"select opn_br_no,sum(ys_bal) from td_mst where prdt_no in (select prdt_no from td_parm where ((term_type='M' and term>=12) or (term_type='Y' and term>=1) ) and substr(dc_code,1,3) in('211','215')) group by opn_br_no"
+		);
+	if( ret ) goto ErrExit;
+
+	ret= get_sum();
+	if( ret ) goto ErrExit;
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"日终昨日余额处理成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"日终昨日余额处理失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+int get_sub( code,sen )
+ char *code;
+ char *sen;
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+ 	char sentence[1025];
+	int z1;
+	struct gl_rpt_c v_gl_rpt;
+ 	EXEC SQL END DECLARE SECTION;
+
+	strcpy( sentence,sen );
+vtcp_log("-------[%s]",code );
+vtcp_log("       [%s]",sentence );
+
+	sqlca.sqlcode=0;
+	EXEC SQL prepare dp_id_00 from :sentence;
+	MYDBERR
+
+	EXEC SQL declare cur_00 cursor for dp_id_00;
+	MYDBERR
+
+	EXEC SQL open cur_00;
+	MYDBERR
+
+	while(1)
+	{
+		memset( &v_gl_rpt,0,sizeof(v_gl_rpt) );
+
+		EXEC SQL fetch cur_00 into :v_gl_rpt.br_no,:v_gl_rpt.amt;
+		if( sqlca.sqlcode==1403 ) break;
+	 	MYDBERR
+
+		/*if( z1 ) v_gl_rpt.amt=0.00;*/
+		v_gl_rpt.date=g_pub_tx.tx_date;
+		strcpy( v_gl_rpt.code,code );
+
+		EXEC SQL select * from gl_rpt
+			where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+			;
+		if( sqlca.sqlcode==1403 )
+		{
+			/**
+			EXEC SQL insert into gl_rpt values(:v_gl_rpt);
+			**/
+			Gl_rpt_Ins(v_gl_rpt,g_pub_tx.reply);
+	 		MYDBERR
+		}
+		else
+		{
+	 		MYDBERR
+			EXEC SQL update gl_rpt set amt=amt+:v_gl_rpt.amt
+				where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+				;
+	 		MYDBERR
+		}
+	}
+	EXEC SQL close cur_00;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+int get_sum()
+{
+ 	EXEC SQL BEGIN DECLARE SECTION;
+	int z1;
+	long vdate;
+	struct gl_rpt_c v_gl_rpt;
+	struct com_branch_c v_jg;
+ 	EXEC SQL END DECLARE SECTION;
+
+	vdate=g_pub_tx.tx_date;
+vtcp_log("汇总");
+
+	EXEC SQL declare cur_sum cursor for 
+		select br_no,"date",code,sum(amt)
+		from gl_rpt
+		where "date"=:vdate
+		and code in ('M001_11311B110','M001_11311B120','M001_1131B200','M002_47',
+					'M002_48','M002_71','M002_72' )
+		group by br_no,"date",code;
+	MYDBERR
+
+	EXEC SQL open cur_sum;
+	MYDBERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_sum
+			into :v_gl_rpt.br_no,:v_gl_rpt.date,:v_gl_rpt.code,:v_gl_rpt.amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYDBERR
+
+		/*if( z1 ) v_gl_rpt.amt=0.00;*/
+		v_gl_rpt.date=g_pub_tx.tx_date;
+		pub_base_strpack( v_gl_rpt.code );
+
+vtcp_log(" SUM[%s] ",v_gl_rpt.br_no );
+		EXEC SQL select rowid,com_branch.* into :v_jg from com_branch where br_no=:v_gl_rpt.br_no;
+		MYDBERR
+
+		strcpy( v_gl_rpt.br_no,v_jg.up_br_no );
+
+		EXEC SQL select * from gl_rpt
+			where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+			;
+		if( sqlca.sqlcode==1403 )
+		{
+
+			/**
+			EXEC SQL insert into gl_rpt values(:v_gl_rpt);
+			**/
+			Gl_rpt_Ins(v_gl_rpt,g_pub_tx.reply);
+	 		MYDBERR
+		}
+		else
+		{
+	 		MYDBERR
+			EXEC SQL update gl_rpt set amt=amt+:v_gl_rpt.amt
+				where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+				;
+	 		MYDBERR
+		}
+
+		if( strncmp(v_jg.up_br_no,"61000",5) )
+		{
+
+		strcpy( v_gl_rpt.br_no,"61000" );
+
+		EXEC SQL select * from gl_rpt
+			where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+			;
+		if( sqlca.sqlcode==1403 )
+		{
+			/**
+			EXEC SQL insert into gl_rpt values(:v_gl_rpt);
+			**/
+			Gl_rpt_Ins(v_gl_rpt,g_pub_tx.reply);
+	 		MYDBERR
+		}
+		else
+		{
+	 		MYDBERR
+			EXEC SQL update gl_rpt set amt=amt+:v_gl_rpt.amt
+				where br_no=:v_gl_rpt.br_no and "date"=:v_gl_rpt.date and code=:v_gl_rpt.code
+				;
+	 		MYDBERR
+		}
+
+		}
+	}
+	EXEC SQL close cur_sum;
+
+	return 0;
+ErrExit:
+	return 1;
+}

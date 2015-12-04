@@ -1,0 +1,107 @@
+<TRANSACTION RIGHTS="11110000" TITLE="5331 支付拼包交易)"
+ xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+ <COMMSEND>"{
+	 commsend_001();
+	 $FD16='5871';
+	 $FD67=#OPTYPE;
+	 $FD52=#OPAYQSACTNO;
+	 $FD23=#OPKGNO;
+	 $FD44=#OPACKDAY;
+	 $FD53=#OPACKID;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	 commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5331                       回执拼包交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM LINE="6"  COL="15"  TYPE="%-10s" FUNCTIONS="T(操作类型:!)"/>
+  <ITEM LINE="8"  COL="15"  TYPE="%-16s" FUNCTIONS="T(原发起清算行号:)"/>
+  <ITEM LINE="10"   COL="15"  TYPE="%-10s"  FUNCTIONS="T(原包类型:!)"/>
+  <ITEM LINE="12"   COL="15"  TYPE="%-10s"  FUNCTIONS="T(原包日期:)"/>
+  <ITEM LINE="14"   COL="15"  TYPE="%-10s"  FUNCTIONS="T(原包序号:)"/>
+  <ITEM NAME="#OPTYPE" TYPE="%1d" LINE="6" COL="25" DEVICE="KAYBOARD" FUNCTIONS="T(0)V(NB)">
+	<SELECT LINE="7" COL="26">
+		<OPTION VALUE="0" TITLE="0.直接拼包"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#LOPTYPE" TYPE="%-4s" FUNCTIONS="j(#OPTYPE=0,T{拼包}T{记帐})"/>
+
+  <ITEM NAME="#OPAYQSACTNO" LINE="8" COL="31" DEVICE="KEYBOARD" TYPE="%-12s" FUNCTIONS="V(NB)T()">
+  <ONLOSTFOCUS>
+  "{
+   		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$TXNO='9553';
+		$FD32=#OPAYQSACTNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		showhelp(3,70,10,3,'支付系统行名信息',substr($FD96,0,60));
+
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM NAME="#OPKGNO" TYPE="%3d" LINE="10" COL="25" DEVICE="KAYBOARD" FUNCTIONS="T(002)V(NB)">
+	<SELECT LINE="9" COL="25">
+		<OPTION VALUE="002" TITLE="0.普通借记"/>
+		<OPTION VALUE="006" TITLE="0.定期借记"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#PKGNO" TYPE="%3d" FUNCTIONS="j(#OPKGNO=002,T{008}T{011})"/>
+  <ITEM NAME="#OPACKDAY" DEVICE="KEYBORAD" LINE="12" COL="25" TYPE="%8d"  FUNCTIONS="V(NB)D()T($HDATE)"/>
+
+  <ITEM NAME="#OPACKID" LINE="14" COL="25" DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#PACKDAY" TYPE="%8d"  FUNCTIONS=""/>
+  <ITEM NAME="#PACKID" TYPE="%8d"  FUNCTIONS=""/>
+
+
+  <!--输入项定义到这里结束-->
+  <ITEM NAME="#MSG" TYPE="%-4s" FUNCTIONS="j($HCODE=0,T{}T{取消})"/>
+  <ITEM LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(6,25,'回执业务拼包交易成功!');
+		print(8,20,'包序号:[8]',substr($FD54,2,8));
+	}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证(回执业务拼包)">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5,2,'代码:5331');
+	print(07,20, '原拼包序号:[12         ]                     委托日期:[8       ]',#OPACKID,$HDATE);
+	print(08,20, '新拼包序号:[12         ]                     ',$FD54);
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+        }"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

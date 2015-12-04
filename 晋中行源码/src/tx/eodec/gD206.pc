@@ -1,0 +1,4980 @@
+/********************
+* 文 件 名: gD206.pc
+* 功能描述: 晋中 数据提取
+*
+* 作    者: zyl
+* 完成日期: 20110316
+* 备    注: 程序的很多设定,只适用于晋中商行.
+* 
+********************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define extern
+#include <math.h>
+#include "public.h"
+#include <sys/timeb.h>
+#include <time.h>
+
+#include "trace_log_c.h"
+#include "dc_log_c.h"
+#include "com_branch_c.h"
+#include "dd_mst_c.h"
+#include "in_mst_c.h"
+#include "ln_mst_c.h"
+#include "prdt_ac_id_c.h"
+#include "note_parm_c.h"
+#include "note_mst_hst_c.h"
+#include "dd_parm_c.h"
+#include "td_parm_c.h"
+#include "note_cheq_mst_c.h"
+#include "com_chrg_hst_c.h"
+#include "in_parm_c.h"
+#include "com_item_c.h"
+#include "mo_hold_c.h"
+#include "mo_rpl_note_c.h"
+#include "hv_zfhtr_c.h"
+#include "lv_pkghtr_c.h"
+#include "hv_uniontab_c.h"
+
+#define MAXFILESIZE 50000000 
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+EXEC SQL BEGIN DECLARE SECTION;
+struct jz_super_c{
+        char      uuid[39];
+        char      trandate[11];
+        char      areano[17];
+        char      tellerid[9];
+        char      serseqno[17];
+        char      ywcode[5];
+        char      tranamt[19];
+        char      faccno[31];
+        char      faccname[61];
+        char      faccbank[61];
+        char      saccno[31];
+        char      saccname[61];
+        char      saccbank[61];
+        char      mondyb[51];
+        char      accountname[61];
+        char      idcode[21];
+        char      savetype[31];
+        char      businesssort[21];
+        char      dealmode[11];
+        char      warrantname[51];
+        char      unit[3];
+        char      count[6];
+        char      startno[19];
+        char      endno[19];
+        char      flatcost[18];
+        char      poundage[11];
+        char      accode[11];
+        char      isup[2];
+        char      state[3];
+};
+static struct jz_super_c g_jz_super;
+EXEC SQL END DECLARE SECTION;
+
+gD206()
+{
+	/**数据定义**/
+	int  ret = 0;
+	int  count = 0;
+	FILE *fp = NULL;
+	FILE *pz = NULL;
+	long filesize = 0;
+	int  flag = 0;
+	char tmpstr[256];
+	char superstr[1024];
+	char tmpfilename[64];
+	long tdate = 0;
+	long tno = 0;
+	
+	char tx_date[9];
+	char trace_no[9];
+	char filename[64];
+	long tmpdate = 0;
+	long tmpno = 0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	
+	char Tmpbuf[1024];
+	struct trace_log_c g_trace_log;
+	EXEC SQL END DECLARE SECTION;
+	
+	struct trace_log_c sTrace_log;
+	struct note_parm_c g_note_parm;
+	struct note_mst_hst_c g_note_mst_hst;
+	struct prdt_ac_id_c sPrdtacid;
+	struct com_branch_c g_com_branch;
+	struct note_cheq_mst_c g_note_cheq_mst;
+	struct com_chrg_hst_c g_com_chrg_hst;
+	struct in_parm_c g_in_parm;
+	struct com_item_c g_com_item;
+	struct mo_hold_c g_mo_hold;
+	struct mo_rpl_note_c g_mo_rpl_note;
+	struct hv_zfhtr_c g_hv_zfhtr;
+	struct lv_pkghtr_c g_lv_pkghtr;
+	struct hv_uniontab_c g_hv_uniontab;
+	memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+	memset(&g_lv_pkghtr,0x00,sizeof(struct lv_pkghtr_c));
+	memset(&g_hv_zfhtr,0x00,sizeof(struct hv_zfhtr_c));
+	memset(&g_mo_rpl_note,0x00,sizeof(struct mo_rpl_note_c));
+	memset(&g_mo_hold,0x00,sizeof(struct mo_hold_c));
+	memset(&g_jz_super,0x00,sizeof(struct jz_super_c));
+	memset(&g_trace_log,0x00,sizeof(struct trace_log_c));
+	memset(&g_note_parm,0x00,sizeof(struct note_parm_c));
+	memset(&g_note_mst_hst,0x00,sizeof(struct note_mst_hst_c));
+	memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+	memset(&sPrdtacid,0x00,sizeof(struct prdt_ac_id_c));
+	memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+	memset(&g_note_cheq_mst,0x00,sizeof(struct note_cheq_mst_c));
+	memset(&g_com_chrg_hst,0x00,sizeof(struct com_chrg_hst_c));
+	memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+	memset(&g_com_item,0x00,sizeof(struct com_item_c));
+	memset(tmpfilename,0x00,sizeof(tmpfilename));
+	memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+	memset(tx_date,0x00,sizeof(tx_date));
+	memset(trace_no,0x00,sizeof(trace_no));
+	memset(filename,0x00,sizeof(filename));
+	
+	memset(tmpstr,0x00,sizeof(tmpstr));
+	memset(superstr,0x00,sizeof(superstr));
+
+	
+	/**初始化**/
+	pub_base_sysinit();
+	
+	/**读配置文件 jz_super.txt 内容 57字符  trace_log.tx_date|trace_log.trace_no|filename  **/
+	/**将每行固定为57个字符**/
+	/**二进制文件**/
+	if( (pz = fopen("/home/devht/etc/jz_super.txt","ab+")) == NULL)
+	{
+		vtcp_log("[%s][%d]文件读取失败..",__FILE__,__LINE__ );
+		strcpy(g_pub_tx.reply,"L206");
+		goto ErrExit;
+	}
+	/**获取文件大小**/
+	fseek(pz,0l,2);
+	filesize = ftell(pz);
+	vtcp_log("[%s][%d] filesize=[%ld]\n",__FILE__,__LINE__,filesize);
+	
+	if(filesize < 57 || filesize%57 != 0 ) /**文件大小**/
+	{
+		if(filesize == 0)
+		{
+			flag = 1;
+		}
+		if(filesize%57 != 0)
+		{
+			vtcp_log("[%s][%d]配置文件jz_super内容出错..",__FILE__,__LINE__ );
+			strcpy(g_pub_tx.reply,"L206");
+			goto ErrExit;
+		}
+	}
+	else
+	{
+		fseek(pz,-57l,2);   /**指针移至最后一行**/
+		fgets(tmpstr,256,pz);
+		vtcp_log("zylsee34 length=%d",strlen(tmpstr));
+	}
+	/****/
+	if(strlen(tmpstr) == 57 || flag == 1)
+	{
+		/**将tmpstr分割**/
+		pub_base_cut_str(tmpstr,tx_date,"|",1);
+		pub_base_cut_str(tmpstr,trace_no,"|",2);
+		pub_base_cut_str(tmpstr,filename,"|",3);
+		tdate = atol(tx_date);
+		tno = atol(trace_no);
+		vtcp_log("[%s][%d] tx_date=[%s]",__FILE__,__LINE__,tx_date);
+		vtcp_log("[%s][%d] trace_no=[%s]",__FILE__,__LINE__,trace_no);
+		vtcp_log("[%s][%d] filename=[%s]",__FILE__,__LINE__,filename);
+		vtcp_log("[%s][%d] tx_date=[%ld]",__FILE__,__LINE__,tdate);
+		vtcp_log("[%s][%d] trace_no=[%ld]",__FILE__,__LINE__,tno);
+		/****/
+		g_trace_log.tx_date=tdate;
+		g_trace_log.trace_no=tno;
+		
+		struct timeb timebuffer;
+		struct tm timenow;
+		ftime( &timebuffer );
+		memcpy(&timenow,localtime(&timebuffer.time),sizeof(struct tm));
+		
+		/**打开文件 /home/devht/data/filename 用于存储提取出的数据 用于查错**/
+		memset(filename,0x00,sizeof(filename));
+		sprintf(filename,"/home/devht/data/jz_super_%04d%02d%02d%02d%02d",timenow.tm_year+1900,timenow.tm_mon+1,timenow.tm_mday,timenow.tm_hour,timenow.tm_min);
+		struct stat lfsts;
+		memset(&lfsts,0x00,sizeof(struct stat));
+		stat(filename, &lfsts);
+		if ( lfsts.st_size >= MAXFILESIZE )
+		{
+			ret = EtcFileBiggerOper(filename);
+			if(ret)
+			{
+				
+			}
+		}
+		if( (fp = fopen(filename,"ab+")) == NULL)
+		{
+			vtcp_log("[%s][%d]文件读取失败..",__FILE__,__LINE__ );
+			strcpy(g_pub_tx.reply,"L206");
+			goto ErrExit;
+		}
+		/**根据分割得到的数据 开始读取 trace_log 循环**/
+		/**if(strlen(tmpstr) == 57) 不执行  tmpstr已经被分解..strlen!=57 haha**/
+
+		if(flag == 1)
+		{
+			vtcp_log("[%s][%d],aaaseee3333",__FILE__,__LINE__);
+			ret = Trace_log_Dec_Sel(g_pub_tx.reply,"trace_cnt = 1 order by tx_date,trace_no,trace_cnt ");
+			if(ret)
+			{
+		    vtcp_log("[%s][%d],Trace_log_Dec_Sel=[%d]\n",__FILE__,__LINE__,ret);
+				strcpy(g_pub_tx.reply,"D101");
+				goto ErrExit;
+			}
+		}
+		else
+		{
+			vtcp_log("[%s][%d],aaasee",__FILE__,__LINE__);
+			ret = Trace_log_Dec_Sel(g_pub_tx.reply,"((tx_date= %ld and trace_no > %ld) or (tx_date > %ld )) and trace_cnt = 1 order by tx_date,trace_no,trace_cnt ",tdate,tno,tdate);
+			if(ret)
+			{
+		    vtcp_log("[%s][%d],Trace_log_Dec_Sel=[%d]\n",__FILE__,__LINE__,ret);
+				strcpy(g_pub_tx.reply,"D101");
+				goto ErrExit;
+			}
+		}
+		while(1)
+		{
+				memset(&g_jz_super,0x00,sizeof(struct jz_super_c));
+			  /**此时 g_trace_log 未用.若下面的 Fet的ret=100 则.最后,插入到 jz_super.txt中时.会是.00000000|00000000|***  这样..**/
+				tmpdate = g_trace_log.tx_date;
+				tmpno = g_trace_log.trace_no;
+		    memset(&g_trace_log,0x00,sizeof(struct trace_log_c));
+		    ret = Trace_log_Fet_Sel(&g_trace_log,g_pub_tx.reply);
+		    if(ret == 100)
+		    {
+		      vtcp_log("[%s][%d] ret = 100",__FILE__,__LINE__);
+		    	break;
+		    }
+		    else if(ret)
+		    {
+		    	vtcp_log("[%s][%d],Trace_log_Fet_Sel=[%d]\n",__FILE__,__LINE__,ret);
+					strcpy(g_pub_tx.reply,"D102");
+					Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    }
+		    /**数据提取 详细 **/
+		    /**重新取时间**/
+				ftime( &timebuffer );
+				memcpy(&timenow,localtime(&timebuffer.time),sizeof(struct tm));
+				
+				memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+				count++;
+				sprintf(Tmpbuf,"%4d%02d%02d%02d%02d%02d%03d%03d",timenow.tm_year+1900,timenow.tm_mon+1,timenow.tm_mday,timenow.tm_hour,timenow.tm_min,timenow.tm_sec,timebuffer.millitm,count);
+		    if(count == 999)
+		    {
+		    	count = 0;
+		    }
+		    strcpy(g_jz_super.uuid,Tmpbuf);/**uuid 用作主键..**/
+		    sprintf(Tmpbuf,"%4d-%02d-%02d",g_trace_log.tx_date/10000,(g_trace_log.tx_date/100 - (g_trace_log.tx_date/10000)*100),(g_trace_log.tx_date-(g_trace_log.tx_date/100)*100));
+		    /**20110328 变成 2011-03-28**/
+		    strcpy(g_jz_super.trandate,Tmpbuf);
+		    strcpy(g_jz_super.areano,g_trace_log.tx_br_no);
+		    strcpy(g_jz_super.tellerid,g_trace_log.tel);
+		    memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		    sprintf(Tmpbuf,"%06d",g_trace_log.trace_no);
+		    strcpy(g_jz_super.serseqno,Tmpbuf);
+		    strcpy(g_jz_super.ywcode,g_trace_log.tx_code);
+		    strcpy(g_jz_super.businesssort,"");/**业务种类 通存通兑不要了.**/
+		  	/**科目代号 是否上传影像等.**/
+		  	strcpy(g_jz_super.accode,"");
+		  	strcpy(g_jz_super.isup,"0");
+		  	strcpy(g_jz_super.state,"00");
+		  	
+		  	/**根据交易 特殊处理**/
+		  	/**凭证出售时.处理以下.warrantname unit count startno endno flatcost poundage**/
+		  	if(strcmp(g_jz_super.ywcode,"5105") == 0)/**凭证出售**/
+		  	{
+		  		/**凭证名称 note_type 取 trace_cnt=1**/
+		  		memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		  		if(strlen(g_trace_log.note_type) == 3)
+		  		{
+		  			EXEC SQL select name into :Tmpbuf from note_parm where note_type =:g_trace_log.note_type;
+		  			if(sqlca.sqlcode == 1403)
+		  			{
+		  				strcpy(g_jz_super.warrantname,"");
+		  			}
+		  			else if(sqlca.sqlcode)
+		  			{
+		    			vtcp_log("[%s][%d],Note_parm_Sel ret=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,sqlca.sqlcode);continue;
+		  			}
+		  			pub_base_strpack(Tmpbuf);
+		  			vtcp_log("zyl see 78 [%s]",Tmpbuf);
+		  			strcpy(g_jz_super.warrantname,Tmpbuf);
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.warrantname,"");
+		  		}
+		  		/**7105 数据 **/
+		  		ret = Note_mst_hst_Sel(g_pub_tx.reply,&g_note_mst_hst,"note_type='%s' and beg_note_no <= '%s' and end_note_no >='%s' and tel='%s' and trace_no=%ld ",g_trace_log.note_type,g_trace_log.note_no,g_trace_log.note_no,g_trace_log.tel,g_trace_log.trace_no);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.count,"");
+		  			strcpy(g_jz_super.startno,"");
+		  			strcpy(g_jz_super.endno,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Note_mst_hst_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		  			sprintf(Tmpbuf,"%d",g_note_mst_hst.note_cnt);
+		  			strcpy(g_jz_super.count,Tmpbuf);
+		  			pub_base_ltrim_zero(g_note_mst_hst.beg_note_no);
+		  			strcpy(g_jz_super.startno,g_note_mst_hst.beg_note_no);
+		  			pub_base_ltrim_zero(g_note_mst_hst.end_note_no);
+		  			strcpy(g_jz_super.endno,g_note_mst_hst.end_note_no);
+		  			vtcp_log("[%s][%d],startno=[%s]\n",__FILE__,__LINE__,g_note_mst_hst.beg_note_no);
+		  			vtcp_log("[%s][%d],endno=[%s]\n",__FILE__,__LINE__,g_note_mst_hst.end_note_no);
+		  		}
+        	
+		  		/**出售 本,张 ac_id 取 trace_cnt=2 **/
+		  		memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		  		EXEC SQL select grp_ind into :Tmpbuf from note_cheq_mst where note_type =:g_trace_log.note_type \
+		  			and beg_note_no <=:g_trace_log.note_no and end_note_no >= :g_trace_log.note_no and ac_id \
+		  				in(select ac_id from trace_log where trace_no =:g_trace_log.trace_no and trace_cnt=2);
+		  		if(sqlca.sqlcode == 1403)
+		  		{
+		  			strcpy(g_jz_super.unit,"");
+		  		}
+		  		else if(sqlca.sqlcode)
+		  		{
+		    		vtcp_log("[%s][%d],Note_cheq_mst_Sel ret=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,sqlca.sqlcode);continue;
+		  		}
+		  		if(Tmpbuf[0] == 'Y')
+		  		{
+		  			strcpy(g_jz_super.unit,"本");
+		  		}
+		  		else if(Tmpbuf[0] == 'N')
+		  		{
+		  			strcpy(g_jz_super.unit,"张");
+		  		}
+        	
+		  		/**工本费,手续费**/
+		  		ret = Com_chrg_hst_Sel(g_pub_tx.reply,&g_com_chrg_hst,"trace_no=%ld and tx_date=%ld and chrg_rate_code ='PZ1'",g_note_mst_hst.trace_no,g_note_mst_hst.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.poundage,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Com_chrg_hst_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		  			sprintf(Tmpbuf,"%9.2f",g_com_chrg_hst.chrg_amt);
+		  			pub_base_strpack(Tmpbuf);
+		  			strcpy(g_jz_super.poundage,Tmpbuf);
+		  		}
+		  		memset(&g_com_chrg_hst,0x00,sizeof(struct com_chrg_hst_c));
+		  		ret = Com_chrg_hst_Sel(g_pub_tx.reply,&g_com_chrg_hst,"trace_no=%ld and tx_date=%ld and chrg_rate_code ='PZ2'",g_note_mst_hst.trace_no,g_note_mst_hst.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.flatcost,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Com_chrg_hst_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		  			sprintf(Tmpbuf,"%17.2f",g_com_chrg_hst.chrg_amt);
+		  			pub_base_strpack(Tmpbuf);
+		  			strcpy(g_jz_super.flatcost,Tmpbuf);
+		  		}
+		  		/**其他数据**/
+					memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+					sprintf(Tmpbuf,"%17.2f",g_trace_log.amt);
+					pub_base_strpack(Tmpbuf);
+					strcpy(g_jz_super.tranamt,Tmpbuf);
+					strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+					
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+		  		}
+		    	if(sTrace_log.ct_ind[0] == '1')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现金");
+		    	}
+		    	else if(sTrace_log.ct_ind[0] == '2')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"转账");
+		    	}
+		    	else
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  		}
+		  		/**facc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and ac_id >100000000 ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**证件号 在 FindFaccName()中**/
+		  		/**储种 在FindFaccName()中**/
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2101") == 0 || strcmp(g_jz_super.ywcode,"2103") == 0 )/**储蓄定期 活期开户**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='0' and length(ac_no)>9 ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100) /**现金付款 或其他情况.**/
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+		  			
+		  		}
+		  		
+		  		/**saccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName_2101(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2105") == 0 || strcmp(g_jz_super.ywcode,"2106") == 0 || strcmp(g_jz_super.ywcode,"2107") == 0 || strcmp(g_jz_super.ywcode,"2501") == 0)/**对公活期 定期开户 对公开户确认 内部产品开户**/
+		  	{
+		  		/**无金额**/
+		  		strcpy(g_jz_super.faccno,"");
+		  		strcpy(g_jz_super.faccname,"");
+		  		strcpy(g_jz_super.faccbank,"");
+		  		strcpy(g_jz_super.tranamt,"0.00");
+		  		strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+		  		strcpy(g_jz_super.dealmode,"现转");
+		  		strcpy(g_jz_super.saccno,g_trace_log.ac_no);
+		  		ret = FindSaccName_2101(g_trace_log.ac_no);
+		  		if(ret<0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Saccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.saccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.saccname);
+
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2108") == 0)/**收费 三个未知信息 todo**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='0' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100) /**现金付款 或其他情况.**/
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+					}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2201") == 0 || strcmp(g_jz_super.ywcode,"2205") == 0)/**2201 储蓄存款 2205 对公现金存款**/
+		  	{
+		  		/**2201 现金**/
+		  		strcpy(g_jz_super.faccno,"");
+		  		strcpy(g_jz_super.faccname,"");
+		  		strcpy(g_jz_super.faccbank,"");
+		  		
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' and ac_id > 100000000",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName_2101(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  			
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2202") == 0 || strcmp(g_jz_super.ywcode,"2206") == 0 || strcmp(g_jz_super.ywcode,"2430") == 0 ||strcmp(g_jz_super.ywcode,"2505") == 0 || strcmp(g_jz_super.ywcode,"2512") == 0)/**2202 储蓄取款 2206 对公取款 2430 存款扣划.现金.未测试.todo 零余额销户2505 2512 与村镇对公通存业务**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='0' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100) /**取款 付款方应一定存在.**/
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+					}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2203") == 0)/**2203 储蓄部提 换证or不换证 要监督的.todo**/
+		  	{
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2204") == 0 || strcmp(g_jz_super.ywcode,"2208") == 0)/**2204 储蓄销户 2208 对公销户-无数据未测试-D203**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='0' and sub_tx_code='D203' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100) /**销户 付款方应一定存在.**/
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+					}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2405") == 0)/**挂失解挂**/
+		  	{
+		  		/**facc 口挂 不收费.密挂.收续费-现金**/
+		  		
+		  		strcpy(g_jz_super.dealmode,"现转");
+		  		strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+		  		/*strcpy(g_jz_super.faccname,"");
+		  		strcpy(g_jz_super.faccbank,"");*/
+		  		ret = FindFaccName_2406(g_trace_log.ac_no);
+		  		if(ret < 0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Faccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.faccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+					}
+					else
+					{
+		    		vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		
+					strcpy(g_jz_super.mondyb, (char *)pub_rpt_pcask(atof(g_jz_super.tranamt)));/**大写**/
+					
+		  		/**sacc 挂失收续费 放在凭证出售手续费中...提取saccno信息.**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' and length(ac_no) <9",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%9.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.poundage,Tmpbuf);
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  			
+					}
+					
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2406") == 0)/**冻结解冻**/
+		  	{
+		  		/**需要特殊处理.另.涉及几个表.**/
+		  		strcpy(g_jz_super.dealmode,"现转");
+		  		strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+		  		ret = FindFaccName_2406(g_trace_log.ac_no);
+		  		if(ret < 0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Faccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.faccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+					}
+					else
+					{
+		    		vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**余额 冻结金额**/
+		  		strcpy(g_jz_super.mondyb, (char *)pub_rpt_pcask(atof(g_jz_super.tranamt)));/**大写**/
+		  		ret = Mo_hold_Sel(g_pub_tx.reply,&g_mo_hold,"trace_no = %ld and wrk_date = %ld ",g_trace_log.trace_no,g_trace_log.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.flatcost,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d] Mo_hold_Sel error ret=[%d]",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_mo_hold.plan_hold_amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.flatcost,Tmpbuf);
+		  		}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2407") == 0)/**补登折**/
+		  	{
+		  		/**无金额**/
+		  		strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+		  		strcpy(g_jz_super.tranamt,"0.00");
+		  		strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+		  		strcpy(g_jz_super.dealmode,"现转");
+		  		ret = FindFaccName(g_trace_log.ac_no);
+		  		if(ret<0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Faccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.faccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2408") == 0)/**打印对账单**/
+		  	{
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2410") == 0)/**更换介质**/
+		  	{
+		  		strcpy(g_jz_super.tranamt,"");
+		  		strcpy(g_jz_super.mondyb,"零圆整");/**大写**/
+		  		strcpy(g_jz_super.dealmode,"现转");
+		  		/**特殊处理**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and ac_id > 100000000 ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Fet_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			if(strlen(sTrace_log.ac_no) == 13)/**换证时**/
+		  			{
+		  				strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  				ret = FindFaccName(sTrace_log.ac_no);
+		  				if(ret<0)
+		  				{
+		  					Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  					continue;
+		  				}
+							/*find Faccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									strcpy(g_jz_super.faccbank,"");
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+							}
+							strcpy(g_jz_super.accountname,g_jz_super.faccname);
+							/**更改faccname 放旧凭证号**/
+							ret = Mo_rpl_note_Sel(g_pub_tx.reply,&g_mo_rpl_note,"trace_no=%ld and rpl_date = %ld ",sTrace_log.trace_no,sTrace_log.tx_date);
+							if(ret == 100)
+							{
+								strcpy(g_jz_super.faccname,"");
+							}
+							else if(ret)
+							{
+		    				vtcp_log("[%s][%d],Mo_rpl_note_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							else
+							{
+								pub_base_ltrim_zero(g_mo_rpl_note.old_note_no);
+								strcpy(g_jz_super.faccname,g_mo_rpl_note.old_note_no);
+							}
+							/**账号不变 新凭证号**/
+							strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+							pub_base_ltrim_zero(sTrace_log.note_no);
+							strcpy(g_jz_super.saccname,sTrace_log.note_no);
+							
+		  			}
+		  			else if(strlen(sTrace_log.ac_no) == 19)/**换卡时**/
+		  			{
+		  				/**旧卡号 旧凭证号**/
+		  				strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  				ret = FindFaccName(sTrace_log.ac_no);
+		  				if(ret<0)
+		  				{
+		  					Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  					continue;
+		  				}
+							/*find Faccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									strcpy(g_jz_super.faccbank,"");
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+							}
+							strcpy(g_jz_super.accountname,g_jz_super.faccname);
+							/**更改faccname**/
+							pub_base_ltrim_zero(sTrace_log.note_no);
+							strcpy(g_jz_super.faccname,sTrace_log.note_no);
+							
+							/**新卡号 新凭证号**/
+							Trace_log_Clo_Upd();
+							memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  				ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+							if(ret)
+							{
+		    				vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  				if(ret == 100)
+		  				{
+		  					
+		  				}
+		  				else if(ret)
+		  				{
+		    				vtcp_log("[%s][%d],Trace_log_Fet_Upd=[%d]\n",__FILE__,__LINE__,ret);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  				}
+		  				else
+		  				{
+		  					strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  					pub_base_ltrim_zero(sTrace_log.note_no);
+		  					strcpy(g_jz_super.saccname,sTrace_log.note_no);
+		  				}
+		  			}
+		  			else
+		  			{
+		  				
+		  			}
+		  		}
+
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2411") == 0)/**通知登记/撤销/变更**/
+		  	{
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2502") == 0)/**内部账记账**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='0' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100) /**借方发起? **/
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and add_ind='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  			if(0)
+		  			{
+		  				strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  			}
+					}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"2601") == 0 || strcmp(g_jz_super.ywcode,"2602") == 0 || strcmp(g_jz_super.ywcode,"2604") == 0 || strcmp(g_jz_super.ywcode,"2609") == 0 || strcmp(g_jz_super.ywcode,"2611") == 0)/**账户信息维护 支取密码维护 证件信息维护 账户客户基本信息关联 对公活期利率调整**/
+		  	{
+		  		/**faccno**/
+		  		strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+		  		ret = FindFaccName(g_trace_log.ac_no);
+		  		if(ret<0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Faccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.faccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+					}
+					else
+					{
+		    		vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+					sprintf(Tmpbuf,"%17.2f",g_trace_log.amt);
+					pub_base_strpack(Tmpbuf);
+					strcpy(g_jz_super.tranamt,Tmpbuf);
+					strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+		    	if(g_trace_log.ct_ind[0] == '1')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现金");
+		    	}
+		    	else if(g_trace_log.ct_ind[0] == '2')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"转账");
+		    	}
+		    	else
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		strcpy(g_jz_super.saccno,"");
+		  		strcpy(g_jz_super.saccname,"");
+		  		strcpy(g_jz_super.saccbank,"");
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3101") == 0 || strcmp(g_jz_super.ywcode,"3105") == 0 || strcmp(g_jz_super.ywcode,"3314") == 0)/**贷款开户 销户 贷款抵质押品出库**/
+		  	{
+		  		/**无金额**/
+		  		strcpy(g_jz_super.faccno,"");
+		  		strcpy(g_jz_super.faccname,"");
+		  		strcpy(g_jz_super.faccbank,"");
+		  		/**sacc**/
+					memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+					sprintf(Tmpbuf,"%17.2f",g_trace_log.amt);
+					pub_base_strpack(Tmpbuf);
+					strcpy(g_jz_super.tranamt,Tmpbuf);
+					strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+					
+		    	if(g_trace_log.ct_ind[0] == '1')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现金");
+		    	}
+		    	else if(g_trace_log.ct_ind[0] == '2')
+		    	{
+		    		strcpy(g_jz_super.dealmode,"转账");
+		    	}
+		    	else
+		    	{
+		    		strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  		}
+		  		
+		  		strcpy(g_jz_super.saccno,g_trace_log.ac_no);
+		  		ret = FindSaccName_2101(g_trace_log.ac_no);
+		  		if(ret<0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Saccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.saccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3104") == 0 || strcmp(g_jz_super.ywcode,"3313") == 0)/**贷款放款 add_ind =1 贷款抵质押品入库**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and substr(prdt_no,1,1) ='3' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and substr(prdt_no,1,1) ='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+					}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3105") == 0)/**贷款借据维护 未提取**/
+		  	{
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3201") == 0)/**贷款还本 add_ind =0**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and substr(prdt_no,1,1) ='1' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and substr(prdt_no,1,1) ='3' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3202") == 0)/**贷款还息 add_ind =0**/
+		  	{
+		  		/**faccno**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and (substr(prdt_no,1,1) ='1' or prdt_no is null) ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.faccno,"");
+		  			strcpy(g_jz_super.faccname,"");
+		  			strcpy(g_jz_super.faccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+		  			ret = FindFaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Faccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.faccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+		    		if(sTrace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(sTrace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+		  		}
+		  		/**sacc**/
+		  		memset(&sTrace_log,0x00,sizeof(struct trace_log_c));
+		  		ret = Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%ld and substr(prdt_no,1,1) ='3' ",g_trace_log.trace_no);
+					if(ret)
+					{
+		    		vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+		  		if(ret == 100)
+		  		{
+		  			strcpy(g_jz_super.saccno,"");
+		  			strcpy(g_jz_super.saccname,"");
+		  			strcpy(g_jz_super.saccbank,"");
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d],Trace_log_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+		  			ret = FindSaccName(sTrace_log.ac_no);
+		  			if(ret<0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+						/*find Saccbank*/
+						if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+						{
+							memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+							ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+							if(ret == 100) 
+							{
+								strcpy(g_jz_super.saccbank,"");
+							}
+							else if(ret) 
+							{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+						}
+						else
+						{
+		    			vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+
+					}
+					strcpy(g_jz_super.accountname,g_jz_super.saccname);
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3206") == 0)/**财务划拨**/
+		  	{
+		  		/**同一个ac_no  acc_ind = 1 amt 一正一负.**/
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3319") == 0)/**存款产品转换**/
+		  	{
+		  		/****/
+		  	}
+		  	else if(0)
+		  	{
+		  		
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"3405") == 0)/**卡挂失解挂**/
+		  	{
+		  		/**facc**/
+		  		strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+
+		  		ret = FindFaccName(g_trace_log.ac_no);
+		  		if(ret < 0)
+		  		{
+		  			Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  			continue;
+		  		}
+					/*find Faccbank*/
+					if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+					{
+						memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+						ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+						if(ret == 100) 
+						{
+							strcpy(g_jz_super.faccbank,"");
+						}
+						else if(ret) 
+						{
+								sprintf(acErrMsg, "查找失败! [%d]", ret);
+								WRITEMSG
+								strcpy(g_pub_tx.reply, "D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+					}
+					else
+					{
+		    		vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+					}
+					strcpy(g_jz_super.saccno,"");
+					strcpy(g_jz_super.saccname,"");
+					strcpy(g_jz_super.saccbank,"");
+		  		strcpy(g_jz_super.accountname,g_jz_super.faccname);
+					strcpy(g_jz_super.tranamt,"0.00");
+					strcpy(g_jz_super.mondyb,"零圆整");/**大写**/
+		    	strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  		
+		  	}
+		  	/**大额**/
+		  	else if(strcmp(g_jz_super.ywcode,"5801") == 0 || strcmp(g_jz_super.ywcode,"5802") == 0 || strcmp(g_jz_super.ywcode,"5809") == 0 || strcmp(g_jz_super.ywcode,"5803") == 0 || strcmp(g_jz_super.ywcode,"5804") == 0 ||strcmp(g_jz_super.ywcode,"5839") == 0 || strcmp(g_jz_super.ywcode,"5869") == 0)/**大额支付,录入,复核,发送...大额支付退汇录入.复核 大额来账处理 大额错账处理**/
+		  	{
+		  		/**hv_zfhtr**/
+		  		ret = Hv_zfhtr_Sel(g_pub_tx.reply,&g_hv_zfhtr,"trace_no = %ld and tx_date = %ld ",g_trace_log.trace_no,g_trace_log.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			/**信息空置.**/		  			
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d] Hv_zfhtr_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			ret = FindFaccName(g_hv_zfhtr.pay_ac_no);
+		  			if(ret < 0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+		  			/**facc**/
+		  			strcpy(g_jz_super.faccno,g_hv_zfhtr.pay_ac_no);
+		  			strcpy(g_jz_super.faccname,g_hv_zfhtr.pay_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_hv_zfhtr.pay_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.faccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.faccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/**sacc**/
+		  			strcpy(g_jz_super.saccno,g_hv_zfhtr.cash_ac_no);
+		  			strcpy(g_jz_super.saccname,g_hv_zfhtr.cash_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_hv_zfhtr.cash_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.saccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.saccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/** ???
+		  			strcpy(g_jz_super.saccbank,g_hv_zfhtr.pay_ac_no);
+		  			**/
+		  			/**金额**/
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_hv_zfhtr.tx_amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_hv_zfhtr.tx_amt));/**大写**/
+						/**现转**/
+						if(strcmp(g_hv_zfhtr.yw_type,"10") == 0)
+							strcpy(g_jz_super.dealmode,"现金");
+						else
+							strcpy(g_jz_super.dealmode,"转账");
+						strcpy(g_jz_super.accountname,g_jz_super.faccname);
+						
+		  		}
+		  		
+		  	}
+		  	/**小额**/
+		  	else if(strcmp(g_jz_super.ywcode,"5841") == 0 || strcmp(g_jz_super.ywcode,"5847") == 0 || strcmp(g_jz_super.ywcode,"5864") == 0 || strcmp(g_jz_super.ywcode,"5865") == 0 || strcmp(g_jz_super.ywcode,"5866") == 0)
+		  	{
+		  		/**lv_pkghtr**/
+		  		ret = Lv_pkghtr_Sel(g_pub_tx.reply,&g_lv_pkghtr,"input_trace_no = %ld and in_date = %ld ",g_trace_log.trace_no,g_trace_log.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			/**信息空置.**/		  			
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d] Lv_pkghtr_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			ret = FindFaccName(g_lv_pkghtr.pay_ac_no);
+		  			if(ret < 0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+		  			/**facc**/
+		  			strcpy(g_jz_super.faccno,g_lv_pkghtr.pay_ac_no);
+		  			strcpy(g_jz_super.faccname,g_lv_pkghtr.pay_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.pay_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.faccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.faccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/**sacc**/
+		  			strcpy(g_jz_super.saccno,g_lv_pkghtr.cash_ac_no);
+		  			strcpy(g_jz_super.saccname,g_lv_pkghtr.cash_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.cash_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.saccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.saccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/** 
+		  			strcpy(g_jz_super.saccbank,g_lv_pkghtr.pay_ac_no);
+		  			**/
+		  			/**金额**/
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_lv_pkghtr.tx_amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_lv_pkghtr.tx_amt));/**大写**/
+						/**现转**/
+		    		if(g_trace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(g_trace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+						strcpy(g_jz_super.accountname,g_jz_super.faccname);
+						
+		  		}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"5842") == 0 || strcmp(g_jz_super.ywcode,"5848") == 0 )
+		  	{
+		  		/**lv_pkghtr**/
+		  		ret = Lv_pkghtr_Sel(g_pub_tx.reply,&g_lv_pkghtr,"check_trace_no = %ld and in_date = %ld ",g_trace_log.trace_no,g_trace_log.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			/**信息空置.**/		  			
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d] Lv_pkghtr_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			ret = FindFaccName(g_lv_pkghtr.pay_ac_no);
+		  			if(ret < 0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  				
+		  			}
+		  			/**facc**/
+		  			strcpy(g_jz_super.faccno,g_lv_pkghtr.pay_ac_no);
+		  			strcpy(g_jz_super.faccname,g_lv_pkghtr.pay_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.pay_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.faccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.faccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/**sacc**/
+		  			strcpy(g_jz_super.saccno,g_lv_pkghtr.cash_ac_no);
+		  			strcpy(g_jz_super.saccname,g_lv_pkghtr.cash_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.cash_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.saccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.saccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/** 
+		  			strcpy(g_jz_super.saccbank,g_lv_pkghtr.pay_ac_no);
+		  			**/
+		  			/**金额**/
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_lv_pkghtr.tx_amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_lv_pkghtr.tx_amt));/**大写**/
+						/**现转**/
+		    		if(g_trace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(g_trace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+						strcpy(g_jz_super.accountname,g_jz_super.faccname);
+						
+		  		}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"5840") == 0 || strcmp(g_jz_super.ywcode,"5878") == 0 || strcmp(g_jz_super.ywcode,"5879") == 0 || strcmp(g_jz_super.ywcode,"5880") == 0 )
+		  	{
+		  		/**lv_pkghtr**/
+		  		ret = Lv_pkghtr_Sel(g_pub_tx.reply,&g_lv_pkghtr,"send_trace_no = %ld and in_date = %ld ",g_trace_log.trace_no,g_trace_log.tx_date);
+		  		if(ret == 100)
+		  		{
+		  			/**信息空置.**/		  			
+		  		}
+		  		else if(ret)
+		  		{
+		    		vtcp_log("[%s][%d] Lv_pkghtr_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+						strcpy(g_pub_tx.reply,"D103");
+						Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  		}
+		  		else
+		  		{
+		  			ret = FindFaccName(g_lv_pkghtr.pay_ac_no);
+		  			if(ret < 0)
+		  			{
+		  				Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);
+		  				continue;
+		  			}
+		  			/**facc**/
+		  			strcpy(g_jz_super.faccno,g_lv_pkghtr.pay_ac_no);
+		  			strcpy(g_jz_super.faccname,g_lv_pkghtr.pay_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.pay_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.faccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.faccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/**sacc**/
+		  			strcpy(g_jz_super.saccno,g_lv_pkghtr.cash_ac_no);
+		  			strcpy(g_jz_super.saccname,g_lv_pkghtr.cash_name);
+		  			memset(&g_hv_uniontab,0x00,sizeof(struct hv_uniontab_c));
+		  			ret = Hv_uniontab_Sel(g_pub_tx.reply,&g_hv_uniontab,"or_br_no='%s'",g_lv_pkghtr.cash_opn_br_no);
+		  			if(ret == 100)
+		  			{
+		  				strcpy(g_jz_super.saccbank,"");
+		  			}
+		  			else if(ret)
+		  			{
+		    			vtcp_log("[%s][%d] Hv_uniontab_Sel ret=[%d] \n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		  			}
+		  			else
+		  			{
+		  				strcpy(g_jz_super.saccbank,g_hv_uniontab.br_name_f);
+		  			}
+		  			/** 
+		  			strcpy(g_jz_super.saccbank,g_lv_pkghtr.pay_ac_no);
+		  			**/
+		  			/**金额**/
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_lv_pkghtr.tx_amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_lv_pkghtr.tx_amt));/**大写**/
+						/**现转**/
+		    		if(g_trace_log.ct_ind[0] == '1')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现金");
+		    		}
+		    		else if(g_trace_log.ct_ind[0] == '2')
+		    		{
+		    			strcpy(g_jz_super.dealmode,"转账");
+		    		}
+		    		else
+		    		{
+		    			strcpy(g_jz_super.dealmode,"现转"); /**lxq 用于标志 空**/
+		  			}
+						strcpy(g_jz_super.accountname,g_jz_super.faccname);
+						
+		  		}
+		  	}
+		  	else if(strcmp(g_jz_super.ywcode,"1101") == 0)/**建立客户识别ID**/
+		  	{
+		  		/**待定 提取不到数据..**/
+		  	}
+		  	else
+		  	{
+		    	/**trace_log中 amt 的值..有可能add_ind=0 时 1 add_ind=1时 1000 怎么取**/
+					if(g_trace_log.add_ind[0] == '1')
+					{
+						memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+						sprintf(Tmpbuf,"%17.2f",g_trace_log.amt);
+						pub_base_strpack(Tmpbuf);
+						strcpy(g_jz_super.tranamt,Tmpbuf);
+						strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+						ret = Trace_log_Dec_Upd(g_pub_tx.reply,"tx_date=%ld and trace_no = %ld and add_ind = '0' ",g_trace_log.tx_date,g_trace_log.trace_no);
+						if(ret)
+						{
+		    			vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+						
+						if(ret == 100)
+						{
+							/**付款人信息 只有收款人**/
+							strcpy(g_jz_super.faccno,"");
+							strcpy(g_jz_super.faccname,"");
+							strcpy(g_jz_super.faccbank,"");
+							/**户名 accountname 证件号 idcode 付款人的 mdm_ac_rel.note_no **/
+							strcpy(g_jz_super.accountname,"");
+							strcpy(g_jz_super.idcode,"");
+							strcpy(g_jz_super.savetype,"");
+							/**收款人信息 科目时 acc_name **/
+							strcpy(g_jz_super.saccno,g_trace_log.ac_no);
+							/*find Saccname*/
+							/**(strlen(g_trace_log.ac_no)==10 && g_trace_log.ac_no[0]=='5') 忽略柜员ac_no**/
+							/**in_mst dd_mst td_mst ac_no长度为13or19 ln_mst ac_no is 10or13 **/
+							if((strlen(g_trace_log.ac_no)==10 && g_trace_log.ac_no[0]=='5') ||strlen(g_trace_log.ac_no)==13 || strlen(g_trace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",g_trace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_dd_mst.name);
+									
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_td_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										strcpy(g_jz_super.saccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.saccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(g_trace_log.ac_no)<=9 && strlen(g_trace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",g_trace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.saccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccname,g_com_item.acc_name);
+							}
+							else
+							{
+								vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+							}
+							/*find Saccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+						}
+						else if(ret)
+						{
+		    			vtcp_log("[%s][%d],Trace_log_Fet_Upd=[%d]\n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						else
+						{
+							/**付款人信息**/
+							strcpy(g_jz_super.faccno,sTrace_log.ac_no);
+							/*find Faccname*/
+							if((strlen(sTrace_log.ac_no)==10 && sTrace_log.ac_no[0]=='5') ||strlen(sTrace_log.ac_no)==13 || strlen(sTrace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",sTrace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_dd_mst.name);
+									/**储种信息**/
+									ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_dd_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_dd_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_td_mst.name);
+									/**储种信息**/
+									ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_td_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_td_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										strcpy(g_jz_super.faccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.faccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(sTrace_log.ac_no)<=9 && strlen(sTrace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,sTrace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",sTrace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.faccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccname,g_com_item.acc_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,sTrace_log.ac_no);
+								/**strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;**/
+							}
+							/**户名 accountname 证件号 idcode 付款人的 mdm_ac_rel.note_no **/
+							strcpy(g_jz_super.accountname,g_jz_super.faccname);
+							strcpy(g_jz_super.idcode,g_mdm_ac_rel.note_no);
+							
+							/*find Faccbank*/
+							if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							/**收款人信息**/
+							strcpy(g_jz_super.saccno,g_trace_log.ac_no);
+							/*find Saccname*/
+							if((strlen(g_trace_log.ac_no)==10 && g_trace_log.ac_no[0]=='5') ||strlen(g_trace_log.ac_no)==13 || strlen(g_trace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",g_trace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_dd_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_td_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										
+										strcpy(g_jz_super.saccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.saccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(g_trace_log.ac_no)<=9 && strlen(g_trace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",g_trace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.saccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccname,g_com_item.acc_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								/**strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;**/
+							}
+							/*find Saccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+						}
+					}
+					else
+					{
+						ret = Trace_log_Dec_Upd(g_pub_tx.reply,"tx_date=%ld and trace_no = %ld and add_ind = '1' ",g_trace_log.tx_date,g_trace_log.trace_no);
+						if(ret)
+						{
+		    			vtcp_log("[%s][%d],Trace_log_Dec_Upd=[%d]\n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						ret = Trace_log_Fet_Upd(&sTrace_log,g_pub_tx.reply);
+						
+						if(ret == 100)
+						{
+							memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+							sprintf(Tmpbuf,"%17.2f",g_trace_log.amt);
+							pub_base_strpack(Tmpbuf);
+							strcpy(g_jz_super.tranamt,Tmpbuf);
+							strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(g_trace_log.amt));/**大写**/
+							/**add_ind=0 存在 add_ind=1 不存在.**/
+							/**付款人信息**/
+							strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+							/*find faccname*/
+							if((strlen(g_trace_log.ac_no)==10 && g_trace_log.ac_no[0]=='5') ||strlen(g_trace_log.ac_no)==13 || strlen(g_trace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",g_trace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_dd_mst.name);
+									/**储种信息**/
+									ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_dd_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_dd_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+									
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_td_mst.name);
+									/**储种信息**/
+									ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_td_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_td_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										strcpy(g_jz_super.faccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.faccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(g_trace_log.ac_no)<=9 && strlen(g_trace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",g_trace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.faccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccname,g_com_item.acc_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								/**strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;**/
+							}
+							/*find faccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								vtcp_log("[%s][%d] zylseeee1",__FILE__,__LINE__);
+								strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							/**户名 accountname 证件号 idcode 付款人的 mdm_ac_rel.note_no **/
+							strcpy(g_jz_super.accountname,g_jz_super.faccname);
+							strcpy(g_jz_super.idcode,g_mdm_ac_rel.note_no);
+							/**收款人信息 不存在**/
+        	
+							strcpy(g_jz_super.saccno,"");
+							strcpy(g_jz_super.saccname,"");
+							strcpy(g_jz_super.saccbank,"");
+							vtcp_log("[%s][%d] zylseeee1.2",__FILE__,__LINE__);
+						}
+						else if(ret)
+						{
+		    			vtcp_log("[%s][%d],Trace_log_Sel=[%d]\n",__FILE__,__LINE__,ret);
+							strcpy(g_pub_tx.reply,"D103");
+							Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+						}
+						else
+						{
+							memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+							sprintf(Tmpbuf,"%17.2f",sTrace_log.amt);
+							pub_base_strpack(Tmpbuf);
+							strcpy(g_jz_super.tranamt,Tmpbuf);
+							vtcp_log("[%s][%d] zylseeee1.3",__FILE__,__LINE__);
+							strcpy(g_jz_super.mondyb,(char *)pub_rpt_pcask(sTrace_log.amt));/**大写**/
+							/**付款人信息**/
+							strcpy(g_jz_super.faccno,g_trace_log.ac_no);
+							/*find Faccname*/
+							if((strlen(g_trace_log.ac_no)==10 && g_trace_log.ac_no[0]=='5') ||strlen(g_trace_log.ac_no)==13 || strlen(g_trace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",g_trace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_dd_mst.name);
+									/**储种信息**/
+									ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_dd_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_dd_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_td_mst.name);
+									/**储种信息**/
+									ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+									if(ret)
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(g_td_parm.cif_type[0] == '1')
+									{
+										strcpy(g_jz_super.savetype,g_td_parm.title);
+									}
+									else
+									{
+										strcpy(g_jz_super.savetype,"");
+									}
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.faccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										strcpy(g_jz_super.faccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.faccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(g_trace_log.ac_no)<=9 && strlen(g_trace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",g_trace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.faccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccname,g_com_item.acc_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,g_trace_log.ac_no);
+								/**strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;**/
+							}
+							/*find Faccbank*/
+							if(strlen(g_trace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", g_trace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.faccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,g_trace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							/**户名 accountname 证件号 idcode 付款人的 mdm_ac_rel.note_no **/
+							strcpy(g_jz_super.accountname,g_jz_super.faccname);
+							strcpy(g_jz_super.idcode,g_mdm_ac_rel.note_no);
+							/**收款人信息**/
+							strcpy(g_jz_super.saccno,sTrace_log.ac_no);
+							/*find Saccname*/
+							if((strlen(sTrace_log.ac_no)==10 && sTrace_log.ac_no[0]=='5') ||strlen(sTrace_log.ac_no)==13 || strlen(sTrace_log.ac_no)==19)
+							{
+								memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+								ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",sTrace_log.ac_no);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+								ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		    				if(ret)
+		    				{
+		    					vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+									strcpy(g_pub_tx.reply,"D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+		    				if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		    				{
+		    					memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+									ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_dd_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		    				{
+		    					memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+									ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_td_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		    				{
+		    					memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+									ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									strcpy(g_jz_super.saccname,g_ln_mst.name);
+		    				}
+		    				else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		    				{
+		    					memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+									ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+									if(ret == 100) 
+									{
+										sprintf(acErrMsg, "查找客户号、户名失败!");
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "M003");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									else if(ret) 
+									{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+									}
+									if(strcmp(g_jz_super.ywcode,"2502") == 0)
+									{
+										/**内部账记账时,付款人收款人名称,放付款方收款方科目号**/
+										memset(&g_in_parm,0x00,sizeof(struct in_parm_c));
+										ret = In_parm_Sel(g_pub_tx.reply,&g_in_parm,"prdt_no = %s",g_in_mst.prdt_no);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										memset(&g_com_item,0x00,sizeof(struct com_item_c));
+										ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_hrt = %s",g_in_parm.acc_hrt);
+										if(ret == 100)
+										{
+											
+										}
+										else if(ret)
+										{
+											sprintf(acErrMsg, "查找失败! [%d]", ret);
+											WRITEMSG
+											strcpy(g_pub_tx.reply, "D103");
+											Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+										}
+										strcpy(g_jz_super.saccname,g_com_item.acc_no);
+									}
+									else
+									{
+										strcpy(g_jz_super.saccname,g_in_mst.name);
+									}
+		    				}
+		    				else
+		    				{
+		    					vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+									strcpy(g_pub_tx.reply, "P410");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+		    				}
+							}
+							else if(strlen(sTrace_log.ac_no)<=9 && strlen(sTrace_log.ac_no) >=5)
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,sTrace_log.ac_no);
+								memset(&g_com_item,0x00,sizeof(struct com_item_c));
+								ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",sTrace_log.ac_no);
+								if(ret == 100)
+								{
+									strcpy(g_jz_super.saccname,"");
+								}
+								else if(ret)
+								{
+									sprintf(acErrMsg, "查找失败! [%d]", ret);
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "D103");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccname,g_com_item.acc_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,sTrace_log.ac_no);
+								/**strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								**/
+							}
+							/*find Saccbank*/
+							if(strlen(sTrace_log.opn_br_no) == 5)/**晋中商行 5位开户行号**/
+							{
+								memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+								ret = Com_branch_Sel(g_pub_tx.reply, &g_com_branch, "br_no='%s'", sTrace_log.opn_br_no);
+								if(ret == 100) 
+								{
+									sprintf(acErrMsg, "Com_branch_Sel失败!");
+									WRITEMSG
+									strcpy(g_pub_tx.reply, "M003");
+									Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								else if(ret) 
+								{
+										sprintf(acErrMsg, "查找失败! [%d]", ret);
+										WRITEMSG
+										strcpy(g_pub_tx.reply, "D103");
+										Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+								}
+								strcpy(g_jz_super.saccbank,g_com_branch.br_name);
+							}
+							else
+							{
+		    				vtcp_log("[%s][%d] opn_br_no=[%s] \n",__FILE__,__LINE__,sTrace_log.opn_br_no);
+								strcpy(g_pub_tx.reply,"D103");
+								Jz_GetDateErr(g_trace_log.tx_date,g_trace_log.trace_no,ret);continue;
+							}
+							
+						}
+						Trace_log_Clo_Upd();
+					}
+				}
+				
+				/**将读取到的数据组合成 superstr**/
+				vtcp_log("[%s][%d] zylseeee1.25",__FILE__,__LINE__);
+				sprintf(superstr,"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n",g_jz_super.uuid,g_jz_super.trandate,g_jz_super.areano,g_jz_super.tellerid,g_jz_super.serseqno,g_jz_super.ywcode,g_jz_super.tranamt,g_jz_super.faccno,g_jz_super.faccname,g_jz_super.faccbank,g_jz_super.saccno,g_jz_super.saccname,g_jz_super.saccbank,g_jz_super.mondyb,g_jz_super.accountname,g_jz_super.idcode,g_jz_super.savetype,g_jz_super.businesssort,g_jz_super.dealmode,g_jz_super.warrantname,g_jz_super.unit,g_jz_super.count,g_jz_super.startno,g_jz_super.endno,g_jz_super.flatcost,g_jz_super.poundage,g_jz_super.accode,g_jz_super.isup,g_jz_super.state);
+				vtcp_log("[%s][%d] [%s]",__FILE__,__LINE__,superstr);
+				/**将superstr写入文件 /home/devht/data/filename filenames取日期,时间,jz_super组合**/
+				
+				fputs(superstr,fp);
+				vtcp_log("[%s][%d] zylseeee1.27",__FILE__,__LINE__);
+
+		}
+		Trace_log_Clo_Sel();
+		
+		vtcp_log("[%s][%d] zylseeee1.28",__FILE__,__LINE__);
+		/**循环读取结束 将最后一条 trace_log.tx_date trace_log.trace_no filename 写入配置文件**/
+		/**移至文件尾,写记录**/
+		fseek(pz,0l,2);
+		memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+		
+		sprintf(Tmpbuf,"%08d|%08d|%s\n",tmpdate,tmpno,filename);
+		fputs(Tmpbuf,pz);
+		vtcp_log("[%s][%d] zylseeee1.29",__FILE__,__LINE__);
+	}
+	else
+	{
+		vtcp_log("[%s][%d]文件读取失败..",__FILE__,__LINE__ );
+		strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;
+	}
+	
+	fclose(fp);
+	fclose(pz);
+
+	/**打开远程连接**/
+	dbl_open();
+	/**得到filename **/
+	vtcp_log("[%s][%d] filename=[%s]",__FILE__,__LINE__,filename);
+	/**读取 /home/devht/data/filename 中数据 **/
+	if( (fp = fopen(filename,"ab+")) == NULL)
+	{
+		vtcp_log("[%s][%d]文件读取失败..",__FILE__,__LINE__ );
+		strcpy(g_pub_tx.reply,"L206");
+		goto ErrExit;
+	}
+	/**每读一行 以|分割开,置于 jz_super 结构体中.**/
+	memset(superstr,0x00,sizeof(superstr));
+	fgets(superstr,1024,fp);
+	while(1)
+	{
+
+		if(strlen(superstr) > 28)
+		{
+			/**分割.**/
+			vtcp_log("[%s][%d] [%s]",__FILE__,__LINE__,superstr);
+			pub_base_cut_str(superstr,g_jz_super.uuid,          "|",1);
+			pub_base_cut_str(superstr,g_jz_super.trandate,      "|",2);
+			pub_base_cut_str(superstr,g_jz_super.areano,        "|",3);
+			pub_base_cut_str(superstr,g_jz_super.tellerid,      "|",4);
+			pub_base_cut_str(superstr,g_jz_super.serseqno,      "|",5);
+			pub_base_cut_str(superstr,g_jz_super.ywcode,        "|",6);
+			pub_base_cut_str(superstr,g_jz_super.tranamt,       "|",7);
+			pub_base_cut_str(superstr,g_jz_super.faccno,        "|",8);
+			pub_base_cut_str(superstr,g_jz_super.faccname,      "|",9);
+			pub_base_cut_str(superstr,g_jz_super.faccbank,      "|",10);
+			pub_base_cut_str(superstr,g_jz_super.saccno,        "|",11);
+			pub_base_cut_str(superstr,g_jz_super.saccname,      "|",12);
+			pub_base_cut_str(superstr,g_jz_super.saccbank,      "|",13);
+			pub_base_cut_str(superstr,g_jz_super.mondyb,        "|",14);
+			pub_base_cut_str(superstr,g_jz_super.accountname,   "|",15);
+			pub_base_cut_str(superstr,g_jz_super.idcode,        "|",16);
+			pub_base_cut_str(superstr,g_jz_super.savetype,      "|",17);
+			pub_base_cut_str(superstr,g_jz_super.businesssort,  "|",18);
+			pub_base_cut_str(superstr,g_jz_super.dealmode,      "|",19);
+			pub_base_cut_str(superstr,g_jz_super.warrantname,   "|",20);
+			pub_base_cut_str(superstr,g_jz_super.unit,          "|",21);
+			pub_base_cut_str(superstr,g_jz_super.count,         "|",22);
+			pub_base_cut_str(superstr,g_jz_super.startno,       "|",23);
+			pub_base_cut_str(superstr,g_jz_super.endno,         "|",24);
+			pub_base_cut_str(superstr,g_jz_super.flatcost,      "|",25);
+			pub_base_cut_str(superstr,g_jz_super.poundage,      "|",26);
+			pub_base_cut_str(superstr,g_jz_super.accode,        "|",27);
+			pub_base_cut_str(superstr,g_jz_super.isup,          "|",28);
+			pub_base_cut_str(superstr,g_jz_super.state,         "|",29);
+			/**将数据插入远程数据库**/
+			EXEC SQL insert into contrastcoredata values(:g_jz_super.uuid,:g_jz_super.trandate,:g_jz_super.areano,:g_jz_super.tellerid,	:g_jz_super.serseqno,:g_jz_super.tranamt,:g_jz_super.state,:g_jz_super.ywcode,:g_jz_super.faccno,:g_jz_super.faccname,:g_jz_super.faccbank,:g_jz_super.saccno,:g_jz_super.saccname,:g_jz_super.saccbank,:g_jz_super.mondyb,:g_jz_super.accountname,:g_jz_super.idcode,	:g_jz_super.startno,:g_jz_super.endno,:g_jz_super.flatcost,:g_jz_super.poundage,:g_jz_super.isup,:g_jz_super.accode,:g_jz_super.savetype,:g_jz_super.businesssort,:g_jz_super.dealmode,:g_jz_super.warrantname,:g_jz_super.count,:g_jz_super.unit);
+			if (sqlca.sqlcode)
+			{
+				sprintf(acErrMsg,"insert error! %d",sqlca.sqlcode);
+				WRITEMSG
+				strcpy (g_pub_tx.reply,"D103");
+				WRITEMSG
+				Jz_InsDateErr(g_jz_super.trandate,g_jz_super.serseqno,sqlca.sqlcode);
+				continue;
+			}
+		}
+		if(fgets(superstr,1024,fp) == NULL)
+		{
+			break;
+		}
+		
+	}
+	
+	dbl_commit();
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"insert error! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (g_pub_tx.reply,"D103");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	/**删除文件**/
+	memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+	vtcp_log("[%s][%d] filename=[%s]",__FILE__,__LINE__,filename);
+	sprintf(Tmpbuf,"rm -f %s",filename);
+	ret = system(Tmpbuf);
+	if(ret)
+	{
+		vtcp_log("command error ret=[%d]\n",ret);
+	}
+	
+OkExit:
+  strcpy(g_pub_tx.reply,"0000");
+  vtcp_log("数据提取成功! " );
+  set_zd_data("0120",g_pub_tx.reply);
+  return 0;
+    
+ErrExit:
+  vtcp_log("数据提取失败 [%s]",g_pub_tx.reply);
+  set_zd_data("0120",g_pub_tx.reply);
+	dbl_rollback();
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"insert error! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (g_pub_tx.reply,"D103");
+		WRITEMSG
+	}
+  return 1;
+}
+
+/** pubf_base_file.c中已经定义
+pub_base_cut_str( char *sstr,char *dstr,char *mode,int num )
+**/
+
+
+
+/**暂用下面的值..需要改为读 .profile.**/
+int dbl_open()
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[256];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	strcpy(sql_username,"archive");
+	strcpy(sql_passwd,"password");
+	strcpy(sql_dbname,"  (DESCRIPTION =\
+    (ADDRESS_LIST =\
+      (ADDRESS = (PROTOCOL = TCP)(HOST = 172.168.99.206)(PORT = 1521))\
+    )\
+    (CONNECT_DATA =\
+      (SERVER = DEDICATED)\
+      (SID = arch)\
+    )\
+  )\
+");
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	
+	EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+	
+	if(sqlca.sqlcode)
+	{
+		printf("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		vtcp_log("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		return -1;
+	}
+	return (0);
+}
+int dbl_close()
+{
+	return(0);
+}
+
+int dbl_commit()
+{
+	EXEC SQL COMMIT WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "保存事务错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}
+
+int dbl_rollback()
+{
+	EXEC SQL ROLLBACK WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "回滚事务错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}
+
+
+/**faccname idcode savetype **/
+int FindFaccName(char * ac_no)
+{
+	int ret = 0;
+	struct prdt_ac_id_c sPrdtacid;
+	struct com_item_c g_com_item;
+	memset(&g_com_item,0x00,sizeof(struct com_item_c));
+	memset(&sPrdtacid,0x00,sizeof(struct prdt_ac_id_c));
+	char *name;
+	name = (char*)malloc(60);
+	/**账号 10位 9开头 是柜员 **/
+	if((strlen(ac_no)==10 && ac_no[0]=='5') ||strlen(ac_no)==13 || strlen(ac_no)==19)
+	{
+		memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+		ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",ac_no);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.faccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		strcpy(g_jz_super.idcode,g_mdm_ac_rel.id_no);
+		ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.faccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		{
+			memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+			ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_dd_mst.name);
+			/**储种信息**/
+			ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_dd_parm.title);
+
+		}
+		else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		{
+			memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+			ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_td_mst.name);
+			/**储种信息**/
+			ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_td_parm.title);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		{
+			memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+			ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_ln_mst.name);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		{
+			memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+			ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_in_mst.name);
+		}
+		else
+		{
+			vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+			strcpy(g_pub_tx.reply, "P410");
+			goto ErrExit;
+		}
+	}
+	else if(strlen(ac_no)<=9 && strlen(ac_no) >=5)
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		memset(&g_com_item,0x00,sizeof(struct com_item_c));
+		ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",ac_no);
+		if(ret == 100)
+		{
+			strcpy(name,"");
+		}
+		else if(ret)
+		{
+			sprintf(acErrMsg, "查找失败! [%d]", ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+		strcpy(name,g_com_item.acc_name);
+	}
+	else
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		/**strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;**/
+	}
+	strcpy(g_jz_super.faccname,name);
+	
+OkExit:
+	return 0;
+ErrExit:
+	return -1;	
+
+	
+}
+
+/**faccname idcode savetype 余额**/
+int FindFaccName_2406(char * ac_no)
+{
+	int ret = 0;
+	double bal = 0.0;
+	char Tmpbuf[256];
+	struct prdt_ac_id_c sPrdtacid;
+	struct com_item_c g_com_item;
+	memset(&g_com_item,0x00,sizeof(struct com_item_c));
+	memset(&sPrdtacid,0x00,sizeof(struct prdt_ac_id_c));
+	char *name;
+	name = (char*)malloc(60);
+	/**账号 10位 9开头 是柜员 **/
+	if((strlen(ac_no)==10 && ac_no[0]=='5') ||strlen(ac_no)==13 || strlen(ac_no)==19)
+	{
+		memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+		ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",ac_no);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.faccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		strcpy(g_jz_super.idcode,g_mdm_ac_rel.id_no);
+		ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.faccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		{
+			memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+			ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_dd_mst.name);
+			bal = g_dd_mst.bal;
+			/**储种信息**/
+			ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_dd_parm.title);
+
+		}
+		else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		{
+			memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+			ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_td_mst.name);
+			bal = g_td_mst.bal;
+			/**储种信息**/
+			ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_td_parm.title);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		{
+			memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+			ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_ln_mst.name);
+			bal = g_ln_mst.bal;
+		}
+		else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		{
+			memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+			ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_in_mst.name);
+			bal = g_in_mst.bal;
+		}
+		else
+		{
+			vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+			strcpy(g_pub_tx.reply, "P410");
+			goto ErrExit;
+		}
+	}
+	else if(strlen(ac_no)<=9 && strlen(ac_no) >=5)
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		memset(&g_com_item,0x00,sizeof(struct com_item_c));
+		ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",ac_no);
+		if(ret == 100)
+		{
+			strcpy(name,"");
+		}
+		else if(ret)
+		{
+			sprintf(acErrMsg, "查找失败! [%d]", ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+		strcpy(name,g_com_item.acc_name);
+	}
+	else
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		/**strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;**/
+	}
+	memset(Tmpbuf,0x00,sizeof(Tmpbuf));
+	sprintf(Tmpbuf,"%17.2f",bal);
+	pub_base_strpack(Tmpbuf);
+	strcpy(g_jz_super.tranamt,Tmpbuf);
+	strcpy(g_jz_super.faccname,name);
+	
+OkExit:
+	return 0;
+ErrExit:
+	return -1;	
+
+	
+}
+
+int FindSaccName(char * ac_no)
+{
+	int ret = 0;
+	struct prdt_ac_id_c sPrdtacid;
+	struct com_item_c g_com_item;
+	memset(&g_com_item,0x00,sizeof(struct com_item_c));
+	memset(&sPrdtacid,0x00,sizeof(struct prdt_ac_id_c));
+	char *name;
+	name = (char*)malloc(60);
+	/**账号 10位 9开头 是柜员 **/
+	if((strlen(ac_no)==10 && ac_no[0]=='5') ||strlen(ac_no)==13 || strlen(ac_no)==19)
+	{
+		memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+		ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",ac_no);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.saccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.saccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		{
+			memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+			ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_dd_mst.name);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		{
+			memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+			ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_td_mst.name);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		{
+			memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+			ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_ln_mst.name);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		{
+			memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+			ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_in_mst.name);
+		}
+		else
+		{
+			vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+			strcpy(g_pub_tx.reply, "P410");
+			goto ErrExit;
+		}
+	}
+	else if(strlen(ac_no)<=9 && strlen(ac_no) >=5)
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		memset(&g_com_item,0x00,sizeof(struct com_item_c));
+		ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",ac_no);
+		if(ret == 100)
+		{
+			strcpy(name,"");
+		}
+		else if(ret)
+		{
+			sprintf(acErrMsg, "查找失败! [%d]", ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+		strcpy(name,g_com_item.acc_name);
+	}
+	else
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		/**strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;**/
+	}
+	strcpy(g_jz_super.saccname,name);
+OkExit:
+	return 0;
+ErrExit:
+	return -1;	
+
+	
+}
+
+/**用于2101 saccname idcode savetype**/
+int FindSaccName_2101(char * ac_no)
+{
+	int ret = 0;
+	struct prdt_ac_id_c sPrdtacid;
+	struct com_item_c g_com_item;
+	memset(&g_com_item,0x00,sizeof(struct com_item_c));
+	memset(&sPrdtacid,0x00,sizeof(struct prdt_ac_id_c));
+	char *name;
+	name = (char*)malloc(60);
+	/**账号 10位 9开头 是柜员 **/
+	if((strlen(ac_no)==10 && ac_no[0]=='5') ||strlen(ac_no)==13 || strlen(ac_no)==19)
+	{
+		memset(&g_mdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+		ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no = '%s'",ac_no);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.saccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Mdm_ac_rel_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		strcpy(g_jz_super.idcode,g_mdm_ac_rel.id_no);
+		ret = Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdtacid,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+		if(ret == 100)
+		{
+			strcpy(g_jz_super.saccname,"");
+			goto OkExit;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d],Prdt_ac_id_Sel ret=[%d]\n",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D103");
+			goto ErrExit;
+		}
+		if(sPrdtacid.ac_id_type[0] == '1')/**活期**/
+		{
+			memset(&g_dd_mst,0x00,sizeof(struct dd_mst_c));
+			ret = Dd_mst_Sel(g_pub_tx.reply, &g_dd_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_dd_mst.name);
+			/**储种信息**/
+			ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no = '%s'",g_dd_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_dd_parm.title);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '2')/**定期**/
+		{
+			memset(&g_td_mst,0x00,sizeof(struct td_mst_c));
+			ret = Td_mst_Sel(g_pub_tx.reply, &g_td_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_td_mst.name);
+			/**储种信息**/
+			ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no = '%s'",g_td_mst.prdt_no);
+			if(ret == 100 )
+			{
+				strcpy(g_jz_super.savetype,"");
+			}
+			else if(ret)
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(g_jz_super.savetype,g_td_parm.title);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '3')/**贷款**/
+		{
+			memset(&g_ln_mst,0x00,sizeof(struct ln_mst_c));
+			ret = Ln_mst_Sel(g_pub_tx.reply, &g_ln_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_ln_mst.name);
+		}
+		else if(sPrdtacid.ac_id_type[0] == '9')/**内部**/
+		{
+			memset(&g_in_mst,0x00,sizeof(struct in_mst_c));
+			ret = In_mst_Sel(g_pub_tx.reply, &g_in_mst, "ac_id=%ld", g_mdm_ac_rel.ac_id);
+			if(ret == 100) 
+			{
+				
+			}
+			else if(ret) 
+			{
+					sprintf(acErrMsg, "查找失败! [%d]", ret);
+					WRITEMSG
+					strcpy(g_pub_tx.reply, "D103");
+					goto ErrExit;
+			}
+			strcpy(name,g_in_mst.name);
+		}
+		else
+		{
+			vtcp_log("[%s][%d],账户类型错误 ac_id_type=[%s]",__FILE__,__LINE__,sPrdtacid.ac_id_type);
+			strcpy(g_pub_tx.reply, "P410");
+			goto ErrExit;
+		}
+	}
+	else if(strlen(ac_no)<=9 && strlen(ac_no) >=5)
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		memset(&g_com_item,0x00,sizeof(struct com_item_c));
+		ret = Com_item_Sel(g_pub_tx.reply,&g_com_item,"acc_no = %s",ac_no);
+		if(ret == 100)
+		{
+			strcpy(name,"");
+		}
+		else if(ret)
+		{
+			sprintf(acErrMsg, "查找失败! [%d]", ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+		strcpy(name,g_com_item.acc_name);
+	}
+	else
+	{
+		vtcp_log("[%s][%d] ac_no=[%s] \n",__FILE__,__LINE__,ac_no);
+		/**strcpy(g_pub_tx.reply,"D103");
+		goto ErrExit;**/
+	}
+	strcpy(g_jz_super.saccname,name);
+OkExit:
+	return 0;
+ErrExit:
+	return -1;	
+
+	
+}
+
+/**文件超大处理 配置文件不应使用Linux的处理..会重复提取许多数据**/
+int EtcFileBiggerOper(char *filename)
+{
+	char sNewName[128];
+	FILE *fp1,*fp2;
+	char str[1024];
+	char strtmp[1024];
+	memset(sNewName,0x00,sizeof(sNewName));
+	memset(str,0x00,sizeof(str));
+	memset(strtmp,0x00,sizeof(strtmp));
+	fp1 = fopen(filename,"ab+");
+	if(fp1==NULL)
+	{
+		vtcp_log("Can not open %s",filename);
+		return(-1);
+	}
+	/****/
+	strcpy(sNewName,filename);
+	strcat(sNewName,".tmp");
+	fp2 = fopen(sNewName,"ab+");
+	if(fp2==NULL)
+	{
+		vtcp_log("Can not open %s",sNewName);
+		return(-1);
+		
+	}
+	fgets(str,1024,fp1);
+	while(1)
+	{
+		if(strlen(str) > 0)
+		{
+			strcpy(strtmp,str);
+		}
+		if(fgets(str,1024,fp1) == NULL)
+		{
+			break;
+		}
+	}
+	
+	fputs(strtmp,fp2);
+	
+	fclose(fp1);
+	fclose(fp2);
+	memset(strtmp,0x00,sizeof(strtmp));
+	strcpy(strtmp,filename);
+	strcat(strtmp,".old");
+	/** rename后.原文件不存在了.**/
+	rename(filename,strtmp);
+	memset(strtmp,0x00,sizeof(strtmp));
+	strcpy(strtmp,filename);
+	rename(sNewName,strtmp);
+	
+	return 0;
+}
+
+
+/**数据提取中.goto ErrExit 改为.将本条提取错误的记录记入某个文件./home/devht/data/jz_err_20110420.txt**/
+int Jz_GetDateErr(long tx_date,long trace_no,int ret)
+{
+	FILE * fp = NULL;
+	long sys_date = 0;
+	
+	char errfilename[64];
+	char sStr[128];
+	memset(sStr,0x00,sizeof(sStr));
+	memset(errfilename,0x00,sizeof(errfilename));
+	sys_date = g_pub_tx.tx_date;
+	sprintf(errfilename,"/home/devht/data/jz_geterr_%8d",sys_date);
+	fp = fopen(errfilename,"ab+");
+	if(fp==NULL)
+	{
+		vtcp_log("Can not open %s",errfilename);
+		return(-1);
+	}
+	sprintf(sStr,"%08d|%6d|%d\n",tx_date,trace_no,ret);
+	fputs(sStr,fp);
+	fclose(fp);
+	return 0;
+}
+
+int Jz_InsDateErr(char * tx_date,char * trace_no,int ret)
+{
+	FILE * fp = NULL;
+	long sys_date = 0;
+	
+	char errfilename[64];
+	char sStr[128];
+	memset(sStr,0x00,sizeof(sStr));
+	memset(errfilename,0x00,sizeof(errfilename));
+	sys_date = g_pub_tx.tx_date;
+	sprintf(errfilename,"/home/devht/data/jz_inserr_%8d",sys_date);
+	fp = fopen(errfilename,"ab+");
+	if(fp==NULL)
+	{
+		vtcp_log("Can not open %s",errfilename);
+		return(-1);
+	}
+	sprintf(sStr,"%s|%s|%d\n",tx_date,trace_no,ret);
+	fputs(sStr,fp);
+	fclose(fp);
+	return 0;
+}

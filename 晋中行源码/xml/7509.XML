@@ -1,0 +1,164 @@
+
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7509 角色交接"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD92=#FD_TLRNO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7509                          角色交接)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9632)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="7" COL="10">
+  <ITEM LINE="3" COL="20" TYPE="%-10s" FUNCTIONS="T(机 构 号:)"/>
+  <ITEM LINE="5" COL="20" TYPE="%-10s" FUNCTIONS="T(柜 员 号:)"/>
+  <ITEM LINE="6" COL="20" TYPE="%-10s" FUNCTIONS="T(对方柜员:)"/>
+  <ITEM LINE="7" COL="20" TYPE="%-10s" FUNCTIONS="T(对方密码:)"/>
+  <ITEM NAME="#BRNO"  INPUT="TEXT" LINE="3" COL="30" ENABLE="false"  TYPE="%-5s" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#TLRNO" INPUT="TEXT" LINE="5" COL="30" TYPE="%4d" FUNCTIONS="T($TLRNO)">
+   <ONLOSTFOCUS>"{
+			dim @baktxno as string;
+			dim @filename as string;
+			dim @to_tel as string;
+			dim @tel_name as string;
+			dim @sts as string;
+			dim @tota as string;
+			dim @f as file;
+			dim @line as string;
+			dim @selid as number;
+			dim @lvl as string;
+			@filename='../tmp/D12_'+#TLRNO+'.txt';
+			@baktxno=$TXNO;
+			$TXNO='9630';
+                        if($TLRNO!=#TLRNO)
+                        {
+                         showmsg('不可使用其它柜员！');
+                         return(false);
+                        }
+			commsend_001();	  
+			@tota=callserver();
+			savefiletxt(@filename,@tota);
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			$TXNO=@baktxno;
+			if(len(@tota) &gt; 0)
+			{
+				@f=openfile(@filename,'r');
+				if(@f &lt; 0)
+				{
+					showmsg('打开回传文件错误就');
+					return(false);
+				}
+				list_init(7,28,8,10);
+				list_setcolcnt(1);
+				list_setcol(0,'角 色 号',10);
+				while(true)
+				{
+					@line=readline(@f);
+					if(@line!='')
+					{
+						@to_tel=strfld(@line,'|',0);
+						list_additem('',@to_tel);
+					}
+					else
+					{
+							break;
+					}
+				}
+                                closefile(@f);
+				while(1){
+					@selid=list_work();
+					if(@selid &gt;= 0){
+						break;
+					}
+				}
+				if(@selid &lt; 0)
+				{
+						list_del();
+						refresh();
+				}
+				else
+				{
+				@selid=0;
+				@selid=list_getselid();
+				$FD91=list_gettext(@selid,0);
+				list_del();
+				refresh();
+			}
+			}
+                        else
+                        if(substr($TLRNO,2,2) == '98' or substr($TLRNO,2,2) == '01' or substr($TLRNO,2,2) == '02' or substr($TLRNO,0,4) == '1531' or substr($TLRNO,0,4) == '0403' or substr($TLRNO,0,4) == '0006' or substr($TLRNO,0,4) == '1703')
+                        {
+			 if(msgbox('是否要交接柜员角色!'+chr(10)+'-------------------','提示','yes|no')!=0)
+                           {
+                              return(false);
+                           }
+		         $FD91=$TLRNO;
+                        }
+			else
+			{
+			 showmsg('该柜员没有可交接的角色!');
+				return(false);
+			}
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FD_TLRNO" INPUT="TEXT" LINE="6" COL="30" TYPE="%4d" FUNCTIONS="F()T()">
+  "{
+   if(substr($TLRNO,0,2) != substr(#FD_TLRNO,0,2) )
+    {
+      showmsg('非本机构柜员!'+#FD_TLRNO);
+      return(false);
+    }
+  }"
+  </ITEM>
+  <ITEM NAME="#PASSWD" INPUT="TEXT"  TYPE="%6d" LINE="7" COL="30" FUNCTIONS="T()i()V(NB)">
+  <ONLOSTFOCUS>"{
+	dim @baktxno as string;
+ 
+	@baktxno=$TXNO;
+	$TXNO='9988';
+        $FD92=#FD_TLRNO;
+	commsend_001();	  
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	$TXNO=@baktxno;
+        showmsg('回车继续!');
+    
+  }"</ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+
+

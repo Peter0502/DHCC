@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1815   借记回执业务复核)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+	<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-52s" FUNCTIONS="T( 1815                        借记回执业务复核)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1815)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(借记回执业务复核)"/>
+	<ITEM LINE="5"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(原交易序号:)"/>
+	<ITEM NAME="#O_TXNO"  LINE="5" COL="16"  TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()"/>
+	<ITEM LINE="5"   COL="40"   TYPE="%-11s"  FUNCTIONS="T(原交易日期:)"/>
+	<ITEM NAME="#O_TXDATE"  LINE="5" COL="52"  TYPE="%-8s" INPUT="TEXT"  FUNCTIONS="T()V(NB)D()"/>
+	<ITEM LINE="6" COL="4"  TYPE="%-11s" FUNCTIONS="T(原发起行号:)"/>
+	<ITEM LINE="6" COL="16"  TYPE="%-12s" NAME="#O_BK_NO"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()L(12,12)"/>
+	<ITEM LINE="6" COL="40"  TYPE="%-11s" FUNCTIONS="T(业务  标志:)"/>
+	<ITEM LINE="6" COL="52" TYPE="%-2s" NAME="#BizFlag" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="00" TITLE="普通借记"/>
+			<OPTION VALUE="01" TITLE="定期借记"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD44 = #O_TXNO;      //原交易序号
+			$FD61 = #O_TXDATE;    //原委托日期
+			$FD59 = #O_BK_NO;      //原发起行号
+			$FD64 = #BizFlag;      //业务标志
+			$FD29 = '1224';
+			$FD16 = '1113';
+			$FD18 = 'pbp';
+			callagnpbp();
+			
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#XYH =delspace($FD74);
+			#PAY_BK_NO = $FD59;
+			#PAY_NM = $FD26;
+			#ACC_NM = $FD27;
+			#OPER_TYPE = $FD35;
+			
+			enable(#PAY_BK_NO, false);
+			enable(#PAY_NM, false);
+			enable(#ACC_NM, false);
+			enable(#XYH, false);
+			enable(#OPER_TYPE,false);
+			refresh();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="8"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(收款人账号:)"/>
+	<ITEM NAME="#ACC_ACT_NO" LINE="8" COL="16" INPUT="TEXT"  TYPE="%-32s"  FUNCTIONS="T()">
+	<ONLOSTFOCUS>
+		"{
+			dim @sTr as string;
+			@sTr = $FD83;
+			if(delspace(@sTr) != #ACC_ACT_NO)
+			{
+				showmsg('收款人账号复核失败');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="9"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(收款人名称:)"/>
+	<ITEM NAME="#ACC_NM" LINE="9" COL="16" INPUT="TEXT"  TYPE="%-60s"  FUNCTIONS="T()"/>
+	<ITEM LINE="10"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(付款行行号:)"/>
+	<ITEM NAME="#PAY_BK_NO" LINE="10" COL="16" INPUT="TEXT"  TYPE="%-32s"  FUNCTIONS="T()"/>
+	<ITEM LINE="11"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(付款人账号:)"/>
+	<ITEM NAME="#PAY_ACT_NO" LINE="11" COL="16" INPUT="TEXT"  TYPE="%-32s"  FUNCTIONS="T()">
+	<ONLOSTFOCUS>
+	"{
+		dim @sTr as string;
+		@sTr = $FD82;
+		if(delspace(@sTr) != #PAY_ACT_NO)
+		{
+			showmsg('付款人账号复核失败');
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="12"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(付款人名称:)"/>
+	<ITEM NAME="#PAY_NM" LINE="12" COL="16" INPUT="TEXT"  TYPE="%-60s"  FUNCTIONS="T()"/>
+	<ITEM LINE="13"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(交易  金额:)"/>
+	<ITEM NAME="#MONEY" LINE="13" COL="16" INPUT="TEXT"  TYPE="%16.2f"  FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+		"{
+			dim @fNumb as number;
+			@fNumb = val($FD39, 1);
+			if (@fNumb != #MONEY)
+			{
+				showmsg('交易金额复核失败');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="14"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(协  议  号:)"/>
+	<ITEM NAME="#XYH" LINE="14" COL="16" INPUT="TEXT"  TYPE="%-32s"  FUNCTIONS="T()"/>
+	<ITEM LINE="15"   COL="4"   TYPE="%-11s"  FUNCTIONS="T(操作  类型:)"/>
+	<ITEM NAME="#OPER_TYPE"  LINE="15" COL="16"  TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="付款" />
+		<OPTION VALUE="1" TITLE="拒绝" />
+	</SELECT>
+	</ITEM>
+	<ITEM NAME="#CHK_NO"  TYPE="%-6d" FUNCTIONS="T()"/>
+	
+	<BLOCK NAME="BLOCK_TH" LINE="0" VISABLE="FALSE">
+		<ITEM NAME="#NAME1" LINE="17"  COL="4"   TYPE="%-11s"   INPUT="LABEL"  FUNCTIONS="T(拒绝  原因:)"/>
+		<ITEM NAME="#REFUSE" LINE="17" COL="16" TYPE="%4s"   INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(RJ01)V(NB)">
+			<SELECT>
+				<OPTION VALUE="RJ01" TITLE="账号不存在"/>
+				<OPTION VALUE="RJ02" TITLE="账号、户名不符"/>
+				<OPTION VALUE="RJ03" TITLE="账户余额不足支付"/>
+				<OPTION VALUE="RJ04" TITLE="当日业务累计金额超过规定金额"/>
+				<OPTION VALUE="RJ05" TITLE="业务检查错"/>
+				<OPTION VALUE="RJ06" TITLE="指定协议不存在"/>
+				<OPTION VALUE="RJ10" TITLE="账户密码错误"/>
+				<OPTION VALUE="RJ11" TITLE="账户状态异常"/>
+				<OPTION VALUE="RJ12" TITLE="核验身份错误"/>
+			</SELECT>
+		</ITEM>
+	</BLOCK>
+ 
+  <ITEM LINE="21"  COL="69"  TYPE="%-6s" NAME="#QUEDING" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONLOSTFOCUS>
+	"{
+		initfd();
+		commsend_001();
+		dim @remit as string;
+		
+		//掉短交易1106确定汇路
+		$FD16='1106';
+		$FD18='pbp';
+		$FD34='B100';          //业务类型,暂时写成普通借记
+		$FD64='09001';         //业务种类
+		callagnpbp();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@remit=$FD28;
+		//掉短交易1106确定汇路
+			
+		$FD35 = #OPER_TYPE;                   //操作类型
+		//showmsg($FD35);
+		$FD103 = #REFUSE;                     //拒绝原因
+		$FD44 = #O_TXNO;                     //原交易序号
+		$FD61 = #O_TXDATE;                   //原交易日期
+		$FD59 = #O_BK_NO;                     //原发起行号
+		$FD74 = #XYH;                          //协议号 
+		$FD52 = #PAY_BK_NO;                      //付款行行号
+		$FD82 = #PAY_ACT_NO;                     //付款人账号
+		$FD26 = #PAY_NM;                         //付款人姓名
+		$FD39 = itoa(#MONEY*100,'%16.0f');      //金额
+		$FD83 = #ACC_ACT_NO;                     //收款人账号
+		$FD27 = #ACC_NM;                         //收款人名称
+		
+		$FD16 = '1224';
+		$FD18 = 'pbp';
+		callagnpbp();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		
+		runoutput();
+		rerun();
+		refresh();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+		<PRINT>"{
+			print(3,25, '2014 借记回执业务复核');
+			print(4,5, '原交易日期:[8]                            原交易序号:[8]',#O_TXDATE,#O_TXNO);
+			print(5,5, '原发起行号:[12]                        操作  类型:[16]',#O_BK_NO,getseltitle(#OPER_TYPE,#OPER_TYPE));
+		
+			if(#OPER_TYPE=='0')
+			{
+			print(6,5, '收款人账 号:[24]           拒绝  原因:[30]',#ACC_ACT_NO,getseltitle(#REFUSE,#REFUSE));
+			}
+			else{
+			print(6,5, '收款  账号:[24]',#ACC_ACT_NO);
+			}
+			print(7,5, '收款人名称:[60]',#ACC_NM);
+			print(8,5, '交易  金额:[21]',itoa(#MONEY,'%.2f'));
+			print(9,5, '付款人行号:[12]',#PAY_BK_NO);
+			print(10,5, '付款人账号:[24]',#PAY_ACT_NO);
+			print(11,5, '付款人名称:[60]',#PAY_NM);
+			print(12,5, '操作  柜员:[6]                              柜员流水:[10]',$FD7,#CHK_NO);
+			}"
+			</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5, 10,'机构名称:[30]',$BRNAME);
+		print( 5, 5,'代码:2014');
+		print( 5, 5,'交易:借记回执业务复核');
+		
+		print(7,10, '原交易日期:[8]                            原交易序号:[8]',#O_TXDATE,#O_TXNO);
+		print(8,10, '原发起行号:[12]                        操作  类型:[16]',#O_BK_NO,getseltitle(#OPER_TYPE,#OPER_TYPE));
+		if(#OPER_TYPE=='0')
+		{
+		print(9,10, '收款人账号:[24]            拒绝  原因:[30]',#ACC_ACT_NO,getseltitle(#REFUSE,#REFUSE));
+		}
+		else{
+		print(9,10, '收款人账号:[24]',#ACC_ACT_NO);
+		}
+		print(10,10, '收款人名称:[60]',#ACC_NM);
+		print(11,10, '交易  金额:[21]',itoa(#MONEY,'%.2f'));
+		print(12,10, '付款人行号:[12]',#PAY_BK_NO);
+		print(13,10, '付款人账号:[24]',#PAY_ACT_NO);
+		print(14,10, '付款人名称:[60]',#PAY_NM);
+		if(#OPER_TYPE=='1')
+		{
+			printacdtl_1();
+		}
+		print( 19,10,'交易日期:[8] [8]',$HDATE,@txtime);
+		if(#OPER_TYPE=='1'){
+			print( 19,5,'核心流水:[8]',$FD4);
+		}else{
+			print( 19,5,'核心流水:[8]',$FD4);
+		}
+		print( 19,5,'柜员:[6]',$FD7);
+		print( 19,5,'柜员流水:[6]',#CHK_NO);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00010000" TITLE="8215 柜面通商行对账统计"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+
+<FIRSTWORK RETURN="TRUE">"{   //柜员一进入交易就检查签到状态 20100708
+
+	commsend_001();
+	$FD16 = '9803';
+	$FD92 = $TLRNO; //本柜员
+	callserver();
+
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if($FD70!='0')
+	{
+		showmsg('此柜员尚未签到!');
+		return(false);
+	}
+	
+	$FD26='';
+	$FD91='';
+	$FD70='';
+	$FD92='';
+	
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+  "T(8215                           柜面通商行对账统计)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+
+  <ITEM ITEM="#TXNO" TYPE="%4d"  FUNCTIONS="T($TXNO=8215)"/>
+
+<ITEM LINE="10" COL="15" TYPE="%-14s" FUNCTIONS="T(统计日期:)"/>
+<ITEM LINE="10" COL="25" NAME="#TX_DATE"  TYPE="%8d"    INPUT="TEXT" FUNCTIONS="T($HDATE)D()"/>
+
+  <ITEM LINE="16"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @tota as string;
+	dim @txno as string;
+	@txno=$TXNO;
+	commsend_001();
+	$FD16='8225';
+	$FD24='gmt';
+	$FD28=#TX_DATE;
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	runoutput();
+	rerun();
+	refresh();	
+	return(true);	
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(4,20,'柜面通商行对账统计成功!');
+print(8,5,'统计日期:[8     ]',#TX_DATE);
+print(10,5,'机    构:[7     ]                  操作员:[6    ]',$KINBR,$TLRNO);
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

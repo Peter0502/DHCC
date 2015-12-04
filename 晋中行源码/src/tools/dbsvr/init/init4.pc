@@ -1,0 +1,260 @@
+/*******
+            大额支付参数初始化
+     ********/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "public.h"
+#include "svrpub_c.h"
+#include "mbfe_pub.h"
+
+
+
+int main(int argc, char *argv[])
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+        struct cash_mst cash_mst;
+        struct com_tel com_tel;
+        struct com_cur_no_code com_cur_no_code;
+        struct com_branch com_branch;
+        char comm[1000],comm1[1000];
+        char dbname[20];
+		int inputval1;
+		char inputstr1[100],inputstr2[100];
+    EXEC SQL END DECLARE SECTION;  
+    
+    char ac_no[24];
+    int ret;
+
+    if (argc != 2)
+    {
+        printf("一位参数: [%s] + 数据库名 \n",argv[0]);
+        return 1;
+    }
+
+    memset(dbname,0x0,sizeof(dbname));
+    strcpy(dbname,argv[1]);
+    EXEC SQL DATABASE :dbname;
+    if(sqlca.sqlcode)
+    {
+        printf("database err [%d]\n",sqlca.sqlcode);
+        return 1;
+    }
+    EXEC SQL BEGIN WORK ;
+    if (sqlca.sqlcode)
+    {
+        printf("database err [%d]\n",sqlca.sqlcode);
+        return 1;
+    }
+
+    /* 初始化系统状态 */
+    EXEC SQL UPDATE MBFE_SYS_CTL SET par_value='00' where par_code='05';
+    if (sqlca.sqlcode)
+    {
+        printf("初始化系统状态错误!! [%d]",sqlca.sqlcode);
+        goto ErrExit;
+    }
+
+	printf( "配置前置机IP地址:\n" );
+	memset( inputstr1, 0x00, sizeof( inputstr1 ) );
+	scanf( "%s", inputstr1 );
+	strpack( inputstr1 );
+	strcat( inputstr1, ":" );
+	printf( "配置前置机端口号:\n" );
+	memset( inputstr2, 0x00, sizeof( inputstr2 ) );
+	scanf( "%s", inputstr2 );
+	strpack( inputstr2 );
+	strcat( inputstr1, inputstr2 );
+    EXEC SQL UPDATE MBFE_SYS_CTL SET par_value=:inputstr1 where par_code='12';
+    if (sqlca.sqlcode)
+    {
+        printf("初始化前置机IP地址和端口号错误!! [%d]",sqlca.sqlcode);
+        goto ErrExit;
+    }
+
+	printf( "配置大额支付历史数据保留天数\n" );
+	scanf( "%d", &inputval1 );
+	memset( inputstr1, 0x00, sizeof( inputstr1 ) );
+	sprintf( inputstr1, "%d", inputval1 );
+    EXEC SQL UPDATE MBFE_SYS_CTL SET par_value=:inputstr1 where par_code='12';
+    if (sqlca.sqlcode)
+    {
+        printf("初始化前置机IP地址和端口号错误!! [%d]",sqlca.sqlcode);
+        goto ErrExit;
+    }
+
+
+    EXEC SQL UPDATE COM_BRANCH SET wrk_sts='2' where br_type <> '0';
+    if (sqlca.sqlcode)
+    {
+        printf("更新科技处的状态错误!! [%d]",sqlca.sqlcode);
+        goto ErrExit;
+    }
+
+    memset(comm, 0x0, sizeof(comm));
+    sprintf ( comm ," SELECT * FROM com_tel WHERE 1=1");
+
+    EXEC SQL PREPARE com_tel_sel FROM :comm;
+    if (sqlca.sqlcode)
+    {
+        printf("[%s] \n",comm);
+        printf("prepare error [%d]\n",sqlca.sqlcode);
+        goto ErrExit;
+    }
+    EXEC SQL DECLARE sel_com_tel CURSOR FOR com_tel_sel;
+
+    EXEC SQL OPEN sel_com_tel;
+    if (sqlca.sqlcode)
+    {
+        printf("OPEN com_tel error [%d]\n",sqlca.sqlcode);
+        goto ErrExit;
+    }
+
+    while(1)
+    {
+        EXEC SQL FETCH sel_com_tel INTO :com_tel;
+        if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+        {
+            printf("Fet com_tel erro!!! [%d]\n",sqlca.sqlcode);
+            goto ErrExit;
+        }
+        else if ( sqlca.sqlcode == 100 )
+        {
+            break;
+        }
+ 
+        memset(&com_branch,0x0,sizeof(struct com_branch));
+        strcpy(com_branch.br_no,com_tel.br_no);
+
+        EXEC SQL select * into :com_branch from com_branch where br_no=:com_branch.br_no;
+        if (sqlca.sqlcode != 0 && sqlca.sqlcode != 100)
+        {
+            printf("select from com_branch error [%d]\n",sqlca.sqlcode);
+            goto ErrExit;
+        }
+        else if (sqlca.sqlcode == 100)
+        {
+            /* 没有该柜员的机构号,删除该柜员,并将信息写在文件中 */
+            continue;
+        }
+        
+        /* 更新所有操作员的状态 */
+        printf("com_tel= [%s] [%s] [%s]\n ",
+              com_tel.tel,com_tel.br_no,com_branch.br_type);
+
+        if (com_branch.br_type[0]!='0')
+        {
+            /* 更新为2 正式签退状态 */
+            printf("com_tel= [%s] [%s]\n ",com_tel.tel,com_tel.br_no);
+            EXEC SQL UPDATE COM_TEL SET csts='2' where tel=:com_tel.tel;
+            if (sqlca.sqlcode)
+            {
+                printf("更新柜员[%s]状态错误!![%d]",com_tel.tel,sqlca.sqlcode);
+                goto ErrExit;
+            } 
+        }
+        else
+        {
+            /* 更新为0 科技处柜员没有签退 */
+            printf("com_tel= [%s] [%s]\n ",com_tel.tel,com_tel.br_no);
+            EXEC SQL UPDATE COM_TEL SET csts='0' where tel=:com_tel.tel;
+            if (sqlca.sqlcode)
+            {
+                printf("更新柜员[%s]状态错误!![%d]",com_tel.tel,sqlca.sqlcode);
+                goto ErrExit;
+            } 
+        }
+
+        /* 给该柜员增加现金台帐 */
+        strcpy(cash_mst.br_no,com_tel.br_no);
+        strcpy(cash_mst.tel,com_tel.tel);
+        cash_mst.bal = 0.00;
+        cash_mst.ys_bal = 0.00;
+        strcpy(cash_mst.sts,"1");
+
+        memset(comm1,0x0,sizeof(comm1));
+        sprintf ( comm1 ," SELECT * FROM com_cur_no_code WHERE 1=1 ");
+
+        EXEC SQL PREPARE com_cur_no_code_sel FROM :comm1;
+        if (sqlca.sqlcode)
+        {
+            printf("[%s]\n",comm);
+            printf("prepare error [%d]\n",sqlca.sqlcode);
+            goto ErrExit;
+        }
+        EXEC SQL DECLARE sel_com_cur_no_code CURSOR FOR com_cur_no_code_sel;
+
+        EXEC SQL OPEN sel_com_cur_no_code;
+        if (sqlca.sqlcode)
+        {
+            printf("OPEN com_cur_no_code error [%d]\n",sqlca.sqlcode);
+            goto ErrExit;
+        }
+        while(1)
+        {
+            EXEC SQL FETCH sel_com_cur_no_code INTO :com_cur_no_code;
+            if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+            {
+                printf("Fet com_cur_no_code erro [%d]\n",sqlca.sqlcode);
+                goto ErrExit;
+            }
+            else if ( sqlca.sqlcode == 100 )
+            {
+                break;
+            }
+            
+            /* 生成一个内部账号 */
+            ret=pub_base_CrtInAc("10101",ac_no);
+            if (ret != 0)
+            {
+                printf("生成该柜员的现金账号错误!!\n");
+                goto ErrExit;
+            }
+
+            strcpy(cash_mst.cur_no,com_cur_no_code.cur_no);
+            strcpy(cash_mst.ac_no,ac_no);
+            
+            /* 登记现金台帐 */
+            EXEC SQL insert into cash_mst values(:cash_mst);
+            if (sqlca.sqlcode != 0)
+            {
+                printf("登记钱箱错误 [%s] [%s][%d]\n",com_tel.tel,
+                       com_cur_no_code.cur_no,sqlca.sqlcode);
+                goto ErrExit;
+            }
+        }
+        
+        EXEC SQL CLOSE sel_com_cur_no_code;
+        EXEC SQL FREE sel_com_cur_no_code;
+    }
+    EXEC SQL CLOSE sel_com_tel;
+    EXEC SQL FREE sel_com_tel;
+
+    EXEC SQL commit work;
+    if (sqlca.sqlcode)
+    {
+        printf("commit db err [%d]\n",sqlca.sqlcode);
+        return 1;
+    }
+
+    EXEC SQL close database;
+    if (sqlca.sqlcode)
+    {
+        printf("close db err %d\n",sqlca.sqlcode);
+        return 1;
+    }
+    printf("normal exit from init2.ec \n");
+
+    return 0;
+ErrExit:
+    printf("unnormal quit from init8.ec \n");
+
+    EXEC SQL ROLLBACK WORK;
+    if(sqlca.sqlcode)
+    {
+        printf("database erro!! %d\n",sqlca.sqlcode);
+        return 1;
+    }
+
+    return 1;
+}

@@ -1,0 +1,293 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"gl_mst_hst_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int gl_mst_hst_con ( struct gl_mst_hst_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct gl_mst_hst_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->cur_no);
+	zip_tail(ps->acc_hrt);
+	zip_tail(ps->dc_ind);
+	zip_tail(ps->up_acc_hrt);
+}
+int Gl_mst_hst_Debug(struct gl_mst_hst_c *ps){
+	vtcp_log("gl_mst_hst_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("gl_mst_hst_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("gl_mst_hst_c.cur_no=[%s]\n",ps->cur_no);
+	vtcp_log("gl_mst_hst_c.acc_hrt=[%s]\n",ps->acc_hrt);
+	vtcp_log("gl_mst_hst_c.date=[%ld]\n",ps->date);
+	vtcp_log("gl_mst_hst_c.dc_ind=[%s]\n",ps->dc_ind);
+	vtcp_log("gl_mst_hst_c.up_acc_hrt=[%s]\n",ps->up_acc_hrt);
+	vtcp_log("gl_mst_hst_c.dr_bal=[%f]\n",ps->dr_bal);
+	vtcp_log("gl_mst_hst_c.cr_bal=[%f]\n",ps->cr_bal);
+	vtcp_log("gl_mst_hst_c.ldd_bal=[%f]\n",ps->ldd_bal);
+	vtcp_log("gl_mst_hst_c.lcd_bal=[%f]\n",ps->lcd_bal);
+	vtcp_log("gl_mst_hst_c.rdd_cnt=[%ld]\n",ps->rdd_cnt);
+	vtcp_log("gl_mst_hst_c.rcd_cnt=[%ld]\n",ps->rcd_cnt);
+	vtcp_log("gl_mst_hst_c.rdd_amt=[%f]\n",ps->rdd_amt);
+	vtcp_log("gl_mst_hst_c.rcd_amt=[%f]\n",ps->rcd_amt);
+	vtcp_log("gl_mst_hst_c.cdd_cnt=[%ld]\n",ps->cdd_cnt);
+	vtcp_log("gl_mst_hst_c.ccd_cnt=[%ld]\n",ps->ccd_cnt);
+	vtcp_log("gl_mst_hst_c.cdd_amt=[%f]\n",ps->cdd_amt);
+	vtcp_log("gl_mst_hst_c.ccd_amt=[%f]\n",ps->ccd_amt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Gl_mst_hst_Sel(reply,gl_mst_hst_c,fmtstr,va_alist)
+char    *reply;
+struct  gl_mst_hst_c *gl_mst_hst_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Gl_mst_hst_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Gl_mst_hst_Fet_Sel( gl_mst_hst_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Gl_mst_hst_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Gl_mst_hst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,gl_mst_hst.* FROM gl_mst_hst WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE gl_mst_hst_sel FROM :comm;
+	EXEC SQL DECLARE sel_gl_mst_hst CURSOR FOR gl_mst_hst_sel;
+
+	EXEC SQL OPEN sel_gl_mst_hst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_mst_hst_Fet_Sel ( struct gl_mst_hst_c *gl_mst_hst_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_gl_mst_hst INTO :gl_mst_hst_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch gl_mst_hst error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch gl_mst_hst finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(gl_mst_hst_c);
+
+	return 0;
+}
+
+int Gl_mst_hst_Clo_Sel (){
+	EXEC SQL CLOSE sel_gl_mst_hst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Gl_mst_hst_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,gl_mst_hst.* FROM gl_mst_hst WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE gl_mst_hst_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_gl_mst_hst CURSOR FOR gl_mst_hst_upd;
+
+	EXEC SQL OPEN upd_gl_mst_hst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_mst_hst_Fet_Upd( struct gl_mst_hst_c *gl_mst_hst_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_gl_mst_hst INTO :gl_mst_hst_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH gl_mst_hst finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(gl_mst_hst_c);
+
+	return 0;
+}
+
+int Gl_mst_hst_Upd_Upd( struct gl_mst_hst_c gl_mst_hst_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE gl_mst_hst SET br_no=:gl_mst_hst_c.br_no,
+			cur_no=:gl_mst_hst_c.cur_no,
+			acc_hrt=:gl_mst_hst_c.acc_hrt,
+			"date"=:gl_mst_hst_c.date,
+			dc_ind=:gl_mst_hst_c.dc_ind,
+			up_acc_hrt=:gl_mst_hst_c.up_acc_hrt,
+			dr_bal=:gl_mst_hst_c.dr_bal,
+			cr_bal=:gl_mst_hst_c.cr_bal,
+			ldd_bal=:gl_mst_hst_c.ldd_bal,
+			lcd_bal=:gl_mst_hst_c.lcd_bal,
+			rdd_cnt=:gl_mst_hst_c.rdd_cnt,
+			rcd_cnt=:gl_mst_hst_c.rcd_cnt,
+			rdd_amt=:gl_mst_hst_c.rdd_amt,
+			rcd_amt=:gl_mst_hst_c.rcd_amt,
+			cdd_cnt=:gl_mst_hst_c.cdd_cnt,
+			ccd_cnt=:gl_mst_hst_c.ccd_cnt,
+			cdd_amt=:gl_mst_hst_c.cdd_amt,
+			ccd_amt=:gl_mst_hst_c.ccd_amt
+	WHERE rowid=:gl_mst_hst_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Gl_mst_hst_Del_Upd(struct gl_mst_hst_c gl_mst_hst_c , char * reply  ){
+
+	EXEC SQL DELETE FROM gl_mst_hst WHERE rowid=:gl_mst_hst_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_mst_hst_Clo_Upd( ){
+	EXEC SQL CLOSE upd_gl_mst_hst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Gl_mst_hst_Ins( struct gl_mst_hst_c gl_mst_hst_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO gl_mst_hst VALUES (:gl_mst_hst_c.br_no,
+			:gl_mst_hst_c.cur_no,
+			:gl_mst_hst_c.acc_hrt,
+			:gl_mst_hst_c.date,
+			:gl_mst_hst_c.dc_ind,
+			:gl_mst_hst_c.up_acc_hrt,
+			:gl_mst_hst_c.dr_bal,
+			:gl_mst_hst_c.cr_bal,
+			:gl_mst_hst_c.ldd_bal,
+			:gl_mst_hst_c.lcd_bal,
+			:gl_mst_hst_c.rdd_cnt,
+			:gl_mst_hst_c.rcd_cnt,
+			:gl_mst_hst_c.rdd_amt,
+			:gl_mst_hst_c.rcd_amt,
+			:gl_mst_hst_c.cdd_cnt,
+			:gl_mst_hst_c.ccd_cnt,
+			:gl_mst_hst_c.cdd_amt,
+			:gl_mst_hst_c.ccd_amt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT gl_mst_hst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

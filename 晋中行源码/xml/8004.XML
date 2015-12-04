@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="8004 IC卡补换卡申请"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(8004                          IC卡补换卡申请)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO"        TYPE="%-4s"  FUNCTIONS="T($TXNO=8004)"/>
+  <ITEM NAME="#MSGTYPE"     TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <PAGE NAME="DEFAULT">
+  <!--界面变量-->
+<ITEM LINE="6" COL="5" TYPE="%-9s" FUNCTIONS="T(卡    号:)"/> 
+<ITEM NAME="#CARD_NO" INPUT="TEXT" LINE="6" COL="14" TYPE="%-19s" DEVICE="ICC"  FUNCTIONS="V(NB)M($MSR2,1)">
+<ONLOSTFOCUS>
+"{
+	dim @chkcard as string ;
+	if(len(rtrim(#CARD_NO))!=19)
+	{
+		showmsg('卡号长度不正确，请重新输入!');
+	//	return(false);fortest
+	}
+	if(substr(#CARD_NO,0,6) != #CARDBIN2)
+	{
+		showmsg('卡号的前6位必须为'+#CARDBIN2);
+	//	return(false);fortest
+	}
+	#CARD_NO = '6212230110800016390';
+	initfd();
+	commsend_001();
+	$FD62=rtrim(#CARD_NO) ;
+	$FD16='1717' ;//查询账户信息
+	//showmsg('准备调查询核心'+$FD16);
+	if (isTxContinue() == false)
+	{
+	 showmsg('不能继续');
+	 return(false);
+	}
+	#IC_ATC = ictagvalue('9f36'); 
+	showmsg('应用交易计数器#IC_ATC='+#IC_ATC);
+	
+	callserver();
+	if($FD12!='0000'){
+	showmsg(geterror());
+	return(false);
+	}
+	#HXZJHM=delspace($FD32);//核心证件号码
+	#HXZJZL=delspace($FD20);//核心证件种类
+	#HXACC_BAL=val(delspace($FD33),0.01);//核心余额 
+}"
+</ONLOSTFOCUS>
+</ITEM>
+ <ITEM LINE="7"  COL="5"   TYPE="%-9s" FUNCTIONS="T(证件种类:)" />
+  <ITEM LINE="7"  COL="14" TYPE="%-1s" NAME="#ZJZL" FUNCTIONS="V(NB)T(1)" INPUT="SELECT" VISABLE="TRUE">
+    <SELECT>
+        <OPTION VALUE="1" TITLE="身份证"/>
+        <OPTION VALUE="2" TITLE="户口薄"/>
+        <OPTION VALUE="3" TITLE="护照  "/>
+        <OPTION VALUE="4" TITLE="军官证"/>
+        <OPTION VALUE="5" TITLE="回乡证"/>
+	<OPTION VALUE="6" TITLE="士兵证"/>
+	<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+	<OPTION VALUE="E" TITLE="临时身份证"/>
+	<OPTION VALUE="F" TITLE="外国人居留证"/>
+	<OPTION VALUE="G" TITLE="警官证"/>
+	<OPTION VALUE="H" TITLE="其他证件"/>
+	<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+    </SELECT>
+    <ONLOSTFOCUS>
+    	"{
+    	if (#ZJZL != #HXZJZL) 
+    	{
+    		showmsg('证件类型错误');
+    		return(false);
+    	}
+    	}"
+    </ONLOSTFOCUS>
+  </ITEM>
+<ITEM LINE="7"  COL="41"   TYPE="%-9s" FUNCTIONS="T(证件号码:)" />
+<ITEM LINE="7"  COL="51" TYPE="%-20s" NAME="#ZJHM"  FUNCTIONS="V(NB)" INPUT="TEXT">
+<ONLOSTFOCUS>
+	"{
+	if(#HXZJHM == delspace(#ZJHM) ){}
+	else
+	{
+		showmsg('证件号码不符!');
+		return(false);
+	}
+	showblock('IC_BUHUAN_APPLY',true);
+	#KH_NAME=$FD26;//户名
+	enable(#KH_NAME,false);
+	#KH_HM=delspace(itoa(atoi($FD54))) ;//客户号
+	enable(#KH_HM,false);
+	
+	if (#CHANGEREASON == '1')
+	{
+ 		show(#lLOSTNO,false);
+ 		show(#LOSTNO,false);
+ 		enable(#lLOSTNO,false);
+ 		enable(#LOSTNO,false);
+	}
+	else if (#CHANGEREASON == '2')
+	{
+ 		show(#lLOSTNO,true);
+ 		show(#LOSTNO,true);
+ 		enable(#lLOSTNO,true);
+ 		enable(#LOSTNO,true);
+	}
+	}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="8"  COL="5"   TYPE="%-70s" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+   <IMPORT>IC_BUHUAN_APPLY.IMP</IMPORT>
+   <ITEM NAME="#HXZJZL"  TYPE="%-2s" FUNCTIONS=""/>
+  <ITEM NAME="#HXZJHM"  TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#HXACC_BAL" TYPE="%17.2f" FUNCTIONS="T()" />
+  <ITEM NAME="#CARDBIN1" TYPE="%-6s" FUNCTIONS="T(621223)"/>  <!--卡bin1-->
+  <ITEM NAME="#CARDBIN2" TYPE="%-6s" FUNCTIONS="T(621780)"/>  <!--卡bin2--> 
+  <ITEM NAME="#TXNAME" TYPE="%-10s" FUNCTIONS="T(IC卡补换卡申请)"/>  
+  <ITEM NAME="#TRACK2" TYPE="%-37s" FUNCTIONS="T()"/>  <!--卡二磁-->
+  <ITEM NAME="#TRACK3" TYPE="%-104s" FUNCTIONS="T()"/>	   <!--卡三磁-->
+  <ITEM NAME="#CCY" TYPE="%-3s" FUNCTIONS=""/><!--交易币种-->
+  <ITEM NAME="#IC_ATC" TYPE="%-4s" FUNCTIONS=""/><!--应用交易计数器-->
+  <ITEM NAME="#IC_AC" TYPE="%-16s" FUNCTIONS=""/><!--应用密文-->
+ <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#AUCODE" TYPE="%-1s" FUNCTIONS="T(#AUCODE)"/><!---授权标志--->
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  	<ONCLICK>
+  		"{
+  	dim @shuju as string ;
+	initfd();
+	commsend_001();
+	$FD30=delspace(#CARD_NO);
+	$FD79=#CARDPWD;
+	$FD66=#ZJZL ;
+	$FD82=delspace(#ZJHM) ;
+	$FD81=#KH_NAME ;//户名
+	$FD70=#CHANGEREASON ;//更换原因
+	$FD63=delspace(#LOSTNO) ;//挂失编号
+	$FD16 = '7120' ;
+	$FD75=#TRACK2;
+	$FD76=#TRACK3;
+	//showmsg('卡号'+$FD30);
+	//showmsg('密码'+#CARDPWD);
+	//showmsg('证件类型'+#ZJZL);
+	//showmsg('证件号码'+#ZJHM);
+	//showmsg('持卡人户名'+#KH_NAME);
+	//showmsg('更换原因'+#CHANGEREASON);
+	//showmsg('挂失编号'+#LOSTNO);
+	//@shuju= initiccard();
+	//#IC_ATC=strfld(@shuju,'|',0); 
+	//#IC_AC=strfld(@shuju,'|',1); 
+	//$FD47 = #IC_ATC ;
+	//$FD43=#IC_AC ;
+	//if (isTxContinue() == false )
+	//{
+	//	showmsg('交易过程中不能拔出卡');
+	//	return(false);
+	//}
+	callagn();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	showmsg('手续费$FD39:'+$FD39);
+  		}"
+  	</ONCLICK>
+  </ITEM>
+</PAGE>
+   <!--IMPORT>ic_qc_accinfo.IMP</IMPORT-->
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="交易完成">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(8,25,'操 作 成 功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+   	  dim @txtime  as string;
+    	  @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	  print( 5, 20,'机构名称:[30]',$BRNAME);
+	  print( 5, 2,'代码:[4 ]',$TXNO);
+	  print( 5, 13,'交易:[10 ]',$TXNO);
+	  print( 7, 20,'客 户 号:[12     ]',#KH_HM);
+	  print( 8, 20,'申请补换卡卡号:[19]',#CARD_NO);
+	  if (#CHANGEREASON == '0'){
+		print( 9, 20,'补换卡原因:损坏补换卡');
+	  }
+	  else if(#CHANGEREASON == '1'){
+		print( 9, 20,'补换卡原因:挂失补发新卡');
+		print( 10, 20,'挂失编号:[16]',#LOSTNO);
+	  }
+	  print( 15,20,'备注:');
+	  print( 15,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	  print( 15,5,'柜员:[4]',$FD7);
+	  print( 15,10,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

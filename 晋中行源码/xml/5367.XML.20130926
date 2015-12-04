@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5367     通存通兑协议维护)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD67=#CZ_TYPE;
+	$FD30=#KT_NO;	//帐号
+	$FD74=#KT_XYNO;	//协议号
+	$FD62=#KT_CIFNO;//证件号
+	$FD68=#KT_CIFLX;//证件类型
+	$FD65=getitems('#TCFLAG#TDFLAG#CXFLAG')+'0000';
+	$FD39=getitems('#TDAMT');
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+	#ZF_NO=substr($FD123,0,12);
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5367                       通存通兑协议维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────
+)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5830)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!-- 贷记基本信息录入 -->
+  <ITEM LINE="5"  COL="3"   TYPE="%-10s" FUNCTIONS="T(操作类型:!)"/>
+  <ITEM LINE="5" COL="14" NAME="#CZ_TYPE" TYPE="%-1s" INPUT="SELECT" DEVICE="KEY
+BOARD" FUNCTIONS="V(NB)T(1)" >
+              <SELECT>
+                     <OPTION VALUE ="0" TITLE="止用" />
+                     <OPTION VALUE ="1" TITLE="启用" />
+              </SELECT>
+  <ONLOSTFOCUS>"{
+	if(#CZ_TYPE=='0'){
+		show(#KT_KTTC,false);
+		show(#TCFLAG,false);
+		show(#KT_KTTD,false);
+		show(#TDFLAG,false);
+		show(#KT_KTCX,false);
+		show(#CXFLAG,false);
+	}else{
+		show(#KT_KTTC,true);
+		show(#TCFLAG,true);
+		show(#KT_KTTD,true);
+		show(#TDFLAG,true);
+		show(#KT_KTCX,true);
+		show(#CXFLAG,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6"  COL="3"  TYPE="%-9s" FUNCTIONS="T(开通账号:)"/>
+  <ITEM LINE="6" COL="13" NAME="#KT_NO19" TYPE="%-19s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+	dim @tota as string;
+	commsend_001();
+	$FD101=#KT_NO19+space(24-len(#KT_NO19))+'0001'+space(153);
+	$FD16='9951';
+	callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	#KT_NO=delspace(substr($FD101,0,24));
+	if(substr(#KT_NO,0,1)=='5'){
+		showmsg('此处只允许输入个人帐号!');
+		return(false);
+	}
+	#KT_NAME=substr($FD101,74,50);
+	show(#KT_NAME,true);
+	//showmsg(#KT_NO);
+	commsend_001();
+	$FD16='9799';
+	$FD67='1';
+	@tota=callserver();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	setsel(#KT_CIFLX,@tota,'o5t20o1v1o2');
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#KT_NO" TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#ZF_NO" TYPE="%-12s" FUNCTIONS=""/>
+  <ITEM LINE="6" COL="30" NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+	<ITEM LINE="6" COL="45" NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/> 
+  <ITEM LINE="7"  COL="3"   TYPE="%-9s" FUNCTIONS="T(开通户名:)"/>
+  <ITEM LINE="7" COL="13" NAME="#KT_NAME" TYPE="%-60s" INPUT="TEXT" DEVICE="NONE"  FUNCTIONS="V(NB)"/>
+  
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#KT_NO19));
+     if(@len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #KT_NO19;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="6" COL="40" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @txnobak as string;
+      dim @tatl as string;
+      @txnobak = $TXNO;
+      $TXNO = '9664';
+      $FD30 = #KT_NO19;
+      $FD72 = '1';
+      commsend_001();
+      @tatl = callserver();
+      if($FD12 !='0000')
+      {
+        
+      }
+      $TXNO = @txnobak;
+      setpicture(#PIC,1,0);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @txnobak as string;
+      dim @tatl as string;
+      @txnobak = $TXNO;
+      $TXNO = '9664';
+      $FD30 = #KT_NO19;
+      $FD72 = '2';
+      commsend_001();
+      @tatl = callserver();
+      if($FD12 !='0000')
+      {
+        
+      }
+      $TXNO = @txnobak;
+      setpicture(#PIC1,1,0);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM LINE="8"  COL="3"   TYPE="%-10s" FUNCTIONS="T(证件类型:!)"/>
+  <ITEM LINE="8" COL="13" NAME="#KT_CIFLX" TYPE="%-1s" INPUT="SELECT" FUNCTIONS= "V(NB)T(1)"> 
+  <SELECT>
+	<OPTION VALUE ="1" TITLE="0.身份证" />
+  </SELECT>
+  </ITEM>
+  <ITEM LINE="8" COL="43" TYPE="%-10s" FUNCTIONS= "T(证件号码:)"/> 
+  <ITEM LINE="8" COL="53" NAME="#KT_CIFNO" TYPE="%-20s" INPUT="TEXT"  FUNCTIONS= "V(NB)"/> 
+
+
+  <ITEM LINE="9"  COL="3"   NAME="#KT_KTTC" TYPE="%-10s" FUNCTIONS="T(开通通存?!)"/>
+  <ITEM LINE="9" COL="13" NAME="#TCFLAG" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS= "V(NB)T(1)"> 
+  <SELECT>
+	<OPTION VALUE ="0"  TITLE="否" />
+	<OPTION VALUE ="1"  TITLE="是" />
+  </SELECT>
+  </ITEM>
+  <ITEM LINE="10"  COL="3"   NAME="#KT_KTTD" TYPE="%-10s" FUNCTIONS="T(开通通兑?!)"/>
+  <ITEM LINE="10" COL="13" NAME="#TDFLAG" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS= "V(NB)T(0)">
+  <SELECT>
+	<OPTION VALUE ="0"  TITLE="否" />
+	<OPTION VALUE ="1"  TITLE="是" />
+  </SELECT>
+  <ONLOSTFOCUS>"{
+	if(#TDFLAG=='0'){
+		show(#LTDAMT,false);
+		show(#TDAMT,false);
+	}else{
+		show(#LTDAMT,true);
+		show(#TDAMT,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11"  COL="3"   NAME="#LTDAMT" INPUT="LABEL" VISABLE="FALSE" TYPE="%-9s" FUNCTIONS="T(通兑限额:)"/>
+  <ITEM LINE="11" COL="13" NAME="#TDAMT" TYPE="%17.2f" INPUT="TEXT" VISABLE="FALSE"  FUNCTIONS= "V(NB)J(#XTDAMT)"/>
+  <ITEM NAME="#XTDAMT"     TYPE="%-21s" FUNCTIONS= "X(#TDAMT)"/>
+  <ITEM LINE="12"  COL="3"   NAME="#KT_KTCX" TYPE="%-10s" FUNCTIONS="T(开通查询?!)"/>
+  <ITEM LINE="12" COL="13" NAME="#CXFLAG" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS= "V(NB)T(1)">
+  <SELECT>
+	<OPTION VALUE ="0"  TITLE="否" />
+	<OPTION VALUE ="1"  TITLE="是" />
+  </SELECT>
+  </ITEM>
+  <ITEM LINE="13"  COL="3"   TYPE="%-11s" FUNCTIONS="T(开通协议号:)"/>
+  <ITEM LINE="13" COL="15" NAME="#KT_XYNO" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONGOTFOCUS>"{
+	#KT_XYNO=#KT_NO;
+	show(#KT_XYNO,true);
+  }"
+  </ONGOTFOCUS>
+ </ITEM>
+  <ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT=
+"SUBMIT" />
+</VARIABLE>
+
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+        NOTHING
+</PACKAGE>
+<PRINT>"{
+	if(#CZ_TYPE=='1'){
+    	print( 10,27, '通存通兑协议增加成功!');
+	}else{
+    	print( 10,27, '通存通兑协议解除成功!');
+	}
+}"
+
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请插入存折首页" CHECK="#CZ_TYPE=1">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  print(6,1,'支付行号:[12        ]',#ZF_NO);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="23" DESC="请插入通存通兑协议书" CHECK="#CZ_TYPE=1">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+       $KINDNO='00';
+  	if(#TCFLAG=='1')
+  		{print( 9,66, '开通通存:是');}
+	  	else
+	  	{print( 9,66, '开通通存:否');}
+    if(#TDFLAG=='1')
+    	{print( 9,2, '开通通兑:是');}
+	    else
+	    {print( 9,2, '开通通兑:否');}
+    if(#CXFLAG=='1')
+    	{print( 10,66, '开通查询:是');}
+    	else
+    	{print( 10,66, '开通查询:否');}
+    if(#TDFLAG=='1'){
+    	print( 10,2, '通兑限额:[21               ]',#XTDAMT); }   		    	
+    print(12,80,'[20        ]',#KT_XYNO);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="23" DESC="请插入通存通兑协议书" CHECK="#CZ_TYPE=0">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+       $KINDNO='00';
+	  	print( 9,66, '终止通存:是');
+	    print( 9,2, '终止通兑:是');
+    	print( 10,66, '终止查询:是');
+    print(12,80,'[20        ]',#KT_XYNO);
+}"
+</PRINT>
+</RESPONSE>
+
+<!--打印信息 -->
+</TRANSACTION>
+

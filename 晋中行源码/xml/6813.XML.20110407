@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="6813 买断式转贴现转出录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+    $FD25=#NAME;
+    $FD45=#MDATE;
+    $FD60=#PNNO;
+    $FD68=#LIND;
+    $FD69=#OPNO;
+    $FD84=getitems('#PINT');
+    $FD90=#NOTYPE;
+    $FD100=getitems('#TINT#AMT');
+	commsend_001();
+	$FD16 = '4931';
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(6813                      买断式转贴现转出录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4931)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(票据类型:!)"/>
+  <ITEM LINE="6"  COL="40" TYPE="%-10s" FUNCTIONS="T(票 据 号:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(操作标志:!)"/>
+  <ITEM LINE="7"  COL="40" TYPE="%-14s" FUNCTIONS="T(异地同城标志:!)"/>
+  <ITEM LINE="8"  COL="5"  TYPE="%-12s" FUNCTIONS="T(对方行名称:)"/>
+  <ITEM LINE="9"  COL="5"  TYPE="%-12s" FUNCTIONS="T(转贴现利率:)"/>
+  <ITEM LINE="9"  COL="32" TYPE="%-2s"  FUNCTIONS="T(‰)"/>
+  <ITEM LINE="9"  COL="40" TYPE="%-12s" FUNCTIONS="T(转贴现利息:)"/>
+
+  <ITEM LINE="11"  COL="5" TYPE="%-70s" FUNCTIONS=
+   "T(----------------------------【票面信息】----------------------------)"/>
+  
+  <ITEM LINE="16"  COL="5" TYPE="%-10s" FUNCTIONS="T(汇票金额:)"/>
+  <ITEM LINE="16"  COL="40" TYPE="%-12s" FUNCTIONS="T(汇票到期日:)"/>
+
+  
+  <!--输入变量-->
+  <ITEM NAME="#NOTYPE" LINE="6" COL="15" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="T()">
+  	<SELECT>
+		<OPTION VALUE="111" TITLE="银行承兑汇票"/>
+		<OPTION VALUE="112" TITLE="商业承兑汇票"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#NOTYPENAME" TYPE="%-12s" FUNCTIONS="S(#NOTYPE,#NOTYPE)"/>
+
+  <ITEM NAME="#PNNO" LINE="6" COL="50" TYPE="%-16s" INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+         initfd();
+    	commsend_001();
+ 		$FD16='9868';
+		$FD60=#PNNO;
+		$FD90=#NOTYPE;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#MDATE=$FD45;
+		setitems('#O16#AMT',$FD100);
+		show(#AMT,true);
+		show(#MDATE,true);
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+  
+  <ITEM NAME="#OPNO" LINE="7" COL="15" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="V(NB)">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="录入"/>
+		<OPTION VALUE="1" TITLE="修改"/>
+		<OPTION VALUE="2" TITLE="删除"/>
+	</SELECT>
+  <ONLOSTFOCUS>
+  "{
+    if(#OPNO!='0')
+    {
+		initfd();
+    	commsend_001();
+ 		$FD16='9693';
+		$FD60=#PNNO;
+		$FD69=#OPNO;
+		$FD90=#NOTYPE;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#NAME=$FD25;
+		#LIND=$FD68;
+		setitems('#PINT',$FD84);
+		setitems('#TINT',$FD100);
+		show(#NAME,true);
+		show(#PINT,true);
+		show(#LIND,true);
+		show(#TINT,true);
+	}
+    if(#OPNO=='1')
+    {
+	}
+	else if(#OPNO=='2')
+    {
+		goitem(#TINT,false);
+	}
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+
+  <ITEM NAME="#OPNONAME" TYPE="%-4s" FUNCTIONS="S(#OPNO,#OPNO)"/>
+
+  <ITEM NAME="#LIND" LINE="7" COL="54" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T()">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="本地"/>
+		<OPTION VALUE="1" TITLE="异地"/>
+	</SELECT>
+	</ITEM>
+  <ITEM NAME="#LINDNAME" TYPE="%-4s" FUNCTIONS="S(#LIND,#LIND)"/>
+ 
+  <ITEM NAME="#NAME" LINE="8" COL="17" TYPE="%-50s" INPUT="TEXT" FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#PINT" LINE="9" COL="17" TYPE="%9.6f" INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM NAME="#TINT" LINE="9" COL="52" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="T()"/>
+  
+  
+  <ITEM NAME="#AMT" LINE="16" COL="15" TYPE="%17.2f" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM NAME="#LAMT" TYPE="%-16s" FUNCTIONS="X(#AMT)"/>
+  <ITEM NAME="#MDATE" LINE="16" COL="52" TYPE="%-8s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="D()"/>
+
+  
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#O16" TYPE="%-16s" FUNCTIONS="T(0000000000000000)"/>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="买断式转贴现转出录入!">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+	 	print( 4, 30,'买断式转贴现转出--[4]成功',#OPNONAME);
+	 	print( 6, 20,'票据类型: [12]',#NOTYPENAME);
+	 	print( 7, 20,'票据号码: [16]',#PNNO);
+	    print( 8, 20,'异地同城标志: [4]',#LINDNAME);
+	    print( 9, 20,'对方行名称: [4]',#NAME);
+		print(10, 20,'转贴现利率: [8]',itoa(#PINT,'%9.6f'));
+		print(11, 20,'转贴现利息: [16]',itoa(#TINT,'%17.2f'));
+	 	print(12, 20,'汇 票金 额: [16]',#LAMT);
+	 	print(13, 20,'汇票到期日: [8]', #MDATE);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+        dim @txtime  as string;
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+        print( 5,2,'代码:6813');
+        print( 5,13,'交易:买断式转贴现转出录入');
+
+        print( 7,20,'票据类型: [12]',#NOTYPENAME);
+	print( 7,10,'票据号码: [16]',#PNNO);
+	print( 8,20,'异地同城标志: [4]',#LINDNAME);
+	print( 8,10,'对方行名称: [4]',#NAME);
+	print( 9,20,'转贴现利率: [8]',itoa(#PINT,'%9.6f'));
+	print( 9,10,'转贴现利息: [16]',itoa(#TINT,'%17.2f'));
+	print(10,20,'汇 票金 额: [16]',#LAMT);
+	print(10,10,'汇票到期日: [8]', #MDATE);
+        print(24,20,'备注:')
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);
+
+        }"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

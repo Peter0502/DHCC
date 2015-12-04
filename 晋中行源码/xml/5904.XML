@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11110000" TITLE="5904  同城票据清单打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{ 
+   }" 
+</COMMSEND>
+<COMMRECV>
+  "{ commrecv_001();
+     runoutput();
+   }"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+	 "T(5904                        同城票据清单打印)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+	 "T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5904)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+ <ITEM LINE="10"  COL="29" TYPE="%-14s" FUNCTIONS="T(提入行交换号:)"/>
+ <ITEM LINE="10"  COL="42" NAME="#CHANGENO"  TYPE="%10d"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+ <ITEM LINE="12"  COL="29" TYPE="%-14s" FUNCTIONS="T(交 易  日 期:)"/>
+ <ITEM LINE="12"  COL="42" NAME="#HDATE"  TYPE="%-8s"  DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)"/>
+   
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错------------------>
+  <ITEM NAME="#TOTA" TYPE="%-5000s" FUNCTIONS=""/>
+ <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="20" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @tota as string;
+    dim @f as file;
+    dim @filename as string;
+    @tota='';
+    @filename='同城票据清单';
+    commsend_001();
+    $FD88=#CHANGENO;
+    $FD46=#HDATE;
+	  $TXNO='5904';
+	  @tota=callserver();
+	  if($FD12!='0000')
+	 {
+		showmsg(geterror());
+		return(false);
+	 }
+	savefiletxt('../tmp/同城票据清单['+$KINBR+']',@tota);              
+	call('fview ../tmp/同城票据清单['+$KINBR+']');                    
+	
+  }"
+  </ONCLICK>
+  </ITEM>  
+   
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+<!--<PACKAGE DEVICE="PRINTER"  DESC="同城票据清单打印">
+LNBKZC||@accountreg.tx_date|@accountreg.change_no|@accountreg.br_name|@accountreg.pay_ac_no|@accountreg.pay_name|@accountreg.amt|@z_accountreg_amt|@accountreg.cash_chg_no|@accountreg.cash_opn_name|@accountreg.cash_ac_no|@accountreg.cash_name |@accountreg.amt|@z_accountreg_amt
+</PACKAGE>
+
+<PRINT>"{
+print( 3,14,'┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print( 4,14,'┃                                编制日期 :[8          ]                                     ┃',@accountreg.tx_date);
+print( 5,14,'┃                                             |                                              ┃');
+print( 6,14,'┃  提出行代号:[05              ]              |    提入行代号:[05              ]           ┃',@accountreg.change_no,@accountreg.cash_chg_no);
+print( 7,14,'┃                                             |                                              ┃');
+print( 8,14,'┠  提出行名称:[61                    ]        |    提入行名称:[61                ]         ┃',@accountreg.br_name,@accountreg.cash_opn_name);
+print( 9,14,'┃                                             |                                              ┃');
+print(10,14,'┠              贷方发生额                     |                 借方发生额                   ┨');
+print(11,14,'┃                                             |                                              ┃');
+print(12,14,'┃  收款单位帐号   付款单位帐号    金额        |  收款单位帐号      付款单位帐号     金额     ┃');
+print(13,14,'┃                                             |                                              ┃');
+print(14,14,'┃ [ 33       ]   [33       ]  [ 10   ]      |  [ 33       ]      [33        ]    [ 10   ]  ┃'@accountreg.cash_ac_no,@accountreg.pay_ac_no,@accountreg.amt,@accountreg.cash_ac_no,@accountreg.pay_ac_no,@accountreg.amt); 
+print(15,14,'┃                                             |                                              ┃');
+print(16,14,'┃       合计:       |   [ 10         ]        |           合计:      |    [ 10         ]     ┃',@z_accountreg_amt,@z_accountreg_amt);
+print(17,14,'┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+}"
+</PRINT>
+<!--<PRINT>
+"{                   
+  //设置打印变量
+  dim @accountreg.tx_date as string;
+  dim @accountreg.change_no as string;
+  dim @accountreg.br_name as string;
+  dim @accountreg.pay_ac_no as string;
+  dim @accountreg.pay_name as string;
+  dim @accountreg.amt  as string;
+  dim @z_accountreg_amt as string;
+  dim @accountreg.cash_chg_no as string;
+  dim @accountreg.cash_opn_name as string;
+  dim @accountreg.cash_ac_no as string;
+  dim @accountreg.cash_name as string;
+  dim @accountreg.amt as string;
+  dim @z_accountreg_amt as string;  
+  //打印变量设置完毕
+  dim @tota as string;
+  @tota=#TOTA;
+  print(3 ,25 ,'编制时间',@accountreg.tx_date);
+  print(5 ,5 ,'提出行代号',@accountreg.change_no);
+  print(5 ,35,'提入行代号',@accountreg.cash_chg_no);
+  print(7 ,5 ,'提出行名称',@accountreg.br_name);
+  print(7 ,35,'提入行名称'@accountreg.cash_opn_name);
+  print(9 ,10,'贷方发生额');
+  print(9 ,40,'借方发生额');
+  print(11,5,'收款单位帐号');
+  print(11,10,'付款单位帐号');
+  print(11,15,'金额');
+  print(11,30,'收款单位帐号');
+  print(11,35,'付款单位帐号');
+  print(11,40,'金额');
+  print(13,5,'accountreg.cash_ac_no');
+  print(13,10,'accountreg.pay_ac_no');
+  print(13,15,'@accountreg.amt');
+  print(13,30,'accountreg.cash_ac_no');
+  print(13,35,'accountreg.pay_ac_no');
+  print(13,40,'@accountreg.amt');
+  print(15,10,'合计');
+  print(15,20,@z_accountreg_amt);
+  print(15,30,'合计');
+  print(15,40,@z_accountreg_amt);
+  print(17,10,'制单:');
+  print(17,40,'复核:');
+ </PTINT> -->
+</RESPONSE>
+</TRANSACTION>		

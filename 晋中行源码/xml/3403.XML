@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="3403 利息测算"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+
+
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3403                          利 息 测 算)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2403)"/>  
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM NAME="#SPACE203" TYPE="%-203s" FUNCTIONS=""/>  
+  <ITEM NAME="#SPACE111" TYPE="%-111s" FUNCTIONS=""/>  
+  <ITEM NAME="#SPACE48"  TYPE="%-48s"  FUNCTIONS=""/>  
+  
+  
+  
+  <PAGE NAME="DEFAULT">
+     
+      
+  <BLOCK NAME="SELECT" LINE="0" COL="0" >   
+  <ITEM LINE="10"  COL="30" TYPE="%-10s" FUNCTIONS="T(操作类型:!)"/>  
+  <ITEM NAME="#OPRTYPE" LINE="10"  COL="40" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)" >
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.计息器"/>
+		<OPTION VALUE="2" TITLE="1.具体帐户"/>		
+	</SELECT>
+  </ITEM> 
+  </BLOCK>
+  
+  </PAGE>
+     
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" NAME="#BUTTON1" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+	"{
+        dim @tota as string;
+
+	      
+	      if (#OPRTYPE == '2')
+	      {
+             showblock('SELECT',false,true);	
+             show(#BUTTON1,false);	  
+             show(#BUTTON2,false);	    
+                            
+		     loadpage('PAGEACTINFO');  
+             showblock('ACTINFO',true,true);	
+             show(#BUTTON3,true);             
+			 goitem(#ACTNO);   
+	      }
+	      else
+	      {
+            	$FD2=$OPNBR;
+            	$FD3=$KINBR;
+            	$FD5=$HDATE;
+            	$FD7=$TLRNO;
+            	$FD10=$TTYNAME;
+            	$FD16='9941';
+            	$FD79=#PASSWD; 
+     	
+        		@tota=callserver();
+              if($FD12!='0000'){
+                  showmsg(geterror());
+                  return(false);
+              }
+             
+              
+             showblock('SELECT',false,true);
+             show(#BUTTON1,false);
+             show(#BUTTON3,false); 
+			       loadpage('PAGEINTRINFO');
+			       
+             setsel(#PRDTCODE,substr(@tota,0,41*62),'o5t30o1v3o2');    // 超过62个出错，暂时这么设置       
+             
+
+             // showmsg(getseltitle(#PRDTCODE,#PRDTCODE));
+             #PRDTTITLE=getseltitle(#PRDTCODE,#PRDTCODE);
+             showblock('INTRINFO',true,true);
+             showblock('RESULT',true,true);
+             show(#BUTTON2,true);
+	      }
+}"
+	</ONCLICK>
+  </ITEM>
+
+  
+  
+  
+  
+  <PAGE NAME="PAGEINTRINFO">
+  
+
+  <BLOCK NAME="INTRINFO" LINE="6" COL="10"  VISABLE="FALSE" > 
+      
+   <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+
+      
+   <ITEM LINE="0"  COL="5" TYPE="%-10s" FUNCTIONS="T(产品编号:!)"/>
+  <ITEM NAME="#PRDTCODE" LINE="0"  COL="15" TYPE="%-3s"  FUNCTIONS="T(101)"  INPUT="SELECT" DEVICE="KEYBOARD">
+		<SELECT>
+			<OPTION VALUE ="101" TITLE="101.储蓄人民币活期" />
+		</SELECT> 
+	
+  <ONLOSTFOCUS>"{
+             // showmsg(getseltitle(#PRDTCODE,#PRDTCODE));  
+             #PRDTTITLE=getseltitle(#PRDTCODE,#PRDTCODE);
+             showblock('INTRINFO',true,true);	             
+  }"
+  </ONLOSTFOCUS>
+
+  </ITEM>  
+ 
+
+
+  <ITEM LINE="1"  COL="5" TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="1"  COL="15" NAME="#PRDTTITLE" TYPE="%-50s" INPUT="TEXT" FUNCTIONS="" ENABLE="FALSE"/>
+
+  
+  <ITEM LINE="2"  COL="5"  TYPE="%-10s" FUNCTIONS="T(金    额:)"/>   
+  <ITEM LINE="2"  COL="15" NAME="#TXAMT" TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS="T(0)"/>
+
+  <ITEM LINE="3"  COL="5"  TYPE="%-14s" FUNCTIONS="T(起息日期:)"/>
+  <ITEM LINE="3"  COL="15" NAME="#BEG_DATE" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="V(NB)V(19000101,99991231)" />
+  
+  <ITEM LINE="4"  COL="5"  TYPE="%-10s" FUNCTIONS="T(终止日期:)"/>
+  <ITEM LINE="4"  COL="15" NAME="#END_DATE" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="V(NB)V(19000101,99991231)" >
+  <ONLOSTFOCUS>"{
+      if ( #BEG_DATE &gt; #END_DATE )
+      {
+          showmsg('终止日期应大于起息日期!');
+     	   	return(false);
+      }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+    
+  </BLOCK>    
+  
+  <BLOCK NAME="RESULT" LINE="12" COL="10"  VISABLE="FALSE" >   
+    <ITEM LINE="0"  COL="0"  TYPE="%-65s" FUNCTIONS=
+   "T(------------------------------------------------------------)"/>
+   
+ 
+  <ITEM LINE="2"  COL="5" TYPE="%-10s" FUNCTIONS="T(应付利息:)"/>   
+  <ITEM LINE="2"  COL="15" NAME="#LDEALVAL" TYPE="%21s" FUNCTIONS="X(#DEALVAL)"/>
+  <ITEM NAME="#DEALVAL" TYPE="%17.2f" FUNCTIONS="J(#LDEALVAL)"/>   
+
+  <ITEM LINE="3"  COL="5" TYPE="%-10s" FUNCTIONS="T(利 息 税:)"/>   
+  <ITEM LINE="3"  COL="15" NAME="#LTAXVAL" TYPE="%21s" FUNCTIONS="X(#TAXVAL)"/>
+  <ITEM NAME="#TAXVAL" TYPE="%17.2f" FUNCTIONS="J(#LTAXVAL)"/>   
+
+  <ITEM LINE="4"  COL="5" TYPE="%-10s" FUNCTIONS="T(保值金额:)"/>   
+  <ITEM LINE="4"  COL="15" NAME="#LKEEPVAL" TYPE="%21s" FUNCTIONS="X(#KEEPVAL)"/>
+  <ITEM NAME="#KEEPVAL" TYPE="%17.2f" FUNCTIONS="J(#LKEEPVAL)"/>   
+
+  <ITEM LINE="6"  COL="5" TYPE="%-10s" FUNCTIONS="T(实付利息:)"/>   
+  <ITEM LINE="6"  COL="15" NAME="#LFACTVAL" TYPE="%21s" FUNCTIONS="X(#FACTVAL)"/>
+  <ITEM NAME="#FACTVAL" TYPE="%17.2f" FUNCTIONS="J(#LFACTVAL)"/>   
+
+ 
+  </BLOCK>
+  </PAGE>
+   
+  
+  <ITEM LINE="21" COL="59" NAME="#BUTTON2" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" VISABLE="FALSE">
+  <ONCLICK>
+	"{
+	
+     	$FD2=$OPNBR;
+     	$FD3=$KINBR;
+     	$FD5=$HDATE;
+     	$FD7=$TLRNO;
+     	$FD10=$TTYNAME;
+     	$FD16='2403';
+     	$FD79=#PASSWD;
+      
+    	$FD23=#PRDTCODE;     	  	
+    	$FD41=getitems('#TXAMT');      	
+    	$FD46=#BEG_DATE;
+    	$FD47=#END_DATE;
+    	// $FD27='储蓄人民币活期                                    ';     	
+
+      $MSGTYPE='03001';
+     	$FD67='1';
+      $FD34='0000';
+      $FD44='00000000';     
+      
+    	callserver();
+    	
+ 			if($FD12!='0000' and $FD12!='D159')
+     	{
+     		showmsg(geterror());
+     		return(false);
+     	}
+
+    setitems('#DEALVAL#TAXVAL#KEEPVAL#FACTVAL#SPACE48',$FD100); 
+
+    showblock('RESULT',true,true);	   
+      
+    showmsg('计算利息成功!');
+
+    // showblock('INTRINFO',false,true);	
+    // show(#BUTTON2,false);
+              
+		// loadpage('DEFAULT');   	       	
+    // showblock('SELECT',true,true);	 
+    // show(#BUTTON1,true); 
+     
+	}"
+	</ONCLICK>
+  </ITEM>  
+  
+
+  
+  
+  
+  <PAGE  NAME="PAGEACTINFO">
+  
+  <BLOCK NAME="ACTINFO" LINE="4" COL="5"  VISABLE="FALSE" >
+  
+  <ITEM LINE="5"  COL="20" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="5"  COL="30" TYPE="%-18s"  FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+     	dim @baktxno as string;
+    	@baktxno=$TXNO;
+    	$TXNO='9741';
+    	$FD30=#ACTNO;
+    	
+    	$FD2=$OPNBR;
+    	$FD3=$KINBR;
+    	$FD5=$HDATE;
+    	$FD7=$TLRNO;
+    	$FD10=$TTYNAME;
+    	$FD16=$TXNO;
+    	$FD79=#PASSWD;
+	
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	setitems('#ACTNO24',$FD30);
+    	setitems('#ACTSEQN',$FD34);   
+  	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="7"  COL="20" TYPE="%-10s"    FUNCTIONS="T(账户序号:)"/>  
+  <ITEM LINE="7"  COL="30" NAME="#ACTSEQN" INPUT="TEXT" TYPE="%-4s" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{ 
+		dim @baktxno as string;
+		commsend_001();
+    	@baktxno=$TXNO;
+    	$TXNO='9740';
+    	$FD30=#ACTNO;
+    	$FD34=#ACTSEQN;
+      $FD16=$TXNO;
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	
+    	setitems('#TXAMT',$FD41);
+    	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="9"  COL="20" TYPE="%-10s" FUNCTIONS="T(支取日期)"/>
+  <ITEM LINE="9"  COL="30" NAME="#DRAWDATE" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="V(NB)V(19000101,99991231)" />
+
+  </BLOCK>
+  
+  <BLOCK NAME="DISPACTINFO" LINE="5" COL="5" VISABLE="FALSE">
+
+ 
+  <ITEM LINE="3"  COL="20" TYPE="%-10s" FUNCTIONS="T(本    金:)"/>
+  <ITEM LINE="3"  COL="30" NAME="#LAVBAL" TYPE="%21s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>   
+
+   
+  <ITEM LINE="4"  COL="20" TYPE="%-10s" FUNCTIONS="T(应付利息:)"/> 
+  <ITEM LINE="4"  COL="30" NAME="#LDEALVAL2" TYPE="%16s" FUNCTIONS="X(#DEALVAL2)"/>
+  <ITEM NAME="#DEALVAL2" TYPE="%17.2f" FUNCTIONS="J(#LDEALVAL2)"/>   
+
+   
+  <ITEM LINE="5"  COL="20" TYPE="%-10s" FUNCTIONS="T(利 息 税:)"/>
+  <ITEM LINE="5"  COL="30" NAME="#LTAXVAL2" TYPE="%16s" FUNCTIONS="X(#TAXVAL2)"/>
+  <ITEM NAME="#TAXVAL2" TYPE="%17.2f" FUNCTIONS="J(#LTAXVAL2)"/>   
+   
+  <ITEM LINE="6"  COL="20" TYPE="%-10s" FUNCTIONS="T(保值利息:)"/>   
+  <ITEM LINE="6"  COL="30" NAME="#LKEEPVAL2" TYPE="%16s" FUNCTIONS="X(#KEEPVAL2)"/>
+  <ITEM NAME="#KEEPVAL2" TYPE="%17.2f" FUNCTIONS="J(#LKEEPVAL2)"/>   
+
+  
+  <ITEM LINE="8"  COL="20" TYPE="%-10s" FUNCTIONS="T(应付总额:)"/>  
+  <ITEM LINE="8"  COL="30" NAME="#LTXAMT2" TYPE="%16s" FUNCTIONS="X(#TXAMT2)"/>
+  <ITEM NAME="#TXAMT2" TYPE="%17.2f" FUNCTIONS="J(#LTXAMT2)"/>   
+  
+     
+  <ITEM LINE="9"  COL="20" TYPE="%-10s" FUNCTIONS="T(账户余额:)"/> 
+  <ITEM LINE="9"  COL="30" TYPE="%16s" FUNCTIONS="T(0.00)"/> 
+ 
+  </BLOCK>
+  
+  </PAGE>
+  
+  <ITEM LINE="21" COL="59" NAME="#BUTTON3" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" VISABLE="FALSE">
+  <ONCLICK>
+	"{
+
+	   if (#ACTNO=='')
+	   {
+         showblock('DISPACTINFO',false,false);	
+         show(#BUTTON1,false);
+         show(#BUTTON2,false);   
+ 	       	
+         showblock('ACTINFO',true,false);	 
+         return(true);   
+	   
+	   }
+	   
+     	$FD2=$OPNBR;
+     	$FD3=$KINBR;
+     	$FD5=$HDATE;
+     	$FD7=$TLRNO;
+     	$FD10=$TTYNAME;
+     	$FD16='2403';
+     	$FD79=#PASSWD;
+
+    	$FD31=#ACTNO; 
+    	$FD34=#ACTSEQN;     	
+    	$FD44=#DRAWDATE;     	
+
+     	$FD67='2';
+    
+    	callserver();
+    	
+ 			if($FD12!='0000')
+     	{
+     		showmsg(geterror());
+     		return(false);
+     	}
+        	
+    setitems('#SPACE203#DEALVAL2#TAXVAL2#KEEPVAL2#TXAMT2#SPACE111',$FD102); 
+    setitems('#AVBAL',$FD41); 
+
+    showblock('ACTINFO',false,false);	
+    show(#BUTTON1,false);
+    show(#BUTTON2,false);  
+   
+    showblock('DISPACTINFO',true,true);	
+    showmsg('计算利息成功!');
+
+	}"
+	</ONCLICK>
+  </ITEM>    
+   
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+
+    
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="计算利息成功！">
+   NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    $KINDNO=='00';
+    if(#OPRTYPE=='1')
+   {print( 3, 25,'交易成功！‘);
+    print( 9, 25,'应付利息:[16]',#DEALVAL);
+		print( 10, 25,'利 息 税:[16]',#TAXVAL);
+		print( 11, 25,'保值金额:[16]',#KEEPVAL);
+		print( 13, 25,'实付利息:[16]',#FACTVAL);
+
+	 }
+	 else
+	 {
+    print( 3, 22,'交易成功！‘);
+		print( 7, 25,'本    金:[16]',#AVBAL);
+    print( 6, 25,'应付利息:[16]',#DEALVAL2);
+		print( 7, 25,'利 息 税:[16]',#TAXVAL2); 
+		print( 8, 25,'保值利息:[16]',#KEEPVAL2)
+    print( 10, 25,'应付总额:[16]',#TXAMT2);
+    print( 11, 25,'帐户余额:  0.00');
+    }
+    }"
+   </PRINT>
+</RESPONSE>
+ 
+ </TRANSACTION>
+
+

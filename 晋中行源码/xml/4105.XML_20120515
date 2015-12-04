@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000000000000000000000000000" TITLE="4105 二级账户开户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD30=#ACTNO;
+	$FD44=#ACSEQ;
+	$FD25=#SNAME;
+	$FD67=#JXBZ;
+	$FD68=#LVLX;
+	$FD84=getitems('#LILV');
+	$FD53=#XQBH;
+	$FD54=#LPBH;
+	$FD55=#DYBH;
+	$FD69=#S_PAPERTYPE;
+	$FD62=#S_PAPERNO;
+	$FD63=#S_TELEPHONE;
+	$FD61=#TXM;
+	$FD70=#XZBZ;
+	$FD40=getitems('#TX_AMT');
+	if(#XZBZ == '1')  //现金
+	{
+		$FD102 = '';
+	}
+	else                //转帐
+	{
+		$FD102 = #TRAN_AC_NO+space(24-len(#TRAN_AC_NO))+#SEQNO_102+#TRAN_CTY+#TTRAN_CNM+space(1)+#TRAN_PDOT+space(6)+#TRAN_PWD+#TRAN_CDOT+#TRAN_CNUM+space(20-len(#TRAN_CNUM))+#TRAN_SDOT+space(17)+#STDAY+space(8-len(#STDAY))+getitems('#TX_AMT')+#S_PAPERTYPE+#TRAN_NAME+getitems('#TRAN_BAL')+#TRAN_CUR+#XZBZ+#ZY_TP+space(3-len(#ZY_TP))+#ACTLX+#SEQNO2+#PRTNB+space(80)+#SPECIAL+#TRAN_PDN+#TRAN_AC_NO+space(24-len(#TRAN_AC_NO))+space(1)+#ZY;
+	}
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	if($FD12!='0000')
+	{
+		return(false);
+	}
+	setitems('#SUB_AC_NO',$FD33);
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+    "T(4105                         二级账户开户)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2109)"/>
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(4105)" />
+  <ITEM NAME="#TXNAME" TYPE="%-20s" FUNCTIONS="T(二级账户开户)" />
+  <ITEM NAME="#ACT_LX"    TYPE="%-5s"  FUNCTIONS="T(2)"/>
+  <ITEM NAME="#ACT_LX_CK" TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#SEQNO2"      TYPE="%4s"  FUNCTIONS="T(0000)"/>  <!---帐户序号2--->
+  <ITEM NAME="#PRTNB"       TYPE="%1s"  FUNCTIONS="T(1)"/>     <!---打折标志--->
+
+  <PAGE NAME="DEFAULT">
+  <BLOCK NAME="ACTINFO" LINE="1" COL="0" >
+  <ITEM LINE="5"  COL="7"  TYPE="%-10s" FUNCTIONS="T(一级账号:)" />
+  <ITEM LINE="5"  COL="45"  TYPE="%-10s" FUNCTIONS="T(序    号:)" />
+  <ITEM LINE="6"  COL="7"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="7" COL="7"  TYPE="%-12s" FUNCTIONS="T(子账户户名:)" />
+  <ITEM LINE="8"  COL="7"  TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+  <ITEM LINE="9"  COL="7" TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+  <ITEM LINE="10"  COL="7"  TYPE="%-10s" FUNCTIONS="T(联系电话:)" />
+  <ITEM LINE="11"  COL="7"  TYPE="%-10s" FUNCTIONS="T(计息标志:)" />
+  <ITEM LINE="11"  COL="35"  TYPE="%-10s" FUNCTIONS="T(利率类型:)" />
+  <ITEM LINE="12"  COL="7"  TYPE="%-10s" FUNCTIONS="T(利    率:)" />
+  <ITEM LINE="12"  COL="28"  TYPE="%-2s" FUNCTIONS="T(％)" />
+  <ITEM LINE="13"  COL="7"  TYPE="%-10s" FUNCTIONS="T(现转标志:)" />
+  <ITEM LINE="13"  COL="35"  TYPE="%-10s" FUNCTIONS="T(开户金额:)" />
+  <ITEM LINE="16" COL="7" TYPE="%-10s" FUNCTIONS="T(楼盘编号:)"/>
+  <ITEM LINE="16" COL="35" TYPE="%-10s" FUNCTIONS="T(单元编号:)"/>
+  <ITEM LINE="17" COL="7" TYPE="%-10s" FUNCTIONS="T(条 形 码:)"/>
+
+  <ITEM LINE="5" COL="18" NAME="#ACTNO" TYPE="%-19s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+ <ONLOSTFOCUS>
+  "{
+		initfd();
+		commsend_001();
+		$FD16='6700';
+		$FD30=#ACTNO;
+		$FD67='1';
+		$FD65='2109';
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if($FD2 != $FD3)
+		{
+			showmsg('请到主账户的开户行进行维护!['+$FD2+']');
+			return(false);
+		}
+		// #ACSEQ= $FD77;
+		#CHELILV=val($FD84,0.000001);
+		#NAME=delspace($FD25);
+		#ACTNO=delspace($FD30);
+   }"
+ </ONLOSTFOCUS>
+	</ITEM>
+  <ITEM LINE="5" COL="56" NAME="#ACSEQ" TYPE="%-5s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()"> <!-- add by chenchao 手输序号-->
+ <ONLOSTFOCUS>
+  "{
+		if(#ACSEQ == '00000')
+		{
+		  showmsg('子序号不允许为0!!!');
+			return(false);
+		}
+		initfd();
+		commsend_001();
+		$FD16='9677';
+		$FD101=getitems('#ACTNO');
+		$FD44=#ACSEQ;
+		callserver();
+		if($FD12=='0000')
+		{
+			showmsg('已存在此序号!!!');
+			return(false);
+		}else if($FD12 != 'D104')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		$BUFFER=delspace($FD30);
+
+		dim @tota as string;
+		commsend_001();
+		$FD16='9799';
+		$FD67='1';
+		@tota=callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		setsel(#S_PAPERTYPE,@tota,'o5t20o1v1o2');
+   }"
+ </ONLOSTFOCUS>
+</ITEM>
+
+  <ITEM NAME="#NAME" LINE="6" COL="18" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM LINE="7" COL="18" NAME="#SNAME" TYPE="%-50s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" />
+  <ITEM LINE="8" COL="18" NAME="#S_PAPERTYPE" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" />
+  <ITEM LINE="9" COL="18" NAME="#S_PAPERNO" TYPE="%-19s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>
+  "{
+		dim @l as number;
+		dim @tota as string;
+		@l = len(#S_PAPERNO);
+		if('1' == #S_PAPERTYPE){
+			if(@l == 15 or  @l == 18){
+			}else{
+			showmsg('身份证号码位数错误');
+			return(false);
+			}
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="10" COL="18" NAME="#S_TELEPHONE" TYPE="%-19s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" />
+
+   <ITEM LINE="11"  COL="18" NAME="#JXBZ" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="V(0|4)V(NB)">
+     <SELECT>
+           <OPTION VALUE="0" TITLE="0.不计息"/>
+           <OPTION VALUE="4" TITLE="4.按季计息"/>
+     </SELECT>
+   <ONLOSTFOCUS>"{
+	if(#JXBZ == '0')
+	{
+		#LILV=0.00;
+		enable(#LILV,false);
+		enable(#LVLX,false);
+	}else{
+		enable(#LILV,false);
+		enable(#LVLX,true);
+	}
+   }"</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM NAME="#jxbz1" TYPE="%-10s" FUNCTIONS="S(#JXBZ,#JXBZ)"/>
+   <ITEM LINE="11" COL="45" NAME="#LVLX" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+   	<SELECT>
+   		<OPTION VALUE="0" TITLE="0.正常利率"/>
+   		<OPTION VALUE="1" TITLE="1.优惠利率"/>
+   	</SELECT>
+   	<ONLOSTFOCUS>
+   	"{
+		if(#LVLX == '1')
+		{
+			enable(#LILV,true);
+		}else
+		{
+			#LILV=#CHELILV;
+			enable(#LILV,false);
+		}
+
+   	}"
+   	</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM NAME="#CHELILV" TYPE="%8.5f" FUNCTIONS="" />
+   <ITEM LINE="12" COL="18" NAME="#LILV" TYPE="%8.5f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" />
+   <ITEM LINE="13" COL="18" NAME="#XZBZ" TYPE="%1s" INPUT="SELECT" FUNCTIONS="T(1)V(NB)" >
+   <SELECT>
+     <OPTION VALUE="1" TITLE="1.现金"/>
+     <OPTION VALUE="2" TITLE="2.转账"/>
+   </SELECT>
+   <ONLOSTFOCUS>
+   "{
+      if(#XZBZ=='1')
+      {
+        show("#NEXT",false);
+        show("#SEND",true);
+      }
+      else
+      {
+        show("#SEND",false);
+        show("#NEXT",true);
+      }
+    }"
+   </ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="13" COL="45" NAME="#TX_AMT" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(0000000000000000,9999999999999999)V(NB)" />
+   <ITEM LINE="14" COL="07" NAME="#LXQBH" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区编号:)"/>
+   <ITEM LINE="14" COL="18" NAME="#XQBH"  TYPE="%-6s"   INPUT="TEXT"  FUNCTIONS="V(000000,999999)" >
+   		<ONLOSTFOCUS>
+   		"{
+   			dim @tota as string;
+   			dim @mc   as string;
+   			initfd();
+   			commsend_001();
+   			$FD16='9598';
+   			//新旧账都可以查到
+   			$FD123='select xqdz15 from xqdz where xqdz100 in('+chr(39)+$BUFFER+chr(39)+','+chr(39)+#ACTNO+chr(39)+') and xqdz101='+chr(39)+#XQBH+chr(39);
+   			@tota=callserver();
+   			if($FD12!='0000')
+   			{
+   				showmsg(geterror());
+   				return(false);
+   			}
+   			@mc=strfld(@tota,'|',0);
+   			if(delspace(@mc)=='')
+   			{
+   				showmsg('没有查询到对应的小区信息');
+   				return(false);
+   			}
+   			#XQMC=@mc;
+   		}"
+   		</ONLOSTFOCUS>
+   	</ITEM>
+   	<ITEM LINE="15" COL="07" NAME="#LXQMC" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区名称:)" />
+   	<ITEM LINE="15" COL="18" NAME="#XQMC"  TYPE="%-50s" INPUT="LABEL" FUNCTIONS="" />
+   <ITEM LINE="16" COL="18" NAME="#LPBH" TYPE="%-6s" INPUT="TEXT" FUNCTIONS="V(000000,999999)"/>
+   <ITEM LINE="16" COL="45" NAME="#DYBH" TYPE="%-6s" INPUT="TEXT" FUNCTIONS="V(000000,999999)"/>
+   <ITEM LINE="17" COL="18" NAME="#TXM"  TYPE="%-16s" INPUT="TEXT" FUNCTIONS="V(NB)" />
+   </BLOCK>
+   <ITEM LINE="21"  COL="59" NAME="#NEXT" TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON" VISABLE="FALSE" >
+   <ONCLICK>
+   "{
+     loadpage('PAGE5');
+   }"
+   </ONCLICK>
+   </ITEM>
+   <ITEM LINE="21"  COL="59" NAME="#SEND" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+   </PAGE>
+
+  <!-- 转帐：输入对方帐户信息 -->
+  <IMPORT>OPN_ACCT_PAGE5.IMP</IMPORT>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SUB_AC_SEQN" TYPE="%5s" FUNCTIONS=""/>
+  <ITEM NAME="#SUB_AC_NO" TYPE="%-25s" FUNCTIONS=""/>
+<!--返回变量 -->
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键返回">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3 ,25,'     二级账户开户');
+		print(4 ,25,'------------------------');
+		print(6 ,25,'一级账户:[24]',#ACTNO);
+		print(8 ,25,'子 账 户:[5]',substr($FD122,0,5));
+		print(10,25,'流 水 号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="打印业务凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print_nxywpz1();
+		print(9 ,10,'一级账户:[24]',#ACTNO);
+		print(10 ,10,'客户名称:[50]',#NAME);
+		print(11 ,10,'子 账 户:[5]',substr($FD122,0,5));
+		print(12 ,10,'子户名称:[50]',#SNAME);
+		print(13 ,10,'计息标志:[10]',#jxbz1);
+		print(14 ,10,'开户金额:[10]',val(#TX_AMT,0.01));
+		print_nxywpz2();
+	}"
+	</PRINT>
+</RESPONSE>
+<IMPORT>CX_QK_VOC.IMP</IMPORT>
+<IMPORT>CXCZ.IMP</IMPORT>
+<LASTWORK>
+	"{
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J001';
+		$FD40=#TXM;                    //条形码
+		$FD30=#SUB_AC_NO;              //账  号
+		$FD5=$HDATE;                   //开户日期
+		$FD39=getitems('#TX_AMT');     //开户金额
+		$FD41=$KINBR;                  //银行代码
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易未成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+	}"
+</LASTWORK>
+</TRANSACTION>
+

@@ -1,0 +1,242 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mq_retmsg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mq_retmsg_con ( struct mq_retmsg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mq_retmsg_c* ps){
+	zip_tail(ps->addword_no);
+	zip_tail(ps->addwork);
+}
+int Mq_retmsg_Debug(struct mq_retmsg_c *ps){
+	printf("mq_retmsg_c.addword_no=[%s]\n",ps->addword_no);
+	printf("mq_retmsg_c.addwork=[%s]\n",ps->addwork);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分                           ****/
+/*****************************************************************************/
+int Mq_retmsg_Sel(reply,mq_retmsg_c,fmtstr,va_alist)
+char    *reply;
+struct  mq_retmsg_c *mq_retmsg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mq_retmsg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mq_retmsg_Fet_Sel( mq_retmsg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mq_retmsg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mq_retmsg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT mq_retmsg.* FROM mq_retmsg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mq_retmsg_sel FROM :comm;
+	EXEC SQL DECLARE sel_mq_retmsg CURSOR FOR mq_retmsg_sel;
+
+	EXEC SQL OPEN sel_mq_retmsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mq_retmsg_Fet_Sel ( struct mq_retmsg_c *mq_retmsg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mq_retmsg INTO :mq_retmsg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mq_retmsg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mq_retmsg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mq_retmsg_c);
+
+	return 0;
+}
+
+int Mq_retmsg_Clo_Sel (){
+	EXEC SQL CLOSE sel_mq_retmsg;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mq_retmsg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT mq_retmsg.* FROM mq_retmsg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mq_retmsg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mq_retmsg CURSOR FOR mq_retmsg_upd;
+
+	EXEC SQL OPEN upd_mq_retmsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mq_retmsg_Fet_Upd( struct mq_retmsg_c *mq_retmsg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mq_retmsg INTO :mq_retmsg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mq_retmsg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mq_retmsg_c);
+
+	return 0;
+}
+
+int Mq_retmsg_Upd_Upd( struct mq_retmsg_c mq_retmsg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mq_retmsg SET addword_no=:mq_retmsg_c.addword_no,
+			addwork=:mq_retmsg_c.addwork
+	WHERE 1=0;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+	pub_reg_rec_file(" upd mq_retmsg"); 
+
+	return 0;
+}
+
+
+int Mq_retmsg_Del_Upd(struct mq_retmsg_c mq_retmsg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mq_retmsg WHERE rowid='0000';
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mq_retmsg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mq_retmsg;
+
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mq_retmsg_Ins( struct mq_retmsg_c mq_retmsg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mq_retmsg VALUES (:mq_retmsg_c.addword_no,
+			:mq_retmsg_c.addwork);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mq_retmsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+	pub_reg_rec_file(" ins mq_retmsg"); 
+
+	return 0;
+}

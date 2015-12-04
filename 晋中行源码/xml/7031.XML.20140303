@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="4822  VTM对账明细查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+		"T(4822                            VTM对账明细查询)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=4822)"/>
+	
+	<ITEM LINE="9" COL="25" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+	<ITEM LINE="9" COL="35" NAME="#TXDATE" TYPE="%-8s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()D()">
+		<ONGOTFOCUS>
+		"{
+				dim @txday as date;
+				
+				@txday = substr($HDATE, 0, 4) + substr($HDATE, 4, 2) + substr($HDATE, 6, 2);
+				#TXDATE = @txday - 1;
+				show(#TXDATE, true);
+				//enable(#TXDATE, false);
+		}"
+		</ONGOTFOCUS>
+	</ITEM>
+		
+	<ITEM LINE="12" COL="25" TYPE="%-10s" FUNCTIONS="T(交易类型:)"/>
+	<ITEM LINE="12" COL="35" TYPE="%1s" NAME="#TXTYPE" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0"  TITLE="0.全部"/>
+			<OPTION VALUE="1"  TITLE="1.活期开户"/>
+			<OPTION VALUE="2"  TITLE="2.定期存单销户"/>
+			<OPTION VALUE="3"  TITLE="3.存款"/>
+			<OPTION VALUE="4"  TITLE="4.存款确认"/>
+			<OPTION VALUE="5"  TITLE="5.取现"/>
+			<OPTION VALUE="6"  TITLE="6.取现冲正"/>
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="15" COL="25" TYPE="%-10s" FUNCTIONS="T(对账状态:)"/>
+	<ITEM LINE="15" COL="35" TYPE="%1s" NAME="#STAT" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0"  TITLE="0.全部"/>
+			<OPTION VALUE="5"  TITLE="1.对账成功"/>
+			<OPTION VALUE="6"  TITLE="2.对账失败"/>
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+				dim @num as number;
+				dim @tota as string;
+				dim @selid as number;
+				
+				initfd();
+				commsend_001();
+				$FD16 = '5099';
+				$FD60 = 'VTMC';
+				$FD44 = #TXDATE;
+				$FD67 = #TXTYPE;
+				$FD68 = #STAT;
+				callagnpt();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				
+				@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+				autolist(@tota);
+				while (true)
+				{
+					@selid = list_work();
+					if (@selid &lt; 0)
+					{
+						closeall();
+						return(true);
+					}
+					else
+					{
+						runoutput();
+						closeall();
+						return(true);
+					}
+				}
+		}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印本页记录">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		list_print();
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

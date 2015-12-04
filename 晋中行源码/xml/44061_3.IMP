@@ -1,0 +1,124 @@
+<!-----定义callserver用得变量----------> 
+
+<!-- 定义放在4406中
+  <ITEM NAME="#FD120_1"   TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_2"   TYPE="%-60s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_3"   TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_4"   TYPE="%-2s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD120_5"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD120_6"   TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD120_7"   TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_8"   TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_9"   TYPE="%-2s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD120_10"  TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD120_11"  TYPE="%-2s"   FUNCTIONS=""/>
+-->
+	
+
+
+  <ITEM NAME="LACTNO_3" LINE="1"  COL="0" TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(扣划帐号: )"/>
+  <ITEM NAME="#CPH" TYPE="%-4s"/>
+  <ITEM NAME="#JJH" TYPE="%-20s"/>
+ <ITEM NAME="#ACTNO_3" INPUT="TEXT" LINE="0"  COL="10" TYPE="%-20s" VISABLE="TRUE" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+	dim @baktxno as string;
+	@baktxno=$TXNO;
+	$TXNO='9989';
+	$FD120=#ACTNO_3;
+	commsend_001();
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	setitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_10#FD120_11',$FD120);
+	#CD120=$FD120;
+
+	#CUSTNAME_3 = #FD120_2;
+	#LAVBAL_3 = itoa(val(#FD120_3,0.01),'%.2f');
+	#BIZHONG_3 = #FD120_4;
+
+	show(#CUSTNAME_3,true);
+	show(#LAVBAL_3,true);
+	show(#BIZHONG_3,true);
+	#XZCAVBAL_3 = itoa(#KHJE, '%.2f');
+	
+	#CPH=$FD24;
+	 if(#CPH=='142' or #CPH=='144')
+  {
+  	  dim @tota1 as string;
+			dim @dkid as string;
+			initfd();
+			commsend_001();
+			$FD16='9598';
+			$FD123 = 'select ac_id from mdm_ac_rel where ac_no='+chr(39)+#DKZH+chr(39)+'';
+			@tota1 = callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if(@tota1!='')
+			{
+				@dkid = strfld(@tota1,'|',0);
+				dim @tota2 as string;
+			  initfd();
+			  commsend_001();
+			  $FD16='9598';
+			  $FD123 = 'select pact_no from ln_mst where ac_id='+chr(39)+@dkid+chr(39)+''; 
+			  @tota2 = callserver();
+			  if($FD12!='0000')
+			  {
+			  	showmsg(geterror());
+			  	return(false);
+			  }              
+			  if(@tota2!='') 	
+			  {
+			    #JJH = strfld(@tota2,'|',0); 
+			    dim @tota3 as string;
+			    initfd();
+			    commsend_001();
+			    $FD16='9598';
+			    $FD123 = 'select * from ln_auth where type='+chr(39)+'13'+chr(39)+' and sts='+chr(39)+'X'+chr(39)+' and pact_no='+chr(39)+#JJH+chr(39)+' and pay_ac_no='+chr(39)+ #ACTNO_3+chr(39)+'';
+			    @tota3 = callserver();
+			    if($FD12!='0000')
+			    {
+			    	showmsg(geterror());
+			    	return(false);
+			    }              
+			    if(@tota3=='') 	
+			    {  
+			    	showmsg('担保保证金取款需要审批');
+		        return(false);
+			    } 
+			  }
+			 } 	
+  }
+
+	showblock('KH_PGE3',true,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  LINE="2"  COL="0" TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+
+  <ITEM LINE="4"  COL="0"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"  COL="0"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="6"  COL="0"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="10" COL="0"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(扣划金额:)"/>
+
+  <ITEM NAME="#CUSTNAME_3" LINE="4"  COL="10" TYPE="%-60s" INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>
+
+  <ITEM NAME="#BIZHONG_3"  LINE="5"  COL="10" TYPE="%2s" INPUT="SELECT"  ENABLE="FALSE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+
+<!--
+  <ITEM NAME="#LAVBAL_3" LINE="6"  COL="10" TYPE="%-16s" FUNCTIONS="X(#AVBAL_3)"/>
+  <ITEM NAME="#AVBAL_3"  TYPE="%17.2f" FUNCTIONS="J(#LAVBAL_3)"/>
+  -->
+ <ITEM NAME="#LAVBAL_3"  LINE="6"  COL="10" TYPE="%-16s" FUNCTIONS=""/>
+
+  <ITEM LINE="10" COL="10" NAME="#XZCAVBAL_3" TYPE="%-16s" FUNCTIONS=""/>

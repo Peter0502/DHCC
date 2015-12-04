@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1830        电子申报机构查询"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1830                         电子申报机构查询 )"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1830)"/>
+	<ITEM NAME="#TXNAME"   TYPE="%-30s"  FUNCTIONS="T(电子申报机构查询)"/>
+	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS=""/>
+	<ITEM LINE="6" COL="15" TYPE="%-10s" FUNCTIONS="T(查询类型：)"/>
+	<ITEM LINE="6" COL="25" NAME="#QryTp" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+		<SELECT>		
+			<OPTION VALUE="1" TITLE="单条"/>
+			<OPTION VALUE="2" TITLE="批量"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#QryTp == '1')
+			{
+				showblock('BLOCK_SIG',true,true);
+			}
+			else
+			{
+				showblock('BLOCK_SIG',false,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="BLOCK_SIG" LINE="8"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0" COL="15" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(机构代码：)"/>
+	<ITEM LINE="0" COL="25" NAME="#ptyid" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	</BLOCK>
+	<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+		<ONCLICK>
+		"{
+		 		//dim @f as file;
+				dim @buffer as string;
+				dim @selid as number; 
+				if(#DOLIST=='1')     
+				 initfd();
+				commsend_001();
+				$FD16='2307';
+				$FD18='pbp';
+				$FD28='sxps';
+				$FD23=#QryTp;
+				if ('1' == #QryTp)
+				{
+					$FD74=#ptyid;
+				}
+				callagnpbp();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}																
+				@buffer=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+				if(@buffer == '')
+				{
+					showmsg('未找到记录!');
+					return(false);
+				}
+				if(autolist('~'+@buffer))
+				{    
+				    list_show();                            
+				}
+				return(true);
+			}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>"{
+			list_print();
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

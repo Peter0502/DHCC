@@ -1,0 +1,82 @@
+#!/bin/sh
+cd $HOME/src/dataover/data
+TMPFILE=/tmp/tmp.a
+CONTFLAG=0
+FROMFILE=$1
+#printf "导入基础数据文件吗?(y/n)[y]"
+#read ans
+
+if [ "$ans" = y ] || [ "$ans" = "Y" ] || [ "$ans" = "" ]
+then
+	SUM=`ls *.dat|grep -c .dat`
+	NUM=0
+	FILES=`ls *.dat`
+	echo "正在导入基础数据文件>>>"
+	for FILE in $FILES
+	do
+		if [ "$FROMFILE" = "" ] || [ "$FROMFILE" = $FILE ]
+		then
+			CONTFLAG=1
+		fi
+		printf "完成[%2d]%%,正在处理%25s...\r" `expr $NUM '*' 100 '/' $SUM` $FILE
+		if [ "$CONTFLAG" = "1" ]
+		then
+			TABLE=`basename $FILE .dat`
+	#		echo loadtable $TABLE $DB_USER $DB_PASSWD
+			loadtable $TABLE $DB_USER $DB_PASSWD >$TMPFILE
+			ERR=`cat $TMPFILE|grep ERROR`
+			if [ "$ERR" != "" ]
+			then
+				cat $TMPFILE
+				rm -f $TMPFILE
+				exit 1
+			fi
+			rm $TMPFILE
+		fi
+		NUM=`expr $NUM + 1`
+	done
+	echo "
+	delete from clt_id_seq;
+	delete from in_id_seq;
+	delete from cif_no_per;
+	delete from cif_no_com;
+	delete from cif_no_in;
+	insert into  clt_id_seq values(100000000);
+	insert into  in_id_seq values(900000000);
+	insert into  cif_no_per values(1000000);
+	insert into  cif_no_com values(5000000);
+	insert into  cif_no_in values(9000000);
+	update in_ac_seqn set seque=0;
+	update auth_seqn set seqn=1;
+	commit;
+	"|sql
+fi
+DATE=`date "+%Y%m%d"`
+#printf "请输入初始化系统日期:[$DATE]"
+#read ans
+#if [ "$ans" != "" ]
+#then
+#	DATE=$ans
+#fi
+init1 $DATE
+if [ $? != 0 ]
+then
+	exit 1
+fi
+init2 $DATE 20121231
+if [ $? != 0 ]
+then
+	exit 1
+fi
+init3
+if [ $? != 0 ]
+then
+	exit 1
+fi
+/*对gl_sub表初始化*/
+#initfortran $DATE
+#if [ $? != 0 ]
+#then
+#	exit 1
+#fi
+echo "All data loaded!"

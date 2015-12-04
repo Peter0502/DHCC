@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3713 IC卡销卡业务"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<COMMSEND>
+	 "{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		commsend_001();
+		$FD30=#ACTNO;
+		$FD16='9961'; //输入卡号，回显证件信息
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		$TXNO=@baktxno;
+		#NAME=delspace($FD25);
+		#CERTTYPE=delspace($FD67);
+		#CERTNO=delspace($FD62);
+		//add by xmh 20111118 调用IC卡的销卡交易
+		if(substr(#ACTNO,0,6) == '621780')
+		{
+			dim @shuju as string;
+			dim @update as string;
+			initfd();
+			commsend_001();
+			$FD16='7102';
+			$FD30=#ACTNO;
+			$FD79=#DRAW_PWD;
+			$FD75=#TRACK2;
+			$FD76=#TRACK3;
+			$FD67=#CERTTYPE;
+			$FD62=#CERTNO;
+			$FD95=#ACCT_CLOSE;
+//#LAVBAL='';
+			if(#CASHFLAG=='2')
+			{
+				$FD39=itoa(val(#LAVBAL,100),'%016.2f');  // 交易金额
+				$FD37=#DFNO;
+			}
+			else
+			{
+				$FD39=itoa(val(#LAVBAL,100),'%016.2f');  // 交易金额
+				$FD37='';
+			}
+
+			showmsg('AMT='+$FD39);
+			@shuju= initiccard();
+			if(strfld(@shuju,'|',0)!='9000')
+			{
+				showmsg('函数initiccard返回值有误!');
+				return(false);
+			}
+			#ICJSQ=strfld(@shuju,'|',2);
+			#ICMW=strfld(@shuju,'|',3);
+			showmsg('应用JSQ='+#ICJSQ);
+			showmsg('应用密文#ICMW='+#ICMW);
+			$FD36=#ICJSQ;
+			$FD59=#ICMW;
+			if(chkiccard()!='0000')
+				{
+					showmsg('往神码发交易前，不允许拔卡!');
+					//goitem('#ACTNO');
+					//loadpage('DEFAULT');
+					return(false);
+				}
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			#TRAN_FEE = $FD40;
+			#CARD_TRACENO = delspace(itoa(val($FD43),'%16d'));
+			//showmsg(' #CARD_TRACENO ='+ #CARD_TRACENO );
+			showmsg('脚本为'+$FD108);
+			@update=updateiccard($FD108);
+			//add beg 20111206
+			//@update=updateiccard('04DA9F790a0000000850006F94ABF1,04DC010C42703C9F61123635333132323139383630373135343431349F62010057136217800109002658D30122200004400284000F5F200848414E204348414F9F1F00260D27E7');
+			//#ORIG_SEQNO=delspace(itoa(val($FD43),'%16d'));
+//$FD12='0000';
+//#RESP_CODE=$FD12;
+		if(@update!='9000')
+			{
+				showmsg(geterror());
+				//return (false);
+			}
+			  //add end 20111206
+		}
+
+		//卡卡转账销户(相当于卡存款) add by ck 20091122
+		if((substr(#DFNO,0,6)=='621223') and (substr(#ACTNO,0,6) == '621780') and (#CASHFLAG=='2'))
+		{
+			initfd();
+			commsend_001();
+			$FD16='7004';
+			$FD30=#DFNO;
+			$FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+			callagn();
+			//卡卡转账销户交易卡处理开户失败时，往数码发送卡销户撤销交易 add by ck 091122
+			if($FD12!='0000')
+			{
+				#RESP_CODE=$FD12;
+				showmsg(geterror());
+				initfd();
+				commsend_001();
+				$FD16='7777';
+				$FD12=#RESP_CODE;
+				$FD30=#ACTNO;
+				$FD39=itoa(#TXAMT*100);
+				$FD43=#CARD_TRACENO;
+				callagn();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					//return (false);
+				}
+				showmsg('卡销户失败!!...');
+			}
+			#CARD_TRACENO_TRAN=delspace(itoa(val($FD43),'%16d'));
+			//#TRAN_FEE=$FD40;
+		}
+		//折卡转账销户(相当于卡存款) add by ck 20091122
+		else if ((substr(#ACTNO,0,6)!='621780') and (substr(#DFNO,0,6)=='621780')  and (#CASHFLAG=='2'))
+		{
+			initfd();
+			commsend_001();
+			$FD16='7004';
+			$FD30=#DFNO;
+			$FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+			callagn();
+			//卡转账销户交易卡处理开户失败时，往数码发送卡销户撤销交易 add by ck 091122
+
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			#CARD_TRACENO_TRAN=delspace(itoa(val($FD43),'%16d'));
+			//#TRAN_FEE=$FD40;
+		}
+		//loadfds(@filename);
+		//与神码通讯 End by ck
+showmsg('开始1-2204!');
+#ACTNO='6217800000000000566';
+		initfd();
+		commsend_001();
+		$FD12='2204';
+		$FD16='9986';
+		//#ACT_LX_CK=#ACT_LX;
+		if(#VOCTYPE=='013' or #VOCTYPE=='014')
+		{
+			#ACT_LX='3';
+		}
+showmsg('开始2-2204!');
+		//ACCOUNTFLAG和ACTTYPE已互换
+		if(#CASHFLAG=='2')
+		{
+			$FD101=getitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME');
+		}
+		else
+		{
+			$FD101=space(28,' ')+getitems('#AVBAL')+space(98,' ')+'2'+space(3,' ')+'20000';
+		}
+		$FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+		callserver();
+showmsg('开始3-2204!');
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+showmsg('开始4-2204!');
+		$MSGTYPE='03001';
+		$FD16='2204';
+	 }"
+	</COMMSEND>
+	<COMMRECV>
+"{
+commrecv_001();
+//showmsg('$FD12='+$FD12);
+//如果是转账销卡户,记录核心返回的12域返回错误代码,否则记为0000,确保是否需要进行转存款的撤销
+if(($FD12!='0000') and ($FD12!='Z003') )
+{
+#RESP_CODE_TRAN=$FD12;
+//showmsg('#RESP_CODE_TRAN='+#RESP_CODE_TRAN);
+}
+else
+{
+#RESP_CODE_TRAN='0000';
+}
+//add by ck 2009 1122
+//卡转账销户核心处理失败往数码发送卡存款撤销交易
+if(($FD12 != '0000') and ($FD12 != 'Z003') and (substr(#DFNO,0,6)=='621223')and (#CASHFLAG=='2'))
+{
+//#RESP_CODE=$FD12;
+//showmsg('#RESP_CODE='+$FD12);
+//showmsg(geterror());
+initfd();
+commsend_001();
+$FD16='7777';
+$FD12=#RESP_CODE_TRAN;
+$FD30=#DFNO;
+$FD39=itoa(#TXAMT*100);
+$FD43=#CARD_TRACENO_TRAN;
+callagn();
+if($FD12!='0000')
+{
+showmsg('撤销卡系统转存款失败:['+geterror()+']');
+//return (false);   //由于要执行2次撤销交易,故执行撤销错误的情况下只返回错误信息,不退出而继续执行下一次撤销
+}
+//showmsg('卡销户失败!!...');
+//rerun();
+}
+//卡交易核心处理失败往数码发送取消交易
+if((#RESP_CODE_TRAN!='0000') and (#RESP_CODE_TRAN!='Z003') and (substr(#ACTNO,0,6)=='621780'))
+{
+//showmsg('#RESP_CODE_TRAN='+$FD12);
+$FD12=#RESP_CODE_TRAN;
+//showmsg('#RESP_CODE='+$FD12);
+showmsg(geterror());
+initfd();
+commsend_001();
+$FD16='7777';
+$FD12=#RESP_CODE_TRAN;
+$FD30=#ACTNO;
+$FD39=itoa(#TXAMT*100);
+$FD43=#CARD_TRACENO;
+//showmsg('#CARD_TRACENO2='+#CARD_TRACENO);
+callagn();
+if($FD12!='0000')
+{
+showmsg('撤销卡系统开户失败:['+geterror()+']');
+//return (false); //此处只提示错误信息而不返回,确保程序继续往下执行
+}
+showmsg('IC卡销户失败!!...');
+rerun();
+}
+//end by ck
+//往银联发送交易处理结果通知
+//		initfd();
+//		commsend_001();
+//		$FD16='7767';
+//		$FD43=#CARD_TRACENO;                      //原发起方交易流水
+//		$FD21='01'                                //币种
+//		$FD39= itoa(val(#LAVBAL,100),'%016.2f');  //交易金额
+//		$FD12=#RESP_CODE_TRAN;                    //响应码
+//		callagn();
+//		if($FD12!='0000')
+//		{
+//		  showmsg(geterror());
+//		  return(false);
+//		}
+    }"
+	 "{
+		commrecv_001();
+		//showmsg('$FD12='+$FD12);
+		//如果是转账销卡户,记录核心返回的12域返回错误代码,否则记为0000,确保是否需要进行转存款的撤销
+		if(($FD12!='0000') and ($FD12!='Z003') )
+		{
+			#RESP_CODE_TRAN=$FD12;
+			//showmsg('#RESP_CODE_TRAN='+#RESP_CODE_TRAN);
+		}
+		else
+		{
+			#RESP_CODE_TRAN='0000';
+		}
+		//add by ck 2009 1122
+		//卡转账销户核心处理失败往数码发送卡存款撤销交易
+		if(($FD12 != '0000') and ($FD12 != 'Z003') and (substr(#DFNO,0,6)=='621223')and (#CASHFLAG=='2'))
+		{
+			//#RESP_CODE=$FD12;
+			//showmsg('#RESP_CODE='+$FD12);
+			//showmsg(geterror());
+			initfd();
+			commsend_001();
+			$FD16='7777';
+			$FD12=#RESP_CODE_TRAN;
+			$FD30=#DFNO;
+			$FD39=itoa(#TXAMT*100);
+			$FD43=#CARD_TRACENO_TRAN;
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg('撤销卡系统转存款失败:['+geterror()+']');
+				//return (false);   //由于要执行2次撤销交易,故执行撤销错误的情况下只返回错误信息,不退出而继续执行下一次撤销
+			}
+			//showmsg('卡销户失败!!...');
+			//rerun();
+		}
+		//卡交易核心处理失败往数码发送取消交易
+		if((#RESP_CODE_TRAN!='0000') and (#RESP_CODE_TRAN!='Z003') and (substr(#ACTNO,0,6)=='621780'))
+		{
+			//showmsg('#RESP_CODE_TRAN='+$FD12);
+			$FD12=#RESP_CODE_TRAN;
+			//showmsg('#RESP_CODE='+$FD12);
+			showmsg(geterror());
+			initfd();
+			commsend_001();
+			$FD16='7777';
+			$FD12=#RESP_CODE_TRAN;
+			$FD30=#ACTNO;
+			$FD39=itoa(#TXAMT*100);
+			$FD43=#CARD_TRACENO;
+			//showmsg('#CARD_TRACENO2='+#CARD_TRACENO);
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg('撤销卡系统开户失败:['+geterror()+']');
+				//return (false); //此处只提示错误信息而不返回,确保程序继续往下执行
+			}
+			showmsg('IC卡销户失败!!...');
+			rerun();
+		}
+		//end by ck
+		//往银联发送交易处理结果通知
+//		initfd();
+//		commsend_001();
+//		$FD16='7767';
+//		$FD43=#CARD_TRACENO;                      //原发起方交易流水
+//		$FD21='01'                                //币种
+//		$FD39= itoa(val(#LAVBAL,100),'%016.2f');  //交易金额
+//		$FD12=#RESP_CODE_TRAN;                    //响应码
+//		callagn();
+//		if($FD12!='0000')
+//		{
+//		  showmsg(geterror());
+//		  return(false);
+//		}
+	 }"
+	</COMMRECV>
+	<VARIABLE UPLOOP="TRUE">
+		<ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+		 "T(3713                           IC卡销卡业务)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		 "T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"              TYPE="%-4s"   FUNCTIONS="T($TXNO=2204)"/>
+		<ITEM NAME="#MSGTYPE"           TYPE="%-5s"   FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#ACT_LX"            TYPE="%-5s"   FUNCTIONS="T(1)"/>
+		<ITEM NAME="#ACT_LX_CK"         TYPE="%-5s"   FUNCTIONS=""/>
+		<ITEM NAME="#TXCD"              TYPE="%4s"    FUNCTIONS="T(3713)"/>      <!---交易代码--->
+		<ITEM NAME="#TXNAME"            TYPE="%-10s"  FUNCTIONS="T(IC卡销卡)"/>  <!---交易名称--->
+		<ITEM NAME="#TRACK2"            TYPE="%-37s"  FUNCTIONS=""/>             <!--二磁信息-->
+		<ITEM NAME="#TRACK3"            TYPE="%-104s" FUNCTIONS=""/>             <!--三磁信息-->
+		<ITEM NAME="#TRAN_FEE"          TYPE="%17.2f" FUNCTIONS=""/>             <!--交易手续费-->
+		<ITEM NAME="#CARD_TRACENO"      TYPE="%-16s"  FUNCTIONS=""/>
+		<ITEM NAME="#CARD_TRACENO_TRAN" TYPE="%-16s"  FUNCTIONS=""/>
+		<ITEM NAME="#RESP_CODE"         TYPE="%-4s"   FUNCTIONS=""/>
+		<ITEM NAME="#RESP_CODE_TRAN"    TYPE="%-4s"   FUNCTIONS=""/>
+		<ITEM NAME="#ICJSQ"             TYPE="%-4s"   FUNCTIONS=""/>             <!--应用交易计数器-->
+		<ITEM NAME="#ICMW"              TYPE="%-16s"  FUNCTIONS=""/>             <!--应用交易密文-->
+		<!-- 取款信息录入 -->
+		<IMPORT>ICACINFO3204.IMP</IMPORT>
+		<!-- 转帐对方账号 -->
+		<IMPORT>ICTRANSINFO.IMP</IMPORT>
+		<!--输出变量--->
+		<ITEM NAME="#MSGEND"   TYPE="%-4s" FUNCTIONS="T(销户)"/>
+		<!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+		<ITEM NAME="#PASSWD"   TYPE="%-6s" FUNCTIONS="T()"/>
+		<!--<ITEM NAME="#CERTTYPE" TYPE="%-1s" FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+	</VARIABLE>
+	<REQUEST>
+	</REQUEST>
+	<RESPONSE>
+		<PACKAGE DEVICE="SCREEN" DESC="显示信息">
+			LXQD|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@av_bal|@all_intst|@tax_intst|@tax_rate|@intst|@real_intst|@real_bal|@dinum|@intst_type|@memo|@ac_seqn|@term|@prt_line|@brf|@ac_no1|@book_line|@mtr_date|@tmp_seqn|@rate|@prdt_no|@int_acc_hrt|
+		</PACKAGE>
+		<PRINT>
+		 "{
+			dim @txamt      as string;
+			dim @intr       as string;
+			dim @all_intr   as string;
+			dim @real_intr  as string;
+			dim @real_avbal as string;
+			dim @tax        as string;
+			dim @ctax_rate  as string;
+			dim @crate      as string;
+			dim @txday      as string;
+			@txamt       ='￥'+ltrim(comma(@tx_amt1));
+			@intr        ='￥'+ltrim(comma(@intst));
+			@all_intr    ='￥'+ltrim(comma(@all_intst));
+			@real_intr   ='￥'+ltrim(comma(@real_intst));
+			@real_avbal  ='￥'+ltrim(comma(@real_bal));
+			@tax         ='￥'+ltrim(comma(@tax_intst));
+			print(03,30,'IC卡销卡');
+			print(05,20,'IC 卡 号:[24  ]',@ac_no);
+			print(06,20,'本    金:[21  ]',@txamt);
+			print(07,20,'实付利息:[21  ]',@real_intr);
+			print(08,20,'利 息 税:[21  ]',@tax);
+			//print(09,20,'保值利息:[21]','￥'+ltrim(comma(substr($FD102,235,14)+'.'+substr($FD102,249,2))));
+			print(10,20,'实付总额:[21  ]',@real_avbal);
+		 }"
+		</PRINT>
+	</RESPONSE>
+	<IMPORT>ICX_QK_VOC.IMP</IMPORT>
+	<IMPORT>ICX_PRT_LXQD.IMP</IMPORT>
+	<IMPORT>ICX_CK_PZ.IMP</IMPORT>
+	<IMPORT>ICXCZ.IMP</IMPORT>
+	<LASTWORK>
+	 "{
+		//showmsg('CK='+#ACT_LX_CK);
+		//showmsg(#ACT_LX);
+	 }"
+	</LASTWORK>
+</TRANSACTION>

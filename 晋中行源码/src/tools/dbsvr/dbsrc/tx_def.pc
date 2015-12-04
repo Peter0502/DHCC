@@ -1,0 +1,258 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"tx_def_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int tx_def_con ( struct tx_def_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct tx_def_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->tx_code);
+	zip_tail(ps->tx_name);
+	zip_tail(ps->bit_map);
+	zip_tail(ps->log_ind);
+	zip_tail(ps->tx_type);
+	zip_tail(ps->wrk_sts);
+}
+int Tx_def_Debug(struct tx_def_c *ps){
+	vtcp_log("tx_def_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("tx_def_c.tx_code=[%s]\n",ps->tx_code);
+	vtcp_log("tx_def_c.tx_name=[%s]\n",ps->tx_name);
+	vtcp_log("tx_def_c.bit_map=[%s]\n",ps->bit_map);
+	vtcp_log("tx_def_c.log_ind=[%s]\n",ps->log_ind);
+	vtcp_log("tx_def_c.tx_type=[%s]\n",ps->tx_type);
+	vtcp_log("tx_def_c.wrk_sts=[%s]\n",ps->wrk_sts);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Tx_def_Sel(reply,tx_def_c,fmtstr,va_alist)
+char    *reply;
+struct  tx_def_c *tx_def_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Tx_def_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Tx_def_Fet_Sel( tx_def_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Tx_def_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Tx_def_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,tx_def.* FROM tx_def WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tx_def_sel FROM :comm;
+	EXEC SQL DECLARE sel_tx_def CURSOR FOR tx_def_sel;
+
+	EXEC SQL OPEN sel_tx_def;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tx_def_Fet_Sel ( struct tx_def_c *tx_def_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_tx_def INTO :tx_def_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch tx_def error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch tx_def finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(tx_def_c);
+
+	return 0;
+}
+
+int Tx_def_Clo_Sel (){
+	EXEC SQL CLOSE sel_tx_def;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Tx_def_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,tx_def.* FROM tx_def WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tx_def_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_tx_def CURSOR FOR tx_def_upd;
+
+	EXEC SQL OPEN upd_tx_def;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tx_def_Fet_Upd( struct tx_def_c *tx_def_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_tx_def INTO :tx_def_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH tx_def finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(tx_def_c);
+
+	return 0;
+}
+
+int Tx_def_Upd_Upd( struct tx_def_c tx_def_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE tx_def SET tx_code=:tx_def_c.tx_code,
+			tx_name=:tx_def_c.tx_name,
+			bit_map=:tx_def_c.bit_map,
+			log_ind=:tx_def_c.log_ind,
+			tx_type=:tx_def_c.tx_type,
+			wrk_sts=:tx_def_c.wrk_sts
+	WHERE rowid=:tx_def_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Tx_def_Del_Upd(struct tx_def_c tx_def_c , char * reply  ){
+
+	EXEC SQL DELETE FROM tx_def WHERE rowid=:tx_def_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tx_def_Clo_Upd( ){
+	EXEC SQL CLOSE upd_tx_def;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Tx_def_Ins( struct tx_def_c tx_def_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO tx_def VALUES (:tx_def_c.tx_code,
+			:tx_def_c.tx_name,
+			:tx_def_c.bit_map,
+			:tx_def_c.log_ind,
+			:tx_def_c.tx_type,
+			:tx_def_c.wrk_sts);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT tx_def error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

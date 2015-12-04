@@ -1,0 +1,279 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cassreg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cassreg_con ( struct cassreg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cassreg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->db_ac_no);
+	zip_tail(ps->name);
+	zip_tail(ps->pact_no);
+	zip_tail(ps->tel);
+	zip_tail(ps->flag);
+}
+int Cassreg_Debug(struct cassreg_c *ps){
+	vtcp_log("cassreg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cassreg_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("cassreg_c.db_ac_no=[%s]\n",ps->db_ac_no);
+	vtcp_log("cassreg_c.name=[%s]\n",ps->name);
+	vtcp_log("cassreg_c.pact_no=[%s]\n",ps->pact_no);
+	vtcp_log("cassreg_c.bw_ac_id=[%ld]\n",ps->bw_ac_id);
+	vtcp_log("cassreg_c.in_tx_date=[%ld]\n",ps->in_tx_date);
+	vtcp_log("cassreg_c.out_tx_date=[%ld]\n",ps->out_tx_date);
+	vtcp_log("cassreg_c.amt=[%f]\n",ps->amt);
+	vtcp_log("cassreg_c.bal=[%f]\n",ps->bal);
+	vtcp_log("cassreg_c.tel=[%s]\n",ps->tel);
+	vtcp_log("cassreg_c.flag=[%s]\n",ps->flag);
+	vtcp_log("cassreg_c.in_trace_no=[%ld]\n",ps->in_trace_no);
+	vtcp_log("cassreg_c.out_trace_no=[%ld]\n",ps->out_trace_no);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cassreg_Sel(reply,cassreg_c,fmtstr,va_alist)
+char    *reply;
+struct  cassreg_c *cassreg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cassreg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cassreg_Fet_Sel( cassreg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cassreg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cassreg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cassreg.* FROM cassreg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cassreg_sel FROM :comm;
+	EXEC SQL DECLARE sel_cassreg CURSOR FOR cassreg_sel;
+
+	EXEC SQL OPEN sel_cassreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cassreg_Fet_Sel ( struct cassreg_c *cassreg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cassreg INTO :cassreg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cassreg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cassreg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cassreg_c);
+
+	return 0;
+}
+
+int Cassreg_Clo_Sel (){
+	EXEC SQL CLOSE sel_cassreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cassreg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cassreg.* FROM cassreg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cassreg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cassreg CURSOR FOR cassreg_upd;
+
+	EXEC SQL OPEN upd_cassreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cassreg_Fet_Upd( struct cassreg_c *cassreg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cassreg INTO :cassreg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cassreg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cassreg_c);
+
+	return 0;
+}
+
+int Cassreg_Upd_Upd( struct cassreg_c cassreg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cassreg SET br_no=:cassreg_c.br_no,
+			db_ac_no=:cassreg_c.db_ac_no,
+			name=:cassreg_c.name,
+			pact_no=:cassreg_c.pact_no,
+			bw_ac_id=:cassreg_c.bw_ac_id,
+			in_tx_date=:cassreg_c.in_tx_date,
+			out_tx_date=:cassreg_c.out_tx_date,
+			amt=:cassreg_c.amt,
+			bal=:cassreg_c.bal,
+			tel=:cassreg_c.tel,
+			flag=:cassreg_c.flag,
+			in_trace_no=:cassreg_c.in_trace_no,
+			out_trace_no=:cassreg_c.out_trace_no
+	WHERE rowid=:cassreg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cassreg_Del_Upd(struct cassreg_c cassreg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cassreg WHERE rowid=:cassreg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cassreg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cassreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cassreg_Ins( struct cassreg_c cassreg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cassreg VALUES (:cassreg_c.br_no,
+			:cassreg_c.db_ac_no,
+			:cassreg_c.name,
+			:cassreg_c.pact_no,
+			:cassreg_c.bw_ac_id,
+			:cassreg_c.in_tx_date,
+			:cassreg_c.out_tx_date,
+			:cassreg_c.amt,
+			:cassreg_c.bal,
+			:cassreg_c.tel,
+			:cassreg_c.flag,
+			:cassreg_c.in_trace_no,
+			:cassreg_c.out_trace_no);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cassreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

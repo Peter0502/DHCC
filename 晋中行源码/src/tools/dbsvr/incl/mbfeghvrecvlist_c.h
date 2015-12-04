@@ -1,0 +1,47 @@
+#ifndef __mbfeghvrecvlist_CH__
+#define __mbfeghvrecvlist_CH__
+struct mbfeghvrecvlist_c{
+	char      rowid[20];
+	char      txssno[9];
+	long      consigndate;
+	char      cmtno[4];
+	double    amount;
+	char      odficode[13];
+	char      isdficode[13];
+	char      odficenter[5];
+	char      payeropenaccbkcode[13];
+	char      payeracc[33];
+	char      payername[61];
+	char      payeraddr[61];
+	char      cnapsrdfi[13];
+	char      rdficode[13];
+	char      osdficode[13];
+	char      rdficenter[5];
+	char      recipientopenaccbk[13];
+	char      recipientacc[33];
+	char      recipientname[61];
+	char      recipientaddr[61];
+	char      oprttype[3];
+	long      warrantdate;
+	char      warrantno[9];
+	double    compensationamnt;
+	double    repudiationamnt;
+	long      prmptpaydate;
+	char      prilevel[2];
+	long      printno;
+	char      procstate[3];
+	char      hang_reply[5];
+	char      statetime[15];
+	char      rectime[15];
+	char      billofxchngseal[11];
+	char      checkstate[3];
+	long      flowno;
+	char      incomeacno[25];
+	char      incomebkcode[13];
+	char      incometime[15];
+	long      incomeflowno;
+	char      incometel[5];
+	char      strinfo[61];
+	char      content[101];
+};
+#endif 

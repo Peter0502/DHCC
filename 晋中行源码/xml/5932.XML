@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="5932 网上支付自由格式发送"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(5932                      网上支付自由格式发送)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5932)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="6"  COL="3"   TYPE="%-14s" FUNCTIONS="T(选择接收方:!)"/>
+  <ITEM LINE="8"  COL="3"   NAME="#JSHH" TYPE="%-14s" FUNCTIONS="T(接收行行号:)"/>
+  <ITEM LINE="10"  COL="3"   NAME="#SBZX" TYPE="%-14s" FUNCTIONS="T(收报中心代码:)"/>
+  <ITEM LINE="12" COL="31"  TYPE="%-14s" FUNCTIONS="T(发 报 内 容)"/>
+  <ITEM LINE="17" COL="26"  TYPE="%-38s" FUNCTIONS="T( 注意:此交易录入后自动发送,不能取消!!!)"/>
+  <ITEM LINE="6"  COL="19"  TYPE="%-1s"  NAME="#OPTYPE"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(0)">
+   <SELECT>
+     <OPTION  VALUE="0" TITLE="接收行号"/>
+     <OPTION  VALUE="1" TITLE="收报中心"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+		  if ( #OPTYPE == '0' ){
+		  	show(#AC_BR_NO,true);
+		  	show(#JSHH,true);
+		  	show(#SBZX,false);
+		  	show(#RECECO,false);
+		  	show(#ACCT_NM,true);
+		  	show(#ACCT_NM1,true);
+		  	show(#ACCT_NM2,false);
+		  	show(#ACCT_NM3,false);
+			}else{
+		  	show(#AC_BR_NO,false);
+		  	show(#JSHH,false);
+		  	show(#SBZX,true);
+		  	show(#RECECO,true);
+		  	show(#ACCT_NM,false);
+		  	show(#ACCT_NM1,false);
+		  	show(#ACCT_NM2,true);
+		  	show(#ACCT_NM3,true);
+			}
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM LINE="8"  COL="19"  TYPE="%-12s" NAME="#AC_BR_NO"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  	  <ONLOSTFOCUS>
+  "{
+			if(#AC_BR_NO!='')
+			{
+				dim @num as number;
+				dim @str as string;
+				@str=delspace(#AC_BR_NO);
+				@num=len(@str);
+				if(@num!=12 and @str!='')
+				{
+					showmsg('格式输入不正确');
+					return(false);
+				}
+				initfd();
+				commsend_001();
+				$FD16='9001';
+			  $FD18 = 'SNB';
+				$FD63=#AC_BR_NO; //接收账号
+
+				callagncjwy();
+				if($FD12=='0000')
+				{
+					#ACCT_NM=$FD25;//接收行名
+					enable(#ACCT_NM,false);
+				}
+				else
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				refresh();
+			}
+   }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="9"   COL="03"  NAME="#ACCT_NM1" TYPE="%-12s" FUNCTIONS="T(接收行行名:)"/>
+	<ITEM LINE="9"   COL="15"  NAME="#ACCT_NM" DEVICE="KEYBOARD" TYPE="%-60s"  FUNCTIONS="V(NB)T()"/>
+  <ITEM LINE="10"  COL="19"  TYPE="%-4s" NAME="#RECECO"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(0000)"/>
+  <ITEM LINE="11"  COL="03"  NAME="#ACCT_NM3" TYPE="%-12s" FUNCTIONS="T(人行名称:)"/>
+	<ITEM LINE="11"  COL="15"  NAME="#ACCT_NM2" DEVICE="KEYBOARD" TYPE="%-60s"  FUNCTIONS="V(NB)T(人民银行)"/>
+  <ITEM LINE="13"  COL="8"   LINES="4" COLS="64" NAME="#NOTPAY_CONTENT" TYPE="%-255s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  	 if (strfldcnt(#NOTPAY_CONTENT,':') != 1 or strfldcnt(#NOTPAY_CONTENT,'{') != 1 or strfldcnt(#NOTPAY_CONTENT,'}') != 1) 
+  	 {
+	  	showmsg('输入内容中不能含有半角:{}字符,请修改为全角其它字符');
+			return(false);
+ 		 }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+			dim @num as number;	
+		  commsend_001();
+			$FD68=#OPTYPE;
+			$FD44=$HDATE;
+			$FD3 =$KINBR;
+			if(#OPTYPE=='1')
+			{
+				$FD31=#RECECO;
+				$FD34='1';
+				$FD30=#RECECO;
+			}
+			else
+			{
+				$FD31=#AC_BR_NO;
+				$FD34='0';
+				$FD30=#AC_BR_NO;
+			}
+		  	$FD76=#NOTPAY_CONTENT;	
+			  $FD16 = '5932';
+			  $FD18 = 'SNB';
+		  	callagncjwy();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			runoutput();
+  }"
+  </ONCLICK>
+  </ITEM>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+							  $KINDNO='00';
+							  dim @txtime  as string;
+							  @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+                print(5,10,'接收行号:[12]',$FD30);
+								print(6,10,'操作员号:[4]     流 水 号:[12]',$FD7,$FD52);    
+        }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+								$KINDNO='00';
+								dim @txtime  as string;
+								@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 		
+                print( 5, 20,'机构名称:[30]',$BRNAME);  
+                print( 5, 2,'代码:5123');
+                print( 5, 13,'交易:自由格式报文录入');
+
+                print( 7,20,'接收行号:[12]',$FD30);
+                print( 9,20,'内    容:[60]',substr(#NOTPAY_CONTENT,0,60));
+                print(10,29,'[64]',substr(#NOTPAY_CONTENT,60,64));
+                print(11,29,'[64]',substr(#NOTPAY_CONTENT,124,64));
+                print(12,29,'[64]',substr(#NOTPAY_CONTENT,188,64));
+                print( 23,20,'备注:');
+                print( 23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                print( 23,5,'柜员:[4]',$FD7);
+                print( 23,5,'流水号:[6]',$FD52);
+        }"
+    </PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

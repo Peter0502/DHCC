@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4501 贷款展期"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$MSGTYPE='03001';
+	$TXNO='3301';
+	$FD16='3301';
+	$FD25=#NAME;
+	$FD37=#ACTNO;
+	$FD44=#OPDAY;
+	$FD45=#ETMDAY;
+	$FD47=#ENDAY;
+	$FD65='3301';
+	$FD70=#TXTP;
+	$FD84=itoa(#ETMRATE*1000000,'%08.0f');
+	$FD79=#PASSWD;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4501                            贷款展期)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="7"   COL="09" TYPE="%-14s" FUNCTIONS="T(操 作 标 志!:)"/>
+  <ITEM LINE="9"   COL="09" TYPE="%-14s" FUNCTIONS="T(贷 款  账 号:)"/>
+  <ITEM LINE="10"  COL="09" TYPE="%-14s" FUNCTIONS="T(户        名:)" NAME="#S_NAME"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="11"     COL="9"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="11"     COL="35"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="12"  COL="09" TYPE="%-14s" FUNCTIONS="T(贷款开户日期:)" NAME="#S_OPDAY" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="14"  COL="09" TYPE="%-14s" FUNCTIONS="T(贷款到期日期:)" NAME="#S_ENDAY" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"  COL="09" TYPE="%-14s" FUNCTIONS="T(展期到期日期:)"/>
+  <ITEM LINE="18"  COL="09" TYPE="%-14s" FUNCTIONS="T(展 期  利 率:)"/>
+  <ITEM LINE="18"  COL="35" TYPE="%-2s"   FUNCTIONS="T(‰)"/>
+
+  <ITEM NAME="#TXTP" 	INPUT="SELECT" 	LINE="7"  COL="23	" TYPE="%-1s" 	FUNCTIONS="T(0)">
+  <SELECT>
+     <OPTION VALUE="0" TITLE="录入"/>
+     <OPTION VALUE="1" TITLE="修改"/>
+     <OPTION VALUE="2" TITLE="删除"/>
+  </SELECT>
+  </ITEM>   
+  <ITEM NAME="#MYZQLL"   TYPE="%8.6f" /><!--20110806展期利率-->
+  <ITEM NAME="#MYZQRQ"   TYPE="%-8s" /><!--20110806 展期日期-->
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="9"   COL="23	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{        
+	    $MSGTYPE='03001';
+      $TXNO='9807';
+      $FD2=$OPNBR;               
+      $FD3=$KINBR;
+      $FD5=$HDATE;
+      $FD6='';
+      $FD7=$TLRNO;
+      $FD8='';
+      $FD9='';
+      $FD10=$TTYNAME;
+      $FD16='9807';
+      $FD17='';
+      $FD37=#ACTNO;
+      $FD65='3301';
+
+      callserver();
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return(false);
+      }
+      #MYZQRQ=$FD46;
+      #MYZQLL=val($FD84,0.000001);
+      //showmsg('日期'+#MYZQRQ+'利率'+itoa(#MYZQLL,'%8.6f'));
+		  #NAME=$FD25;
+		  #OPDAY=$FD47;
+		  #ENDAY=$FD44;
+		  if (#TXTP!='0'){
+		  #ETMDAY=$FD45;
+		  }
+		  show(#NAME,true);
+		  show(#OPDAY,true);
+		  show(#ENDAY,true);
+		  show(#S_NAME,true);
+		  show(#S_OPDAY,true);
+		  show(#S_ENDAY,true);
+		  if(#TXTP=='2')
+		  {
+		  		enable(#ETMDAY,false);
+		  		enable(#ETMRATE,false);
+		  }else{
+		  		enable(#ETMDAY,true);
+		  		enable(#ETMRATE,true);
+		  }             
+		  showhelp(3,70,8,3,'帐户余额',itoa(val($FD42,0.01),'%17.2f'));
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#NAME" 	INPUT="LABEL" 	LINE="10"  COL="23	" TYPE="%-60s" 	FUNCTIONS=""/>
+  
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+ <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="11" COL="23" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11" COL="45" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#OPDAY" 	INPUT="LABEL" 	LINE="12"  COL="23	" TYPE="%-8s" 	FUNCTIONS=""/>
+  <ITEM NAME="#ENDAY" 	INPUT="LABEL" 	LINE="14"  COL="23	" TYPE="%-8s" 	FUNCTIONS=""/>
+  <ITEM NAME="#ETMDAY" 	INPUT="TEXT" 	LINE="16"  COL="23	" TYPE="%-8s" 	FUNCTIONS="D()V(#ENDAY,99999999)">
+  <ONLOSTFOCUS>"{
+  	if(#TXTP=='0'){
+  	  if(#ETMDAY !=#MYZQRQ){
+  	  showmsg('输入日期与审批不符，请检查');
+  	  return(false);
+  	  }
+  	}	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ETMRATE" INPUT="TEXT" 	LINE="18"  COL="23	" TYPE="%8.5f" 	FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+  	if(#TXTP=='0'){
+  	  if(#ETMRATE !=#MYZQLL){
+  	  showmsg('输入利率与审批不符，请检查');
+  	  return(false);
+  	  }
+  	}	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PASSWD" 	TYPE="%-6s" 	/>
+  <ITEM NAME="#WSSRNO" 	TYPE="%-6s" 	/>
+  <ITEM NAME="#OTXDAY" 	    TYPE="%-10s" 	/>
+  <ITEM NAME="#OSTDAY" 	    TYPE="%-10s" 	/>
+  <ITEM NAME="#OENDAY"    	TYPE="%-10s" 	/>
+  <ITEM NAME="#OETMSDAY" 	TYPE="%-10s" 	/>
+  <ITEM NAME="#OETMEDAY" 	TYPE="%-10s" 	/>
+  <ITEM NAME="#OOPAMT"    	TYPE="%-21s" 	/>
+  <ITEM NAME="#OTXAMT"    	TYPE="%-21s" 	/>
+  <ITEM NAME="#OAVBAL"    	TYPE="%-21s" 	/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="20" DESC="请打印贷款展期凭证">
+LNBKZQ||@actno|@jjno|@name|@lnkd||@stday|@enday|@opamt|@txamt|@avbal|@nomrate|@overrate|@acno|@tp|@wssrno|@etmrate|@etmsday|@etmeday
+</PACKAGE>
+<INIT>
+"{
+	#OTXDAY=substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+	#OSTDAY=substr(@stday,0,4)+'-'+substr(@stday,4,2)+'-'+substr(@stday,6,2);
+	#OENDAY=substr(@enday,0,4)+'-'+substr(@enday,4,2)+'-'+substr(@enday,6,2);
+	#OETMSDAY=substr(@etmsday,0,4)+'-'+substr(@etmsday,4,2)+'-'+substr(@etmsday,6,2);
+	#OETMEDAY=substr(@etmeday,0,4)+'-'+substr(@etmeday,4,2)+'-'+substr(@etmeday,6,2);
+	#OOPAMT=comma(@opamt,21);
+	#OTXAMT=comma(@txamt,21);
+	#OAVBAL=comma(@avbal,21);
+}"
+</INIT>
+<PRINT>"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print( 2,55,'贷款展期凭证');
+print( 4,14,'      交易日期: [10        ]   [8]                                       流 水 号: [5  ]',#OTXDAY,@txtime,@wssrno);
+print( 5,14,'┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print( 6,14,'┃  机构名称: [60                                                          ]                    ┃',$BRNAME);
+print( 7,14,'┃  贷款账号: [19                   ]                          借 据 号: [20             ]     ┃',@actno,@jjno);
+print( 8,14,'┃  户    名: [60                                                            ]                    ┃',@name);
+print( 9,14,'┃  产品名称: [50                                                ]                              ┃',@lnkd);
+print(10,14,'┃--------------------------------------------------------------------------------------------┃');
+print(11,14,'┃  展期利率(月): [10        ]                                                                  ┃',@etmrate);
+print(12,14,'┃--------------------------------------------------------------------------------------------┃');
+print(13,14,'┃  起止日期: [10      ] 到 [10      ][4     ]             展期日期：[10      ] 到 [10      ]     ┃',#OSTDAY,#OENDAY,@tp,#OETMSDAY,#OETMEDAY);
+print(14,14,'┃  贷款本金: [21                   ]   合同利率(月):[10         ]   逾期利率(月):[10        ]       ┃',ltrim(#OOPAMT),@nomrate,@overrate);
+print(15,14,'┃  累计还本: [21                   ]                                                           ┃',ltrim(#OTXAMT));
+print(16,14,'┃  尚欠本金: [21                   ]                                                           ┃',ltrim(#OAVBAL));
+print(17,14,'┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+ <PACKAGE DEVICE="PRINTER" DESC="打印贷款展期普通凭证">
+LNBKZQ||@actno|@jjno|@name|@lnkd||@stday|@enday|@opamt|@txamt|@avbal|@nomrate|@overrate|@acno|@tp|@wssrno|@etmrate|@etmsday|@etmeday
+</PACKAGE>
+<INIT>
+"{
+	#OTXDAY=substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+	#OSTDAY=substr(@stday,0,4)+'-'+substr(@stday,4,2)+'-'+substr(@stday,6,2);
+	#OENDAY=substr(@enday,0,4)+'-'+substr(@enday,4,2)+'-'+substr(@enday,6,2);
+	#OETMSDAY=substr(@etmsday,0,4)+'-'+substr(@etmsday,4,2)+'-'+substr(@etmsday,6,2);
+	#OETMEDAY=substr(@etmeday,0,4)+'-'+substr(@etmeday,4,2)+'-'+substr(@etmeday,6,2);
+	#OOPAMT=comma(@opamt,21);
+	#OTXAMT=comma(@txamt,21);
+	#OAVBAL=comma(@avbal,21);
+}"
+</INIT>
+ <PRINT>
+ "{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:4501');
+        print( 5, 13,'交易:贷款展期');
+	print( 7, 20,'贷款帐号:[19]       借据号:[20]',@actno,@jjno);
+	print( 8, 20,'户    名:[60]',@name);
+	print( 9, 20,'展期利率:[10]',@etmrate);
+	print( 10, 20,'起止日期:[10] 到 [10][4]     展期日期:[10] 到 [10]',#OSTDAY,#OENDAY,@tp,#OETMSDAY,#OETMEDAY);
+	print( 11, 20,'贷款本金:[21]     合同利率(月):[10]     逾期利率(月):[10]',ltrim(#OOPAMT),@nomrate,@overrate);
+	print( 12, 20,'累计还本:[21]     尚欠本金:[21]',ltrim(#OTXAMT),ltrim(#OAVBAL));
+	print_sq();
+	print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+ }"
+ </PRINT>
+</RESPONSE>
+<IMPORT>CXHZ.IMP</IMPORT>
+</TRANSACTION>
+

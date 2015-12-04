@@ -1,0 +1,263 @@
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
+#include <sys/stat.h>
+#include "public.h"
+#include "com_item_c.h"
+#include "dc_log_c.h"
+#include "trace_log_c.h"
+#include "dd_mst_c.h"
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include "public.h"
+#include "svrpub_c.h"
+#include "tx_def_c.h"
+#include "tx_flow_def_c.h"
+#include "tx_sub_def_c.h"
+#include "tx_sub_rel_c.h"
+#include "tx_dc_rel_c.h"
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_def_chrg_c.h"
+#include "mo_def_rate_c.h"
+#include "com_chrg_rate_c.h"
+#include "com_chrg_hst_c.h"
+#include "prdt_ac_id_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+
+int  ret = 0;
+int log_cnt;
+int  ErrCnt ;
+char tmp[5];
+int  dbTrace_no;
+int  dbTxtime;
+
+struct trace_log_c wd_trace_log;
+struct dc_log_c wd_dc_log,wp_dc_log;
+
+int dclogck(int argc,char **argv)
+{
+	  sql_begin();
+
+	  ErrCnt = 0;
+	  
+	  EXEC SQL DECLARE trace_log_cur cursor for
+			select distinct trace_no,tx_time
+			from   trace_log
+			where  tx_code='2202' and sts='0' order by trace_no;
+	  EXEC SQL OPEN trace_log_cur;
+	  if(sqlca.sqlcode)
+	  {
+		printf("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		goto ErrExit;
+	  }
+	  while(1)
+	  {
+		log_cnt = 0;
+		dbTrace_no = 0;
+		dbTxtime = 0;
+		EXEC SQL fetch trace_log_cur into :dbTrace_no,:dbTxtime;
+		if(sqlca.sqlcode==1403) break;
+		if(sqlca.sqlcode)
+		{
+			printf("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+			EXEC SQL CLOSE trace_log_cur;
+			goto ErrExit;
+		}
+		
+		/** 对记录进行判断 **/
+
+		/** 1.检查dc_log里分录数 
+		EXEC SQL select count(*)
+			  into :log_cnt
+			  from  dc_log
+			 where  trace_no=:dbTrace_no;
+		if(sqlca.sqlcode)
+		{
+			printf("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+			EXEC SQL CLOSE trace_log_cur;
+			return;
+		}
+
+		if(log_cnt<2)
+		{
+			printf("[%s][%d]流水[%d]只有一笔分录,错误!\n",__FILE__,__LINE__,dbTrace_no);
+			ErrCnt++;
+			goto Error;
+		}**/
+
+		/** 2.检查dc_log里取款分录是否有贷方分录 **/
+		memset(&wp_dc_log,0,sizeof(wp_dc_log));
+		EXEC SQL DECLARE dc_log_cur cursor for
+			  select rowid,dc_log.* 
+			    from dc_log
+			   where trace_no=:dbTrace_no order by trace_cnt,dc_seqn;
+		EXEC SQL open dc_log_cur;
+		if(sqlca.sqlcode)
+		{
+			printf("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+			EXEC SQL CLOSE trace_log_cur;
+			goto ErrExit;
+		}
+		while(1)
+		{
+			memset(&wd_dc_log,0,sizeof(wd_dc_log));
+			EXEC SQL fetch dc_log_cur into :wd_dc_log;
+			if(sqlca.sqlcode==1403)
+			{
+				EXEC SQL close dc_log_cur;
+				ErrCnt++;
+				goto Error;
+			}
+			if(sqlca.sqlcode)
+			{
+				printf("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+				EXEC SQL CLOSE dc_log_cur;
+				EXEC SQL CLOSE trace_log_cur;
+				goto ErrExit;
+			}
+
+			if(!memcmp(wd_dc_log.acc_hrt,"21101",5) && wd_dc_log.dc_ind[0]=='1')
+			{
+				memcpy(&wp_dc_log,&wd_dc_log,sizeof(wp_dc_log));
+			}
+
+			if(wd_dc_log.dc_ind[0]=='2')
+			{
+				/** 找到了贷方分录,认为是完整的分录 **/
+				if(fabs(wd_dc_log.amt-wp_dc_log.amt)<0.005)
+				{
+					EXEC SQL close dc_log_cur;
+					break;
+				}
+			}
+		}
+		EXEC SQL close dc_log_cur;
+		
+		/** 到此认为通过检查 **/
+		continue;
+Error:
+		/** 下面是对错帐的修改部分 **/
+		printf("[%s][%d]错帐流水号:[%d],错帐分录: 机构:[%s],科目:[%s],借贷:[%s],现转:[%s],金额:[%f]\n"\
+		,__FILE__,__LINE__,dbTrace_no,wp_dc_log.tx_tx_br_no,wp_dc_log.acc_hrt,wp_dc_log.dc_ind,wp_dc_log.ct_ind,\
+		wp_dc_log.amt);
+    
+    /** 公共结构体赋值 **/
+    memset(&g_pub_tx,0,sizeof(g_pub_tx));
+    if(wp_dc_log.ct_ind[0]!='1')
+    {
+    		printf("[%s][%d]!!!!!!!!!!!!!!不是现金取宽[%d]\n",__FILE__,__LINE__,dbTrace_no);
+    		EXEC SQL close dc_log_cur;
+    		goto ErrExit;
+    }
+    g_pub_tx.svc_ind=1001;
+    g_pub_tx.tx_amt1=wp_dc_log.amt;
+    g_pub_tx.trace_no=dbTrace_no;
+    g_pub_tx.tx_date=wp_dc_log.tx_date;
+    g_pub_tx.tx_time=dbTxtime;
+    g_pub_tx.trace_cnt=imax_trace_cnt(dbTrace_no);
+    strcpy(g_pub_tx.name,"储蓄取款");
+    strcpy(g_pub_tx.brf,"储蓄取款");
+    zip_space(wp_dc_log.ct_ind);
+    strcpy(g_pub_tx.ct_ind,wp_dc_log.ct_ind);
+    zip_space(wp_dc_log.tx_tx_br_no);
+    strcpy(g_pub_tx.tx_br_no,wp_dc_log.tx_tx_br_no);
+    strcpy(g_pub_tx.opn_br_no,wp_dc_log.tx_tx_br_no);
+    strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.tx_code,"2202");
+    strcpy(g_pub_tx.sub_tx_code,"M002");
+    zip_space(wp_dc_log.tel);
+    strcpy(g_pub_tx.tel,wp_dc_log.tel);
+    strcpy(g_pub_tx.add_ind,"0");
+    strcpy(g_pub_tx.no_show,"0");
+       
+    /** 是现金则修改柜员现金库 **/
+    ret  = pub_acct_cash();
+    if(ret)
+    {
+    		printf("[%s][%d]修改柜员现金库错误[%d]\n",__FILE__,__LINE__,ret);
+    		EXEC SQL close dc_log_cur;
+    		goto ErrExit;
+    }
+		
+		/** 补dc_log贷方子交易分录 **/
+		set_zd_data("1191","01");
+		printf("[%s][%d]+++++++++++[%f]\n",__FILE__,__LINE__,g_pub_tx.tx_amt1);
+		set_zd_double("1194",g_pub_tx.tx_amt1);
+		set_zd_data(DC_CODE,"ACHR");
+		set_zd_data(DC_TEL,g_pub_tx.tel);
+		strcpy(g_pub_tx.tel,wp_dc_log.tel);
+		ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+		if(ret)
+    {
+    		printf("[%s][%d]登记贷方会计分录错误![%d]\n",__FILE__,__LINE__,ret);
+    		EXEC SQL close dc_log_cur;
+    		goto ErrExit;
+    }
+    
+	  }
+	  EXEC SQL CLOSE trace_log_cur;
+
+
+OkExit:
+	  
+	printf("--------------------------------------------------------\n");
+	printf("总共修改[%d]条错误记录!\n",ErrCnt);
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+
+}
+
+int sql_begin()
+{
+	exec sql begin declare section;
+	char user[10];
+	char passwd[10];
+	exec sql end declare section;
+	strcpy(user,getenv("DB_USER"));
+	strcpy(passwd,getenv("DB_PASSWD"));
+
+	exec sql connect :user identified by :passwd;
+	if(sqlca.sqlcode==0)
+	printf("[%s][%d]连接到数据库!!!!\n",__FILE__,__LINE__);
+	return 0;
+}
+int imax_trace_cnt(int ino)
+{
+	int itrace_no=0;
+	int imax_trace_cnt=0;
+	
+	itrace_no=ino;
+	EXEC SQL select max(trace_cnt)
+			      into  :imax_trace_cnt
+			      from  trace_log
+			      where trace_no=:itrace_no;
+	if(sqlca.sqlcode)
+  {
+  	 printf("[%s][%d]取最大流水序号错[%d]!\n",__FILE__,__LINE__,sqlca.sqlcode);
+  	 return(0);
+  }
+  imax_trace_cnt++;
+  set_zd_long( DC_TRACE_CNT , imax_trace_cnt);
+  return(imax_trace_cnt);
+}

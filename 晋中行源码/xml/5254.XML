@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="5254 网点提入借方记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	
+    	$FD16='4254';	
+ 	    $MSGTYPE='03001';
+     	$FD11='0';
+     	
+     	// 和 spD254.c 不对应， 对应的源文件为 spD256.c  但是域不对应
+      // $FD69='0';        	
+      
+      $FD30=getitems('#ACTNO24');      	
+      $FD31=getitems('#ACTNO24');          
+      $FD39=getitems('#TXAMT');  
+      
+   	      
+
+     	$FD58=getitems('#BILL_NO'); 
+
+     	
+     	// showmsg($FD81); 
+     	  
+      $FD81=getseltitle(#BRF,#BRF);    	
+      // $FD82=getitems('#REMARK');      
+          	   	
+     	$FD89=#BRF;       	
+     	$FD90=#BILL_TYPE;   
+	
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(5254                       网点提入借方记账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+    
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4254)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+ 
+  <ITEM LINE="6"  COL="5" TYPE="%-12s" FUNCTIONS="T(付款人账号:)"/>  
+  <ITEM NAME="#PAYER_AC_NO" INPUT="TEXT" LINE="6"  COL="17" TYPE="%-18s"  FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;  
+    	dim @tota as string;
+    	@baktxno=$TXNO;
+
+     	$FD2=$OPNBR;
+     	$FD3=$KINBR;
+     	$FD5=$HDATE;
+     	$FD7=$TLRNO;
+     	$FD10=$TTYNAME;
+     	$FD16='9753';
+     	$FD79=#PASSWD; 
+
+ 			@tota=callserver();
+       if($FD12!='0000'){
+           showmsg(geterror());
+           return(false);
+       }
+       
+      setsel(#BRF,substr(@tota,0,21*62),'o5t10o1v3o2');     
+ 	
+ 	
+ 	  $MSGTYPE='03001';
+    $FD11='0';
+     	
+     	
+      $FD30=getitems('#PAYER_AC_NO');  
+      $FD31=getitems('#PAYER_AC_NO');    
+         	  	
+    	$FD2=$OPNBR;
+    	$FD3=$KINBR;
+    	$FD5=$HDATE;
+    	$FD7=$TLRNO;
+    	$FD10=$TTYNAME;
+    	$FD16='9878';  
+    	$FD79=#PASSWD;
+    	
+    	callserver();
+    	
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+
+    	setitems('#ACTNO24',$FD30);  
+    	setitems('#PAYER_NAME',$FD25); 
+
+    	showblock('ACTINFO',true,true);	 	
+ 	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+
+  <BLOCK NAME="ACTINFO" LINE="7" COL="0" VISABLE="FALSE" >  
+  <ITEM LINE="0"  COL="5" TYPE="%-12s" FUNCTIONS="T(户      名:)"/>  
+  <ITEM LINE="0"  COL="17"  NAME="#PAYER_NAME" INPUT="TEXT" TYPE="%-50s" ENABLE="FALSE" FUNCTIONS="V(NB)"/>
+  </BLOCK>       
+
+
+  <ITEM LINE="9"  COL="5" TYPE="%-12s" FUNCTIONS="T(金      额:)"/>   
+   <ITEM LINE="9"  COL="17" NAME="#TXAMT" INPUT="TEXT" TYPE="%17.2f" FUNCTIONS="0.00"/>   
+ 
+   <ITEM LINE="11"  COL="5" TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"/>
+  <ITEM NAME="#BILL_TYPE" LINE="11"  COL="15" TYPE="%-3s"   INPUT="SELECT" FUNCTIONS="T(002)" >
+	<SELECT>
+	
+		<OPTION VALUE="002" TITLE="0.转帐支票"/>
+		<OPTION VALUE="140" TITLE="1.本票"/>	
+		<OPTION VALUE="299" TITLE="2.其他"/>		
+	</SELECT>
+  </ITEM>  
+  
+  <ITEM LINE="13"  COL="5" TYPE="%-12s" FUNCTIONS="T(凭证号码:)"/>  
+  <ITEM  LINE="13"  COL="17"  NAME="#BILL_NO" INPUT="TEXT" TYPE="%-16s"  FUNCTIONS=""/>
+      
+   <ITEM LINE="15"  COL="5" TYPE="%-10s" FUNCTIONS="T(摘    要:!)"/>
+  <ITEM NAME="#BRF" LINE="15"  COL="15" TYPE="%-3s"   INPUT="SELECT" FUNCTIONS="T(001)" >
+	<SELECT>
+		<OPTION VALUE="001" TITLE="0.货款    "/>
+	</SELECT>
+  </ITEM>    
+ 
+    
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+    
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+
+    
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="网点提入借方记账成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 22,'网 点 提 入 借 方 记 账 成 功 ！');
+
+				
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+
+</TRANSACTION>
+
+
+
+
+
+

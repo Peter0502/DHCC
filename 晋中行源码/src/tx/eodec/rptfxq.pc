@@ -1,0 +1,2040 @@
+/*************************************************************
+* $Header: /devLib/新反洗钱/src/rptfxq.pc,v 1.4.2.1 2007/06/26 01:48:12 Administrator Exp $
+* Desp:新版反小洗钱大额报表
+* $Log: rptfxq.pc,v $
+* Revision 1.4.2.1  2007/06/26 01:48:12  Administrator
+* 简单添加调试信息后
+*
+* Revision 1.2  2006/12/29 01:57:42  weiz
+* 由于设计错误要换一个方法来解决而保存一下
+* 2007年05月10日朱春喜修改预定义行号，行名
+*
+*************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include <sys/timeb.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <varargs.h>
+#ifdef WIN32
+#include <io.h>
+#include <winsock2.h>
+#include <process.h>
+#else
+#include <unistd.h>
+#include <sys/select.h>
+#ifndef SCO
+#endif
+#endif
+
+
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_branch_c.h"
+
+#include "gl_prdt_dyn_c.h"
+#include "trace_log_rz_c.h"
+#include "mo_opn_cls_c.h"
+
+#include "hvpttab_c.h"
+#include "hvcstab_c.h"
+#include "hvcdtab_c.h"
+#include "ohvctab_c.h"
+#include "pbtotab_c.h"
+#include "patotab_c.h"
+#include "hv_orno_brno_c.h"
+#include "cif_id_code_rel_c.h"
+#include "prdt_ac_id_c.h"
+#include "dd_mst_c.h"
+#include "td_mst_c.h"
+#include "ln_mst_c.h"
+#include "in_mst_c.h"
+#include "cif_magn_inf_c.h"
+#include "hv_zfhtr_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL INCLUDE com_item_c.h;
+EXEC SQL INCLUDE dc_log_rz_c.h;
+EXEC SQL INCLUDE mo_xjszybb_c.h;
+
+#define XQ_DEBUG	1
+#define XQ_MIN_AMT_S 200000.00	/*现金，对私*/
+#define XQ_MIN_AMT_G 200000.00	/*现金，对公*/
+#define XQ_MIN_AMT_ZZ_S 200000.00	/*转账，对私*/
+#define XQ_MIN_AMT_ZZ_G 200000.00	/*转账，对公*/
+#define XQ_TX_OPTION "111111111111111111111111"
+#define XQ_BRNO		"401173541335"
+#define XQ_BRNAME	"晋中银行"
+#define XQ_TCFILE	"./data/tcdb.exp/ticke00105.unl"		/*同城清算的数据文件*/
+#define XQ_INITFILE	"/home/jzht/etc/fxq.brno"
+
+/*	返回值 */
+#define XQ_OK 	0
+#define XQ_ERR	-1
+
+/*操作宏*/
+#define MYRETERR if( iRc ) { \
+			sprintf(acErrMsg,"DO FUNTION ERROR[%d]",iRc ); \
+			WRITEMSG \
+			strcpy( g_pub_tx.reply,"Rfxq" ); \
+			goto ErrExit;\
+		}
+#define MYSQLERR if( sqlca.sqlcode ) { \
+			sprintf(acErrMsg,"DO DATABASE ERROR[%d]",sqlca.sqlcode ); \
+			WRITEMSG \
+			strcpy( g_pub_tx.reply,"D103" ); \
+			goto ErrExit;\
+		}
+
+/*全局变量 */
+static char    	scBrno[18];
+static char	 	scBrname[60];
+
+static double xq_min_amt_s;
+static double xq_min_amt_g;
+static double xq_min_amt_zz_s;
+static double xq_min_amt_zz_g;
+static char xq_tx_option[50];
+
+static int  count;
+
+static char dateString[10];
+static int txdate;
+static char  pcTimeStr[22];
+static int	 totalFile;
+static int	 currentFile;
+
+struct com_sys_parm_c com_sys_parm_c;
+
+static struct hvpttab_c wd_hvpttab;
+static struct hvcstab_c wd_hvcstab;
+static struct hvcdtab_c wd_hvcdtab;
+static struct ohvctab_c wd_ohvctab;
+static struct pbtotab_c wd_pbtotab;
+static struct patotab_c wd_patotab;
+
+static struct trace_log_rz_c tl;
+#if 0
+int fxq_defmark(){} /*这个是一个用来当UE标签的函数*/
+#endif 
+static int fxq_init(char *fileName);
+static int fxq_deldate();
+static int  fxq_fgetline(FILE *fp, char *buffer, int maxlen);
+static int fxq_rptdate(char *date);
+static int fxq_tx();
+static int fxq_hv();
+static int fxq_tx2hvpt(struct trace_log_rz_c *tx1,struct trace_log_rz_c *tx2);
+static int fxq_tx2hvcs(struct trace_log_rz_c *tx);
+static int fxq_tx2hvcd(struct trace_log_rz_c *tx);
+static int fxq_tx2pato(struct trace_log_rz_c *tx1,struct trace_log_rz_c *tx2);
+static int fxq_hv2hvpt(struct hv_zfhtr_c *hv);
+static int fxq_gethvbrno(char *hn,char *zf);
+static int fxq_hvpt();
+static int fxq_hvcs();
+static int fxq_hvcd();
+static int fxq_pato();
+static int fxq_getCertif(const long cif_no,char *certif);
+static int fxq_cercat(char *cer,char *cer2);
+static int fxq_id2cn(char *cer,const long cif_no);
+static int fxq_getbrcode(const long cif_no,char *brcode);
+static int fxq_setAmt(struct trace_log_rz_c *tx,char *amt);
+static int fxq_setAmt_hv(struct hv_zfhtr_c *tx,char *amt);
+
+static int  fxq_check_hvcs(struct hvcstab_c *wha);
+static int  fxq_check_hvpt(struct hvpttab_c *wha);
+static int  fxq_check_hvcd(struct hvcdtab_c *wha);
+static int  fxq_check_ohvc(struct ohvctab_c *wha);
+static int  fxq_check_pbto(struct pbtotab_c *wha);
+static int  fxq_check_pato(struct patotab_c *wha);
+static int fxq_debug_hvpt(struct hvpttab_c *xq);
+static int fxq_debug_hvcs(struct hvcstab_c *xq);
+static int fxq_debug_hvcd(struct hvcdtab_c *xq);
+static int fxq_debug_pato(struct patotab_c *xq);
+
+static int fxq_genPack();
+static void xq_date2new(char *newdate,char *date,char *time);
+static int xq_checkbrno(char *brno,char *brtype);
+
+static char* appGetTime(char *pcInputTimeStr,int iSecNum,char *pcTimeStr);
+
+
+/*主函数，成败返回0，失败返回-1*/
+int rptfxq(){
+	int iRc;
+	struct com_sys_parm_c s_com_sys_parm;
+
+	vtcp_log("-------反洗钱程序开始----------\n");
+	
+	
+	
+	iRc = fxq_init(XQ_INITFILE);
+	MYRETERR
+	iRc = fxq_rptdate(dateString);
+	MYRETERR
+	fxq_deldate();
+	
+	txdate = atoi(dateString);
+	
+	memset( &g_pub_tx,0,sizeof(g_pub_tx) );
+	pub_base_sysinit();
+
+	iRc=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+	
+	/*综合业务交易提取*/
+	iRc = fxq_tx();
+	MYRETERR
+	
+	/*大小额业务交易提取*/
+	iRc = fxq_hv();
+	MYRETERR
+	
+	/*生成报表*/
+	iRc = fxq_genPack();
+	MYRETERR
+	
+	vtcp_log("-------反洗钱程序结束----------\n");
+	goto OkExit;
+
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"反洗钱报表生成成功!!!![%s]!",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return XQ_OK;
+ErrExit:
+   	strcpy(g_pub_tx.reply,"0000");
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"反洗钱报表生成失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return XQ_ERR;
+}
+
+static int fxq_init(char *fileName){
+	char initBuf[1024];
+	FILE *fp;
+	int  n;
+	
+	memset(pcTimeStr,'\0',sizeof(pcTimeStr));
+	appGetTime(NULL,0,pcTimeStr);
+#ifdef XQ_DEBUG
+	vtcp_log("%s,%d,get appGetTime=%s\n",__FILE__,__LINE__,pcTimeStr);
+#endif
+	fp = fopen(fileName,"r");
+	if (fp == NULL){
+		vtcp_log("%s,%d反洗钱初始化程序失败\n",__FILE__,__LINE__);
+		return XQ_ERR;
+	}else{
+		memset(initBuf,'\0',sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		strcpy(scBrno,initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		strcpy(scBrname,initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		xq_min_amt_s = atof(initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		xq_min_amt_g = atof(initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		xq_min_amt_zz_s = atof(initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		xq_min_amt_zz_g = atof(initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		strcpy(xq_tx_option,initBuf);
+		memset(initBuf,0,sizeof(initBuf));
+		n=fxq_fgetline(fp,initBuf,sizeof(initBuf));
+		memset(dateString,0,sizeof(dateString));
+		strcpy(dateString,initBuf);
+	}
+	fclose(fp);
+	vtcp_log("%s,%d反洗钱初始化程序成功[%s][%s]\n",__FILE__,__LINE__,scBrno,scBrname);
+	
+	count = 1;
+	
+	return XQ_OK;
+}   
+static int fxq_deldate(){
+	
+	vtcp_log("[%s][%d]清理过期数据.\n",__FILE__,__LINE__); 
+	EXEC SQL delete from hvpttab where txday=:dateString;
+	EXEC SQL delete from hvcstab where txday=:dateString;
+	EXEC SQL delete from hvcdtab where txday=:dateString;
+	EXEC SQL delete from ohvctab where txday=:dateString;
+	EXEC SQL delete from pbtotab where txday=:dateString;
+	EXEC SQL delete from patotab where txday=:dateString;
+	return XQ_OK;
+}
+    
+/*处理综合业务相关的交易*/
+static int fxq_tx(){
+	int	iRc;
+	char *is=xq_tx_option;
+	int i=0;
+	
+	iRc = fxq_hvpt();
+	MYRETERR
+	iRc = fxq_hvcs();
+	MYRETERR
+	iRc = fxq_hvcd();
+	MYRETERR
+	iRc = fxq_pato();
+	MYRETERR
+	
+	goto OkExit;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+/*
+从流水中取出符合hvpt(人民币大额转账)的交易
+条件：tx_date=txdate ct_ind=2(转账) 
+　　　amt>=xq_min_amt_zz_g小写，要的是变量
+	  账号第一位是5，是1的属于与个人相关的业务pato
+	　找不是大小额交易的
+*/
+static int fxq_hvpt(){
+	long	lstno;	/*用来识别重复的记录*/
+	int 	iRc;
+	int		isAtx=0;	/*0表示交易没有记录完成，1表示记录已经完成，可以入库
+					　按这里的取法，大小额交易都不会完成的，所有默认大小额会被舍去*/
+	
+	struct trace_log_rz_c tx1,tx2; /* tx1记录付款方，tx2记录收款方*/
+	
+	iRc = Trace_log_rz_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%d and ct_ind=2 and amt>=%f and ac_id<>0 order by trace_no",txdate,xq_min_amt_zz_g);
+	MYSQLERR
+	vtcp_log("%s,%d,开始提hvpt数据\n",__FILE__,__LINE__);
+	while(1){
+		lstno = tl.trace_no;
+		memset(&tl,0,sizeof(tl));
+		iRc = Trace_log_rz_Fet_Sel(&tl,g_pub_tx.reply);
+		if (iRc == 100) break;
+		else if (iRc){
+			sprintf(acErrMsg,"FETCH trace_log_rz ERROR !! [%d]",iRc);
+			vtcp_log("%s,%d,Fetch trace_log_rz 表出错 sqlcode=[%d]\n",
+				__FILE__,__LINE__,sqlca.sqlcode);
+            WRITEMSG
+            return XQ_ERR;
+		}
+#if 0
+		vtcp_log("%s,%d,取得一条符合的流水\n",__FILE__,__LINE__);
+#endif
+		if (lstno != tl.trace_no)	/*已经是别一条流水记录了*/
+			isAtx=0;
+		if (isAtx==-1)				/*-1说明本流水号的交易已经完成*/
+			continue;
+		
+		pub_base_old_acno(tl.ac_no);		
+		/*if ( tl.ac_no[0]!='1' && tl.ac_no[0]!='5' )
+			continue;
+			mod by weiz 2007-1-4 这里只要对公的*/
+		if ( tl.ac_no[0]!='5' )
+			continue;
+		if ( tl.add_ind[0] == '0' ){	/*标志为0，为付款方*/
+			memcpy(&tx1,&tl,sizeof(tl));
+			isAtx++;
+		}else if ( tl.add_ind[0] == '1' ){
+			memcpy(&tx2,&tl,sizeof(tl));
+			isAtx++;
+		}
+		if (isAtx==2){				/*为2说明所要的两个子流水都取到了*/
+			iRc = fxq_tx2hvpt(&tx1,&tx2);
+			/*MYRETERR*/
+			isAtx=0;
+		}
+		
+	}
+	
+	Trace_log_rz_Clo_Sel();
+	
+	goto OkExit;
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+/*
+从流水中取出符合HVCS人民币大额现金存入业务的交易
+条件：tx_date=txdate ct_ind=1(现金) 
+　　　amt>=xq_min_amt_s小写，要的是变量
+      add_ind=1  账号的钱增加
+	　找不是大小额交易的
+*/
+
+static int fxq_hvcs(){
+	long		lstno;	/*用来识别重复的记录*/
+	int 	iRc;
+	int		isAtx=0;	/*0表示交易没有记录完成，1表示记录已经完成，可以入库
+					　按这里的取法，大小额交易都不会完成的，所有默认大小额会被舍去*/
+	
+	
+	iRc = Trace_log_rz_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%d and ct_ind=1 and amt>=%f and add_ind=0 and ac_id<>0 order by trace_no",
+		txdate,xq_min_amt_s);
+	MYSQLERR
+	vtcp_log("%s,%d,开始提hvpt数据\n",__FILE__,__LINE__);
+	while(1){
+		lstno = tl.trace_no;
+		memset(&tl,0,sizeof(tl));
+		iRc = Trace_log_rz_Fet_Sel(&tl,g_pub_tx.reply);
+		if (iRc == 100) break;
+		else if (iRc){
+			sprintf(acErrMsg,"FETCH trace_log_rz ERROR !! [%d]",iRc);
+			vtcp_log("%s,%d,Fetch trace_log_rz 表出错 sqlcode=[%d]\n",
+				__FILE__,__LINE__,sqlca.sqlcode);
+            WRITEMSG
+            return XQ_ERR;
+		}
+#if 0
+		vtcp_log("%s,%d,取得一条符合的流水\n",__FILE__,__LINE__);
+#endif
+		if (lstno != tl.trace_no)	/*已经是别一条流水记录了*/
+			isAtx=0;
+		if (isAtx==-1)				/*-1说明本流水号的交易已经完成*/
+			continue;	
+		
+		pub_base_old_acno(tl.ac_no);		
+		if ( tl.ac_no[0]!='1' && tl.ac_no[0]!='5' )
+			continue;
+		isAtx++;
+		if (isAtx==1){				/*为1说明已经取得本交易的有效流水*/
+			iRc = fxq_tx2hvcs(&tl);
+			/*MYRETERR*/
+			isAtx=0;
+		}
+		
+	}
+	
+	Trace_log_rz_Clo_Sel();
+	
+	goto OkExit;
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+/*
+从流水中取出符合HVCD人民币大额现金支取业务的交易
+条件：tx_date=txdate ct_ind=1(现金) 
+　　　amt>=xq_min_amt_s小写，要的是变量
+      add_ind=0  账号的钱减少
+	　找不是大小额交易的
+*/
+
+static int fxq_hvcd(){
+	long		lstno;	/*用来识别重复的记录*/
+	int 	iRc;
+	int		isAtx=0;	/*0表示交易没有记录完成，1表示记录已经完成，可以入库
+					　按这里的取法，大小额交易都不会完成的，所有默认大小额会被舍去*/
+	
+	
+	iRc = Trace_log_rz_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%d and ct_ind=1 and amt>=%f and add_ind=1 and ac_id<>0 order by trace_no",
+		txdate,xq_min_amt_s);
+	MYSQLERR
+	vtcp_log("%s,%d,开始提hvpt数据\n",__FILE__,__LINE__);
+	while(1){
+		lstno = tl.trace_no;
+		memset(&tl,0,sizeof(tl));
+		iRc = Trace_log_rz_Fet_Sel(&tl,g_pub_tx.reply);
+		if (iRc == 100) break;
+		else if (iRc){
+			sprintf(acErrMsg,"FETCH trace_log_rz ERROR !! [%d]",iRc);
+			vtcp_log("%s,%d,Fetch trace_log_rz 表出错 sqlcode=[%d]\n",
+				__FILE__,__LINE__,sqlca.sqlcode);
+            WRITEMSG
+            return XQ_ERR;
+		}
+#if 0
+		vtcp_log("%s,%d,取得一条符合的流水\n",__FILE__,__LINE__);
+#endif
+		if (lstno != tl.trace_no)	/*已经是别一条流水记录了*/
+			isAtx=0;
+		if (isAtx==-1)				/*-1说明本流水号的交易已经完成*/
+			continue;	
+		
+		pub_base_old_acno(tl.ac_no);		
+		if ( tl.ac_no[0]!='1' && tl.ac_no[0]!='5' )
+			continue;
+		isAtx++;
+		if (isAtx==1){				/*为1说明已经取得本交易的有效流水*/
+			iRc = fxq_tx2hvcd(&tl);
+			/*MYRETERR*/
+			isAtx=0;
+		}
+		
+	}
+	
+	Trace_log_rz_Clo_Sel();
+	
+	goto OkExit;
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+static int fxq_pato(){
+	long	lstno;	/*用来识别重复的记录*/
+	int 	iRc;
+	int		isAtx=0;	/*0表示交易没有记录完成，1表示记录已经完成，可以入库
+					　按这里的取法，大小额交易都不会完成的，所有默认大小额会被舍去*/
+	
+	struct trace_log_rz_c tx1,tx2; /* tx1记录付款方，tx2记录收款方*/
+	
+	iRc = Trace_log_rz_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%d and ct_ind=2 and amt>=%f and ac_id<>0 order by trace_no",txdate,xq_min_amt_zz_s);
+	MYSQLERR
+	vtcp_log("%s,%d,开始提hvpt数据\n",__FILE__,__LINE__);
+	while(1){
+		lstno = tl.trace_no;
+		memset(&tl,0,sizeof(tl));
+		iRc = Trace_log_rz_Fet_Sel(&tl,g_pub_tx.reply);
+		if (iRc == 100) break;
+		else if (iRc){
+			sprintf(acErrMsg,"FETCH trace_log_rz ERROR !! [%d]",iRc);
+			vtcp_log("%s,%d,Fetch trace_log_rz 表出错 sqlcode=[%d]\n",
+				__FILE__,__LINE__,sqlca.sqlcode);
+            WRITEMSG
+            return XQ_ERR;
+		}
+#if 0
+		vtcp_log("%s,%d,取得一条符合的流水\n",__FILE__,__LINE__);
+#endif
+		if (lstno != tl.trace_no)	/*已经是别一条流水记录了*/
+			isAtx=0;
+		if (isAtx==-1)				/*-1说明本流水号的交易已经完成*/
+			continue;
+		
+		pub_base_old_acno(tl.ac_no);		
+		if ( tl.ac_no[0]!='1' && tl.ac_no[0]!='5' )
+			continue;
+		if ( tl.ac_no[0]=='1')
+			isAtx++;
+		if ( tl.add_ind[0] == '0' ){	/*标志为0，为付款方*/
+			memcpy(&tx1,&tl,sizeof(tl));
+			isAtx++;
+		}else if ( tl.add_ind[0] == '1' ){
+			memcpy(&tx2,&tl,sizeof(tl));
+			isAtx++;
+		}
+		
+		if (isAtx>2){				/*为2说明所要的两个子流水都取到了*/
+			iRc = fxq_tx2pato(&tx1,&tx2);
+			/*MYRETERR*/
+			isAtx=0;
+		}
+		
+	}
+	
+	Trace_log_rz_Clo_Sel();
+	
+	goto OkExit;
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+/*取得业务标识*/
+static int fxq_getapflg(char *flg){
+	sprintf(flg,"%s%06d",dateString,count++);
+	return XQ_OK;
+}
+
+/*
+把流水trace_log_rz的数据转成hvpt的数据
+tx1为付款人的记录
+tx2为收款人的记录
+*/
+static int fxq_tx2hvpt(struct trace_log_rz_c *tx1,struct trace_log_rz_c *tx2){
+	static struct hvpttab_c xq;	/*为方便命名，用统一名字*/
+	int iRc;
+	memset(&xq,0,sizeof(xq));
+	
+	strcpy(xq.brno,scBrno);
+	strcpy(xq.brname,scBrname);
+	strcpy(xq.txday,dateString);
+	sprintf(xq.txtime,"%d",tx1->tx_time);
+	memcpy(xq.sendday,pcTimeStr,8);
+	
+	fxq_getapflg(xq.apflg);
+	/*付款方*/
+	iRc = fxq_getActnoInfo(tx1->ac_id,xq.paybrno,xq.payname,
+		xq.paycode,NULL);
+	MYRETERR
+	xq.paybrtype[0]='1';
+	strcpy(xq.payactno,tx1->ac_no);
+	/*收款方*/
+	iRc = fxq_getActnoInfo(tx2->ac_id,xq.cashbrno,xq.cashname,
+		xq.cashbrcode,NULL);
+	MYRETERR
+	xq.cashbrtype[0]='1';
+	strcpy(xq.cashactno,tx2->ac_no);
+	
+	iRc = fxq_setAmt(tx1,xq.txamt);
+
+    sprintf(xq.paydate,"%d",tx1->tx_date);
+    sprintf(xq.cashdate,"%d",tx2->tx_date);
+    
+    strcpy(xq.cashtype,"61");
+    
+    if (tx1->note_no)
+    	strcpy(xq.crdno,tx1->note_no);
+    else 
+    	strcpy(xq.crdno,tx2->note_no);
+    strcpy(xq.txtypeno,tx1->tx_code);
+    sprintf(xq.expand,"%ld",tx1->trace_no);
+    
+   	/*检查一下正确性*/
+   	iRc = fxq_check_hvpt(&xq);
+   	MYRETERR
+#if 0  	
+   	fxq_debug_hvpt(&xq);
+#endif
+   	iRc = Hvpttab_Ins(xq,g_pub_tx.reply);
+   	MYSQLERR;
+   	
+#ifdef XQ_DEBUG
+	/*vtcp_log("打不出来呢");*/
+#endif
+	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+/*
+把流水trace_log_rz的数据转成hvcs的数据
+tx2为收款人的记录
+*/
+static int fxq_tx2hvcs(struct trace_log_rz_c *tx){
+	static struct hvcstab_c xq;	/*为方便命名，用统一名字*/
+	int iRc;
+	memset(&xq,0,sizeof(xq));
+	
+	strcpy(xq.brno,scBrno);
+	strcpy(xq.brname,scBrname);
+	strcpy(xq.txday,dateString);
+	sprintf(xq.txtime,"%d",tx->tx_time);
+	memcpy(xq.sendday,pcTimeStr,8);
+	
+	fxq_getapflg(xq.apflg);
+	/*收款方*/
+	iRc = fxq_getActnoInfo(tx->ac_id,xq.cashbrno,xq.cashname,
+		xq.cashcode,xq.cashcertif);
+	MYRETERR
+	xq.cashbrtype[0]='1';
+	strcpy(xq.cashactno,tx->ac_no);
+	if ( xq.cashactno[0]=='1')
+		strcpy(xq.cashertype,"02");
+	else
+		strcpy(xq.cashertype,"01");
+	/*付款方*/
+	strcpy(xq.payname,xq.cashname);
+	strcpy(xq.paycertif,xq.cashcertif);
+	
+	iRc = fxq_setAmt(tx,xq.txamt);
+
+    sprintf(xq.cashdate,"%d",tx->tx_date);
+    
+    strcpy(xq.cashtype,"91");
+    
+    strcpy(xq.txtypeno,tx->tx_code);
+    sprintf(xq.expand,"%ld",tx->trace_no);
+    
+   	/*检查一下正确性*/
+   	iRc = fxq_check_hvcs(&xq);
+   	MYRETERR
+   	if (xq.cashactno[0]=='5'){
+   		if (tx->amt<xq_min_amt_g)
+   			return XQ_OK;
+   	}
+#if 0  	
+   	fxq_debug_hvcs(&xq);
+#endif
+   	iRc = Hvcstab_Ins(xq,g_pub_tx.reply);
+   	MYSQLERR;
+   	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+static int fxq_tx2hvcd(struct trace_log_rz_c *tx){
+	static struct hvcdtab_c xq;	/*为方便命名，用统一名字*/
+	int iRc;
+	memset(&xq,0,sizeof(xq));
+	
+	strcpy(xq.brno,scBrno);
+	strcpy(xq.brname,scBrname);
+	strcpy(xq.txday,dateString);
+	sprintf(xq.txtime,"%d",tx->tx_time);
+	memcpy(xq.sendday,pcTimeStr,8);
+	
+	fxq_getapflg(xq.apflg);
+	/*收款方*/
+	iRc = fxq_getActnoInfo(tx->ac_id,xq.paybrno,xq.payname,
+		xq.paycode,xq.paycertif);
+	MYRETERR
+	xq.paybrtype[0]='1';
+	strcpy(xq.payactno,tx->ac_no);
+	if ( xq.payactno[0]=='1')
+		strcpy(xq.payertype,"02");
+	else
+		strcpy(xq.payertype,"01");
+	/*付款方*/
+	strcpy(xq.cashname,xq.payname);
+	strcpy(xq.cashertype,xq.payertype);
+	strcpy(xq.cashcertif,xq.paycertif);
+	
+	iRc = fxq_setAmt(tx,xq.txamt);
+
+    sprintf(xq.paydate,"%d",tx->tx_date);
+    
+    strcpy(xq.cashtype,"02");
+    
+    strcpy(xq.txtypeno,tx->tx_code);
+    sprintf(xq.expand,"%ld",tx->trace_no);
+    
+   	/*检查一下正确性*/
+   	iRc = fxq_check_hvcd(&xq);
+   	MYRETERR
+   	if (xq.payactno[0]=='5'){
+   		if (tx->amt<xq_min_amt_g)
+   			return XQ_OK;
+   	}
+#if 0  	
+   	fxq_debug_hvcd(&xq);
+#endif
+   	iRc = Hvcdtab_Ins(xq,g_pub_tx.reply);
+   	MYSQLERR;
+   	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+static int fxq_tx2pato(struct trace_log_rz_c *tx1,struct trace_log_rz_c *tx2){
+	static struct patotab_c xq;	/*为方便命名，用统一名字*/
+	int iRc;
+	memset(&xq,0,sizeof(xq));
+	
+	strcpy(xq.brno,scBrno);
+	strcpy(xq.brname,scBrname);
+	strcpy(xq.txday,dateString);
+	sprintf(xq.txtime,"%d",tx1->tx_time);
+	memcpy(xq.sendday,pcTimeStr,8);
+	
+	fxq_getapflg(xq.apflg);
+	/*付款方*/
+	iRc = fxq_getActnoInfo(tx1->ac_id,xq.paybrno,xq.payname,
+		xq.paycode,xq.paycertif);
+	MYRETERR
+	xq.paybrtype[0]='1';
+	strcpy(xq.payactno,tx1->ac_no);
+	if ( xq.payactno[0]=='1')
+		strcpy(xq.payertype,"02");
+	else
+		strcpy(xq.payertype,"01");
+	/*收款方*/
+	iRc = fxq_getActnoInfo(tx2->ac_id,xq.cashbrno,xq.cashname,
+		xq.cashcode,xq.cashcertif);
+	MYRETERR
+	xq.cashbrtype[0]='1';
+	strcpy(xq.cashactno,tx2->ac_no);
+	if ( xq.cashactno[0]=='1')
+		strcpy(xq.cashertype,"02");
+	else
+		strcpy(xq.cashertype,"01");
+		
+	iRc = fxq_setAmt(tx1,xq.txamt);
+
+    sprintf(xq.paydate,"%d",tx1->tx_date);
+    sprintf(xq.cashdate,"%d",tx2->tx_date);
+    
+    strcpy(xq.paytype,"37");
+    
+    if (tx1->note_no)
+    	strcpy(xq.crdno,tx1->note_no);
+    else 
+    	strcpy(xq.crdno,tx2->note_no);
+    strcpy(xq.txtypeno,tx1->tx_code);
+    sprintf(xq.expand,"%ld",tx1->trace_no);
+    
+   	/*检查一下正确性*/
+   	iRc = fxq_check_pato(&xq);
+   	MYRETERR
+#if 0  	
+   	fxq_debug_pato(&xq);
+#endif
+   	iRc = Patotab_Ins(xq,g_pub_tx.reply);
+   	MYSQLERR;
+	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+
+static int fxq_hv(){
+	struct hv_zfhtr_c hv;
+	int		iRc;
+	
+	memset(&hv,0,sizeof(hv));
+	
+	/*iRc = Hv_zfhtr_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%d and tx_amt>=%f order by trace_no",
+		txdate,xq_min_amt_zz_s);*/
+	iRc = Hv_zfhtr_Dec_Sel( g_pub_tx.reply,
+		" tx_date=%ld and tx_amt>=%f order by trace_no",
+		txdate,xq_min_amt_zz_s);
+	MYSQLERR
+	vtcp_log("%s,%d,开始提大额数据\n",__FILE__,__LINE__);
+	while(1){
+		memset(&hv,0,sizeof(hv));
+		iRc = Hv_zfhtr_Fet_Sel(&hv,g_pub_tx.reply);
+		if (iRc == 100) break;
+		else if (iRc){
+			sprintf(acErrMsg,"FETCH Hv_zfhtr ERROR !! [%d]",iRc);
+			vtcp_log("%s,%d,Fetch Hv_zfhtr 表出错 sqlcode=[%d]\n",
+				__FILE__,__LINE__,sqlca.sqlcode);
+            WRITEMSG
+            return XQ_ERR;
+		}
+		iRc = fxq_hv2hvpt(&hv);
+		/*MYRETERR*/
+	}
+	
+	Hv_zfhtr_Clo_Sel();
+	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+static int fxq_hv2hvpt(struct hv_zfhtr_c *hv){
+	struct hvpttab_c xq;
+	int		iRc;
+	
+	memset(&xq,0,sizeof(xq));
+	strcpy(xq.brno,scBrno);
+	strcpy(xq.brname,scBrname);
+	strcpy(xq.txday,dateString);
+	sprintf(xq.txtime,"%d",hv->tx_time);
+	memcpy(xq.sendday,pcTimeStr,8);
+	
+	fxq_getapflg(xq.apflg);
+	/*付款方*/
+	strcpy(xq.paybrno,hv->pay_opn_br_no);
+	if (memcmp(xq.paybrno,"000000",6)==0){
+			memcpy(xq.paybrno,hv->or_br_no,12);
+	}
+	xq.paybrtype[0]='1';
+	strcpy(xq.payname,hv->pay_name);
+	strcpy(xq.payactno	,hv->pay_ac_no);
+	/*strcpy(xq.paybrcode	,hv->);*/
+	strcpy(xq.cashbrno  ,hv->cash_opn_br_no);
+	xq.cashbrtype[0]='1';
+	strcpy(xq.cashname  ,hv->cash_name);
+	strcpy(xq.cashactno ,hv->cash_ac_no);
+	/*strcpy(xq.cashbrcode,hv->);*/
+	iRc = fxq_setAmt_hv(hv,xq.txamt);
+	sprintf(xq.paydate  ,"%06d" ,hv->tx_date);
+	strcpy(xq.cashdate  ,xq.paydate);
+	strcpy(xq.dscpt     ,hv->hv_brf);
+	fxq_getCashtype(xq.cashtype  ,hv->cmtno);
+	if (xq.crdno[0]=='\0')
+		strcpy(xq.crdno,"11111111");
+	else
+		strcpy(xq.crdno     ,hv->note_no);
+	strcpy(xq.txtypeno  ,hv->yw_type);
+    sprintf(xq.expand,"%ld",hv->trace_no);
+    
+   	/*检查一下正确性*/
+   	iRc = fxq_check_hvpt(&xq);
+   	MYRETERR
+#if 0  	
+   	fxq_debug_hvpt(&xq);
+#endif
+   	iRc = Hvpttab_Ins(xq,g_pub_tx.reply);
+   	MYSQLERR;
+	
+	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+static int fxq_getCashtype(char *type,char *cmtno){
+	int cmt=atoi(cmtno);
+	switch(cmt){
+		case	100:
+			strcpy(type,"53");
+			break;
+		case	102:
+			strcpy(type,"54");
+			break;
+		case	101:
+			strcpy(type,"55");
+			break;
+		case	104:
+			strcpy(type,"57");
+			break;
+		case	105:
+			strcpy(type,"56");
+			break;
+		default:
+			strcpy(type,"61");
+			break;
+	}
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+/***************************************************************************/
+/* 程序功能 : 取得日期和时间, 避免2000年问题*/
+/* 作    者 : 唐燕云  Tang Yanyun*/
+/* 日    期 : 1997年12月05日*/
+/* 使用限制 : 无*/
+/* 参数意义 : char *pcInputTimeStr 字符串,指定起始时间,如为空指针,表示当前 */
+/*系统时间为起始时间.字符串格式为(必需有字符串结束符) :  */
+/*"年月日时分秒微秒"(YYYYmmddHHMMSSMicroS)*/
+/*int   iSecNum    取当前系统时间经过多少秒后的时间(可为负数)  */
+/*char *pcTimeStr  字符串,函数执行成功后返回21个字节的字符串,  */
+/*系统日期和时间按"年月日时分秒微秒"(YYYYmmddHHMMSSMicroS) */
+/*的顺序排列, 其中年用4 位表示( 返回时已包含字符串结束符 )     */
+/* 返值意义 : char *  返回取得的字符串( 即pcTimeStr )*/
+/* 注意事项 : 调用此函数时函数的参数须有大于等于21个字节的存贮空间, 否则会 */
+/*            导致程序运行极不稳定. 使用此函数时须包含time.h :             */
+/*             #include <time.h>                                           */
+/* 修改记录 :                                                              */
+/***************************************************************************/
+static char* appGetTime(char *pcInputTimeStr,int iSecNum,char *pcTimeStr)
+{
+  struct tm stTime;
+#ifdef WIN32
+  struct _timeb stTimeB;
+#else
+  struct  timeb stTimeB;
+#endif
+
+  memset((char *)&stTime ,'\0',sizeof(struct tm));
+#ifdef WIN32
+  memset((char *)&stTimeB,'\0',sizeof(struct _timeb));
+#else
+  memset((char *)&stTimeB,'\0',sizeof(struct  timeb));
+#endif
+
+  if (pcInputTimeStr == NULL) {
+#ifdef WIN32
+      _ftime(&stTimeB);
+#else
+       ftime(&stTimeB);
+#endif
+  } else {
+      sscanf(pcInputTimeStr,"%4d%2d%2d%2d%2d%2d",&(stTime.tm_year),
+          &(stTime.tm_mon),&(stTime.tm_mday),&(stTime.tm_hour),
+          &(stTime.tm_min),&(stTime.tm_sec));
+
+      stTime.tm_year = stTime.tm_year - 1900;
+      stTime.tm_mon--;
+      stTimeB.time = mktime(&stTime);
+  }
+
+  memcpy(&stTime,localtime((time_t *)&(stTimeB.time)),sizeof(struct tm));
+  strftime(pcTimeStr,(size_t)(14 + 1),"%Y%m%d%H%M%S",&stTime);
+  if (pcInputTimeStr == NULL) {
+      sprintf(pcTimeStr + 14,"%.3ld",stTimeB.millitm);
+  } else {
+      strcpy( pcTimeStr + 14,pcInputTimeStr + 14);
+  }
+
+  return(pcTimeStr);
+}
+
+/*
+把行内的机构号(hn)换成支付系统的行号(zf)
+*/
+static int fxq_gethvbrno(char *hn,char *zf){
+	struct hv_orno_brno_c hv_orbr_no;
+    int iRc;
+    
+#ifdef XQ_DEBUG
+    vtcp_log("%s,%d,brno=[%s]\n",__FILE__,__LINE__,hn);
+#endif
+
+    if (isdigit(hn[5]))/*判断第6位是否为数字*/
+    {
+#ifdef XQ_DEBUG
+        vtcp_log("%s,%d,输入已经是支付系统行号[%s]\n",__FILE__,__LINE__,hn);
+#endif
+        return XQ_OK;
+    }
+    
+    memset(&hv_orbr_no,0,sizeof(hv_orbr_no));
+
+    iRc=Hv_orno_brno_Sel(g_pub_tx.reply,&hv_orbr_no,"br_no='%s' ",hn);
+    MYSQLERR
+    
+    memcpy(zf,hv_orbr_no.or_br_no,12);
+
+	return XQ_OK;
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+static int  fxq_fgetline(FILE *fp, char *buffer, int maxlen)
+{
+    int  i;
+
+    memset(buffer, 0x00, maxlen);
+    if(fgets(buffer, maxlen, fp) == NULL)
+    {
+        i = strlen(buffer);
+        if(feof(fp) != 0)
+        {
+          if(i == 0) return -1;                 /* 文件结束 */
+        }
+        else return -2;                         /* 出现错误 */
+    }
+
+    i = strlen(buffer);
+    if(i > 0 && buffer[i-1] == '\n')
+        buffer[--i] = '\0';
+    return i;
+}
+
+/*如果当前日期为日期+Y格式，date取前日期，不然去数据库com_sys_parm表的lst_date日期*/
+static int fxq_rptdate(char *date){
+	int intDate=0;
+	
+	if ( date[8]=='Y' ){
+		date[8]='\0';
+		vtcp_log("%s,%d指定生成日期[%s]的报表\n",__FILE__,__LINE__,date);
+		return XQ_OK;
+	}else{
+		EXEC SQL select lst_date into:intDate from com_sys_parm ;
+		if ( intDate<=0 ){
+			vtcp_log("%s,%d取表com_sys_parm日期lst_date错--intDate=%d\n",__FILE__,__LINE__,intDate);
+			return XQ_ERR;
+		} 
+		sprintf(date,"%d",intDate);
+		vtcp_log("%s,%d默认生成日期[%s]的报表\n",__FILE__,__LINE__,date);
+		return XQ_OK;
+	}	
+}
+/*
+通过账号ac_id得到一些信息
+包括：brno ,acname,brcode,certif,
+*/
+int fxq_getActnoInfo(const long ac_id,char *brno,char *name,
+		char *brcode,char *certif){
+	int iRc=0;
+	struct prdt_ac_id_c sPrdt_ac_id;
+	
+	iRc=Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdt_ac_id," ac_id=[%ld]\n ",ac_id);
+	vtcp_log("ac_id = %ld",ac_id);
+	MYSQLERR
+	
+	switch(sPrdt_ac_id.ac_id_type[0])
+	{
+		case '1':/*活期*/
+		{
+			struct dd_mst_c mst;
+			iRc=Dd_mst_Sel(g_pub_tx.reply,&mst," ac_id=%ld",ac_id);  
+			MYSQLERR
+			iRc = fxq_gethvbrno(mst.opn_br_no,brno);
+			MYRETERR
+			strcpy(name,mst.name);
+			if (certif!=NULL)
+				iRc = fxq_getCertif(mst.cif_no,certif);
+			MYRETERR
+			if (brcode!=NULL)
+				iRc = fxq_getbrcode(mst.cif_no,brcode);
+			break;
+		}
+		case '2':/*定期存款*/
+		{
+			struct td_mst_c mst;
+			iRc=Td_mst_Sel(g_pub_tx.reply,&mst," ac_id=%ld",ac_id);   
+			MYSQLERR
+			iRc = fxq_gethvbrno(mst.opn_br_no,brno);
+			MYRETERR
+			strcpy(name,mst.name);
+			if (certif!=NULL)
+				iRc = fxq_getCertif(mst.cif_no,certif);
+			MYRETERR
+			if (brcode!=NULL)
+				iRc = fxq_getbrcode(mst.cif_no,brcode);
+			break;
+		}
+		case '3':/*贷款*/
+		{
+			struct ln_mst_c mst;
+			iRc=Ln_mst_Sel(g_pub_tx.reply,&mst," ac_id=%ld",ac_id);   
+			MYSQLERR
+			iRc = fxq_gethvbrno(mst.opn_br_no,brno);
+			MYRETERR
+			strcpy(name,mst.name);
+			if (certif!=NULL)
+				iRc = fxq_getCertif(mst.cif_no,certif);
+			MYRETERR
+			if (brcode!=NULL)
+				iRc = fxq_getbrcode(mst.cif_no,brcode);
+			break;
+		}
+		case '9':/*内部帐*/
+		{
+			struct in_mst_c mst;
+			iRc=In_mst_Sel(g_pub_tx.reply,&mst," ac_id=%ld",ac_id);   
+			MYSQLERR
+			iRc = fxq_gethvbrno(mst.opn_br_no,brno);
+			MYRETERR
+			strcpy(name,mst.name);
+			break;
+		}
+		default:
+			sprintf(acErrMsg,"无效的帐户类型");
+			set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			goto ErrExit;
+			break;
+	}
+	
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+	return XQ_ERR;
+}
+
+/*根据cif_no客户号取得对应的证件信息*/
+static int fxq_getCertif(const long cif_no,char *certif){
+	struct cif_id_code_rel_c cif;
+	int iRc;
+	memset(&cif,0,sizeof(cif));
+
+	iRc  =  Cif_id_code_rel_Dec_Sel(g_pub_tx.reply,"cif_no=%ld",cif_no);
+	MYSQLERR
+	
+	/*取第一个证件号就可以了*/
+	iRc=Cif_id_code_rel_Fet_Sel(&cif,g_pub_tx.reply);
+	MYSQLERR
+	
+	Cif_id_code_rel_Clo_Sel();
+	
+	switch (cif.id_type[0]){
+	case '1':
+	case '2':
+	case 'E':
+		strcpy(certif,"01");
+		break;
+	case '4':
+	case '6':
+	case 'G':
+		strcpy(certif,"02");
+		break;
+	case '7':
+	case 'I':
+		strcpy(certif,"03");
+		break;
+	case '3':
+		strcpy(certif,"04");
+		break;
+	case '5':
+	case '8':
+	case '9':
+	case 'A':
+	case 'B':
+	case 'C':
+	case 'D':
+	case 'F':
+	case 'H':
+		strcpy(certif,"05");
+		break;
+	default:
+		strcpy(certif,"05");
+		break;
+	}
+	
+	iRc = fxq_cercat(certif,cif.id_no);
+	iRc = fxq_id2cn(certif,cif_no);
+	
+	goto OkExit;
+OkExit:
+	return XQ_OK;
+ErrExit:
+	return XQ_ERR;
+}
+
+/*这个函数解决一下证件类型、身份证号等问题*/
+int fxq_cercat(char *cer,char *cer2){
+	/*榆林有在身份证前添加000的习惯。。。要处理*/
+	int i;
+	char *tmp=cer2;
+#if	XQ_DEBUG
+	vtcp_log("%s,%d,cer=[%s],cer2=[%s]\n",__FILE__,__LINE__,cer,cer2);
+#endif
+	if (!memcmp(cer,"01",2)){
+		for (i=0;i<18;i++){
+			if (*(tmp)=='0'){
+				tmp++;
+			}else
+				break;
+		}
+	}
+	
+	if (!memcmp(cer,"01",2)){
+		if ( strlen(tmp)>=18 ){
+			*(tmp+18)='\0';
+			strcpy(cer+2,tmp);
+		}else if (strlen(tmp)>=15){
+			*(tmp+15)='\0';
+			strcpy(cer+2,tmp);
+		}else if (strlen(tmp)>=3){
+			strcpy(cer,"05");
+			strcpy(cer+2,tmp);
+		}else {
+			strcpy(cer,"05");
+			strcpy(cer+2,"99999");
+		}
+	}else{
+		strcpy(cer+2,tmp);
+	}
+#if	XQ_DEBUG
+	vtcp_log("%s,%d,ok cer=[%s]\n",__FILE__,__LINE__,cer);
+#endif
+	return XQ_OK;
+}
+
+/*对个人为身份证号的情况，如果身份证是不合法的，就用客户号来代替*/
+static int fxq_id2cn(char *cer,const long cif_no){
+	char custno[23];
+	sprintf(custno,"%ld",cif_no);
+	if ( !memcmp(cer,"0599999",7) ){ /*0599999表示上一步没有找到合适的数据*/
+		strcpy(cer+2,custno);
+		return XQ_OK;
+	}
+	
+	if ( !memcmp(cer,"01",2) ){	/*是身份证的要检查一下年龄*/
+		if (strlen(cer+2)==15){
+			if ( isdigit(*(cer+8)) && isdigit(*(cer+9)) ){
+				return XQ_OK;
+			}else{
+				strcpy(cer,"05");
+				strcpy(cer+2,custno);
+			}
+		}else if (strlen(cer+2)==18){
+			char tmp[5];
+			int itmp;
+			memset(tmp,0,5);
+			memcpy(tmp,cer+8,4);
+			itmp = atoi(tmp);
+			if ( itmp > 3000 || itmp < 1700 ){
+				strcpy(cer,"05");
+				strcpy(cer+2,custno);
+				return XQ_OK;
+			}
+		}else
+			return XQ_OK;
+	}
+}
+
+/*如果有机构号，就是取一下机构号，非强制*/
+static int fxq_getbrcode(const long cif_no,char *brcode){
+	struct cif_magn_inf_c mi;
+	int iRc;
+	memset(&mi,0,sizeof(mi));
+	
+	iRc = Cif_magn_inf_Sel(g_pub_tx.reply,&mi,"cif_no=%ld",cif_no);
+	if (iRc)
+		return XQ_ERR;
+	/*不处理错误*/
+	strcpy(brcode,mi.units_license);
+#ifdef XQ_DEBUG
+	vtcp_log("%ld取得机构号%s",cif_no,brcode);
+#endif
+	return XQ_OK;
+OkExit:
+	return XQ_OK;
+ErrExit:
+	return XQ_ERR;
+}
+/*从一个流水中取得金额*/
+static int fxq_setAmt(struct trace_log_rz_c *tx,char *amt){
+	long lAmt;
+	strcpy(amt,"CNY");
+	lAmt = (long)(tx->amt*100);
+	sprintf(amt+3,"%015ld",lAmt);
+	
+	return XQ_OK;
+}
+static int fxq_setAmt_hv(struct hv_zfhtr_c *tx,char *amt){
+	long lAmt;
+	strcpy(amt,"CNY");
+	lAmt = (long)(tx->tx_amt*100);
+	sprintf(amt+3,"%015ld",lAmt);
+	
+	return XQ_OK;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   hvcstab
+*************************************************************/
+int  fxq_check_hvcs(struct hvcstab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		return XQ_ERR;
+	if ( *wha->payname == '\0')
+		return XQ_ERR;
+	if ( *wha->cashbrno == '\0')
+		return XQ_ERR;
+	if ( *wha->cashbrtype == '\0')
+		return XQ_ERR;
+	if ( *wha->cashname == '\0')
+		return XQ_ERR;
+	if ( *wha->cashactno == '\0')
+		return XQ_ERR;
+	if ( *wha->cashertype == '\0')
+		return XQ_ERR;
+	if ( *wha->txamt == '\0')
+		return XQ_ERR;
+	if ( *wha->cashdate == '\0')
+		return XQ_ERR;
+	if ( *wha->cashtype == '\0')
+		return XQ_ERR;
+	if ( *wha->txtypeno == '\0')
+		return XQ_ERR;
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"0500");
+	return 0;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   hvpttab
+*************************************************************/
+int  fxq_check_hvpt(struct hvpttab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		strcpy(wha->apflg,"9");
+	if ( *wha->paybrno == '\0')
+		strcpy(wha->paybrno,"9");
+	if ( *wha->paybrtype == '\0')
+		strcpy(wha->paybrtype,"9");
+	if ( *wha->cashbrno == '\0')
+		strcpy(wha->cashbrno,"9");
+	if ( *wha->cashbrtype == '\0')
+		strcpy(wha->cashbrtype,"9");
+	if ( *wha->cashname == '\0')
+		strcpy(wha->cashname,"9");
+	if ( *wha->cashactno == '\0')
+		strcpy(wha->cashactno,"9");
+	if ( *wha->txamt == '\0')
+		strcpy(wha->txamt,"9");
+	if ( *wha->paydate == '\0')
+		strcpy(wha->paydate,"9");
+	if ( *wha->cashdate == '\0')
+		strcpy(wha->cashdate,"9");
+	if ( *wha->cashtype == '\0')
+		strcpy(wha->cashtype,"9");
+	if ( *wha->txtypeno == '\0')
+		strcpy(wha->txtypeno,"9");
+	if ( *wha->crdno == '\0')			/*由于这个字段经常由于没有可取要素，所以只能这样处理*/
+	  strcpy(wha->crdno,wha->apflg);
+	if ( *wha->payname == '\0')
+		strcpy(wha->payname,"9");
+	if ( *wha->payactno == '\0')
+		strcpy(wha->payactno,"9");
+	return 0;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   hvcdtab
+*************************************************************/
+int  fxq_check_hvcd(struct hvcdtab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		strcpy(wha->apflg,"9");
+	if ( *wha->paybrno == '\0')
+		strcpy(wha->paybrno,"9");
+	if ( *wha->paybrtype == '\0')
+		strcpy(wha->paybrtype,"9");
+	if ( *wha->payname == '\0')
+		strcpy(wha->payname,"9");
+	if ( *wha->payactno == '\0')
+		strcpy(wha->payactno,"9");
+	if ( *wha->payertype == '\0')
+		strcpy(wha->payertype,"9");
+	if ( *wha->cashname == '\0')
+		strcpy(wha->cashname,"9");
+	if ( *wha->cashertype == '\0')
+		strcpy(wha->cashertype,"9");
+	if ( *wha->txamt == '\0')
+		strcpy(wha->txamt,"9");
+	if ( *wha->paydate == '\0')
+		strcpy(wha->paydate,"9");
+	if ( *wha->cashtype == '\0')
+		strcpy(wha->cashtype,"9");
+	if ( *wha->txtypeno == '\0')
+		strcpy(wha->txtypeno,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->paycertif,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	return 0;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   ohvctab
+*************************************************************/
+int  fxq_check_ohvc(struct ohvctab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		strcpy(wha->apflg,"9");
+	if ( *wha->paybrno == '\0')
+		strcpy(wha->paybrno,"9");
+	if ( *wha->paybrtype == '\0')
+		strcpy(wha->paybrtype,"9");
+	if ( *wha->payname == '\0')
+		strcpy(wha->payname,"9");
+	if ( *wha->cashbrno == '\0')
+		strcpy(wha->cashbrno,"9");
+	if ( *wha->cashbrtype == '\0')
+		strcpy(wha->cashbrtype,"9");
+	if ( *wha->cashname == '\0')
+		strcpy(wha->cashname,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	if ( *wha->txamt == '\0')
+		strcpy(wha->txamt,"9");
+	if ( *wha->paydate == '\0')
+		strcpy(wha->paydate,"9");
+	if ( *wha->cashdate == '\0')
+		strcpy(wha->cashdate,"9");
+	if ( *wha->cashtype == '\0')
+		strcpy(wha->cashtype,"9");
+	if ( *wha->txtypeno == '\0')
+		strcpy(wha->txtypeno,"9");
+	if ( *wha->crdno == '\0')			/*由于这个字段经常由于没有可取要素，所以只能这样处理*/
+	  strcpy(wha->crdno,wha->apflg);
+	return 0;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   pbtotab
+*************************************************************/
+int  fxq_check_pbto(struct pbtotab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		strcpy(wha->apflg,"9");
+	if ( *wha->paybrno == '\0')
+		strcpy(wha->paybrno,"9");
+	if ( *wha->paybrtype == '\0')
+		strcpy(wha->paybrtype,"9");
+	if ( *wha->cashbro == '\0')
+		strcpy(wha->cashbro,"9");
+	if ( *wha->cashbrtype == '\0')
+		strcpy(wha->cashbrtype,"9");
+	if ( *wha->cashname == '\0')
+		strcpy(wha->cashname,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	if ( *wha->txamt == '\0')
+		strcpy(wha->txamt,"9");
+	if ( *wha->paydate == '\0')
+		strcpy(wha->paydate,"9");
+	if ( *wha->cashdate == '\0')
+		strcpy(wha->cashdate,"9");
+	if ( *wha->paytype == '\0')
+		strcpy(wha->paytype,"9");
+	if ( *wha->txtypeno == '\0')
+		strcpy(wha->txtypeno,"9");
+	if ( *wha->payname == '\0')
+		strcpy(wha->payname,"9");
+	if ( *wha->payactno == '\0')
+		strcpy(wha->payactno,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	if ( *wha->crdno == '\0')			/*由于这个字段经常由于没有可取要素，所以只能这样处理*/
+	  strcpy(wha->crdno,wha->apflg);
+	return 0;
+}
+
+/*************************************************************
+*   检查是否所需的要素是完整的，成功返回0，失败返回XQ_ERR
+*   patotab
+*************************************************************/
+int  fxq_check_pato(struct patotab_c *wha){
+	/*检查首字符是否为空格*/
+	if ( *wha->apflg == '\0')
+		strcpy(wha->apflg,"9");
+	if ( *wha->paybrno == '\0')
+		strcpy(wha->paybrno,"9");
+	if ( *wha->paybrtype == '\0')
+		strcpy(wha->paybrtype,"9");
+	if ( *wha->payname == '\0')
+		strcpy(wha->payname,"9");
+	if ( *wha->payactno == '\0')
+		strcpy(wha->payactno,"9");
+	if ( *wha->payertype == '\0')
+		strcpy(wha->payertype,"9");
+	if ( *wha->cashbrno == '\0')
+		strcpy(wha->cashbrno,"9");
+	if ( *wha->cashbrtype == '\0')
+		strcpy(wha->cashbrtype,"9");
+	if ( *wha->cashname == '\0')
+		strcpy(wha->cashname,"9");
+	if ( *wha->cashactno == '\0')
+		strcpy(wha->cashactno,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	if ( *wha->txamt == '\0')
+		strcpy(wha->txamt,"9");
+	if ( *wha->paydate == '\0')
+		strcpy(wha->paydate,"9");
+	if ( *wha->cashdate == '\0')
+		strcpy(wha->cashdate,"9");
+	if ( *wha->paytype == '\0') 
+		strcpy(wha->paytype,"9");
+	if ( *wha->txtypeno == '\0')
+		strcpy(wha->txtypeno,"9");
+	if ( *wha->cashcertif == '\0')
+		strcpy(wha->cashcertif,"9");
+	if ( *wha->crdno == '\0')			/*由于这个字段经常由于没有可取要素，所以只能这样处理*/
+	  strcpy(wha->crdno,wha->apflg);
+	return 0;
+}
+
+static int fxq_debug_hvpt(struct hvpttab_c *xq){
+	vtcp_log("debug of hvpt");
+	vtcp_log("[%s]",xq->rowid		);			
+	vtcp_log("[%s]",xq->brno		);	
+	vtcp_log("[%s]",xq->brname	);		
+	vtcp_log("[%s]",xq->txday		);	
+	vtcp_log("[%s]",xq->txtime	);		
+	vtcp_log("[%s]",xq->aptype	);		
+	vtcp_log("[%s]",xq->txcd		);	
+	vtcp_log("[%s]",xq->sendday	);		
+	vtcp_log("[%s]",xq->apflg		);	
+	vtcp_log("[%s]",xq->paybrno	);		
+	vtcp_log("[%s]",xq->paybrtype	);	
+	vtcp_log("[%s]",xq->payname	);		
+	vtcp_log("[%s]",xq->payactno	);	
+	vtcp_log("[%s]",xq->paycode	);		
+	vtcp_log("[%s]",xq->cashbrno	);	
+	vtcp_log("[%s]",xq->cashbrtype);		
+	vtcp_log("[%s]",xq->cashname	);	
+	vtcp_log("[%s]",xq->cashactno	);	
+	vtcp_log("[%s]",xq->cashbrcode);		
+	vtcp_log("[%s]",xq->txamt		);	
+	vtcp_log("[%s]",xq->paydate	);		
+	vtcp_log("[%s]",xq->cashdate	);	
+	vtcp_log("[%s]",xq->dscpt		);	
+	vtcp_log("[%s]",xq->cashtype	);	
+	vtcp_log("[%s]",xq->crdno		);	
+	vtcp_log("[%s]",xq->txtypeno	);	
+	vtcp_log("[%s]",xq->expand	);
+	return XQ_OK;
+}
+
+static int fxq_debug_hvcs(struct hvcstab_c *xq){
+	vtcp_log("debug of hvcstab_cre");
+	vtcp_log("[%s]",xq->brno		);		
+    vtcp_log("[%s]",xq->brname	);
+    vtcp_log("[%s]",xq->txday		);
+    vtcp_log("[%s]",xq->txtime	);
+    vtcp_log("[%s]",xq->aptype	);
+    vtcp_log("[%s]",xq->txcd		);
+    vtcp_log("[%s]",xq->sendday	);
+    vtcp_log("[%s]",xq->apflg		);
+    vtcp_log("[%s]",xq->payname	);
+    vtcp_log("[%s]",xq->paycertif	);
+    vtcp_log("[%s]",xq->cashbrno	);
+    vtcp_log("[%s]",xq->cashbrtype);
+    vtcp_log("[%s]",xq->cashname	);
+    vtcp_log("[%s]",xq->cashactno	);
+    vtcp_log("[%s]",xq->cashertype);
+    vtcp_log("[%s]",xq->cashcode	);
+    vtcp_log("[%s]",xq->cashcertif);
+    vtcp_log("[%s]",xq->txamt		);
+    vtcp_log("[%s]",xq->cashdate	);
+    vtcp_log("[%s]",xq->cfrom		);
+    vtcp_log("[%s]",xq->cashtype	);
+    vtcp_log("[%s]",xq->txtypeno	);
+    vtcp_log("[%s]",xq->expand	);
+    return XQ_OK;
+}
+
+static int fxq_debug_hvcd(struct hvcdtab_c *xq){
+	vtcp_log("debug of hvcdtab_cre");
+	vtcp_log("[%s]",xq->brno		);		
+    vtcp_log("[%s]",xq->brname		);
+    vtcp_log("[%s]",xq->txday		);
+    vtcp_log("[%s]",xq->txtime		);
+    vtcp_log("[%s]",xq->aptype		);
+    vtcp_log("[%s]",xq->txcd		);
+    vtcp_log("[%s]",xq->sendday		);
+    vtcp_log("[%s]",xq->apflg		);
+    vtcp_log("[%s]",xq->paybrno		);
+    vtcp_log("[%s]",xq->paybrtype	);
+    vtcp_log("[%s]",xq->payname		);
+    vtcp_log("[%s]",xq->payactno	);
+    vtcp_log("[%s]",xq->paycode		);
+    vtcp_log("[%s]",xq->payertype	);
+    vtcp_log("[%s]",xq->paycertif	);
+    vtcp_log("[%s]",xq->cashname	);
+    vtcp_log("[%s]",xq->cashertype	);
+    vtcp_log("[%s]",xq->cashcertif	);
+    vtcp_log("[%s]",xq->txamt		);
+    vtcp_log("[%s]",xq->paydate		);
+    vtcp_log("[%s]",xq->dscpt		);
+    vtcp_log("[%s]",xq->cashtype	);
+    vtcp_log("[%s]",xq->txtypeno	);
+    vtcp_log("[%s]",xq->expand		);
+	return XQ_OK;
+}
+static int fxq_debug_pato(struct patotab_c *xq){
+	vtcp_log("debug of ptaotab_cre");
+	vtcp_log("[%s]",xq->brno			);
+	vtcp_log("[%s]",xq->brname		);
+	vtcp_log("[%s]",xq->txday			);
+	vtcp_log("[%s]",xq->txtime		);
+	vtcp_log("[%s]",xq->aptype		);
+	vtcp_log("[%s]",xq->txcd			);
+	vtcp_log("[%s]",xq->sendday		);
+	vtcp_log("[%s]",xq->apflg			);
+	vtcp_log("[%s]",xq->paybrno		);
+	vtcp_log("[%s]",xq->paybrtype		);
+	vtcp_log("[%s]",xq->payname		);
+	vtcp_log("[%s]",xq->payactno		);
+	vtcp_log("[%s]",xq->paycode		);
+	vtcp_log("[%s]",xq->payertype		);
+	vtcp_log("[%s]",xq->paycertif		);
+	vtcp_log("[%s]",xq->cashbrno		);
+	vtcp_log("[%s]",xq->cashbrtype	);
+	vtcp_log("[%s]",xq->cashname		);
+	vtcp_log("[%s]",xq->cashactno		);
+	vtcp_log("[%s]",xq->cashcode		);
+	vtcp_log("[%s]",xq->cashertype	);
+	vtcp_log("[%s]",xq->cashcertif	);
+	vtcp_log("[%s]",xq->txamt			);
+	vtcp_log("[%s]",xq->paydate		);
+	vtcp_log("[%s]",xq->cashdate		);
+	vtcp_log("[%s]",xq->dscpt			);
+	vtcp_log("[%s]",xq->paytype		);
+	vtcp_log("[%s]",xq->crdno			);
+	vtcp_log("[%s]",xq->txtypeno		);
+	vtcp_log("[%s]",xq->expand		);
+	return XQ_OK;
+}
+
+/*生成监控报文*/
+static int fxq_genPack(){
+	int		iRc;
+	FILE  *packFile;
+	char  FileName[50];
+	char  expArea[36];
+	char  buf[1024];
+	int	  hvptcount=0;
+	int   hvcscount=0;
+	int   hvcdcount=0;
+	int   ohvccount=0;
+	int   pbtocount=0;
+	int   patocount=0;
+	int		recordcount;		/*记录数*/
+	/*下面这个变量用来调整日期从8位到14位 add by weiz*/
+	static char newCashDate[15];
+	static char newPayDate[15];
+	/*end add by weiz 20060729*/
+	
+	struct hvpttab_c wd_hvpttab2;
+	struct hvcstab_c wd_hvcstab2;
+	struct hvcdtab_c wd_hvcdtab2;
+	struct ohvctab_c wd_ohvctab2;
+	struct pbtotab_c wd_pbtotab2;
+	struct patotab_c wd_patotab2;
+	memset(FileName,'\0',sizeof(FileName));
+	memset(expArea,'\0',sizeof(expArea));
+	totalFile = 1;
+	currentFile = 1;
+	recordcount = 0;
+	sprintf(FileName,"/home/jzht/fanxiqian/d%s-%s-%02d-%02d.txt",scBrno,dateString,totalFile,currentFile);
+	/*创建文件，如果没有就创建，有就覆盖*/
+	packFile = fopen(FileName,"w");
+	if (packFile == NULL)
+	{
+		vtcp_log("[%s][%d]error:打开文件[%s]失败。\n",__FILE__,__LINE__,FileName);
+	}
+	sprintf(buf,"{\n%-12s\n%-60s\n%-8s\n",scBrno,scBrname,dateString);
+	
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM HVPTTAB where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sHVPT\n%-6d\n%-12d\n",buf,recordcount,468*recordcount);
+	}
+	hvptcount = recordcount;
+	recordcount = 0;
+
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM hvcstab where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sHVCS\n%-6d\n%-12d\n",buf,recordcount,389*recordcount);
+	}
+	hvcscount = recordcount;
+	recordcount = 0;
+
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM hvcdtab where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sHVCD\n%-6d\n%-12d\n",buf,recordcount,393*recordcount);
+	}
+	hvcdcount = recordcount;
+	recordcount = 0;
+
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM ohvctab where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sOHVC\n%-6d\n%-12d\n",buf,recordcount,516*recordcount);
+	}
+	ohvccount = recordcount;
+	recordcount = 0;
+
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM pbtotab where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sPBTO\n%-6d\n%-12d\n",buf,recordcount,498*recordcount);
+	}
+	pbtocount = recordcount;
+	recordcount = 0;
+
+	EXEC SQL SELECT COUNT(*)  INTO:recordcount FROM patotab where txday=:dateString;
+	if (recordcount != 0){
+		sprintf(buf,"%sPATO\n%-6d\n%-12d\n",buf,recordcount,524*recordcount);
+	}
+	patocount = recordcount;
+	recordcount = 0;
+	memset(expArea,'\0',sizeof(expArea));
+	sprintf(buf,"%s%-36s\n}\n{\n",buf,expArea);
+	
+
+	fwrite(buf,strlen(buf),1,packFile);
+
+	/*正面是报文体*/
+	/*For HVPT*/
+	if (hvptcount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"HVPT\n%-6d\n%-12d\n",hvptcount,468*hvptcount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+		iRc = Hvpttab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_hvpttab2,'\0',sizeof(wd_hvpttab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Hvpttab_Fet_Sel(&wd_hvpttab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH Hvpttab ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch Hvpttab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			
+			xq_date2new(newPayDate,wd_hvpttab2.paydate,wd_hvpttab2.txtime);
+			xq_date2new(newCashDate,wd_hvpttab2.cashdate,wd_hvpttab2.txtime);
+			
+			xq_checkbrno(wd_hvpttab2.paybrno,wd_hvpttab2.paybrtype);
+			xq_checkbrno(wd_hvpttab2.cashbrno,wd_hvpttab2.cashbrtype);
+			
+			sprintf(buf,"||%-32s||%-12s||%-1s||%-60s||%-40s||%-20s||%-12s||%-1s||%-60s||%-40s||%-20s||%-18s||%-14s||%-14s||%-20s||%-2s||%-32s||%-10s||%-20s||\n",
+				wd_hvpttab2.apflg,wd_hvpttab2.paybrno,wd_hvpttab2.paybrtype,
+				wd_hvpttab2.payname,wd_hvpttab2.payactno,wd_hvpttab2.paycode,
+				wd_hvpttab2.cashbrno,wd_hvpttab2.cashbrtype,wd_hvpttab2.cashname,
+				wd_hvpttab2.cashactno,wd_hvpttab2.cashbrcode,wd_hvpttab2.txamt,
+				newPayDate,newCashDate,wd_hvpttab2.dscpt,
+				wd_hvpttab2.cashtype,wd_hvpttab2.crdno,wd_hvpttab2.txtypeno,
+				wd_hvpttab2.expand);
+			
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Hvpttab_Clo_Sel();
+	}
+
+	
+	/*FOR HVCS*/
+	if (hvcscount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"HVCS\n%-6d\n%-12d\n",hvcscount,389*hvcscount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+	
+		iRc = Hvcstab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_hvcstab2,'\0',sizeof(wd_hvcstab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Hvcstab_Fet_Sel(&wd_hvcstab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH Hvcstab ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch Hvcstab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			
+			xq_date2new(newCashDate,wd_hvcstab2.cashdate,wd_hvcstab2.txtime);
+
+			xq_checkbrno(wd_hvcstab2.cashbrno,wd_hvcstab2.cashbrtype);
+			sprintf(buf,"||%-32s||%-60s||%-22s||%-12s||%-1s||%-60s||%-40s||%-2s||%-20s||%-22s||%-18s||%-14s||%-20s||%-2s||%-10s||%-20s||\n",
+				wd_hvcstab2.apflg,wd_hvcstab2.payname,wd_hvcstab2.paycertif,
+				wd_hvcstab2.cashbrno,wd_hvcstab2.cashbrtype,wd_hvcstab2.cashname,
+				wd_hvcstab2.cashactno,wd_hvcstab2.cashertype,wd_hvcstab2.cashcode,
+				wd_hvcstab2.cashcertif,wd_hvcstab2.txamt,newCashDate,
+				wd_hvcstab2.cfrom,wd_hvcstab2.cashtype,wd_hvcstab2.txtypeno,
+				wd_hvcstab2.expand);
+			
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Hvcstab_Clo_Sel();
+	}
+
+	/*FOR HVCD*/
+	if (hvcdcount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"HVCD\n%-6d\n%-12d\n",hvcdcount,393*hvcdcount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+	
+		iRc = Hvcdtab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_hvcdtab2,'\0',sizeof(wd_hvcdtab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Hvcdtab_Fet_Sel(&wd_hvcdtab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH Hvcdtab ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch Hvcdtab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			
+			xq_date2new(newPayDate,wd_hvcdtab2.paydate,wd_hvcdtab2.txtime);
+			
+			xq_checkbrno(wd_hvcdtab2.paybrno,wd_hvcdtab2.paybrtype);
+			sprintf(buf,"||%-32s||%-12s||%-1s||%-60s||%-40s||%-20s||%-2s||%-22s||%-60s||%-2s||%-22s||%-18s||%-14s||%-20s||%-2s||%-10s||%-20s||\n",
+				wd_hvcdtab2.apflg,wd_hvcdtab2.paybrno,wd_hvcdtab2.paybrtype,
+				wd_hvcdtab2.payname,wd_hvcdtab2.payactno,wd_hvcdtab2.paycode,
+				wd_hvcdtab2.payertype,wd_hvcdtab2.paycertif,wd_hvcdtab2.cashname,
+				wd_hvcdtab2.cashertype,wd_hvcdtab2.cashcertif,wd_hvcdtab2.txamt,
+				newPayDate,wd_hvcdtab2.dscpt,wd_hvcdtab2.cashtype,
+				wd_hvcdtab2.txtypeno,wd_hvcdtab2.expand);
+			/*end add */
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Hvpttab_Clo_Sel();
+	}
+	
+	/*FOR OHVC*/
+	if (ohvccount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"OHVC\n%-6d\n%-12d\n",ohvccount,516*ohvccount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+	
+		iRc = Ohvctab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_ohvctab2,'\0',sizeof(wd_ohvctab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Ohvctab_Fet_Sel(&wd_ohvctab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH ohvctab ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch ohvctab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			
+			xq_date2new(newPayDate,wd_ohvctab2.paydate,wd_ohvctab2.txtime);
+			xq_date2new(newCashDate,wd_ohvctab2.cashdate,wd_ohvctab2.txtime);
+
+			xq_checkbrno(wd_ohvctab2.paybrno,wd_ohvctab2.paybrtype);
+			xq_checkbrno(wd_ohvctab2.cashbrno,wd_ohvctab2.cashbrtype);
+			sprintf(buf,"||%-32s||%-12s||%-1s||%-60s||%-40s||%-22s||%-20s||%-12s||%-1s||%-60s||%-40s||%-22s||%-18s||%-14s||%-14s||%-20s||%-2s||%-32s||%-10s||%-20s||\n",
+				wd_ohvctab2.apflg,wd_ohvctab2.paybrno,wd_ohvctab2.paybrtype,
+				wd_ohvctab2.payname,wd_ohvctab2.payactno,wd_ohvctab2.paycerrif,
+				wd_ohvctab2.paycode,wd_ohvctab2.cashbrno,wd_ohvctab2.cashbrtype,
+				wd_ohvctab2.cashname,wd_ohvctab2.cashactno,wd_ohvctab2.cashcertif,
+				wd_ohvctab2.cashcode,wd_ohvctab2.txamt,newPayDate,
+				newCashDate,wd_ohvctab2.dscpt,wd_ohvctab2.cashtype,
+				wd_ohvctab2.crdno,wd_ohvctab2.txtypeno,wd_ohvctab2.expand);
+			
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Ohvctab_Clo_Sel();
+	}	
+
+	/*FOR PBTO*/
+	if (pbtocount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"PBTO\n%-6d\n%-12d\n",pbtocount,498*pbtocount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+	
+		iRc = Pbtotab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_pbtotab2,'\0',sizeof(wd_pbtotab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Pbtotab_Fet_Sel(&wd_pbtotab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH Pbtotab ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch Pbtotab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			xq_date2new(newPayDate,wd_pbtotab2.paydate,wd_pbtotab2.txtime);
+			xq_date2new(newCashDate,wd_pbtotab2.cashdate,wd_pbtotab2.txtime);
+			
+			xq_checkbrno(wd_pbtotab2.paybrno,wd_pbtotab2.paybrtype);
+			xq_checkbrno(wd_pbtotab2.cashbro,wd_pbtotab2.cashbrtype);
+			sprintf(buf,"||%-32s||%-12s||%-1s||%-60s||%-40s||00%-20s||%-12s||%-1s||%-60s||%-40s||%-20s||%-2s||%-22s||%-18s||%-14s||%-14s||%-20s||%-2s||%-32s||%-10s||%-20s||\n",
+				wd_pbtotab2.apflg,wd_pbtotab2.paybrno,wd_pbtotab2.paybrtype,
+				wd_pbtotab2.payname,wd_pbtotab2.payactno,wd_pbtotab2.paycode,
+				wd_pbtotab2.cashbro,wd_pbtotab2.cashbrtype,wd_pbtotab2.cashname,
+				wd_pbtotab2.cashactno,wd_pbtotab2.cashcode,wd_pbtotab2.cashertype,
+				wd_pbtotab2.cashcertif,wd_pbtotab2.txamt,newPayDate,
+				newCashDate,wd_pbtotab2.dscpt,wd_pbtotab2.paytype,
+				wd_pbtotab2.crdno,wd_pbtotab2.txtypeno,wd_pbtotab2.expand);
+			
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Pbtotab_Clo_Sel();
+	}	
+
+	/*FOR PATO*/
+	if (patocount > 0){
+		memset(buf,'\0',sizeof(buf));
+		sprintf(buf,"PATO\n%-6d\n%-12d\n",patocount,524*patocount);
+		fwrite(buf,strlen(buf),1,packFile);
+
+	
+		iRc = Patotab_Dec_Sel(g_pub_tx.reply," txday=%s order by apflg",dateString);
+		MYSQLERR
+
+		while(1){
+			memset(&wd_patotab2,'\0',sizeof(wd_patotab2));
+			memset(buf,'\0',sizeof(buf));
+			iRc = Patotab_Fet_Sel(&wd_patotab2,g_pub_tx.reply);
+			if (iRc == 100) break;
+			else if (iRc){
+				sprintf(acErrMsg,"FETCH trace_log_rz ERROR !! [%d]",iRc);
+				vtcp_log("%s,%d,Fetch Hvpttab 表出错 sqlcode=[%d]\n",
+					__FILE__,__LINE__,sqlca.sqlcode);
+	            WRITEMSG
+	            return XQ_ERR;
+			}
+			xq_date2new(newPayDate,wd_patotab2.paydate,wd_patotab2.txtime);
+			xq_date2new(newCashDate,wd_patotab2.cashdate,wd_patotab2.txtime);
+			
+			xq_checkbrno(wd_patotab2.cashbrno,wd_patotab2.cashbrtype);
+			xq_checkbrno(wd_patotab2.paybrno,wd_patotab2.paybrtype);
+			sprintf(buf,"||%-32s||%-12s||%-1s||%-60s||%-40s||%-20s||%-2s||%-22s||%-12s||%-1s||%-60s||%-40s||%-20s||%-2s||%-22s||%-18s||%-14s||%-14s||%-20s||%-2s||%-32s||%-10s||%-20s||\n",
+				wd_patotab2.apflg,wd_patotab2.paybrno,wd_patotab2.paybrtype,
+				wd_patotab2.payname,wd_patotab2.payactno,wd_patotab2.paycode,
+				wd_patotab2.payertype,wd_patotab2.paycertif,wd_patotab2.cashbrno,
+				wd_patotab2.cashbrtype,wd_patotab2.cashname,wd_patotab2.cashactno,
+				wd_patotab2.cashcode,wd_patotab2.cashertype,wd_patotab2.cashcertif,
+				wd_patotab2.txamt,newPayDate,newCashDate,
+				wd_patotab2.dscpt,wd_patotab2.paytype,wd_patotab2.crdno,
+				wd_patotab2.txtypeno,wd_patotab2.expand);
+			/*end add*/
+			fwrite(buf,strlen(buf),1,packFile);
+		}
+		Patotab_Clo_Sel();
+	}	
+
+	memset(buf,'\0',sizeof(buf));
+	sprintf(buf,"}");
+	fwrite(buf,strlen(buf),1,packFile);
+
+	fclose(packFile);
+	
+OkExit:
+	return XQ_OK;
+ErrExit:
+    return XQ_ERR;
+}
+
+static void xq_date2new(char *newdate,char *date,char *time){
+	static char  timeStr[9];
+	memset(newdate,0,15);
+	memcpy(timeStr,time,8);
+	*(timeStr+8) = '\0';
+	
+	if ( *time > 9 || *time < 0 ){
+		memset(timeStr,'0',8);
+	}
+	memcpy(newdate,date,8);
+	memcpy(newdate+8,timeStr,6);
+	*(newdate+14)='\0';
+	
+	return ;
+}
+static int xq_checkbrno(char *brno,char *brtype){
+	if ( isdigit(*(brno+11))){
+		*brtype='1';
+	}else{
+		*brtype='0';
+	}
+	return 0;
+}

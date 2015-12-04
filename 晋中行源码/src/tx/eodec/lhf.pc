@@ -1,0 +1,51 @@
+/*************************************************************
+* 文 件 名: rpt002.c
+* 功能描述：日报
+*
+* 作    者: rob
+* 完成日期: 2003年4月13日
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+EXEC SQL INCLUDE sqlca.h;
+
+lhf()
+{
+	int i=0;
+	char sql_buf[2048];
+	char cBrno[6];
+	char cBrname[100];
+	memset(cBrno, 0 , sizeof(cBrno));
+	memset(cBrname, 0 , sizeof(cBrname));
+	memset(sql_buf, 0 , sizeof(sql_buf));
+
+	for(;i<=2;i++){
+		if(i==0)
+			memcpy(cBrno,"50601",5);
+		if(i==1)
+			memcpy(cBrno,"50501",5);
+		if(i==2)
+			memcpy(cBrno,"50401",5);
+		sprintf(sql_buf,"select br_name from com_branch where  br_no='%s'",cBrno);
+		EXEC SQL prepare sql_zhihang_cur from :sql_buf; 
+		EXEC SQL declare cur_lhf cursor for sql_zhihang_cur;
+		EXEC SQL open cur_lhf;
+		EXEC SQL fetch cur_lhf into :cBrname;
+		printf("%s,%d name=[%.20s]sqlca.sqlcode=[%d]\n",__FILE__,__LINE__,cBrname,sqlca.sqlcode);
+		EXEC SQL close cur_lhf;
+		if(i==2) break;
+	}
+	sql_rollback();	/*--事务回滚--*/
+	set_zd_data("0120","0000");
+	return 0;
+}
+

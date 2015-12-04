@@ -1,0 +1,1082 @@
+/***************************************************************************
+ *** 程序作者 : Han Xichao                                               ***
+ *** 日    期 : 2010-01-23                                               ***
+ *** 所属模块 :                                                          ***
+ *** 程序名称 : rptcupsfee.pc                                            ***
+ *** 程序作用 : 按日期生成收入/支出手续费报告表                          ***
+ *** 使用注意 :                                                          ***
+ ***************************************************************************/
+#define MYSQLERR if(sqlca.sqlcode ) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错![%d][%d]",sqlca.sqlcode,__LINE__); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#include  <stdio.h>
+#include  <stdlib.h>
+#include  <math.h>
+#include  "public.h"
+#include  "com_sys_parm_c.h"
+#include  "com_branch_c.h"
+#include  "cupserr_c.h"
+#include  "cupsppfw_c.h"
+#include  "cupscardhtr_c.h"
+#include  "atmrecord_c.h"
+
+#define   FORM_LINE 10
+#define   TOT_LINE 50
+#define   HEAD_LINE 7
+#define   TOT_LENGTH 181
+#define   BRNO_LEN 5
+
+EXEC SQL INCLUDE sqlca ;
+EXEC SQL INCLUDE sqlda ;
+
+/*各行费用记录机构体*/
+static struct BR_FEE_AREA{
+	double infee;
+	double outfee;
+	double fwinfee;
+	double fwoutfee;
+	char   brtype[2];
+	char   brno[6];
+};
+static int fee_prt_line(struct BR_FEE_AREA *pr_fee,char * date);
+static int fee_prt_hj_line(struct BR_FEE_AREA *pr_fee);
+static FILE *fp1=NULL;
+static FILE *fp2=NULL;
+static FILE *fp3=NULL;
+static FILE *fp4=NULL;
+static FILE *fp5=NULL;
+static FILE *fp6=NULL;
+
+rptcupsfee()
+{
+	vtcp_log("%s,%d,开始收入/支出手续费报告表!",__FILE__,__LINE__);
+	/*初始化全局变量*/
+	int i=0;
+	struct BR_FEE_AREA br_fee;	/*用于统计每日费用*/
+	struct BR_FEE_AREA br_sum_fee2;   /*用于统计区间费用合计*/
+	struct BR_FEE_AREA br_sum_fee1;   /*用于统计区间费用合计*/
+	struct BR_FEE_AREA br_sum_fee3;   /*用于统计区间费用合计*/
+	struct BR_FEE_AREA br_sum_fee4;   /*用于统计区间费用合计*/
+	struct BR_FEE_AREA br_sum_fee5;   /*用于统计区间费用合计*/
+	struct com_sys_parm_c g_com_sys_parm;   
+	struct com_branch_c  sCom_branch;      
+	int    ret=0;                              
+	char  filename1[248];                    
+	char  filename2[248];                    
+	char  filename3[248];
+	char  filename4[248];                  
+	char  filename5[248];
+	char  filename6[248];
+	char  sSysday[9];                          
+	char  sLstday[9]; 
+	char  sSysyearmon[7];
+	char  squry_sql[256];
+	memset(filename1,0x00,sizeof(filename1));                       
+	memset(filename2,0x00,sizeof(filename2));                       
+	memset(filename3,0x00,sizeof(filename3));                       
+	memset(filename4,0x00,sizeof(filename4));
+	memset(filename4,0x00,sizeof(filename5));
+	memset(filename4,0x00,sizeof(filename6));
+	memset(&g_com_sys_parm,0x00,sizeof(g_com_sys_parm));
+	memset(&sCom_branch,0x00,sizeof(sCom_branch));
+	memset(sLstday,0x00,sizeof(sLstday));
+	memset(sSysday,0x00,sizeof(sSysday));
+	memset(sSysyearmon,0x00,sizeof(sSysyearmon));
+	memset(squry_sql,0x00,sizeof(squry_sql));
+	memset(&br_fee,0x00,sizeof(br_fee));
+	memset(&br_sum_fee1,0x00,sizeof(br_sum_fee1));
+	memset(&br_sum_fee2,0x00,sizeof(br_sum_fee2));
+	memset(&br_sum_fee3,0x00,sizeof(br_sum_fee3));
+	memset(&br_sum_fee4,0x00,sizeof(br_sum_fee4));
+	memset(&br_sum_fee5,0x00,sizeof(br_sum_fee5));
+	/*取系统日期*/
+	ret = Com_sys_parm_Sel(g_pub_tx.reply,&g_com_sys_parm,"1=1");
+	if(ret){
+		sprintf(acErrMsg,"查找Com_sys_parm没有符合要求的记录!ret=[%d]!",ret);
+			WRITEMSG
+		vtcp_log("%s,%d,没有符合要求的记录!",__FILE__,__LINE__);
+		goto ErrExit;
+	}	
+	sprintf(sSysday,"%8d",g_com_sys_parm.lst_date);
+	memcpy(sSysyearmon,sSysday,6);
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type='4' and br_no!='10001'");
+	if(ret)
+	{
+		strcpy(acErrMsg,"定义机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		i=0;
+		memset(&sCom_branch,0x0,sizeof(sCom_branch));
+		ret=Com_branch_Fet_Sel(&sCom_branch,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+		strcpy(acErrMsg,"读取机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+		}
+	memset(filename1,0x00,sizeof(filename1));                       
+	memset(filename2,0x00,sizeof(filename2));                       
+	memset(filename3,0x00,sizeof(filename3));   
+	memset(&br_sum_fee1,0x00,sizeof(br_sum_fee1));
+	memset(&br_sum_fee2,0x00,sizeof(br_sum_fee2));
+	memset(&br_sum_fee3,0x00,sizeof(br_sum_fee3));
+	memset(&br_sum_fee4,0x00,sizeof(br_sum_fee4));
+	memset(&br_sum_fee5,0x00,sizeof(br_sum_fee5));
+	sprintf(squry_sql,"SELECT sum(infee),sum(outfee),txday,brtype,brno FROM cupscardhtr WHERE respcd='00' and infee+outfee<>0 and (brtype=1 or brtype=2 or brtype=3 or brtype=4 or (brtype=0 and mertype!='6011' and mertype!='6050' and mertype!='6051' and mertype!='6010')) and (substr(tmp,1,1)!='1' or tmp is NULL) and brno='%s' group by txday,brtype,brno",sCom_branch.br_no);   /**新增brtype=2表示本行ATM收入**/
+	vtcp_log("%s,%d,%s\n",__FILE__,__LINE__,squry_sql);
+	EXEC SQL PREPARE cupscardhtr_sel FROM :squry_sql;
+	EXEC SQL declare cur1 cursor for cupscardhtr_sel;
+	MYSQLERR
+	EXEC SQL open cur1;
+	MYSQLERR
+	i=0;
+	while(1)
+	{
+		memset(&br_fee,0x00,sizeof(br_fee));
+		memset(sLstday,0x00,sizeof(sLstday));
+		EXEC SQL fetch cur1 
+		into :br_fee.infee,
+		     :br_fee.outfee,
+		     :sLstday,
+		     :br_fee.brtype,
+		     :br_fee.brno;
+		if( sqlca.sqlcode==1403 )
+		{
+		   	sprintf(acErrMsg,"查找Cupscardhtr没有符合要求的记录!ret=[%d]!",ret);
+			WRITEMSG
+			vtcp_log("%s,%d,没有符合要求的记录!",__FILE__,__LINE__);
+		   	break;
+		}
+		MYSQLERR	
+		if(br_fee.brtype[0]=='1')
+		{
+			sprintf(filename1,"%s/report/%s/RPT_CUPSATMTHFEE.txt",getenv("HOME"),br_fee.brno);
+			fp1 = fopen( filename1,"w" );/*该文件用来记录正确处理结果*/
+			if( fp1==NULL )
+			{
+				sprintf(acErrMsg," open file [%s] error ",filename1);
+				WRITEMSG
+				strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+			fprintf(fp1," \n");
+			fprintf(fp1,"                              晋中银行股份有限公司%ld他行银联卡ATM手续费报告表\n",g_pub_tx.tx_date);
+			fprintf(fp1," \n");
+			fprintf(fp1," 机构编号:%s       机构名称:%-60s\n",sCom_branch.br_no,sCom_branch.br_name);
+			fprintf(fp1,"┏━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┓    \n");
+			fprintf(fp1,"┃日    期┃他行卡ATM手续费收入 ┃他行卡ATM手续费支出 ┃  品牌服务费收入  ┃  品牌服务费支出  ┃   手续费收支差额   ┃    \n");
+			fprintf(fp1,"┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━╋━━━━━━━━━╋━━━━━━━━━━┫    \n");
+			
+		}
+		else if(br_fee.brtype[0]=='2')
+		{
+			sprintf(filename4,"%s/report/%s/RPT_CUPSATMBHFEE.txt",getenv("HOME"),br_fee.brno);
+			fp4 = fopen( filename4,"w" );/*该文件用来记录正确处理结果*/
+		if( fp4==NULL )
+		{
+			sprintf(acErrMsg," open file [%s] error ",filename4);
+			WRITEMSG
+			strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+			fprintf(fp4,"     \n");
+			fprintf(fp4,"           晋中银行股份有限公司%ld本行银联卡ATM手续费报告表\n",g_pub_tx.tx_date);
+			fprintf(fp4,"     \n");
+			fprintf(fp4,"     机构编号:%s       机构名称:%-60s\n",sCom_branch.br_no,sCom_branch.br_name);
+			fprintf(fp4,"    ┏━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓    \n");
+			fprintf(fp4,"    ┃日    期┃本行卡ATM手续费收入 ┃本行卡ATM手续费支出 ┃   手续费收支差额   ┃    \n");
+			fprintf(fp4,"    ┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━┫    \n");  	   
+		 
+		 }
+		else if(br_fee.brtype[0]=='3')
+		{
+			sprintf(filename5,"%s/report/%s/RPT_CUPSGMTTHFEE.txt",getenv("HOME"),br_fee.brno);
+			fp5 = fopen( filename5,"w" );/*该文件用来记录正确处理结果*/
+		if( fp5==NULL )
+		{
+			sprintf(acErrMsg," open file [%s] error ",filename4);
+			WRITEMSG
+			strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+			fprintf(fp5,"     \n");
+			fprintf(fp5,"           晋中银行股份有限公司%ld他行银联卡柜面通手续费报告表\n",g_pub_tx.tx_date);
+			fprintf(fp5,"     \n");
+			fprintf(fp5,"     机构编号:%s       机构名称:%-60s\n",sCom_branch.br_no,sCom_branch.br_name);
+			fprintf(fp5,"    ┏━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┓    \n");
+			fprintf(fp5,"    ┃日    期┃他行卡柜面通手续费收入┃他行卡柜面通手续费支出┃   手续费收支差额   ┃    \n");
+			fprintf(fp5,"    ┣━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━┫    \n");  	   
+		 
+		 }
+		else if(br_fee.brtype[0]=='4')
+		{
+			sprintf(filename6,"%s/report/%s/RPT_CUPSGMTBHFEE.txt",getenv("HOME"),br_fee.brno);
+			fp6 = fopen( filename6,"w" );/*该文件用来记录正确处理结果*/
+		if( fp6==NULL )
+		{
+			sprintf(acErrMsg," open file [%s] error ",filename6);
+			WRITEMSG
+			strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+			fprintf(fp6,"     \n");
+			fprintf(fp6,"           晋中银行股份有限公司%ld本行银联卡ATM手续费报告表\n",g_pub_tx.tx_date);
+			fprintf(fp6,"     \n");
+			fprintf(fp6,"     机构编号:%s       机构名称:%-60s\n",sCom_branch.br_no,sCom_branch.br_name);
+			fprintf(fp6,"    ┏━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┓    \n");
+			fprintf(fp6,"    ┃日    期┃本行卡柜面通手续费收入┃本行卡柜面通手续费支出┃   手续费收支差额   ┃    \n");
+			fprintf(fp6,"    ┣━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━┫    \n");  	   
+		 
+		 }
+		else
+		{
+			sprintf(filename2,"%s/report/%s/RPT_CUPSPOSFEE.txt",getenv("HOME"),br_fee.brno);
+			fp2 = fopen( filename2,"w" );/*该文件用来记录正确处理结果*/
+		if( fp2==NULL )
+		{
+			sprintf(acErrMsg," open file [%s] error ",filename2);
+			WRITEMSG
+			strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+			fprintf(fp2,"     \n");
+			fprintf(fp2,"             晋中银行股份有限公司%ld银联卡POS手续费报告表\n",g_pub_tx.tx_date);
+			fprintf(fp2,"     \n");
+			fprintf(fp2,"     机构编号:%s       机构名称:%-60s\n",sCom_branch.br_no,sCom_branch.br_name);
+			fprintf(fp2,"    ┏━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓    \n");
+			fprintf(fp2,"    ┃日    期┃   POS手续费收入    ┃   POS手续费支出    ┃   手续费收支差额   ┃    \n");
+			fprintf(fp2,"    ┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━┫    \n");  	   
+		  
+		 }
+	  }
+	  Cupscardhtr_Clo_Sel();
+	
+	  memset(&br_sum_fee1,0x00,sizeof(br_sum_fee1));
+	  memset(&br_sum_fee2,0x00,sizeof(br_sum_fee2));
+	  memset(&br_sum_fee3,0x00,sizeof(br_sum_fee3));
+	  memset(&br_sum_fee4,0x00,sizeof(br_sum_fee4));
+	  memset(&br_sum_fee5,0x00,sizeof(br_sum_fee5));
+	  EXEC SQL PREPARE cupscardhtr_sel FROM :squry_sql;
+	  EXEC SQL declare cur2 cursor for cupscardhtr_sel;
+	  MYSQLERR
+	  EXEC SQL open cur2;
+	  MYSQLERR
+	  while(1)
+	  {
+	  	memset(&br_fee,0x00,sizeof(br_fee));
+	  	memset(sLstday,0x00,sizeof(sLstday));
+	  	EXEC SQL fetch cur2 
+	  	into :br_fee.infee,
+	  	     :br_fee.outfee,
+	  	     :sLstday,
+	  	     :br_fee.brtype,
+	  	     :br_fee.brno;
+	  	if( sqlca.sqlcode==1403 )
+	  	{
+	  	   	sprintf(acErrMsg,"查找Cupscardhtr没有符合要求的记录!ret=[%d]!",ret);
+	  		WRITEMSG
+	  		vtcp_log("%s,%d,没有符合要求的记录!",__FILE__,__LINE__);
+	  	   	break;
+	  	}
+	  	MYSQLERR	
+	  	if(br_fee.brtype[0]=='1')
+	  	{
+	  		double dppfwinfee=0.00;
+	  		double dppfwoutfee=0.00;
+	  		ret = sql_sum_double("cupsppfw","pinpfee",&dppfwinfee,"brtype='0' and txday ='%s' and brno='%s'",sLstday,br_fee.brno);
+	  		vtcp_log("brtype=0时统计品牌服务费dppfwinfee=[%ld]!\n",dppfwinfee);
+	  		if(ret)
+	  		{
+	  			vtcp_log("统计品牌服务费错误[%d]!\n",ret);
+	  			goto ErrExit;
+	  		}	
+	  		br_fee.fwinfee=dppfwinfee;
+	  		ret = sql_sum_double("cupsppfw","pinpfee",&dppfwoutfee,"brtype='1' and txday ='%s' and brno='%s'",sLstday,br_fee.brno);
+	  		vtcp_log("brtype=1时统计品牌服务费dppfwoutfee=[%ld]!\n",dppfwoutfee);
+	  		if(ret)
+	  		{
+	  			vtcp_log("统计品牌服务费错误[%d]!\n",ret);
+	  			goto ErrExit;
+	  		}
+	  		br_fee.fwoutfee=dppfwoutfee;   	   
+	  		fee_prt_line(&br_fee,sLstday);
+	  		fprintf(fp1,"┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━╋━━━━━━━━━╋━━━━━━━━━━┫    \n");
+	  		br_sum_fee1.infee+=br_fee.infee;
+	  		br_sum_fee1.outfee+=br_fee.outfee;
+	  		br_sum_fee1.fwinfee+=dppfwinfee;
+	  		br_sum_fee1.fwoutfee+=dppfwoutfee;
+	  		strcpy(br_sum_fee1.brno,br_fee.brno);
+	  	}
+	  	else if(br_fee.brtype[0]=='2')
+	  	{
+	  		fee_prt_line2(&br_fee,sLstday);
+	  	  fprintf(fp4,"    ┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━┫    \n");
+	  	  br_sum_fee3.infee+=br_fee.infee;
+	  	  br_sum_fee3.outfee+=br_fee.outfee;
+	  	  strcpy(br_sum_fee3.brno,br_fee.brno);
+	  	 }
+	  	else if(br_fee.brtype[0]=='3')
+	  	{
+	  		fee_prt_line3(&br_fee,sLstday);
+	  	  fprintf(fp5,"    ┣━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━┫    \n");
+	  	  br_sum_fee4.infee+=br_fee.infee;
+	  	  br_sum_fee4.outfee+=br_fee.outfee;
+	  	  strcpy(br_sum_fee4.brno,br_fee.brno);
+	  	 }
+	  	else if(br_fee.brtype[0]=='4')
+	  	{
+	  		fee_prt_line4(&br_fee,sLstday);
+	  	  fprintf(fp6,"    ┣━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━┫    \n");
+	  	  br_sum_fee5.infee+=br_fee.infee;
+	  	  br_sum_fee5.outfee+=br_fee.outfee;
+	  	  strcpy(br_sum_fee5.brno,br_fee.brno);
+	  	 }
+	  	else
+	  	{
+	  		fee_prt_line1(&br_fee,sLstday);
+	  	  fprintf(fp2,"    ┣━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━┫    \n");
+	  	  br_sum_fee2.infee+=br_fee.infee;
+	  	  br_sum_fee2.outfee+=br_fee.outfee;
+	  	  strcpy(br_sum_fee2.brno,br_fee.brno);
+	  	 }
+	    }
+	    Cupscardhtr_Clo_Sel();
+	    if(br_sum_fee1.infee>0.005 || br_sum_fee1.outfee >0.005)
+	    	{
+	       fee_prt_hj_line(&br_sum_fee1);
+	      }
+	    if(br_sum_fee2.infee>0.005 || br_sum_fee2.outfee >0.005)
+	    	{
+		     fee_prt_hj_line1(&br_sum_fee2); 
+		    }
+		  if(br_sum_fee3.infee>0.005 || br_sum_fee3.outfee >0.005)
+	    	{
+		     fee_prt_hj_line2(&br_sum_fee3); 
+		    }
+		  if(br_sum_fee4.infee>0.005 || br_sum_fee4.outfee >0.005)
+	    	{
+		     fee_prt_hj_line3(&br_sum_fee4); 
+		    }
+		  if(br_sum_fee5.infee>0.005 || br_sum_fee5.outfee >0.005)
+	    	{
+		     fee_prt_hj_line4(&br_sum_fee5); 
+		    }
+			fclose(fp1);
+	    fclose(fp2);
+	    fclose(fp4);
+	    fclose(fp5);
+	    fclose(fp6);
+	   if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	    {
+		  sprintf(acErrMsg,"取主机流水号错![%d]",g_pub_tx.trace_no);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+		  set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no);
+		  g_pub_tx.trace_cnt=0;
+  	  ret=sub_acct_j("41404","5111701",br_sum_fee2.infee-br_sum_fee2.outfee,"POS手续费收入",sCom_branch.br_no);
+  	  if ( ret)
+	    {
+		  sprintf(acErrMsg,"POS手续费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+  	  if((br_sum_fee1.infee-br_sum_fee1.outfee)>0.005)
+  	  {
+  	  	ret=sub_acct_j("41404","5111501",br_sum_fee1.infee-br_sum_fee1.outfee,"他行卡ATM手续费收入",sCom_branch.br_no);
+  	  }
+  	  else
+  	  {
+  	  	ret=sub_acct_d("52704","41404",-(br_sum_fee1.infee-br_sum_fee1.outfee),"他行卡ATM手续费支出",sCom_branch.br_no);
+  	  }
+  	  if ( ret)
+	    {
+		  sprintf(acErrMsg,"他行卡ATM手续费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+  	  
+  	  if((br_sum_fee3.infee-br_sum_fee3.outfee)>0.005)
+  	  {
+  	  	ret=sub_acct_j("41404","5111401",br_sum_fee3.infee-br_sum_fee3.outfee,"本行卡ATM手续费收入",sCom_branch.br_no);
+  	  }
+  	  else
+  	  {
+  	  	ret=sub_acct_d("52704","41404",-(br_sum_fee3.infee-br_sum_fee3.outfee),"本行卡ATM手续费支出",sCom_branch.br_no);
+  	  }
+  	 if ( ret)
+	    {
+		  sprintf(acErrMsg,"本行卡ATM手续费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+  	  if((br_sum_fee4.infee-br_sum_fee4.outfee)>0.005)
+  	  {
+  	  	ret=sub_acct_j("41404","5111502",br_sum_fee4.infee-br_sum_fee4.outfee,"他行卡GMT手续费收入",sCom_branch.br_no);
+  	  }
+  	  else
+  	  {
+  	  	ret=sub_acct_d("52704","41404",-(br_sum_fee4.infee-br_sum_fee4.outfee),"他行卡GMT手续费支出",sCom_branch.br_no);
+  	  }
+  	  if ( ret)
+	    {
+		  sprintf(acErrMsg,"他行卡柜面通手续费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+  	  
+  	  if((br_sum_fee5.infee-br_sum_fee5.outfee)>0.005)
+  	  {
+  	  	ret=sub_acct_j("41404","5111401",br_sum_fee5.infee-br_sum_fee5.outfee,"本行卡GMT手续费收入",sCom_branch.br_no);
+  	  }
+  	  else
+  	  {
+  	  	ret=sub_acct_d("52704","41404",-(br_sum_fee5.infee-br_sum_fee5.outfee),"本行卡GMT手续费支出",sCom_branch.br_no);
+  	  }
+  	 if ( ret)
+	    {
+		  sprintf(acErrMsg,"本行卡柜面通手续费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+  	  if((br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee)>0.005)
+  	  {
+  	  	ret=sub_acct_j("41404","5111501",br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee,"品牌服务费收入",sCom_branch.br_no);
+		  }
+		  else
+		  {
+  	  	ret=sub_acct_d("52704","41404",-(br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee),"品牌服务费支出",sCom_branch.br_no);
+		  }
+		  if ( ret)
+	    {
+		  sprintf(acErrMsg,"品牌服务费记账出错!trace_no=[%d],ret=[%d]",g_pub_tx.trace_no,ret);
+		  WRITEMSG
+		  goto ErrExit;
+	   }
+		  double sum_fee=0.00;
+		  /**sum_fee=br_sum_fee2.infee-br_sum_fee2.outfee+br_sum_fee1.infee+br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee;**/
+		  sum_fee=br_sum_fee2.infee-br_sum_fee2.outfee+br_sum_fee1.infee-br_sum_fee1.outfee+br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee+br_sum_fee3.infee-br_sum_fee3.outfee+br_sum_fee4.infee-br_sum_fee4.outfee+br_sum_fee5.infee-br_sum_fee5.outfee;
+		  
+		  if((br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee!=0.00) || (br_sum_fee1.outfee-br_sum_fee1.infee!=0.00) || (br_sum_fee2.infee-br_sum_fee2.outfee!=0.00) || (br_sum_fee3.outfee-br_sum_fee3.infee!=0.00))
+		  {
+		  sprintf(filename3,"%s/report/%s/RPT_CUPSFEE.txt",getenv("HOME"),sCom_branch.br_no);
+			fp3 = fopen( filename3,"w" );/*该文件用来记录正确处理结果*/
+			if( fp3==NULL )
+			{
+				sprintf(acErrMsg," open file [%s] error ",filename3);
+				WRITEMSG
+				strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+		  fprintf(fp3,"\n");	/*打行换页符*/
+      fprintf(fp3, "                                        晋中银行股份有限公司银联卡手续费传票\n");
+			fprintf(fp3, "                         ---------------------------------------------------------------------------\n");
+			fprintf(fp3,"\n");
+			fprintf(fp3,"                      营业机构: %-12s(%s)     交易日期: %ld       流水号: %ld\n",sCom_branch.br_name,sCom_branch.br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+			fprintf(fp3,"                    ┍━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━━━━━━┑\n");  
+			fprintf(fp3,"                    │金额:￥%-17.2f        │                                              │  \n",sum_fee);
+			fprintf(fp3,"                    ┝━━━━━━━━━━━━━━┯━┿━━━━━━━━━━━━━━━━━━━━━━━┥\n");  
+			fprintf(fp3,"                    │                            │会│品牌服务费:                                   │\n"); 
+    if((br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee)<0.005)
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │计│科目:41404      (贷) ￥%-17.2f      │\n",br_sum_fee1.fwoutfee-br_sum_fee1.fwinfee);  
+			fprintf(fp3,"                    │                            │  │科目:52704      (借) ￥%-17.2f      │\n",br_sum_fee1.fwoutfee-br_sum_fee1.fwinfee); 
+		}
+		else
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │计│科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee);  
+			fprintf(fp3,"                    │                            │  │科目:5111501    (贷) ￥%-17.2f      │\n",br_sum_fee1.fwinfee-br_sum_fee1.fwoutfee); 
+		}
+			fprintf(fp3,"                    │                            │  │他行卡ATM手续费:                              │\n");  
+		if((br_sum_fee1.infee-br_sum_fee1.outfee)>0.005)
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee1.infee-br_sum_fee1.outfee);  
+			fprintf(fp3,"                    │                            │  │科目:5111501    (贷) ￥%-17.2f      │\n",br_sum_fee1.infee-br_sum_fee1.outfee);  
+		}
+		else
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (贷) ￥%-17.2f      │\n",br_sum_fee1.outfee-br_sum_fee1.infee);  
+			fprintf(fp3,"                    │                            │  │科目:52704      (借) ￥%-17.2f      │\n",br_sum_fee1.outfee-br_sum_fee1.infee);  
+		}
+		  fprintf(fp3,"                    │                            │  │本行卡ATM手续费:                              │\n");  
+		if((br_sum_fee3.infee-br_sum_fee3.outfee)>0.005)
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee3.infee-br_sum_fee3.outfee);  
+			fprintf(fp3,"                    │                            │  │科目:5111401    (贷) ￥%-17.2f      │\n",br_sum_fee3.infee-br_sum_fee3.outfee);  
+		}
+		else
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (贷) ￥%-17.2f      │\n",br_sum_fee3.outfee-br_sum_fee3.infee);  
+			fprintf(fp3,"                    │                            │  │科目:52704      (借) ￥%-17.2f      │\n",br_sum_fee3.outfee-br_sum_fee3.infee);  
+		}
+			fprintf(fp3,"                    │                            │  │他行卡柜面通手续费:                           │\n");  
+		if((br_sum_fee4.infee-br_sum_fee4.outfee)>0.005)
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee4.infee-br_sum_fee4.outfee);  
+			fprintf(fp3,"                    │                            │  │科目:5111502    (贷) ￥%-17.2f      │\n",br_sum_fee4.infee-br_sum_fee4.outfee);  
+		}
+		else
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (贷) ￥%-17.2f      │\n",br_sum_fee4.outfee-br_sum_fee4.infee);  
+			fprintf(fp3,"                    │                            │  │科目:52704      (借) ￥%-17.2f      │\n",br_sum_fee4.outfee-br_sum_fee4.infee);  
+		}
+		  fprintf(fp3,"                    │                            │  │本行卡柜面通手续费:                           │\n");  
+		if((br_sum_fee5.infee-br_sum_fee5.outfee)>0.005)
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee5.infee-br_sum_fee5.outfee);  
+			fprintf(fp3,"                    │                            │  │科目:5111401    (贷) ￥%-17.2f      │\n",br_sum_fee5.infee-br_sum_fee5.outfee);  
+		}
+		else
+		{
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (贷) ￥%-17.2f      │\n",br_sum_fee5.outfee-br_sum_fee5.infee);  
+			fprintf(fp3,"                    │                            │  │科目:52704      (借) ￥%-17.2f      │\n",br_sum_fee5.outfee-br_sum_fee5.infee);  
+		}
+			fprintf(fp3,"                    │                            │  │银联卡POS手续费:                              │\n");  
+			fprintf(fp3,"                    │     上列款项已收取         │  │科目:41404      (借) ￥%-17.2f      │\n",br_sum_fee2.infee-br_sum_fee2.outfee);  
+			fprintf(fp3,"                    │                            │分│科目:5111701    (贷) ￥%-17.2f      │\n",br_sum_fee2.infee-br_sum_fee2.outfee);  
+			fprintf(fp3,"                    │             (开户行盖章)   │录│                                              │\n");  
+			fprintf(fp3,"                    ┕━━━━━━━━━━━━━━┷━┷━━━━━━━━━━━━━━━━━━━━━━━┙\n");  
+			fprintf(fp3,"                                    复核                        经办\n");
+			fprintf(fp3,"\n\n\n");
+		  fclose(fp3);
+		}  
+  }
+	Com_branch_Clo_Sel();
+  ret=sql_execute("update cupscardhtr set tmp='1'||substr(tmp,2,length(tmp)-1)");
+
+	vtcp_log("%s,%d ■ 已生成银联卡手续费报告表...\n",__FILE__,__LINE__);
+	
+OkExit:
+	      sql_commit();   /*--提交事务--*/
+	      strcpy(g_pub_tx.reply,"0000");
+	      sprintf(acErrMsg,"生成银联卡手续费报告表成功![%s]",g_pub_tx.reply);
+	      WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 0;
+ErrExit:
+	     Cupscardhtr_Clo_Sel();
+	     Com_branch_Clo_Sel();
+       sql_rollback(); /*--事务回滚--*/
+       if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+         strcpy(g_pub_tx.reply,"G009");
+       sprintf(acErrMsg,"生成银联卡手续费报表错误![%s]",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data("0120",g_pub_tx.reply);
+       return 1;
+}
+/*打印每日明细*/
+fee_prt_line(struct BR_FEE_AREA *pr_fee,char * date)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee + pr_fee->fwinfee - pr_fee->outfee - pr_fee->fwoutfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+
+	ceamt=fabs(ceamt);
+	/***开始格式化数据***/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt3,"%12.2f",(pr_fee->fwinfee));
+	sprintf(tmp_amt4,"%12.2f",(pr_fee->fwoutfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp1,"┃%s┃    %12s    ┃    %12s    ┃    %12s  ┃    %12s  ┃%4s    %12s┃    \n",date,tmp_amt1,tmp_amt2,tmp_amt3,tmp_amt4,cetmp,tmp_amt5);
+}
+
+/*打印区间合计*/
+fee_prt_hj_line(struct BR_FEE_AREA *pr_fee)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee + pr_fee->fwinfee - pr_fee->outfee - pr_fee->fwoutfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+		
+	ceamt=fabs(ceamt);
+	/*格式化合计金额*/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt3,"%12.2f",(pr_fee->fwinfee));
+	sprintf(tmp_amt4,"%12.2f",(pr_fee->fwoutfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp1,"┃合    计┃%16s    ┃%16s    ┃%16s  ┃%16s  ┃%4s%16s┃    \n",tmp_amt1,tmp_amt2,tmp_amt3,tmp_amt4,cetmp,tmp_amt5);
+	fprintf(fp1,"┗━━━━┻━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━┻━━━━━━━━━┻━━━━━━━━━━┛    \n");
+}
+int sub_acct_d( acc_jf,acc_df,amt,brf,br_no)
+ char *acc_jf;
+ char *acc_df;
+ double amt;
+ char *brf;
+ char *br_no;
+{
+	int ret=0;
+	vtcp_log("借方记帐科目[%s][%.2lf]",acc_jf,amt);
+
+	strcpy( g_pub_tx.tx_code, "CFEE");
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"0" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_jf );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy( g_pub_tx.brf,brf );
+	strcpy( g_pub_tx.no_show,"0" );
+
+	g_pub_tx.trace_cnt++;
+	set_zd_long( DC_TRACE_CNT,g_pub_tx.trace_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1204","01" );
+		set_zd_data("1205","2" );
+        set_zd_double("1208",amt);
+
+		ret = pubf_acct_proc("A016");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+	vtcp_log("贷方记帐科目[%s][%.2lf]",acc_df,amt);
+	strcpy(g_pub_tx.opn_br_no,"10001");
+			strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"1" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_df );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy(g_pub_tx.brf,brf);
+	strcpy( g_pub_tx.no_show,"0" );
+
+	g_pub_tx.trace_cnt++;
+	set_zd_long( DC_TRACE_CNT,g_pub_tx.trace_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1214","01" );
+		set_zd_data("1215","2" );
+        set_zd_double("1218",amt);
+			strcpy(g_pub_tx.tx_br_no,br_no);
+        ret = pubf_acct_proc("A017");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+		set_zd_data("1204","" );
+		set_zd_data("1205","" );
+    set_zd_double("1208",0.00 );
+		set_zd_data("1214","" );
+		set_zd_data("1215","" );
+    set_zd_double("1218",0.00 );
+	return 0;
+ErrExit:
+	return 1;
+}
+int sub_acct_j( acc_jf,acc_df,amt,brf,br_no)
+ char *acc_jf;
+ char *acc_df;
+ double amt;
+ char *brf;
+ char *br_no;
+{
+	int ret=0;
+	vtcp_log("借方记帐科目[%s][%.2lf]",acc_jf,amt);
+
+	strcpy( g_pub_tx.tx_code, "CFEE");
+	strcpy(g_pub_tx.opn_br_no,"10001");
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"0" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_jf );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy( g_pub_tx.brf,brf );
+	strcpy( g_pub_tx.no_show,"0" );
+  g_pub_tx.trace_cnt++;
+	set_zd_long( DC_TRACE_CNT,g_pub_tx.trace_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1204","01" );
+		set_zd_data("1205","2" );
+    set_zd_double("1208",amt);
+	strcpy(g_pub_tx.tx_br_no,br_no);
+		ret = pubf_acct_proc("A016");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+	vtcp_log("贷方记帐科目[%s][%.2lf]",acc_df,amt);
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy(g_pub_tx.cur_no,"01");
+    strcpy(g_pub_tx.ac_wrk_ind,"0000000");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,"2" );
+	strcpy( g_pub_tx.add_ind,"1" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,acc_df );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	strcpy( g_pub_tx.note_type,"" );
+	strcpy( g_pub_tx.beg_note_no,"" );
+	g_pub_tx.tx_amt1=amt;
+    strcpy(g_pub_tx.brf,brf);
+	strcpy( g_pub_tx.no_show,"0" );
+
+	g_pub_tx.trace_cnt++;
+	set_zd_long( DC_TRACE_CNT,g_pub_tx.trace_cnt);
+
+	/*** 调用会计分录自动记 ***/
+		ret=pub_acct_trance();
+		if( ret ) goto ErrExit;
+
+        /* 进行会计记帐 */
+		set_zd_data("1214","01" );
+		set_zd_data("1215","2" );
+        set_zd_double("1218",amt);
+
+        ret = pubf_acct_proc("A017");
+        if (ret != 0)
+        {
+            sprintf(acErrMsg,"会计记帐不成功!!");
+            WRITEMSG
+            goto ErrExit;
+        }
+
+		set_zd_data("1204","" );
+		set_zd_data("1205","" );
+    set_zd_double("1208",0.00 );
+		set_zd_data("1214","" );
+		set_zd_data("1215","" );
+    set_zd_double("1218",0.00 );
+	return 0;
+ErrExit:
+	return 1;
+}
+fee_prt_line1(struct BR_FEE_AREA *pr_fee,char * date)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+
+	ceamt=fabs(ceamt);
+	/***开始格式化数据***/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp2,"    ┃%s┃    %12s    ┃    %12s    ┃%4s    %12s┃    \n",date,tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+}
+
+/*打印区间合计*/
+fee_prt_hj_line1(struct BR_FEE_AREA *pr_fee)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee  - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+		
+	ceamt=fabs(ceamt);
+	/*格式化合计金额*/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp2,"    ┃合    计┃%16s    ┃%16s    ┃%4s%16s┃    \n",tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+	fprintf(fp2,"    ┗━━━━┻━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━┛    \n");
+}
+
+fee_prt_line2(struct BR_FEE_AREA *pr_fee,char * date)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+
+	ceamt=fabs(ceamt);
+	/***开始格式化数据***/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp4,"    ┃%s┃    %12s    ┃    %12s    ┃%4s    %12s┃    \n",date,tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+}
+
+/*打印区间合计*/
+fee_prt_hj_line2(struct BR_FEE_AREA *pr_fee)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee  - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+		
+	ceamt=fabs(ceamt);
+	/*格式化合计金额*/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp4,"    ┃合    计┃%16s    ┃%16s    ┃%4s%16s┃    \n",tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+	fprintf(fp4,"    ┗━━━━┻━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━┛    \n");
+}
+
+fee_prt_line3(struct BR_FEE_AREA *pr_fee,char * date)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+
+	ceamt=fabs(ceamt);
+	/***开始格式化数据***/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp5,"    ┃%s┃    %12s      ┃    %12s      ┃%4s    %12s┃    \n",date,tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+}
+
+/*打印区间合计*/
+fee_prt_hj_line3(struct BR_FEE_AREA *pr_fee)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee  - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+		
+	ceamt=fabs(ceamt);
+	/*格式化合计金额*/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp5,"    ┃合    计┃%16s      ┃%16s      ┃%4s%16s┃    \n",tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+	fprintf(fp5,"    ┗━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━┛    \n");
+}
+
+fee_prt_line4(struct BR_FEE_AREA *pr_fee,char * date)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+
+	ceamt=fabs(ceamt);
+	/***开始格式化数据***/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp6,"    ┃%s┃    %12s      ┃    %12s      ┃%4s    %12s┃    \n",date,tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+}
+
+/*打印区间合计*/
+fee_prt_hj_line4(struct BR_FEE_AREA *pr_fee)
+{
+	double ceamt = 0.0;
+	char  tmp[TOT_LENGTH+1];
+	char  cetmp[5];
+	char  tmp_amt1[17];
+	char  tmp_amt2[17];
+	char  tmp_amt3[17];
+	char  tmp_amt4[17];
+	char  tmp_amt5[17];
+	memset(tmp_amt1,0x00,sizeof(tmp_amt1));
+	memset(tmp_amt2,0x00,sizeof(tmp_amt2));
+	memset(tmp_amt3,0x00,sizeof(tmp_amt3));
+	memset(tmp_amt4,0x00,sizeof(tmp_amt4));
+	memset(tmp_amt5,0x00,sizeof(tmp_amt5));
+	memset(cetmp,0x00,sizeof(cetmp));
+	ceamt = pr_fee->infee  - pr_fee->outfee;
+	if(ceamt<0)
+		memcpy(cetmp,"支出",4);
+	else
+		memcpy(cetmp,"收入",4);
+		
+	ceamt=fabs(ceamt);
+	/*格式化合计金额*/
+	sprintf(tmp_amt1,"%12.2f",(pr_fee->infee));
+	sprintf(tmp_amt2,"%12.2f",(pr_fee->outfee));
+	sprintf(tmp_amt5,"%12.2f",(ceamt));
+	fprintf(fp6,"    ┃合    计┃%16s      ┃%16s      ┃%4s%16s┃    \n",tmp_amt1,tmp_amt2,cetmp,tmp_amt5);
+	fprintf(fp6,"    ┗━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━┛    \n");
+}

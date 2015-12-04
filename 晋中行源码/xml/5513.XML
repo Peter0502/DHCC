@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100000000000000000000000000" TITLE="5513 	授权支付对账日报"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{ 
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+	"T(5513                     授权支付对账日报)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1247)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-12s" FUNCTIONS="T(授权支付对账日报)"/>
+  <!---交易名称--->
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(5513)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <BLOCK LINE="4" COL="10" >
+  <ITEM LINE="5" COL="8" TYPE="%-10s" FUNCTIONS="T(对账类型:)"/>
+  <ITEM LINE="5" COL="18" TYPE="%-1s" NAME="#DZLX" INPUT="TEXT" FUNCTIONS="T(1)">
+  <SELECT>
+  	  <OPTION VALUE="1"  TITLE="支付对账" />
+  	  <OPTION VALUE="2"  TITLE="退款对账" />
+  	</SELECT>
+  </ITEM>
+  <ITEM LINE="6" COL="8" TYPE="%-10s" FUNCTIONS="T(银行编码: )"/>
+  <ITEM LINE="6" COL="18" TYPE="%-16s" NAME="#BR_NO" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="7" COL="8" TYPE="%-10s"  FUNCTIONS="T(财政编码: )"/>
+  <ITEM LINE="7" COL="18" TYPE="%-16s" NAME="#FIN_CODE" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  
+  <ITEM LINE="8" COL="8" TYPE="%-10s"  FUNCTIONS="T(凭证类型: )"/>
+  <ITEM LINE="8" COL="18" TYPE="%-1s" NAME="#PAY_NOTE_TYPE" INPUT="SELECT" FUNCTIONS="T(2)">
+    <SELECT>
+  	  <OPTION VALUE="2"  TITLE="授权支付" />
+  	  <OPTION VALUE="3"  TITLE="公务卡 "/>
+  	</SELECT>
+  	<ONLOSTFOCUS>
+	"{
+		if(#PAY_NOTE_TYPE=='3' and  #DZLX=='2')  //行内支付
+		{
+			showmsg('公务卡不能做退款对账');
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9" COL="8" TYPE="%-10s" FUNCTIONS="T(凭 证 号:)"/>
+  <ITEM LINE="9" COL="18" TYPE="%-16s" NAME="#NOTE_NO" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="8" TYPE="%-10s" FUNCTIONS="T(日    期:)"/>
+  <ITEM LINE="10" COL="18" TYPE="%-8d" NAME="#DATE" INPUT="TEXT" FUNCTIONS="T($HDATE)"/>
+  </BLOCK>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+ 
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+    "{
+        dim @tota as string; 
+        dim @filename as string;
+        initfd();
+        commsend_001();
+        $FD16=#TXNO;
+        $FD58=#BR_NO;
+        $FD59=#FIN_CODE;
+        $FD67=#DZLX;
+        $FD68=#PAY_NOTE_TYPE;
+        $FD60=#NOTE_NO;
+        $FD44=#DATE;     
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        call('fview '+@filename);
+        //showmsg('授权支付对账日报发送成功!!!');
+    }"
+  </ONCLICK> 
+   </ITEM> 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+		NOTHING
+	</PACKAGE>
+		<PRINT>
+		"{
+			
+		}"
+		</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印保单凭证" LINESPACE="24" >
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+	
+
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

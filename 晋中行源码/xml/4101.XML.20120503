@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4101 对公活期开户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  initfd();
+	commsend_001();
+	if(#CASHCD == '1')  //现金
+	{
+		$FD102 = '';
+	}
+	else                //转帐
+	{
+		$FD102 = #TRAN_AC_NO+space(24-len(#TRAN_AC_NO))+#SEQNO_102+#TRAN_CTY+#TTRAN_CNM+space(1)+#TRAN_PDOT+space(6)+#TRAN_PWD+#TRAN_CDOT+#TRAN_CNUM+space(20-len(#TRAN_CNUM))+#TRAN_SDOT+space(17)+#STDAY+space(8-len(#STDAY))+getitems('#TXAMT')+#TRAN_CET+#TRAN_NAME+getitems('#TRAN_BAL')+#TRAN_CUR+#CASHCD+#ZY_TP+space(3-len(#ZY_TP))+#ACTLX+#SEQNO2+#PRTNB+space(80)+#SPECIAL+#TRAN_PDN+#TRAN_AC_NO+space(24-len(#TRAN_AC_NO))+space(1)+#ZY; 
+	}
+	//$FD103=getitems('#PRDTNO#CPMC#CURCD_P#ACTYPE#ZHZL#INTSTYPE#AVBAL#NAME_P#XSZH#CQ#CQDW#DQCKLX#ACTSEQ_P#CASHFLAG');
+	commsend_103();
+	commsend_116();
+	$FD118 = #CURCD+space(19)+space(16,'0');
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+   #PIC='';
+   #PIC1='';
+}"
+</FIRSTWORK>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(4101                          对公活期开户)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO"        TYPE="%-4s" FUNCTIONS="T($TXNO=2105)"/>
+  <ITEM NAME="#MSGTYPE"     TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TX_ACT_TYPE" TYPE="%-1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#SEQNO"       TYPE="%4s"  FUNCTIONS="T(0000)"/>  <!---帐户序号---> 
+  <ITEM NAME="#SEQNO2"      TYPE="%4s"  FUNCTIONS="T(0000)"/>  <!---帐户序号2---> 
+  <ITEM NAME="#PRTNB"       TYPE="%1s"  FUNCTIONS="T(1)"/>     <!---打折标志---> 
+  <ITEM NAME="#TXCD"        TYPE="%4s"  FUNCTIONS="T(4101)"/>  <!---交易代码---> 
+  <ITEM NAME="#TXNAME"  TYPE="%-12s" FUNCTIONS="T(对公活期开户)"/><!---交易名称--->  
+  
+  <!-- 输入客户信息 -->  
+  <ITEM NAME="#CP_SERV"   TYPE="%-4s" FUNCTIONS="T(9838)"/>
+  <ITEM NAME="#JZ_SERV"   TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#CARD_SERV" TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#PZ_SERV"   TYPE="%-4s" FUNCTIONS="T()"/>
+  <IMPORT>OPN_DGHQ_DEFAULT.IMP</IMPORT>
+  
+  <!-- 输入产品信息 -->
+  <IMPORT>OPN_ACCT_PAGE3.IMP</IMPORT>
+  
+  <!-- 转帐：输入对方帐户信息 -->
+  <IMPORT>OPN_ACCT_PAGE2.IMP</IMPORT>
+ <REQUEST>
+ </REQUEST>
+ </VARIABLE>
+ <REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+CZFY|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|||||@tx_amt1|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no|
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+print(6,0,'                                 对公活期开户');
+print(8,0,'                       账 /卡号:  [24                       ]                           ',@ac_no);
+print(9,0,'                       账户序号:  [24                       ]                           ',@ac_seqn);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+CZFY|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|||||@tx_amt1|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no||@acc_no|
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO = '00';
+
+		print( 5,20,'机构名称:[30]',$BRNAME);  
+		print( 5,2,'代码:4101');
+		print( 5,13,'交易:对公活期开户');
+
+		print( 7,20,'帐    号: [20                  ]   产品名称: [20]',@ac_no,@title);
+		print( 8,20,'客 户 号: [10        ]             户    名: [60]',@cif_no,@name);
+		print( 9,20,'证件类型: [20                  ]   证件号码: [20]',@id_name,@id_no);
+		print(10,20,'开户方式: [4   ]                   科 目 号: [7]',@ct_name,@acc_no);
+		print(11,20,'币    种: [8       ]               帐户类型: [10]',#SCUR,#S_ACTLX);
+		print(12,20,'计息类型: [10]',#S_JXLX);
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+ </TRANSACTION>

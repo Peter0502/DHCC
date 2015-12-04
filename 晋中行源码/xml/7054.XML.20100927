@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7054 支付宝查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7054                          支付宝查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7054)"/>
+
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+
+  <ITEM  LINE="6" COL="16"  NAME="#CARD_NO" INPUT="TEXT" DEVICE="MSR" TYPE="%-19s" FUNCTIONS="V(NB)m($MSR2,1,19)">
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223')
+						{
+							showmsg('卡号的前6位必须为621223');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	   	<ITEM  LINE="7"  COL="16"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+<ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#JYXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZJHM" TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#KHXM" TYPE="%-60s"   FUNCTIONS=""/> 
+  <ITEM NAME="#TEL"  TYPE="%-30s"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZJLX" TYPE="%-1s"  FUNCTIONS=""/>
+  <ITEM NAME="#ADDR" TYPE="%-50s"  FUNCTIONS=""/> 
+  <ITEM NAME="#JYXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#DBXE" TYPE="%17.2f"  FUNCTIONS=""/> 
+  <ITEM NAME="#ZFB"  TYPE="%-30s"  FUNCTIONS=""/>
+  <ITEM NAME="#KHLX" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#JYQD" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#YHLX" TYPE="%-1s" FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD35=#KLX;
+		$FD30=#CARD_NO;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#TEL=$FD26;
+		#KHXM=$FD27;
+		#ZJHM=$FD63;
+		#KHLX=$FD67;
+		#ZJLX=$FD68;
+		#ADDR=$FD81;
+		#ZFB=$FD31;
+		#JYQD=$FD34;
+		#KLX=$FD35;
+		#YHLX=$FD36;
+		runoutput();
+		close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+	print( 8, 20,'卡    号:[20]',#CARD_NO);
+	print( 9,20,'客 户 名:[60]',#KHXM);
+	print( 10, 20,'支付宝号:[50] ',#ZFB);
+	print( 11,20,'证件号码:[20]',#ZJHM);
+	print( 12,20,'联系电话:[30]',#TEL);
+	print( 13,20,'联系地址:[50]',#ADDR);
+	print( 14,20,'单日支付限额:[20]', ltrim(comma($FD39,20)));
+	print( 15,20,'单笔支付限额:[20]', ltrim(comma($FD40,20)));
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

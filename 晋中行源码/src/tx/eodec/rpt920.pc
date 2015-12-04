@@ -1,0 +1,2486 @@
+ /***********************************************************
+ * 文 件 名: bbxxxx.c										*
+ * 功能描述: 生成报表程序,打印固定结构报表					*
+ * 作    者: terry
+ * 完成日期：2002/07/12 --- 2002/07/15    新疆.库尔勒		*
+ *															*
+ * 修改记录：												*
+ *    日    期:	2003/04/12									*
+ *    修 改 人:	rob											*
+ *    修改内容:												*
+ *															*
+ ***********************************************************/
+
+#define ERR_DEAL {WRITEMSG goto ErrExit;}
+#define D_CURNO		RMB
+/*#define EXTERN */
+
+#include <sys/stat.h>
+#include <string.h>
+#include <math.h>
+#include "com_sys_parm_c.h"   
+#include "svrpub_c.h"
+#include "public.h"
+#define  MY_PAGE_SIZE 500
+
+void               (*func)();
+EXEC SQL INCLUDE SQLCA;
+struct 	com_sys_parm_c 	g_com_sys_parm;			/*系统参数*/
+
+
+struct PRT_SUM{
+	char * _val_a;
+	float _val_b;
+	float _val_c;
+	float _val_d;
+	float _val_e;
+	float _val_f;
+	float _val_g;
+	float _val_h;
+	float _val_i;
+	float _val_j;
+	float _val_k;
+	float _val_l;
+	float _val_m;
+	float _val_n;
+	float _val_o;
+	float _val_p;
+	float _val_q;
+	float _val_r;
+	float _val_s;
+	float _val_t;
+	float _val_u;
+};
+
+struct  PRT_SUM g_sum_prt_val;/**用来计算合计的值**/
+
+FILE 	*fp;
+int 	cpzs=0;
+int 	line=0;							/* 行数 */
+
+char	g_filename[FILE_NAME_LEN];		/* 文 件 名 */
+char	g_brno_str[LINE_LEN];			/* 机构字符串 */
+char	g_var_str[LINE_LEN];			/* 变量符号 */
+char	g_rpt_head[LINE_LEN];			/* 报 表 头 */
+static	FILE	*g_fp;							/* 打印报表文件 */
+
+int     cal_form_nums = 0;				/*  记录计算公式数组个数*/
+int     brno_nums = 0;					/*  记录机构个数*/
+int     prt_val_nums = 0;				/*  记录整个报表变量的个数 */
+int     bdsjsbh;
+static	int		ret=0;
+
+long    char_to_ascii(char *_str);
+int print_head_tail(FILE *fp_table,FILE *fp_rpt,char *gsm);
+rpt920()
+{
+	int		i, k,j,l;							/* 记录循环次数 	  */
+	int  		ret = 0;
+	char	pathname[FILE_NAME_LEN];
+	char 	filename[FILE_NAME_LEN];		/* 保存报表格式文件名 */
+	char	l_str_tmp[256];
+	char    vparm2[21];
+	FILE	*l_fp;
+	FILE    *_fp_prt_val;
+	FILE    *fp_form_val;
+	int     body_flag = 0;	/**是否已经进入了body-/body之间 ，0－没有进入 1-进入***/
+	long    file_position = 0;
+
+	memset(vparm2,0,sizeof(vparm2));
+	
+
+	
+TRACE
+	sprintf(pathname,"%s",getenv("PFMDIR"));
+	sprintf(filename,"%s/%s",pathname,"ZJTC.rfc");
+
+TRACE
+	/* 检查文件是否顺利打开 */
+	printf("look1 filename=[%s]",filename);
+	l_fp = fopen(filename,"r");
+	if( l_fp == NULL )
+	{
+		printf("文件不存在或者存在错误,请检查[%s]\n",filename);
+		return 1;
+	}
+	fclose(l_fp);
+TRACE
+
+	/***  打开数据库  ***/
+	db_open() ;
+TRACE
+
+	/***  系统初始化  ***/
+	rpt_init();
+TRACE
+
+	/* 取报表日期 */
+	ret = get_rpt_date( vparm2 );
+	if( ret ) goto ErrExit;
+TRACE
+
+	/******读取报表定义****************/
+	ret = read_form_rfc( filename ); 
+	if( ret ) goto ErrExit;
+
+	vtcp_log("读取报表定义文件[%s]\n",filename);
+
+	/* 删除文件 */
+	Pub_rm_file(g_filename);
+	vtcp_log("删除旧报表文件\n");
+
+	strcpy(l_str_tmp, g_filename);
+	
+	vtcp_log("机构[%d]\n",brno_nums);
+	printf("brno_nums=[%d]\n",brno_nums);
+
+	
+
+	/* 创建文件 ,在这里我们只创建一个属于清算中心的文件*/
+	
+	TRACE
+	ret = cre_file(QS_BR_NO, g_filename);
+	if( ret ) goto ErrExit;
+	
+	
+
+	
+	
+	printf("[%s][%d]出来!\n",__FILE__,__LINE__);
+	memset(&g_brno_tmp, 0x00, sizeof(g_brno_tmp));
+
+	
+
+	strcpy(g_filename,l_str_tmp);	
+   
+
+	
+	
+
+	/* 第一次扫描报表，记录所有的变量 */
+	ret = scan_rpt_var(filename);
+	
+	if( ret ) goto ErrExit;
+	
+	
+
+	printf("[%s][%d]取报表变量\n",__FILE__,__LINE__);TRACE
+	
+	/*report 校验计算公式和变量 */
+	if(cal_form_nums != prt_val_nums)
+	{
+		printf("变量与计算公式定义错误: 数量不符\n");
+		printf("cal_form_nums=[%d]\n",cal_form_nums);
+		printf("prt_val_nums=[%d]\n",prt_val_nums);
+	}
+	if( cmp_cal_val() ) goto ErrExit;
+	
+	
+	/****把头部打印出来********打印出报表文件的头部*****/
+	fp_form_val = fopen(filename,"r");
+	if( fp_form_val == NULL )
+	{
+		printf("文件不存在或者存在错误,请检查[%s]\n",filename);
+		return 1;
+	}
+     	
+
+	
+	for(i=0; i<brno_nums; i++)
+	{
+		/*init_prt_val(&g_prt_val);*/
+		
+		rewind(fp_form_val);/*table的句柄回到文件头部***/
+
+	
+		memset(&g_brno_tmp,0x00,sizeof(g_brno_tmp));
+		
+		g_brno_tmp = g_brno[i];
+		memcpy(g_brno_tmp.br_no,g_brno[i].br_no,sizeof(g_brno_tmp.br_no)-1);
+		
+		init_prt_val_zero();
+		
+		/* 计算出变量的值 */
+		cal_g_prt_val();
+		
+		printf("[%s][%d]取报表变量\n",__FILE__,__LINE__);TRACE
+		printf("计算报表变量\n");
+		
+		while( !feof(fp_form_val) )
+		{
+			
+			
+			fgets( l_str_tmp, BUFLEN, fp_form_val );
+			/**
+        		if(feof(fp_form_val) )
+        		{
+        			printf("[%s][%d]TMD这是第[%d]次啊就出来了!\n",__FILE__,__LINE__,i);
+        			break;
+        		}***/
+				
+			del_fore_space(l_str_tmp);
+			del_after_space(l_str_tmp);
+			
+			if(l_str_tmp[0]=='#' ||!strncmp(l_str_tmp,"//",2))  continue;
+			if(strlen(l_str_tmp)==0 || l_str_tmp[0]=='\0'||l_str_tmp[0]=='\n')  continue;
+			
+			
+        		file_position = ftell(fp_form_val);
+        		
+        		
+			if( !strncmp(l_str_tmp,"body",4) ) 
+			{
+				
+				
+				if(i==0)/**如果是第一次的话需要打印出头部**/
+				{
+					
+					fprintf(g_fp,"%c%c%c%c%c\n",0x1b,0x40,0x1b,0x33,0x16);	
+					ret = prt_rpt_body(fp_form_val,g_fp,"TA",file_position);
+					prt_rpt_body(fp_form_val,g_fp,"TD",file_position);
+					prt_rpt_body(fp_form_val,g_fp,"TM",file_position);
+				}
+				/***循环部分***/
+				prt_rpt_body(fp_form_val,g_fp,"TB",file_position);
+				prt_rpt_body(fp_form_val,g_fp,"A0",file_position);
+				
+				if(i==brno_nums-1)
+				{
+					/***计算总和**/
+					iReset_Sum_Row();
+					print_sum_rpt_val();
+					prt_rpt_body(fp_form_val,g_fp,"SB",file_position);
+					prt_rpt_body(fp_form_val,g_fp,"SU",file_position);
+					/*****打印好了合计栏***/
+					
+					prt_rpt_body(fp_form_val,g_fp,"TT",file_position);
+					/***打印下面接着的几个表格**/
+					
+					
+					fprintf(g_fp,"%c%c%c%c%c\n",0x1b,0x40,0x1b,0x33,0x1E);
+					
+					fprintf(g_fp,"%c%c%c%c\n",0x1c,0x53,0x00,0x00);
+					
+					prt_rpt_body(fp_form_val,g_fp,"TC",file_position);
+					
+					/***下面的内容是清算中心专门享受的***/
+					memset(&g_brno_tmp,0x00,sizeof(g_brno_tmp));
+					memcpy(g_brno_tmp.br_no,QS_BR_NO,sizeof(g_brno_tmp.br_no)-1);
+					
+					init_prt_val_zero();
+					iReset_Sum_Row();
+					cal_g_prt_val();
+					init_prt_val_one();
+					
+					
+					prt_rpt_body(fp_form_val,g_fp,"A1",file_position);
+					prt_rpt_body(fp_form_val,g_fp,"TE",file_position);
+					/*iReset_Sum_Row();*/
+					
+					prt_rpt_body(fp_form_val,g_fp,"A2",file_position);
+					prt_rpt_body(fp_form_val,g_fp,"TF",file_position);
+					fseek(fp_form_val,file_position,SEEK_SET);
+				}
+			}
+			else
+				continue;
+			
+			
+			
+			
+			
+		}
+		
+		
+		printf("机构[%s]完成\n",g_brno_tmp.br_no);
+	}
+	fprintf(g_fp,"%c%c",0x1b,0x40);
+	fclose(g_fp);
+	
+
+/******************程序出口************************/
+/*
+* 正常出口
+*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	printf("Before OK return: reply is [%s]\n",g_pub_tx.reply);
+	return (0);
+/*
+* 错误出口
+*/
+ErrExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	printf("Before bad return: reply is [%s]\n",g_pub_tx.reply);
+	return (1);
+}
+
+/***************************************************
+	初始化变量
+****************************************************/
+int rpt_init()
+{
+	int i_cal_form = 0;
+	int i_prt_val  = 0;
+	memset (&g_com_sys_parm, 0x00, sizeof(struct com_sys_parm_c));
+	memset (&g_brno, 0x00, sizeof(struct com_branch_c));
+	memset (g_filename, 0x00, sizeof(g_filename));
+	memset (g_brno_str, 0x00, sizeof(g_brno_str));
+	memset (g_var_str, 0x00, sizeof(g_var_str));
+	memset (g_rpt_head, 0x00, sizeof(g_rpt_head));
+	
+	for(i_cal_form=0;i_cal_form<1024;i_cal_form++)
+		init_cal_form(&g_cal_form[i_cal_form]);
+	for(i_prt_val=0;i_prt_val<1024;i_prt_val++)
+		init_prt_val(&g_prt_val[i_prt_val]);
+	init_sum_prt_val(&g_sum_prt_val);
+}
+
+/******************************************************
+	从pfm文件中读出定义报表格式
+	char    g_filename[256];        文 件 名
+	char    g_brno_str[256];        机    构
+	char    g_var_str[256];         变量符号
+	char    g_cal_form[256];        取值公式 
+*******************************************************/
+int read_form_rfc( _filename )
+char *_filename;
+{
+	char 	l_str_tmp[STR_TMP_LEN];
+	FILE 	*fp;
+	int		i;
+	char *p;
+
+vtcp_log(" READ RFC [%s]",_filename );
+	fp = fopen(_filename,"r");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",_filename);
+		printf("open file [%s] error",_filename);
+		return 1;
+	}
+	while( !feof(fp) )
+	{
+		memset(l_str_tmp, 0x00, sizeof(l_str_tmp));
+		fgets(l_str_tmp, BUFLEN, fp);
+
+/* vtcp_log("POP[%s]",l_str_tmp); */
+
+		/***  如果行首为 # 或 // ,表示本行为注释  ***/
+		if(l_str_tmp[0]=='#'||!strncmp(l_str_tmp,"//",2))continue;
+		/***  如果空行，则跳过  ***/
+		if(strlen(l_str_tmp)== 0||l_str_tmp[0]=='\0'||l_str_tmp[0]=='\n')
+			continue;
+
+		/***  报表名－> 文件名  ***/
+		if(!strncmp(l_str_tmp,"报表名:",7)||!strncmp(l_str_tmp,"PRTNAME:",8)
+		 ||!strncmp(l_str_tmp,"报表名：",8)||!strncmp(l_str_tmp,"PRTNAME：",9))
+		{
+			if( !strncmp(l_str_tmp,"报表名:",7) )
+				strcpy( g_filename,l_str_tmp+7 );
+			if( !strncmp(l_str_tmp,"PRTNAME:",8) )
+				strcpy( g_filename,l_str_tmp+8 );
+			if( !strncmp(l_str_tmp,"报表名：",8) )
+				strcpy( g_filename,l_str_tmp+8 );
+			if( !strncmp(l_str_tmp,"PRTNAME：",9) )
+				strcpy( g_filename,l_str_tmp+9 );
+
+			del_after_space(g_filename);
+		}
+		/***  出表机构－> 生成目录  ***/
+		else if(!strncmp(l_str_tmp,"出表机构:",9)||!strncmp(l_str_tmp,"BRNO:",5)
+		||!strncmp(l_str_tmp,"出表机构：",10)||!strncmp(l_str_tmp,"RBNO：",6))
+		{
+			if( !strncmp(l_str_tmp,"出表机构:",9) )
+				strcpy( g_brno_str,l_str_tmp+9);
+			if( !strncmp(l_str_tmp,"BRNO:",5) )
+				strcpy( g_brno_str,l_str_tmp+5);
+			if( !strncmp(l_str_tmp,"出表机构：",10) )
+				strcpy( g_brno_str,l_str_tmp+10);
+			if( !strncmp(l_str_tmp,"RBNO：",6) )
+				strcpy( g_brno_str,l_str_tmp+6);
+
+			del_after_space(g_brno_str);
+			/***  取出所有机构号  ***/
+			if(get_brno(g_brno_str))
+			{
+				return -1;	
+			}
+		}
+		/***  变量符号－> 匹配变量  ***/
+		else if(!strncmp(l_str_tmp,":",1)||!strncmp(l_str_tmp,"FLAG:",5)
+			|| !strncmp(l_str_tmp,"变量符号:",9) 
+			|| !strncmp(l_str_tmp,"：",2) || !strncmp(l_str_tmp,"FLAG：",6)
+			|| !strncmp(l_str_tmp,"变量符号：",10) )
+		{
+			if( !strncmp(l_str_tmp,":",1) )
+				strcpy( g_var_str,l_str_tmp+1 );
+			if( !strncmp(l_str_tmp,"：",2) )
+				strcpy( g_var_str,l_str_tmp+2 );
+			if( !strncmp(l_str_tmp,"FLAG:",5) )
+				strcpy( g_var_str,l_str_tmp+5 );
+			if( !strncmp(l_str_tmp,"FLAG：",6) )
+				strcpy( g_var_str,l_str_tmp+6 );
+			if( !strncmp(l_str_tmp,"变量符号:",9) )
+				strcpy( g_var_str,l_str_tmp+9 );
+			if( !strncmp(l_str_tmp,"变量符号：",10) )
+				strcpy( g_var_str,l_str_tmp+10 );
+			
+			del_after_space(g_var_str);
+		}
+		/***  取计算公式  ***/
+		else if(!strncmp(l_str_tmp,"form:",5)||!strncmp(l_str_tmp,"公式:",5)
+			||!strncmp(l_str_tmp,"form：",6)||!strncmp(l_str_tmp,"公式：",6))
+		{
+			while(1)
+			{
+				fgets(l_str_tmp, BUFLEN, fp);
+				del_fore_space(l_str_tmp);
+				del_after_space(l_str_tmp);
+				/***  如果行首为 # 或 // ,表示本行为注释  ***/
+				if(l_str_tmp[0]=='#'||!strncmp(l_str_tmp,"//",2))continue;
+				/*** 如果空行，则跳过 ***/
+				if(strlen(l_str_tmp)==0||l_str_tmp[0]=='\0'||l_str_tmp[0]=='\n')
+					continue;
+				p=strstr(l_str_tmp,"//");
+				if( p==NULL ) 
+					;
+				else
+				{
+					p[0]='\n'; p[1]='\0';
+				}
+
+				if(!strncmp(l_str_tmp,"/公式",5)) break;
+				split_formula(l_str_tmp,&g_cal_form[cal_form_nums]);
+				cal_form_nums++;
+			}
+		}
+	}
+	fclose(fp);
+
+	return 0;
+}
+
+/**************************************************
+	取出所有机构号
+***************************************************/
+int	get_brno(char * _str)
+{
+	int	i = 0;							/**  记录brno个数 **/
+
+	if(!strncmp(_str,"ALL",3)||!strncmp(_str,"all",3))
+	{
+		/*ret=Com_branch_Dec_Sel(g_pub_tx.reply," br_no not in(select br_no from com_branch where wrk_sts ='*' or br_type  in ('6', '0') )"); lwb 20150526 加入支行 */
+		ret=Com_branch_Dec_Sel(g_pub_tx.reply," br_no not in(select br_no from com_branch where wrk_sts ='*' or br_type  in ('6', '0','7') )");
+		if(ret)
+		{
+			sprintf(acErrMsg,"declare cursor error[%d]!",ret);
+			strcpy(g_pub_tx.reply,"0200");
+			ERR_DEAL
+		}
+
+		while(1)
+		{
+			ret=Com_branch_Fet_Sel(&g_brno[i],g_pub_tx.reply);
+			if(ret==100)break;
+			else if(ret)
+			{
+				strcpy(g_pub_tx.reply,"0200");
+				sprintf(acErrMsg,"fetch cursor error![%d]",ret);
+				ERR_DEAL
+			}
+
+			pub_base_strpack(g_brno[i].br_no);
+			i++;
+		}
+
+		Com_branch_Clo_Sel();
+	}
+	else					/**  部分机构  **/
+	{
+		while(1)
+		{
+			if(_str[0]=='\0'||_str[0]=='\n') break;
+			get_first_str(_str, g_brno[i].br_no);	
+			del_after_space(g_brno[i].br_no);
+
+			ret=Com_branch_Sel(g_pub_tx.reply,&g_brno[i], \
+								"br_no='%s'",g_brno[i].br_no);
+			if(ret==100)break;
+			else if(ret)
+			{
+				strcpy(g_pub_tx.reply,"0200");
+				sprintf(acErrMsg,"fetch cursor error![%d]",ret);
+				ERR_DEAL
+			}
+			i++;
+		}
+
+	}
+	brno_nums = i;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+
+/********************************************************
+	拆分计算公式
+	input:	char	*str;	读入的计算公式串
+	output:	struct CAL_FORM	_cal_form	计算公式结构
+*********************************************************/
+int	split_formula(char	*_str, struct CAL_FORM *_cal_form)
+{
+	/* 变量所在行 */
+	get_first_str(_str, _cal_form->var_row);	
+	del_after_space(_cal_form->var_row);
+	/* 变量所在列 */
+	get_first_str(_str, _cal_form->var_col);	
+	del_after_space(_cal_form->var_col);
+	/* 变量类型 */
+	get_first_str(_str, _cal_form->var_type);	
+	del_after_space(_cal_form->var_type);
+	/* 变量的内容 */
+	get_first_str(_str, _cal_form->var_body);	
+	del_after_space(_cal_form->var_body);
+	
+	return 0;
+}
+
+/***************************************************
+	依据空格截取第一个子串
+****************************************************/
+int	get_first_str(char	*_str, char *_sub_str)
+{
+	int		i, k = 0;
+	int		str_len;
+
+	/***  去掉字符串前面的空格  ***/
+	del_fore_space(_str);
+
+	str_len = strlen(_str);
+
+	for(i = 0; i<=str_len; i++,k++)
+	{
+		if( _str[i] == ' ' || _str[i] == '\0' || _str[i] == '\n') break;
+		_sub_str[k] = _str[i];
+	}
+	_sub_str[k+1] = '\0';
+
+	if(_str[i] == '\0' || _str[i] == '\n')
+		strcpy(_str, _str+i);
+	else
+		strcpy(_str,_str+i+1);
+
+	return 0;
+}
+
+
+/*********************************************************
+	从字符串截取函数标示号和参数
+	input	:
+				char	*_str
+	output	:
+				
+**********************************************************/
+int	get_funcName_parm(char *_str, char _re_val[10][256])
+{
+	int		i = 0;
+
+	while(1)
+	{
+		if(_str[0]=='\0' || _str[0] == '\n') break;
+		get_substr(_str, _re_val[i]);	
+		del_after_space(_re_val[i]);
+		i++;
+	}
+	return 0;
+}
+/*******************************************************
+	根据 '-' , '.' 从字符串中截取子串
+	input	:
+				char	*_str		
+	output	:
+				char	*_str		
+				char	*_sub_str
+
+********************************************************/
+int get_substr(char  *_str, char *_sub_str)
+{
+	int     i, k = 0;
+	int     str_len;
+
+	/***  去掉字符串前面的空格  ***/
+	del_fore_space(_str);
+
+	str_len = strlen(_str);
+
+	for(i = 0; i<=str_len; i++,k++)
+	{
+		if( _str[i] == '_' || _str[i] == '.' || _str[i] == '\0' || _str[i] == '\n') break;
+		_sub_str[k] = _str[i];
+	}
+	_sub_str[k+1] = '\0';
+
+	if(_str[i] == '\0' || _str[i] == '\n')
+		strcpy(_str,_str+i);
+	else
+		strcpy(_str,_str+i+1);
+
+	return 0;
+}
+
+
+/*******************************************************
+	去掉字符串前面的空格
+	input	:
+				char	*_str;
+	output	:
+				char	*_str;
+********************************************************/
+int del_fore_space(char *_str)
+{
+	int     i, k = 0;
+	int     str_len;
+	char    str[STR_TMP_LEN];
+
+	str_len = strlen(_str);
+
+	for(i = 0; i<str_len; i++,k++)
+	{
+		if( _str[i] == ' ') continue;
+		else    break;
+	}
+	for(i=0; i<str_len; i++,k++)
+	{
+		if(_str[k] == '\0' || _str[k] == '\n')
+		{
+			_str[i] = '\0';
+			break;
+		}else
+		{
+			_str[i] = _str[k];
+		}
+	}
+	return 0;
+}
+
+/*********************************************************
+	去掉字符串后面的空格
+	input	:
+				char	*_str;
+	output	:
+				char	*_str;
+**********************************************************/
+int del_after_space(char *_str)
+{
+	int     i, k = 0;
+	int     str_len;
+
+	str_len = strlen(_str);
+
+	for(i = str_len-1; i>0; i-- )
+	{
+		if( _str[i] == ' ' || _str[i] == '\n') continue;
+		else    break;
+	}
+	_str[i+1] = '\0';
+
+	return 0;
+}
+
+/************************************************************
+	创建文件
+	input:
+			_brno	:行号
+			_filename:文件名(报表名)
+	output:
+			1 :失败
+			0 :成功
+*************************************************************/
+int	cre_file(char *_brno, char *_filename)
+{
+	char	fullname[256];
+	char	fullname2[256];
+
+	memset(fullname, 0x00, sizeof(char));
+	memset(fullname2, 0x00, sizeof(char));
+
+	sprintf(_filename,"%s.txt",_filename);
+
+	sprintf(fullname,"%s/report/%s/%s",getenv("HOME"), _brno,_filename);
+
+	vtcp_log("fullname[%s]",fullname);
+	printf("fullname[%s]",fullname);
+
+	strcpy( fullname2,fullname );
+	if( (g_fp = fopen(fullname,"w")) == NULL )
+	{
+		sprintf( fullname,"%s/report/%s",getenv("HOME"),_brno);
+	    mkdir( fullname, S_IRWXU|S_IRWXG|S_IRWXO);		/*先生成报表目录*/
+
+	    strcpy( fullname,fullname2 );
+		if( (g_fp = fopen( fullname,"w")) == NULL  )
+		{
+			printf("open file failed,filename=%s\n",fullname);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+/**************************************************************
+	开始扫描报表的所有变量
+	input	:	
+				char	*_read_file		格式文件名
+				FILE	*_prt_fp		报表文件句柄
+	output	
+				0  --  success
+				1  --  fail
+**************************************************************/
+int	scan_rpt_var(char	*_read_file)
+{
+	char	l_str_tmp[STR_TMP_LEN]; 
+	FILE	*l_read_fp;
+	int		l_ret;
+	printf("[%s][%d]扫描嵌套的字段_read_file=[%s]\n",__FILE__,__LINE__,_read_file);
+	/* 打开格式文件 */
+	l_read_fp = fopen(_read_file, "r");
+	if( l_read_fp == NULL)
+	{
+		printf("ddddopen read_file error\n");
+		return -1;
+	}
+	
+	
+	while( !feof(l_read_fp) )
+	{
+    		memset(l_str_tmp, 0x00, sizeof(char));
+		fgets( l_str_tmp, BUFLEN+1, l_read_fp );
+		
+		
+
+		del_fore_space(l_str_tmp);
+		del_after_space(l_str_tmp);
+	 	/***  如果行首为 # 或 // ,表示本行为注释  ***/
+	 	if( l_str_tmp[0]=='#' || !strncmp( l_str_tmp, "//", 2 ) ) continue;
+	 	/***  如果空行，则跳过  ***/
+	 	if( strlen(l_str_tmp)==0||l_str_tmp[0]=='\0'||l_str_tmp[0]== '\n') 
+			continue;
+		if( !strncmp(l_str_tmp,"body",4) )
+		{
+			/***  开始扫描报表  ***/
+			
+			
+			scan_rpt_body(l_read_fp);
+		}else
+		{
+			
+			continue;
+		}
+	}
+	fclose(l_read_fp); 
+	
+	return 0;
+}
+
+/**************************************************************
+	扫描报表体,保存变量到g_prt_val中
+	input	:
+				FILE	*_read_fp	格式文件句柄
+	output	:	
+				g_prt_val		全局变量 保存整个报表的变量
+				0  --  success
+				1  --  fail
+
+***************************************************************/
+int scan_rpt_body(FILE *_read_fp)
+{
+	int		i = 0;
+	char	l_str_tmp[STR_TMP_LEN];
+	char	l_row[4];
+	
+	while(1)
+	{
+		memset(l_str_tmp, 0x00, sizeof(l_str_tmp));
+
+		fgets(l_str_tmp, BUFLEN, _read_fp);
+		
+		del_fore_space(l_str_tmp);
+		del_after_space(l_str_tmp);
+
+		if( !strncmp(l_str_tmp, "/body", 5) ) break;
+
+	 	/***  如果行首为 # 或 // ,表示本行为注释  ***/
+	 	if( l_str_tmp[0]=='#' || !strncmp( l_str_tmp, "//", 2 ) ) continue;
+	 	/***  如果空行，则跳过  ***/
+	 	if( strlen(l_str_tmp) == 0 || l_str_tmp[0] == '\0' || l_str_tmp[0] == '\n' ) 
+			continue;
+
+		/*  常量  TA,TH 表头内容  TM 中间横线  TT 表结尾  */
+		if( !strncmp(l_str_tmp, "TA", 2) ||
+			!strncmp(l_str_tmp, "TB", 2) ||
+			!strncmp(l_str_tmp,"TC",2)||
+			!strncmp(l_str_tmp,"TE",2)||
+		 	!strncmp(l_str_tmp,"TF",2 )||
+		 	!strncmp(l_str_tmp,"TH",2 )||
+		 	!strncmp(l_str_tmp, "TM", 2) ||
+		 	!strncmp(l_str_tmp, "TT", 2)
+		 	
+		 	
+		 	 )
+		{
+			continue;
+		}
+		/*	表头	制表单位	日期  */
+		/*  非  TM TA  TT TH */
+		
+		strncpy( l_row, l_str_tmp, 2 );
+		strcpy( l_str_tmp, l_str_tmp + 2 );
+		
+		while(1)
+		{
+			init_prt_val(&g_prt_val[i]);
+			
+			
+			if(l_str_tmp[0] == '\0' || l_str_tmp[0] == '\n') break;
+
+			strncpy(g_prt_val[i].val_row, l_row, 2);
+
+			scan_body_var(l_str_tmp, &g_prt_val[i]);
+			
+			i++;
+		}
+		i--;
+		
+	}
+	prt_val_nums = i;
+	
+	
+	
+
+	return 0;
+}
+/***************************************************************
+	解析字符串,取出变量字符、变量长度，
+	保存到 _prt_val.val_col,_prt_val.val_len
+	char	val_row[4];			*行*
+	char	val_col[2];			*列*
+	char	val_type[2];		*类型*
+	int		val_len;			*长度*
+	char	val_val[20];		*值*
+	input	:
+				char	*_str			读入的字符串
+	output	:
+				struct PTR_VAL *_prt_val取出变量、变量长度
+***************************************************************/
+int	scan_body_var(char *_str, struct PRT_VAL *_prt_val)
+{
+	int		i = 0;
+	int		l_str_len;
+	
+	
+	l_str_len = strlen(_str);
+	
+	while(1)
+	{
+		
+		if(_str[i] == '\0' || _str[i] == '\n') 
+		{
+			_str[0]='\0';
+			break;
+		}
+		if( !strchr(g_var_str, _str[i]) )
+		{
+			i++;
+			continue;
+		}
+
+		_prt_val->val_len = get_chr_nums(_str,_str[i]);
+		sprintf(_prt_val->val_col, "%c", _str[i]);
+
+		strcpy(_str,_str+i+_prt_val->val_len);
+		
+		break;
+	}
+	return 0;
+}
+
+/*************************************************************
+	根据全局变量g_prt_val计算出公式的值
+	input	:
+				cal_form_nums		总共计算公式个数
+				g_cal_form.var_row
+				g_cal_form.var_col
+				g_cal_form.var_body
+
+				prt_val_nums		总共变量个数
+				g_prt_val.val_row
+				g_prt_val.val_col
+				g_prt_val.val_len
+	output	:
+				g_prt_val.val_val
+*************************************************************/
+int	cal_g_prt_val()
+{
+	int		i, k;			/* 循环控制变量 */
+	int		_flag = 0;
+	int		_ret = 0;
+	double	l_unit_val;
+	char	l_str_tmp[256];	
+	char	*l_str_tmp_s;	
+
+	/***  计算字符串变量  ***/
+printf("STRING 计算字符串变量" );
+
+	
+	for( i=0; i < cal_form_nums; i++ )
+	{
+			
+		/*memset(l_str_tmp, 0x00 , sizeof(l_str_tmp));*/
+		if( g_cal_form[i].var_type[0] == 's' &&
+			g_prt_val[i].val_flag == 0 )
+		{
+ 			vtcp_log("字符型计算公式[%s]", g_cal_form[i].var_body );
+ 			l_str_tmp_s = pub_rept_dealfunc(g_cal_form[i].var_body);
+			g_prt_val[i].val_flag = 1;
+			strcpy( g_prt_val[i].val_type, "s");
+				
+			strcpy( g_prt_val[i].val_val, l_str_tmp_s );
+			
+			
+		}
+	}
+
+printf("对于找不到计算函数的字符串");
+	/*  对于找不到计算函数的字符串，符" "值  */
+	for( i=0; i<cal_form_nums; i++)
+	{
+		
+		if( g_cal_form[i].var_type[0] == 's' && 
+			g_prt_val[i].val_flag == 0 )
+		{
+			 printf("[%s][%d],g_cal_form.var_type=[%c],g_prt_val[i].val_flag=[%d]\n",__FILE__,__LINE__,
+			 g_cal_form[i].var_type[0],g_prt_val[i].val_flag);
+			 printf("[%s][%d]g_cal_form==[%s]\n",__FILE__,__LINE__,(char *)&g_cal_form[i]);
+			strcpy( g_prt_val[i].val_type, "s");	
+			strcpy(g_prt_val[i].val_val, "**");
+		}
+	}
+
+printf("计算数值变量double");
+	/*  计算数值变量  */	
+	for( k=0; k<10; k++)
+	{
+		for( i=0; i < cal_form_nums; i++ )
+		{
+			if( g_prt_val[i].val_flag == 0 &&
+				( g_cal_form[i].var_type[0] == 'd' ||
+			  	  g_cal_form[i].var_type[0] == 'f') && strncmp(g_cal_form[i].var_row,"SU",2) )
+			{
+		vtcp_log("wjwjw计算公式[%s]", g_cal_form[i].var_body );
+		
+				if(!strncmp(g_brno_tmp.br_no,QS_BR_NO,sizeof(g_brno_tmp.br_no)-1) &&!strncmp(g_cal_form[i].var_row,"A0",2)
+				   && !( g_cal_form[i].var_col[0]=='h' || g_cal_form[i].var_col[0]=='i'||
+					    g_cal_form[i].var_col[0]=='p' || g_cal_form[i].var_col[0]=='u'||g_cal_form[i].var_col[0]=='e'
+					    ||g_cal_form[i].var_col[0]=='f'||g_cal_form[i].var_col[0]=='g'))
+					    /*
+				{
+					if(!( g_cal_form[i].var_col[0]=='h' || g_cal_form[i].var_col[0]=='i'||
+					    g_cal_form[i].var_col[0]=='p' || g_cal_form[i].var_col[0]=='u'))
+					    
+					   	l_unit_val = 0.0;
+						
+				}*/
+					l_unit_val = 0.0;
+				else
+					_flag = PUB_bdsjs( &l_unit_val, g_cal_form[i].var_body );
+			
+				if(_flag == -1)  continue;
+				sprintf(l_str_tmp,"%f", l_unit_val); 
+				g_prt_val[i].val_flag = 1;
+				strcpy( g_prt_val[i].val_type, g_cal_form[i].var_type);	
+				strcpy( g_prt_val[i].val_val, l_str_tmp );	
+		vtcp_log("打印结果[%d] [%s]",__LINE__, g_prt_val[i].val_val );
+				
+			}
+		}
+	}
+
+printf("对于找不到计算函数的数值，符0值" );
+	/*  对于找不到计算函数的数值，符0值  */
+	
+	for( i=0; i<cal_form_nums; i++)
+	{
+		if( g_prt_val[i].val_flag == 0 &&
+			(g_cal_form[i].var_type[0] == 'd' || g_cal_form[i].var_type[0] == 'f')  )
+		{
+			
+			
+			strcpy( g_prt_val[i].val_type, g_cal_form[i].var_type);	
+			strcpy( g_prt_val[i].val_val , "**" );
+		}
+	}
+	return 0;
+}
+
+
+/************************************************************
+	开始报表处理
+	input	:	
+				char	*_read_file		格式文件名
+				FILE	*_prt_fp		报表文件句柄
+	output	:
+				0  --  success
+				1  --  fail
+*************************************************************/
+
+int	make_rpt(char	*_read_file, FILE *_prt_fp)
+{
+	char	l_str_tmp[STR_TMP_LEN];
+	FILE	*l_read_fp;
+	int		l_ret;
+
+    memset(l_str_tmp, 0x00, sizeof(char));
+	/* 打开格式文件 */
+	l_read_fp = fopen(_read_file, "r");
+	if( l_read_fp == NULL)
+	{
+		printf("ddddopen read_file error\n");
+		return 1;
+	}
+
+	while( !feof(l_read_fp) )
+	{
+		fgets( l_str_tmp, BUFLEN, l_read_fp );
+
+		del_fore_space(l_str_tmp);
+		del_after_space(l_str_tmp);
+
+	 	/***  如果行首为 # 或 // ,表示本行为注释  ***/
+	 	if( l_str_tmp[0]=='#' || !strncmp( l_str_tmp, "//", 2 ) ) continue;
+	 	/***  如果空行，则跳过  ***/
+	 	if( strlen(l_str_tmp) == 0 || l_str_tmp[0] == '\0' || l_str_tmp[0] == '\n' ) 
+			continue;
+
+		if( !strncmp(l_str_tmp,"body",4) )
+		{
+			/***  开始打印报表  ***/
+			prt_rpt_body(l_read_fp,_prt_fp);
+		}else
+		{
+			continue;
+		}
+	}
+	return 0;
+}
+
+/************************************************************
+	打印报表体
+	input	:
+				FILE	*_read_fp	格式文件句柄
+				FILE	*_prt_fp	报表文件句柄
+	output	:	
+				0  --  success
+				1  --  fail
+
+*************************************************************/
+int prt_rpt_body(FILE *_read_fp, FILE *_prt_fp,char gsm[3],long file_position)
+{
+	char	l_str_tmp[STR_TMP_LEN];
+	int     hy_line  = 0;		/**行数,用来换页用的,liuyue****/
+	int     page_size = 0;		/**页数liuyue***/
+	int k = 0;
+	
+	
+
+	fseek(_read_fp,file_position,SEEK_SET);
+	
+	
+
+	while(1)
+	{
+		memset(l_str_tmp, 0x00, sizeof(l_str_tmp));
+		fgets(l_str_tmp, BUFLEN, _read_fp);
+		
+		
+		if( !strncmp(l_str_tmp, "/body", 5) ) break;
+		
+		
+		
+		
+		del_fore_space(l_str_tmp);
+		del_after_space(l_str_tmp);
+
+	 	/***  如果行首为 # 或 // ,表示本行为注释  ***/
+	 	if( l_str_tmp[0]=='#' || !strncmp( l_str_tmp, "//", 2 ) ) continue;
+	 	/***  如果空行，则跳过  ***/
+	 	if( strlen(l_str_tmp) == 0 || l_str_tmp[0] == '\0' || l_str_tmp[0] == '\n' ) 
+			continue;
+			
+			
+		if(strncmp(l_str_tmp,gsm,2))	
+		{
+			
+			continue;
+		}
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		if( !strncmp(l_str_tmp, "TA", 2) )		 /*  常量   表头内容  */
+		{
+			fprintf(_prt_fp, "%s\n", l_str_tmp + 2);
+			
+			continue;
+		}else if( !strncmp(l_str_tmp, "TM", 2) ) /*  常量   中间横线  */
+		{
+			fprintf(_prt_fp, "%s\n", l_str_tmp + 2); 
+			
+			continue;
+		}else if( !strncmp(l_str_tmp, "TH", 2) ) /*  常量   表结尾 表头内容 */
+		{
+			fprintf(_prt_fp, "%s\n", l_str_tmp + 2); 
+			
+			continue;
+		}else if( !strncmp(l_str_tmp, "TT", 2) ) /*  常量   表结尾 表头内容 */
+		{ 
+			fprintf(_prt_fp, "%s\n", l_str_tmp + 2); 
+			
+		}
+		else 									/*   变量   		*/
+		{
+				
+			
+			print_var_str(l_str_tmp,_prt_fp);
+			fprintf(_prt_fp,"%s","\n");
+			
+		}
+		
+		
+		
+	}
+
+	return 0;
+}
+
+/***************************************************************
+	根据变量所在行列取出计算函数
+	input	:
+			int		cal_form_nums			变量数组的个数	
+			struct CAL_FORM	g_cal_form	全局变量，保存所有变量
+			struct PRT_VAL _prt_val		保存便量所在行列
+	output	:
+			struct PRT_VAL _prt_val		返回变量的值
+****************************************************************/
+int	get_cal_fun(struct PRT_VAL *_prt_val)
+{
+	int	i;
+
+	for(i=0; i<= cal_form_nums; i++)
+	{
+		if( !strncmp(g_cal_form[i].var_row, _prt_val->val_row, 2) && 
+			!strncmp(g_cal_form[i].var_col, _prt_val->val_col, 2) )
+		{
+			strcpy(_prt_val->val_val, g_cal_form[i].var_body);
+		}
+	}
+
+	return 0;
+}
+
+/********************************************************************
+	根据变量所在行列取出变量长度和数值val_len  val_val
+	input	:
+			int		prt_val_nums		变量数组的个数	
+			struct PRT_VAL g_prt_val	全局变量 保存变量所在行列及值
+			struct PRT_VAL _prt_val		保存变量所在行列
+	output	:
+			struct PRT_VAL _prt_val		返回变量的值
+*********************************************************************/
+int	get_prt_val(struct PRT_VAL *_prt_val)
+{
+	int	i;
+	
+	
+	for(i=0; i<= prt_val_nums; i++)
+	{
+		if( !strncmp(g_prt_val[i].val_row, _prt_val->val_row, 2) && 
+			!strncmp(g_prt_val[i].val_col, _prt_val->val_col, 2) )
+		{
+			strcpy(_prt_val->val_type , g_prt_val[i].val_type);
+			_prt_val->val_len = g_prt_val[i].val_len;
+			_prt_val->val_flag = g_prt_val[i].val_flag;
+			strcpy(_prt_val->val_val, g_prt_val[i].val_val);
+			
+			break;
+		}
+	}
+
+	return 0;
+}
+/*******************************************************************
+	解析带变量得字符串，并打印到报表文件中
+	input	:	
+				char	*_str	从格式文件中读出得带变量得字符串
+				FILE	*_prt_fp	报表文件句柄
+	output	:
+				0  success
+				1  fail
+	char	val_row[4];			*行*
+	char	val_col[2];			*列*
+	int		val_len;			*长度*
+	char	val_val[20];		*值*
+********************************************************************/
+int	print_var_str(char *_str, FILE *_prt_fp)
+{
+	int		i = 0;
+	int             l = 0;
+	int		_str_len;
+	int		l_prt_i;				/* 打印整形变量 */
+	double	l_prt_f;				/* 打印浮点型变量 */
+	char	l_prt_s[256];			/* 打印字符串变量 */
+	char	l_prt_s1[256];			/* 打印字符串变量 */
+	char	prt_form[10];			/* 打印格式 */
+	struct 	PRT_VAL 	_prt_val;
+	int     money = 0;
+	char	*p;
+	int     k = 0;
+	int     round = 0;/***四舍五入***/
+
+
+	memset(l_prt_s,0x00,sizeof(l_prt_s));
+	memset(l_prt_s1,0x00,sizeof(l_prt_s1));
+	memset(prt_form,0x00,sizeof(prt_form));
+	memset(&_prt_val,0x00,sizeof(_prt_val));
+	
+	
+	init_prt_val(&_prt_val);
+	_str_len = strlen(_str);
+	del_after_space(_str);
+	strncpy(_prt_val.val_row, _str, 2);
+	/**
+	l = 0;
+	if(!strncmp(_prt_val.val_row,"A1",2) ||!strncmp(_prt_val.val_row,"A2",2))
+	{
+	for(l=0; l<cal_form_nums; l++)
+	{
+		vtcp_log("[%s][%d]g_prt_val_val_row=[%s] [%c]\n",__FILE__,__LINE__,g_prt_val[l].val_row,g_prt_val[l].val_col[0]);
+		if(!strncmp(g_prt_val[l].val_row,"SU",2))
+		{
+			vtcp_log("[%s][%d]为什么!\n",__FILE__,__LINE__);
+			print_prt_val(g_prt_val[l]);
+		}
+	}
+	}
+	***********/
+	strcpy(_str, _str+2);
+	while(1)
+	{
+		memset(l_prt_s, 0x00, sizeof(l_prt_s));
+		memset(l_prt_s1, 0x00, sizeof(l_prt_s1));
+		memset(prt_form, 0x00, sizeof(prt_form));
+		l_prt_i = 0;
+		l_prt_f = 0.0;
+		
+		
+		
+		if(_str[i] == '\0' || _str[i] == '\n') break;
+		if( !strchr(g_var_str, _str[i]) )
+		{
+			fprintf(_prt_fp,"%c",_str[i]);
+			
+			i++;
+			continue;
+		}	
+
+		/*  取变量所在列  */
+		sprintf(_prt_val.val_col, "%c", _str[i]);
+		
+		
+		/*  根据行、列查找变量数组g_prt_val[],取出val_len,val_val */
+		
+		
+		
+		get_prt_val(&_prt_val);
+		
+		/*  打印到报表文件中 */
+		switch(_prt_val.val_type[0])
+		{
+			
+			case 's':				/* 字符串 */
+			case 'S':				/* 字符串 */
+				/***去掉支行这四个字符***/
+				if(!strncmp(_prt_val.val_row,"A0",2) &&!strncmp(_prt_val.val_col,"a",1))
+					_prt_val.val_len = deal_branch_name(_prt_val.val_val,l_prt_s1);
+				else
+					strcpy(l_prt_s1, _prt_val.val_val);
+				sprintf(prt_form+1,"-%ds",_prt_val.val_len);
+				prt_form[0]='%';
+				strcpy(l_prt_s, l_prt_s1);
+				del_after_space(l_prt_s);
+				
+				fprintf(_prt_fp,prt_form,l_prt_s);
+				break;
+			case 'd':				/* 整数   */
+			case 'D':				/* 整数   */
+				if( _prt_val.val_flag == 1)
+				{
+					sprintf(prt_form+1,"%dd",_prt_val.val_len);
+					prt_form[0]='%';
+					l_prt_i = atoi(_prt_val.val_val)/10000;
+					fprintf(_prt_fp,prt_form,l_prt_i);
+				}else
+				{	
+					sprintf(prt_form+1,"%ds",_prt_val.val_len);
+					prt_form[0]='%';
+					strcpy(l_prt_s, _prt_val.val_val);
+					fprintf(_prt_fp,prt_form,l_prt_s);
+				}
+				/**计算合计项***/
+				dGet_sum(_prt_val.val_row,_prt_val.val_col,l_prt_s);
+				
+				break;
+			case 'f':				/* 浮点数 */
+			case 'F':				/* 浮点数 */
+				if( _prt_val.val_flag == 1)
+				{
+					l_prt_f = atof(_prt_val.val_val);
+					if(l_prt_f!=0)
+					{
+						if((!strncmp(_prt_val.val_row,"A0",2) && _prt_val.val_col[0]=='j')||(!strncmp(_prt_val.val_row,"A0",2) && _prt_val.val_col[0]=='r')||
+						      (!strncmp(_prt_val.val_row,"SU",2) && _prt_val.val_col[0]=='j')||(!strncmp(_prt_val.val_row,"SU",2) && _prt_val.val_col[0]=='r'))/**这几个字段需要保留小数点后的两位**/
+						{
+							
+							sprintf(prt_form+1,"%d.2f",_prt_val.val_len);
+							prt_form[0]='%';
+							l_prt_f = atof(_prt_val.val_val);
+							/***add by liuyue 20070209 沁源支行的保证金比率太大了***/
+							if(l_prt_f>=1000)
+								l_prt_f = 999.99;
+							/*****add end*****/
+							fprintf(_prt_fp,prt_form,l_prt_f);
+						}
+						else
+						{
+							/***四舍五入***/
+							l_prt_f = l_prt_f+0.50;
+							sprintf(l_prt_s, "%.2f",l_prt_f);
+							
+							strtok(l_prt_s,".");
+                                                	
+							
+							/*flttomon(l_prt_s,l_prt_s1);
+							sprintf(prt_form+1,"%d.2f",_prt_val.val_len);
+							prt_form[0]='%';
+							l_prt_f = atof(_prt_val.val_val);
+							fprintf(_prt_fp,prt_form,l_prt_f);
+							*/
+							sprintf(prt_form+1,"%ds",_prt_val.val_len);
+							prt_form[0]='%';
+							fprintf(_prt_fp,prt_form,l_prt_s);
+						}
+					}
+					else
+					{	memset(l_prt_s,' ',_prt_val.val_len);
+						sprintf(prt_form+1,"%ds",_prt_val.val_len);
+						prt_form[0]='%';
+						fprintf(_prt_fp,prt_form,l_prt_s);
+					}
+				}else
+				{
+					sprintf(prt_form+1,"%ds",_prt_val.val_len);
+					prt_form[0]='%';
+					strcpy(l_prt_s, _prt_val.val_val);
+					fprintf(_prt_fp,prt_form,l_prt_s);
+				}
+				/**计算合计项***/
+				/* 为了减小四舍五入的误差所以注释掉下面 modify liuxuan 2007-3-15
+				strtok(l_prt_s,".");
+				*/
+				dGet_sum(_prt_val.val_row,_prt_val.val_col,l_prt_s);
+				
+				break;
+			default:
+				break;
+		}
+		
+		
+		i = i + _prt_val.val_len;
+		
+	}
+	/***
+	l = 0;
+	if(!strncmp(_prt_val.val_row,"A1",2) ||!strncmp(_prt_val.val_row,"A2",2))
+	{
+	for(l=0; l<cal_form_nums; l++)
+	{
+		vtcp_log("[%s][%d]g_prt_val_val_row=[%s] [%c]\n",__FILE__,__LINE__,g_prt_val[l].val_row,g_prt_val[l].val_col[0]);
+		if(!strncmp(g_prt_val[l].val_row,"SU",2))
+		{
+			vtcp_log("[%s][%d]为什么!\n",__FILE__,__LINE__);
+			print_prt_val(g_prt_val[l]);
+		}
+	}
+	
+	}
+	***************/
+	return 0;
+}
+
+/************************************************************
+	判断连续字符的个数
+	input	:	
+				char  *_str  读入的字符串
+				char	_c	 变量字符
+	output	:
+				int	i	字符在变量字符串的长度
+
+*************************************************************/
+int	get_chr_nums(char *_str, char _c)
+{
+	int	i=0;
+	char	str_tmp[STR_TMP_LEN];
+	strcpy(str_tmp, _str);
+
+	strcpy(str_tmp, strchr(str_tmp,_c));
+
+	while(1)
+	{
+		if(str_tmp[i] != _c) break;
+		i++;
+	}
+	return i;
+}
+
+int init_cal_form(struct CAL_FORM *_cal_form)
+{
+	memset(_cal_form->var_row, 0x00, sizeof(_cal_form->var_row));
+	memset(_cal_form->var_row, 0x00, sizeof(_cal_form->var_col));
+	memset(_cal_form->var_type, 0x00, sizeof(_cal_form->var_type));
+	memset(_cal_form->var_body, 0x00, sizeof(_cal_form->var_body));
+	return 0;
+}
+
+int	init_prt_val(struct PRT_VAL *_prt_val)
+{
+	memset(_prt_val->val_row, 0x00, sizeof(_prt_val->val_row));
+	memset(_prt_val->val_col, 0x00, sizeof(_prt_val->val_col));
+	memset(_prt_val->val_type, 0x00, sizeof(_prt_val->val_type));
+	_prt_val->val_len = 0;
+	_prt_val->val_flag = 0;
+	memset(_prt_val->val_val, 0x00, sizeof(_prt_val->val_val));
+	return 0;
+}
+
+/****************************************************************
+	根据计算符号计算数值
+	input	:
+				char	curopr		计算符号
+				double	curvalue	操作数1
+				double	tolvalue	操作数2
+	output	:
+				double	tolvalue	返回结果
+
+*****************************************************************/
+double opr( tolvalue,curvalue,curopr )
+double tolvalue;
+double curvalue;
+char curopr;
+{
+	switch( curopr ) {
+	case '=' :
+		tolvalue=curvalue;
+		break;
+	case '+' :
+		tolvalue=tolvalue+curvalue;
+		break;
+	case '-' :
+		tolvalue=tolvalue-curvalue;
+		break;
+	case '*' :
+		tolvalue=tolvalue*curvalue;
+		break;
+	case '%' :
+		tolvalue=rint(tolvalue/curvalue);
+		break;
+	case '/' :
+		if( curvalue==0 )
+			tolvalue=0.0;
+		else
+			tolvalue=tolvalue/curvalue;
+		
+		
+		break;
+	default :
+		break;
+		/****ERROR******/
+	}
+	return tolvalue;
+}
+
+/***************************************************************
+	计算包含计算公式的变量
+	[]   变量
+	default	基本函数
+****************************************************************/
+int PUB_bdsjs( unit_val, state ) 
+ double *unit_val;
+ char state[MAXBDSLEN];
+{
+	int fhm=0;
+	int l = 0;
+	int i=0,starti,deep=0,len;
+	double curvalue=0.0,tolvalue=0.0;
+	char substring[MAXBDSLEN],curopr='=';
+	char blm[MAXBDSLEN],cl[17];
+
+	ldchar( state,strlen(state),state );
+
+	while( i<MAXBDSLEN && state[i]!='\0' )
+	{
+		switch( state[i] )
+		{
+		case '(' :
+			i++;
+			starti=i;
+ 			deep++;
+			while( i<MAXBDSLEN ) {
+				if( state[i]=='(' ) 
+					deep++;
+				else if( state[i]==')' )
+					deep--;
+				
+				if( deep==0 ) {
+					len=i-starti;
+					memset( substring, 0x00, sizeof(substring) );
+					strncpy( substring,state+starti,len );	
+					bdsjsbh++;
+vtcp_log("当前计算字符串[%s]",substring);
+					fhm=PUB_bdsjs( &curvalue,substring); 
+vtcp_log("当前计算值[%lf]",curvalue);
+					if( fhm ) return fhm;
+vtcp_log("计算前总值[%lf]符号[%c]",tolvalue,curopr);
+					tolvalue=opr( tolvalue,curvalue,curopr );
+vtcp_log("计算后总值[%lf]",tolvalue);
+					break;
+				}
+				i++;
+			}
+			break;
+		case '+' :
+			curopr='+';
+			break;
+		case '-' :
+			curopr='-';
+			break;
+		case '*' :
+			curopr='*';
+			break;
+		case '%' :
+			curopr='%';
+			break;
+		case '/' :
+			curopr='/';
+			break;
+		case '[' :	
+			i++;
+			starti=i;
+			while( i<MAXBDSLEN ) {
+				if( state[i]==']' ) {
+					len=i-starti;
+					memset( blm, 0x00, sizeof(blm) );
+					strncpy( blm,state+starti,len );
+					/*  根据已经计算出来的变量取值  */
+					
+					
+					fhm=Q_unit_val_in_brace( blm,&curvalue );
+					if( fhm ) {
+							
+							return fhm;
+						}
+					tolvalue=opr( tolvalue,curvalue,curopr );
+					vtcp_log("[%s][%d]计算后的值[%lf] [%c] === [%lf ]\n",__FILE__,__LINE__,curvalue,curopr,tolvalue);
+					break;
+				}
+				i++;
+			}
+			break;
+		case '<':
+			i++;
+			starti = i;
+			while( i<MAXBDSLEN ) {
+				if( state[i]=='>' ) {
+					len=i-starti;
+					memset( blm, 0x00, sizeof(blm) );
+					strncpy( blm,state+starti,len );
+					/*  根据已经计算出来的变量取值  */
+vtcp_log("[%d]取值公式[%s]",__LINE__,blm);
+					fhm=Q_unit_val_in_name( blm,&curvalue );
+vtcp_log("[%d]取值结果[%lf]",__LINE__,curvalue);
+					if( fhm ) return fhm;
+vtcp_log("[%d]计算前总值[%lf]计算值[%lf]符号[%c]",__LINE__,tolvalue,curvalue,curopr);
+					tolvalue=opr( tolvalue,curvalue,curopr );
+vtcp_log("[%d]计算后总值[%lf]",__LINE__,tolvalue);
+					break;
+				}
+				i++;
+			}
+			break;
+		case '@' : /***常量***/
+			i++;
+			starti=i;
+			while( i<MAXBDSLEN ) {
+				if( state[i]=='@' ) {
+					len=i-starti;
+					memset( cl, 0x00, sizeof(cl) );
+					strncpy( cl,state+starti,len );
+					curvalue=atof( cl );
+					tolvalue=opr( tolvalue,curvalue,curopr );
+					break;
+				}
+				i++;
+			}
+			break;
+		case '{':
+			i++;
+			starti = i;
+			while( i<MAXBDSLEN ) 
+			{
+				if( state[i]=='}' ) 
+				{
+					len=i-starti;
+					memset( blm, 0x00, sizeof(blm) );
+					strncpy( blm,state+starti,len );
+					/*  根据已经计算出来的变量取值  */
+vtcp_log("[%d]取值公式[%s]",__LINE__,blm);
+					fhm=Q_unit_val_in_sentence( blm,&curvalue );
+vtcp_log("[%d]取值结果[%lf]",__LINE__,curvalue);
+					if( fhm ) return fhm;
+vtcp_log("[%d]计算前总值[%lf]计算值[%lf]符号[%c]",__LINE__,tolvalue,curvalue,curopr);
+					tolvalue=opr( tolvalue,curvalue,curopr );
+vtcp_log("[%d]计算后总值[%lf]",__LINE__,tolvalue);
+					break;
+				}
+				i++;
+			}
+			break;
+		default :		
+			/***added by terry 2002/7/21 ***/
+			if( strchr(state,'~') )
+			{
+				memset(substring, 0x00, sizeof(substring));
+				strcpy(substring, state);
+				continue_add(substring);	
+				
+				fhm=PUB_bdsjs( &curvalue,substring); 
+				if( fhm ) return fhm;
+
+				tolvalue=opr( tolvalue,curvalue,curopr );
+				goto A;
+			}
+			/**** end of add ***/
+
+			if( (state[i]>='A' && state[i]<='Z') ||
+				(state[i]>='0' && state[i]<='9') ||
+				(state[i]>='a' && state[i]<='z') )
+			{
+				starti=i;
+				while( i<MAXBDSLEN )
+				{
+					if( !( (state[i+1]>='A' && state[i+1]<='Z') ||
+						(state[i+1]>='0' && state[i+1]<='9') ||
+						(state[i+1]>='a' && state[i+1]<='z') ) )
+					{
+						len=i+1-starti;
+						if(len>9 )len=9;
+						memset( blm, 0x00, sizeof(blm) );
+						strncpy( blm,state+starti,len );
+						/* 根据具体函数代码取值  */
+						fhm=Q_unit_val_in_name( blm,&curvalue );
+						if( fhm ) 
+						{
+						
+						return fhm;
+					}
+
+						tolvalue=opr( tolvalue,curvalue,curopr );
+						break;
+					}
+					i++;
+				}				/* end of while*/
+			}				/* end of if */
+			break;
+		}				/* switch */		
+		i++;
+	}				/* while */
+A:
+	*unit_val=tolvalue;
+
+	return fhm;
+}
+
+
+int	Q_unit_val_in_brace( state,unit_val )
+ char state[MAXBDSLEN];
+ double *unit_val;
+{
+	char	l_row[4];
+	char	l_col[2];
+	int		i;
+	int		_flag = -1;
+
+	memset(l_row, 0x00, sizeof(l_row));
+	memset(l_col, 0x00, sizeof(l_col));
+
+	del_fore_space(state);
+	del_after_space(state);
+	
+	strncpy(l_row, state, 2);
+	strncpy(l_col, state+3, 1);
+	
+	vtcp_log("[%s][%d] state===[%s]\n",__FILE__,__LINE__,state);
+
+	vtcp_log("[%s][%d] l_row==[%s],l_col==[%s]\n",__FILE__,__LINE__,l_row,l_col);
+    for(i=0; i<= prt_val_nums; i++)
+	{
+		
+		
+		if( !strncmp(g_prt_val[i].val_row, l_row, 2) &&
+			!strncmp(g_prt_val[i].val_col, l_col, 2) &&
+			g_prt_val[i].val_flag == 1 )
+		{
+			
+			*unit_val = atof(g_prt_val[i].val_val);
+			vtcp_log("[%s][%d]哈哈找到了 val==[%s] !\n",__FILE__,__LINE__,g_prt_val[i].val_val);
+			_flag = 0;
+			break;
+		}
+		
+	}
+	if(_flag==-1)
+		printf("[%s][%d]l_row====[%s]\n",__FILE__,__LINE__,state);
+	return _flag;
+}
+
+
+int	Q_unit_val_in_name( state, unit_val )
+ char state[MAXBDSLEN];
+ double * unit_val;
+{
+	char	*l_str_tmp;
+	int		_ret = 0;
+
+	/*memset( l_str_tmp, 0x00, sizeof( l_str_tmp ) );*/
+
+	del_fore_space(state);
+	del_after_space(state);
+
+ /*	_ret = pub_rept_dealfunc(state, l_str_tmp);*/
+ 	l_str_tmp = pub_rept_dealfunc(state);
+
+vtcp_log("[%d]取值结果[%s]",__LINE__,l_str_tmp);
+	*unit_val = atof(l_str_tmp);
+vtcp_log("[%d]取值结果[%lf]",__LINE__,*unit_val);
+	
+	return _ret;
+}
+int	Q_unit_val_in_sentence( state, unit_val )
+ char state[MAXBDSLEN];
+ double * unit_val;
+{
+	EXEC SQL BEGIN DECLARE SECTION; 
+ 		char sentence[MAXBDSLEN];
+		double vtmp_dbl;
+		short z1;
+	EXEC SQL END DECLARE SECTION; 
+	int		_ret = 0;
+
+	del_fore_space(state);
+	del_after_space(state);
+
+	do_with_sentence( state,sentence );
+
+	EXEC SQL prepare dp_id_sent from :sentence;
+	if( sqlca.sqlcode ) return sqlca.sqlcode;
+
+	EXEC SQL declare cur_id_sent cursor for dp_id_sent;
+	if( sqlca.sqlcode ) return sqlca.sqlcode;
+
+	EXEC SQL open cur_id_sent;
+	if( sqlca.sqlcode ) return sqlca.sqlcode;
+
+	EXEC SQL fetch cur_id_sent into :vtmp_dbl:z1;
+	if( sqlca.sqlcode ) return sqlca.sqlcode;
+
+	EXEC SQL close cur_id_sent;
+
+	if( z1 ) vtmp_dbl=0.00;
+
+	*unit_val = vtmp_dbl;
+
+	vtcp_log("[%d]取值结果[%lf]",__LINE__,*unit_val);
+	
+	return _ret;
+}
+do_with_sentence( char *state,char *sentence )
+{
+	char *p;
+	char *q;
+	char vrq[11];
+
+	sprintf( vrq,"%8d",g_rept_date );
+	
+	strcpy( sentence,"" );
+	q=state;
+	while( 1 )
+	{
+		p=strstr(q,":_BRNO");
+		p=strstr(q,":_");
+		if( p==NULL ) break;
+
+		strncat( sentence,q,p-q );
+		strcat( sentence,"'" );
+		if( strncmp(p,":_BRNO",6) )
+			strcat( sentence,g_brno_tmp.br_no );
+		else if( strncmp(p,":_DATE",6) )
+			strcat( sentence,vrq );
+		strcat( sentence,"'" );
+
+		q=p+6;
+	}
+	strcat( sentence,q );
+}
+
+/***********************************************************
+	取得出报表日期  昨日日期
+	input	:
+				g_com_sys_parm
+	output	:
+				g_rept_date
+************************************************************/
+int	get_rpt_date( char * vparm2 )
+{
+	if( pub_base_GetSysparm(&g_com_sys_parm))
+	{
+		sprintf(acErrMsg,"Select Error");
+		vtcp_log(acErrMsg);
+		return (-1);
+	}
+	if( vparm2[1]!='0' )
+		g_rept_date = g_com_sys_parm.lst_date;
+	else
+		g_rept_date = g_com_sys_parm.sys_date;
+
+	return 0;
+}
+
+
+/***********************************************************
+	转化连续相加函数[A0.c]~[A9.c]
+************************************************************/
+int	continue_add(char	*_str)
+{
+	char	sub_char[2];
+	char	sub_char2[3];
+	char	tmp_str[8];
+	int		tmp_1;
+	int		tmp_2;
+	int		i;
+
+	memset(sub_char, 0x00, sizeof(sub_char));
+	memset(sub_char2, 0x00, sizeof(sub_char2));
+	memset(tmp_str,   0x00,sizeof(tmp_str));
+
+
+	
+	
+	strcpy(_str,strchr(_str,'['));
+
+	/*    字母1   */
+	strcpy(_str, _str+1);
+	strncpy(sub_char,_str,1);
+
+	/*    数字1   */
+	strcpy(_str, _str+1);
+	strncpy(tmp_str,_str,1);
+	tmp_1 = atoi(tmp_str);
+
+	/*   .*   */
+	strcpy(_str, _str+1);
+	strncpy(sub_char2,_str,2);
+
+	strcpy(_str,strchr(_str,'['));
+	strncpy(tmp_str,_str+2,1);
+	
+	tmp_2 = atoi(tmp_str);
+
+	
+	for(i = tmp_1;i<=tmp_2;i++)
+	{
+		if(i == tmp_1)
+		{
+			sprintf(_str,"[%s%d%s]",sub_char,i,sub_char2);
+		} else
+		{
+			sprintf(_str,"%s+[%s%d%s]",_str,sub_char,i,sub_char2); 
+		}
+		
+	}
+	
+	return 0;
+}
+
+
+/*****************************************************************
+	计算给定字符串的ASCII值
+	input	:
+				char	*_str		待求值得字符串
+	output	:
+				long	ret_val		计算后的ASCII值
+******************************************************************/
+long char_to_ascii(char *_str)
+{
+	int     str_len;
+	int     i,k;
+	int     ddd;
+	long    ret_val = 0;
+	long    n10 = 1;
+	
+	del_fore_space(_str);
+	del_after_space(_str);
+
+	str_len = strlen(_str);
+
+	for(i=0; i<str_len; i++)
+	{
+		ddd = 2 * ( str_len - ( i+1 ) );
+		for(k=1;k<=ddd;k++)
+		{
+			n10 = n10*10;
+		}
+		ret_val += _str[i] * n10;
+
+		n10 = 1;
+	}
+	return ret_val;
+}
+
+/*************************
+  str1 转为 金额表示 str2
+*************************/
+int flttomon(str1,str2)
+char *str1,*str2;
+{ 
+  register i;
+  char sour[30],dest[30],stmp[30];
+  char *p;
+  int leng,j,l,negflag=0,ch='.';
+
+  if (str1[0]=='\0') 
+  { 
+	str2[0]='\0';	
+	return 0; \
+  }
+
+  for(i=0;i<strlen(str1)-4;i++) 
+  {
+	  if(str1[i]!='0'&& str1[i]!=' ') break; 
+  }
+  strcpy(stmp,str1+i); 
+
+  if (stmp[0]=='-') 
+  { 
+	negflag=1;
+	strcpy(sour,stmp+1);
+  }
+  else strcpy(sour,stmp);
+
+  p = strchr(sour,ch);
+  if (!p) p=sour+strlen(sour);
+  leng=p-sour; 
+  if (!leng) { sprintf(dest,"0.%s",p+1); return 0; }
+  i=leng%3;
+  if (!i) i=3;
+  strncpy(dest,sour,i);
+  
+  for (l=i,j=0;i<leng;i++,j++) { 
+	if (j%3==0) dest[l++]=','; 
+	dest[l++]=sour[i]; 
+	}
+  dest[l++]='.';
+  if (leng==strlen(sour)) { strcpy(dest+l,"00"); return 0; }
+  strcpy(dest+l,p+1); 
+
+  if (negflag) { str2[0]='-'; strcpy(str2+1,dest); }
+	else strcpy(str2,dest);
+
+  return 0;
+}
+
+/*计算变量的值*/
+int	cmp_cal_val()
+{
+	int	i;
+	for(i=0; i<cal_form_nums; i++)
+	{
+		if(strcmp(g_prt_val[i].val_row ,g_cal_form[i].var_row) ||
+			strcmp(g_prt_val[i].val_col, g_cal_form[i].var_col) )
+		{
+			printf("变量和计算公式: 行号和变量不符\n");
+			printf("i[%d]\n",i);
+			printf("prt.val_row[%s]",g_prt_val[i].val_row);
+			printf("cal.var_row[%s]\n",g_cal_form[i].var_row);
+			printf("prt.val_col[%s]",g_prt_val[i].val_col);
+			printf("cal.var_col[%s]\n",g_cal_form[i].var_col);
+			return -1;
+		}
+		continue;
+	}
+	return 0;
+}
+
+/********************************************************
+* 函数名：Pub_rm_file( )
+* 用  途：删除文件
+*
+*********************************************************/
+int Pub_rm_file( char tblname[21] )
+{
+	char    fname[100] ;
+	struct	com_branch_c	g_com_branch;
+
+	pub_base_strpack( tblname );
+	memset(&g_com_branch,0x00,sizeof(struct com_branch_c));
+
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"1=1");
+	if(ret)
+	{
+		sprintf(acErrMsg,"定义机构表游标错误");
+	  	WRITEMSG
+		goto ErrExit;
+	}
+	 
+	while(1)
+	{
+	  	ret=Com_branch_Fet_Sel(&g_com_branch,g_pub_tx.reply);
+	  	if(ret==100)break;
+	  	else if(ret)
+	  	{
+	  		sprintf(acErrMsg,"机构不存在");
+	  		WRITEMSG
+			goto ErrExit;
+	  	}
+	 
+	  	sprintf( fname,"rm -f %s/report/rzrpt/%s/%s.txt",
+			getenv("HOME"),g_com_branch.br_no,tblname);
+	  	ret=system( fname );
+
+		/**
+	  	sprintf(acErrMsg,"rm over %s %d",fname,ret);
+	  	WRITEMSG
+		***/
+	}
+	Com_branch_Clo_Sel();
+
+	return 0;
+ErrExit:
+	return 1;
+}
+
+int print_prt_val(struct PRT_VAL g_prt_val_1)
+{
+	vtcp_log("val_row=【%s】**",g_prt_val_1.val_row);
+	vtcp_log("val_col=【%s】**",g_prt_val_1.val_col);
+	vtcp_log("val_type=【%s】**",g_prt_val_1.val_type);
+	vtcp_log("val_len=【%d】**",g_prt_val_1.val_len);
+	vtcp_log("val_flag=【%d】**",g_prt_val_1.val_flag);
+	vtcp_log("val_val=【%s】\n",g_prt_val_1.val_val);
+	return 0;
+}
+/*************************************************
+ *函数功能:打印非添值行,比如头部,尾部,以及换页处 *
+ *参数说明:行数以及列数 以从g_prt_val结构体中取  *
+ *函数返回:                                      *
+ *AUTHOR  :20061024                              *
+ *************************************************/
+
+int print_head_tail(FILE *fp_table,FILE *fp_rpt,char *gsm)
+{
+	char cLineBuf[1024];
+	int  iFlag = 0     ;/***0 没有进入到body结构体  1--进入了body结构体**/
+	int i =0;
+	/**
+	struct PRT_VAL find_prt_val;
+	memset(&find_prt_val,0x00,sizeof(find_prt_val));
+	
+	memcpy(find_prt_val.val_row,line,4);
+	memcpy(find_prt_val.val_col,col,2);
+	***/
+	
+	
+	while(1)
+	{
+		memset(cLineBuf,0x00,sizeof(cLineBuf));
+		fgets(cLineBuf,1024,fp_table);
+		
+		if(!strncmp(cLineBuf,"body:",5)||!strncmp(cLineBuf,"body：",6))
+			iFlag = 1;
+		if( !strncmp(cLineBuf, "/body", 5) ) break;
+			
+		
+		if(iFlag ==1)
+		{
+			
+			if(memcmp(cLineBuf,gsm,2))
+				continue;
+			else
+			{
+				if(!strncmp(gsm,"TA",2)||!strncmp(gsm,"TM",2)||!strncmp(gsm,"TT",2)|!strncmp(gsm,"TH",2))/**打印表头,表尾,以及TM字段**/
+				{
+					
+					fprintf(fp_rpt,"%s",cLineBuf+2);
+				}
+				else    /**需要填充数值的行**/
+				{
+					print_var_str(cLineBuf,fp_rpt);
+				}
+			}
+		}
+	}
+	
+	return 0;
+
+}	                              
+
+
+/********************************
+ *函数名称:get_line_value       *
+ *函数功能:获取一列的值         *
+ *函数参数: fp_form表格文件     *
+ *	    fp_prt  报表文件    *
+ *AUTHOR  ：dadary 20061027     *
+ *注意事项:表格文件已打开且跳了 *
+ *	   到body附近           *
+ ********************************/
+ 
+int get_line_value (FILE *_fp_form,FILE *_fp_prt,char *gsm)
+ {
+ 	char cLine_buf[1024];
+ 	char info[1024];
+ 	int  index2 = 0;	/**info的下标***/
+ 	char fmt[10]	;	/**存放数据的格式,%-10s,%6d ect***/
+ 	char vstr[100]   ;	/**将从结构体中获取的值按照fmt转换后的值***/
+ 	
+ 	int  _int_prt = 0;
+ 	float _float_prt = 0.0;
+ 	char  _float_str[100];
+ 	
+ 	int   body_flag = 0;	/*body_flag 1 进入body   0没有进入body****/
+ 	
+ 	memset(cLine_buf,0x00,sizeof(cLine_buf));
+ 	
+
+ 	
+ 	struct PRT_VAL my_prt_val;
+ 	
+ 	init_prt_val(& my_prt_val);
+ 	
+ 	rewind(_fp_form);
+ 	
+ 	while(1)
+ 	{
+ 		memset(cLine_buf,0x00,sizeof(cLine_buf));
+ 		memset(info,	 0x00,sizeof(info));
+ 		fgets(cLine_buf,1024,_fp_form);
+ 		
+ 		del_fore_space(cLine_buf);
+		del_after_space(cLine_buf);
+		
+		
+		
+		/** 如果行首为 # 或 // ,表示本行为注释  ****/
+		if( cLine_buf[0]=='#' || !strncmp( cLine_buf, "//", 2))
+		{
+			continue;
+		}
+		/** 如果空行，则跳过  ****/
+		if( strlen(cLine_buf) == 0 || cLine_buf[0] == '\0' || cLine_buf[0] == '\n' ) 
+		{
+			continue;
+		}
+        	
+		if( !strncmp(cLine_buf,"body",4) ) 
+		{	
+			body_flag = 1; /**只有到了body那里才来进行取值哦**/
+		}
+		if( !strncmp(cLine_buf,"/body",5))
+		{
+			body_flag = 0 ;
+			break;
+		}	
+		
+ 		
+ 		
+ 	
+ 		
+ 		if(strncmp(cLine_buf,gsm,2))
+ 		{   
+ 			continue;/**如果不是对应的标签行,跳过本次循环***/
+ 		}
+ 		else if(!strncmp(cLine_buf,"TA",2) ||!strncmp(cLine_buf,"TH",2) ||!strncmp(cLine_buf,"TT",2)||!strncmp(cLine_buf,"TM",2)||!strncmp(cLine_buf,"TB",2))
+ 		{
+ 			fprintf(_fp_prt,"%s",cLine_buf+2);
+ 			
+ 			continue;
+ 		}
+ 		else 
+ 		{
+ 			print_var_str(cLine_buf,_fp_prt);
+ 		}
+ 	}
+ 	return 0;
+ }
+ 
+ 
+ int init_prt_val_zero()
+{
+	int index = 0;
+	for(index=0;index<cal_form_nums;index++)
+		g_prt_val[index].val_flag = 0;
+		
+	return 0;
+}
+ int init_prt_val_one()
+{
+	int index = 0;
+	for(index=0;index<cal_form_nums;index++)
+	{
+		if(!strncmp(g_prt_val[index].val_row,"SU",2))
+			g_prt_val[index].val_flag = 1;
+	}
+		
+	return 0;
+}
+ 
+int deal_branch_name(char *name,char *target)
+{
+	char *p ;
+ 	char cName[10];
+ 	memset(cName,0x00,sizeof(cName));
+ 	
+ 	int len = 0;
+ 	
+ 	del_after_space(name);
+ 	del_fore_space(name);
+ 	
+ 	
+ 	if((p=strstr(name,"支行")))
+ 	{
+                if(strlen(name)==10)
+                {
+                        cName[0] = ' ';
+                        memcpy(cName+1,name,strlen(name)-strlen(p));
+                        strcat(cName," ");
+                }
+                else if(strlen(name)==8)
+                {
+                        cName[0] = ' ';
+                        memcpy(cName+1,name,2);
+                        strcat(cName+3,"  ");
+                        memcpy(cName+5,name+2,2);
+                        strcat(cName+5," ");
+                }
+                else
+                        memcpy(cName,name,strlen(name)-strlen(p));
+
+        }
+        else if(strlen(name)==6)
+        {
+        	cName[0] = ' ';
+        	memcpy(cName+1,name,strlen(name));
+        	strcat(cName," ");
+        }
+        else
+        	 memcpy(cName,name,strlen(name));
+        
+      
+        len =   strlen(cName);
+        name[0] = 0x00;
+        if(!strncmp(cName,"资金结算部",10))
+        {
+        	memcpy(target,"清算中心",8);
+        	len = 8;
+        }
+        else   
+        	memcpy(target,cName,strlen(cName));
+        target[len] = 0x00;
+	
+	return len;
+}
+
+
+
+int init_sum_prt_val(struct PRT_SUM *_prt_sum)
+{
+	_prt_sum -> _val_b = 0.0;
+	_prt_sum -> _val_c = 0.0;
+	_prt_sum -> _val_d = 0.0;
+	_prt_sum -> _val_e = 0.0;
+	_prt_sum -> _val_f = 0.0;
+	_prt_sum -> _val_g = 0.0;
+	_prt_sum -> _val_h = 0.0;
+	_prt_sum -> _val_i = 0.0;
+	_prt_sum -> _val_j = 0.0;
+	_prt_sum -> _val_k = 0.0;
+	_prt_sum -> _val_l = 0.0;
+	_prt_sum -> _val_m = 0.0;
+	_prt_sum -> _val_n = 0.0;
+	_prt_sum -> _val_o = 0.0;
+	_prt_sum -> _val_p = 0.0;
+	_prt_sum -> _val_q = 0.0;
+	_prt_sum -> _val_r = 0.0;
+	_prt_sum -> _val_s = 0.0;
+	_prt_sum -> _val_t = 0.0;
+	_prt_sum -> _val_u = 0.0;
+}
+
+int print_sum_rpt_val()
+{
+	vtcp_log("[%s][%d]g_sum_prt_val._val_a=[%s]\n",__FILE__,__LINE__,g_sum_prt_val._val_a);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_b=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_b);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_c=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_c);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_d=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_d);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_e=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_e);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_f=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_f);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_g=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_g);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_h=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_h);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_i=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_i);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_j=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_j);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_k=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_k);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_l=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_l);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_m=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_m);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_n=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_n);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_o=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_o);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_p=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_p);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_q=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_q);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_r=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_r);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_s=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_s);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_t=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_t);
+	vtcp_log("[%s][%d]g_sum_prt_val._val_u=[%f]\n",__FILE__,__LINE__,g_sum_prt_val._val_u);
+		
+}
+double dGet_Add(float *_f_val,char * _c_val)
+{
+	float l_prt_val ;
+	
+	int   _prt_val;
+	
+	del_fore_space(_c_val);
+	del_after_space(_c_val);
+	
+	if(_c_val[0]==0x00)
+		l_prt_val = 0.0;
+	else
+	{
+		vtcp_log("[%s][%d],_c_val==[%s]\n",__FILE__,__LINE__,_c_val);
+		l_prt_val = atof(strtok(_c_val,"."));
+		vtcp_log("[%s][%d],l_prt_val==[%lf]\n",__FILE__,__LINE__,l_prt_val);
+	}
+	
+	
+	*_f_val = *_f_val+l_prt_val;
+
+}
+
+int dGet_sum(char *val_row,char *val_col,char *val_val)
+{
+	
+	
+	if(!strncmp(val_row,"A0",2))
+	{
+		if(val_col[0]=='b')		dGet_Add(&g_sum_prt_val._val_b,val_val);
+		else if(val_col[0]=='c')	dGet_Add(&g_sum_prt_val._val_c,val_val);
+		else if(val_col[0]=='d')	dGet_Add(&g_sum_prt_val._val_d,val_val);
+		else if(val_col[0]=='e')	dGet_Add(&g_sum_prt_val._val_e,val_val);
+		else if(val_col[0]=='f')	dGet_Add(&g_sum_prt_val._val_f,val_val);
+		else if(val_col[0]=='g')	dGet_Add(&g_sum_prt_val._val_g,val_val);
+		else if(val_col[0]=='h')	dGet_Add(&g_sum_prt_val._val_h,val_val);
+		else if(val_col[0]=='i')	dGet_Add(&g_sum_prt_val._val_i,val_val);
+		else if(val_col[0]=='j')	dGet_Add(&g_sum_prt_val._val_j,val_val);
+		else if(val_col[0]=='k')	dGet_Add(&g_sum_prt_val._val_k,val_val);
+		else if(val_col[0]=='l')	dGet_Add(&g_sum_prt_val._val_l,val_val);
+		else if(val_col[0]=='m')	dGet_Add(&g_sum_prt_val._val_m,val_val);
+		else if(val_col[0]=='n')	dGet_Add(&g_sum_prt_val._val_n,val_val);
+		else if(val_col[0]=='o')	dGet_Add(&g_sum_prt_val._val_o,val_val);
+		else if(val_col[0]=='p')	dGet_Add(&g_sum_prt_val._val_p,val_val);
+		else if(val_col[0]=='q')	dGet_Add(&g_sum_prt_val._val_q,val_val);
+		else if(val_col[0]=='r')	dGet_Add(&g_sum_prt_val._val_r,val_val);
+		else if(val_col[0]=='s')	dGet_Add(&g_sum_prt_val._val_s,val_val);
+		else if(val_col[0]=='t')	dGet_Add(&g_sum_prt_val._val_t,val_val);
+		else if(val_col[0]=='u')	dGet_Add(&g_sum_prt_val._val_u,val_val);
+	}
+	
+	return 0;
+}
+
+/**将合计栏的数据重新设置****/
+int iReset_Sum_Row()
+{
+	int i = 0;
+	char  l_prt_s[256];
+	
+	
+	
+	if(g_sum_prt_val._val_c!=0)
+		g_sum_prt_val._val_j = (g_sum_prt_val._val_f-g_sum_prt_val._val_h) / g_sum_prt_val._val_c*100;
+	else 
+		g_sum_prt_val._val_j = 0;
+	if(g_sum_prt_val._val_c!=0)
+		g_sum_prt_val._val_r =  g_sum_prt_val._val_k / g_sum_prt_val._val_c*100;
+	else
+		g_sum_prt_val._val_r = 0;
+		
+		
+	for(i=0;i<prt_val_nums;i++)
+	{
+		if(!strncmp(g_prt_val[i].val_row,"SU",2))
+		{
+			memset(l_prt_s,0x00,sizeof(l_prt_s));
+			if(g_prt_val[i].val_col[0]=='b')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_b);
+			else if(g_prt_val[i].val_col[0]=='c')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_c);
+			else if(g_prt_val[i].val_col[0]=='d')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_d);
+			else if(g_prt_val[i].val_col[0]=='e')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_e);
+			else if(g_prt_val[i].val_col[0]=='f')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_f);
+			else if(g_prt_val[i].val_col[0]=='g')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_g);
+			else if(g_prt_val[i].val_col[0]=='h')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_h);
+			else if(g_prt_val[i].val_col[0]=='i')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_i);
+			else if(g_prt_val[i].val_col[0]=='j')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_j);
+			else if(g_prt_val[i].val_col[0]=='k')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_k);
+			else if(g_prt_val[i].val_col[0]=='l')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_l);
+			else if(g_prt_val[i].val_col[0]=='m')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_m);
+			else if(g_prt_val[i].val_col[0]=='n')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_n);
+			else if(g_prt_val[i].val_col[0]=='o')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_o);
+			else if(g_prt_val[i].val_col[0]=='p')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_p);
+			else if(g_prt_val[i].val_col[0]=='q')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_q);
+			else if(g_prt_val[i].val_col[0]=='r')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_r);
+			else if(g_prt_val[i].val_col[0]=='s')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_s);
+			else if(g_prt_val[i].val_col[0]=='t')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_t);
+			else if(g_prt_val[i].val_col[0]=='u')	sprintf(l_prt_s,"%f",g_sum_prt_val._val_u);
+			
+			
+			
+			strcpy(g_prt_val[i].val_val,l_prt_s);
+			g_prt_val[i].val_flag = 1;
+			
+		}
+	}	
+}

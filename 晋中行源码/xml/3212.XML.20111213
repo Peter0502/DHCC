@@ -1,0 +1,453 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="3212 特殊转帐记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		dim @tmp91 as string;//对方机构
+		dim @tmp31 as string;//本方账号
+		dim @tmp65 as string;//对方科目
+		dim @tmp40 as string;//交易金额
+		$TXNO='3210';
+		commsend_001();
+		$FD31=#ACC_NO;	
+		$FD65=#DFACC_NO;
+		$FD40=getitems('#TX_AMT');
+		$FD66=#DC_IND;
+		$FD88=#DSCPTS;
+		$FD21=#CUR_NO;
+		$FD25=#AC_NAME;
+		$FD26=#ACC_NAME;
+		$FD22=#AVBALCRDB;
+		$FD24=#AVBALCR;
+		$FD91=#DFBR_NO;	
+		@tmp91=$FD91;
+		@tmp31=$FD31;
+		@tmp65=$FD65;
+		@tmp40=$FD40;
+		//if(waitsuper())
+		//{
+		//}
+		//else
+		//{
+			//return(false);
+		//}
+		$FD91=@tmp91;
+		$FD31=@tmp31;
+		$FD65=@tmp65;
+		$FD40=@tmp40;
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+ <FIRSTWORK>"{
+	dim @txno_bak as string;
+	dim @tota as string;
+	dim @list1 as string;
+	dim @i as number;
+	@txno_bak=$TXNO;
+	$TXNO='9966';
+	commsend_001();
+	@tota=callserver();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	@i = 0;
+	while('0230' == substr(@tota, @i, 4)){
+		@i = @i + 30;
+	}
+	@list1=substr(@tota, 0 , @i+1);
+	setsel(#ZY_TP,@list1,'o5t20o1v2o2');
+}"
+</FIRSTWORK>
+<VARIABLE UPLOOP="FALSE">
+  <ITEM LINE="3"  COL="3"  TYPE="%-44s" FUNCTIONS=
+    "T(3212                           特殊转帐记账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"  FUNCTIONS="T($TXNO=3210)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <ITEM NAME="#TXNAME"     TYPE="%-12s" FUNCTIONS="T(特殊转帐记账)"/>
+  <ITEM NAME="#TXNUMBER"   TYPE="%-4s" FUNCTIONS="T(3212)"/>
+  <ITEM LINE="06" COL="5"  TYPE="%-10s" FUNCTIONS="T(本方账号:)"/>
+  <ITEM LINE="06" COL="30" TYPE="%-10s" FUNCTIONS="T(币   种:!)"/>
+  <ITEM LINE="06" COL="54" TYPE="%-10s" FUNCTIONS="T(本方机构:)"/>
+  <ITEM LINE="07" COL="5"  TYPE="%-10s" FUNCTIONS="T(名    称:)"/>
+  <ITEM LINE="08" COL="5"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="09" COL="5"  TYPE="%-10s" FUNCTIONS="T(借贷标志:!)"/>	
+	<ITEM LINE="10" COL="5"  TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+	<ITEM LINE="12" COL="3"  TYPE="%-74s" FUNCTIONS=
+	 "T(-------------------------------------------------------------------------)"/>
+	<ITEM LINE="14" COL="5"  TYPE="%-10s" FUNCTIONS="T(对方科目:)"/>
+	<ITEM LINE="14" COL="30" TYPE="%-10s" FUNCTIONS="T(币   种:!)"/>
+	<ITEM LINE="14" COL="54" TYPE="%-10s" FUNCTIONS="T(对方机构:)"/>
+	<ITEM LINE="15" COL="5"  TYPE="%-10s" FUNCTIONS="T(科目名称:)"/>
+	<ITEM LINE="16" COL="5"  TYPE="%-10s" FUNCTIONS="T(借贷标志:)"/> 
+	<ITEM LINE="17" COL="5"  TYPE="%-10s" FUNCTIONS="T(摘要选项:!)"  INPUT="LABEL"  NAME="#S_DSCPT"/> 
+	 
+	<ITEM LINE="06"   COL="15" NAME="#ACC_NO"     TYPE="%-15s"    INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		initfd();
+		commsend_001();
+		$FD16='5567';
+		$FD91=$KINBR;
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if($KINBR=='10001')
+		{
+			//return(true);
+		}
+		else
+		{
+			showmsg('本机构没有做此交易的权限');
+			return(false);
+		}
+		if(#ACC_NO=='3003' or substr(#ACC_NO,0,4)=='3001')
+	 	{
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+	 	}
+   //		if(substr(#ACC_NO,0,1)=='6' and $KINBR!='88002' and len(#ACC_NO) &lt; 8)
+//	 	{
+//	    		showmsg('不可以记此科目的帐务!');
+//			return(false);
+//	 	}
+		if(substr(#ACC_NO,0,1)!='9' and len(delspace(#ACC_NO)) &gt; 8)
+		{
+			showmsg('只可以记内部帐号!');
+    		        return(false);
+		}
+		//add by wangzhe 20091012	不允许做同业存放科目业务
+		//if(#ACC_NO=='2017' or substr(#ACC_NO,0,4)=='2017')
+	 	//{
+		//	showmsg('不可以记此科目的帐务!');
+		//	return(false);
+	 	//}
+	 	//如果输入的是账号，检查该账号是否输入同业存放科目
+	 	//showmsg(len(#ACC_NO));
+	 	//if(len(#ACC_NO)>8)
+	 	//{
+		// 	initfd();
+		// 	commsend_001();
+		//	$FD16='7779';
+		// 	$FD30=#ACC_NO;
+		// 	$FD34='3210';
+		// 	$FD65='3212';
+		//	callserver();
+		//	if($FD12!='0000')
+		//	{
+		//		showmsg(geterror());
+		//		return(false);
+		//	}
+		//}
+		//end by wangzhe 
+	 }"
+	 </ONLOSTFOCUS>
+	</ITEM> 
+	<ITEM LINE="06"   COL="40" NAME="#CUR_NO"     TYPE="%-2s"    ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+	</ITEM> 
+	<ITEM LINE="06"   COL="64" NAME="#BR_NO"      TYPE="%-5s"    INPUT="LABEL" FUNCTIONS="T($KINBR)">
+	<ONLOSTFOCUS>
+	"{
+		dim @txno as string;
+		$FD30=#ACC_NO;
+		$FD68='6';
+		@txno=$TXNO;
+		$TXNO='9930';
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#ACC_NAME=$FD25;
+		#AVBALCRDB=$FD22;
+		//#ACC_BAL=val($FD41, 0.01);支持负数 RM BY ZHGF  20090603
+		dim @i as number;
+		dim @str as string;
+		@i=0;
+		while(@i &lt; 16)
+		{
+			if(substr($FD41,@i,1)=='0')
+			{
+				@str=@str+' ';
+			}
+			else
+			{
+				@str=@str+substr($FD41,@i,16-@i);
+				break;
+			}
+			@i=@i+1;
+		}
+		$FD41=@str;
+		#ACC_BAL=val($FD41, 0.01);
+		//ADD END 20090603
+
+		enable(#ACC_NAME, false);
+		enable(#AVBALCRDB, false);
+		enable(#ACC_BAL, false);
+		
+	}"
+	 </ONLOSTFOCUS>
+	</ITEM> 
+	<ITEM LINE="07"   COL="15" NAME="#ACC_NAME"   TYPE="%-60s"   INPUT="TEXT" FUNCTIONS=""/> 
+	<ITEM LINE="08"   COL="15" NAME="#AVBALCRDB"  TYPE="%-2s"    INPUT="TEXT"    FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="08"   COL="19" NAME="#ACC_BAL"    TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/> 
+	<ITEM LINE="09"   COL="15" NAME="#DC_IND"     TYPE="%-1s"    INPUT="TEXT" FUNCTIONS="T(1)V(1|2)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="借"/>
+		<OPTION VALUE="2" TITLE="贷"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		//6开头的科目 不能反向记账 2009-6-1 22:24 ADD BY ZHGF
+		if(substr(#ACC_NO,0,1)=='6'){
+			if(#AVBALCRDB=='借' and #DC_IND!='1'){
+				showmsg('['+#ACC_NO+'] 不允许记贷!');
+				return(false);
+			}
+			if(#AVBALCRDB=='贷' and #DC_IND!='2'){
+				showmsg('['+#ACC_NO+'] 不允许记借!');
+				return(false);
+			}
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="10"   COL="15" NAME="#TX_AMT"     TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS="" SIGNED="TRUE" />
+	<ITEM LINE="14"   COL="15" NAME="#DFACC_NO"   TYPE="%-8s"    INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		if(#DFACC_NO=='41600' or substr(#DFACC_NO,0,3)=='407')
+		{
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+		if(substr(#DFACC_NO,0,3)=='408')
+		{
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+		if(substr(#DFACC_NO,0,1)=='5' and $KINBR!='88002')
+		{
+			//showmsg('不可以记此科目的帐务!');
+			//return(false);
+		}
+	}"
+	 </ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="14"   COL="40" NAME="#CUR_NO"     TYPE="%-2s"    INPUT="TEXT" ENABLE="FALSE" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+	</ITEM> 
+	<ITEM LINE="14"   COL="64" NAME="#DFBR_NO"    TYPE="%-5s"    INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		if($KINBR=='88002')
+		{
+			
+		}
+		else
+		{
+			if(substr($KINBR,0,2)!=substr(#DFBR_NO,0,2))
+			{
+				showmsg('不允许跨机构进行账务处理!!!');
+				return(false);
+			}
+		}
+		dim @txno as string;
+		delspace(#DFBR_NO);
+		$FD30=#DFACC_NO;
+		$FD68='6';
+		@txno=$TXNO;
+		$TXNO='9930';
+		$FD65='3210';//ADD BY ZHGF 20090603
+		$FD64=#DFBR_NO;//要查输入机构的科目
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if(#DFBR_NO=='101101')
+		{
+			showmsg('不能做现金业务');
+			return(false);
+		}
+		#AC_NAME=$FD25;
+		#AVBALCR=$FD22;
+		//#AC_BAL=val($FD41, 0.01);支持负数 RM BY ZHGF  20090603
+		dim @i as number;
+		dim @str as string;
+		@i=0;
+		while(@i &lt; 16)
+		{
+			if(substr($FD41,@i,1)=='0')
+			{
+			       @str=@str+' ';
+			}
+			else
+			{
+			       @str=@str+substr($FD41,@i,16-@i);
+			       break;
+			}
+			@i=@i+1;
+		}
+		$FD41=@str;
+		#AC_BAL=val($FD41, 0.01);
+		//ADD END 20090603
+
+		enable(#AC_NAME, false);
+		enable(#AVBALCR, false);
+		enable(#AC_BAL, false);
+		show(#AC_BAL,false);
+		//6开头的科目 不能反向记账 2009-6-1 22:24 ADD BY ZHGF
+		if(substr(#DFACC_NO,0,1)=='6'){
+			if(#AVBALCR=='借' and #DC_IND=='1'){
+				showmsg('['+#DFACC_NO+'] 不允许记贷方帐!');
+				return(false);
+			}
+			if(#AVBALCR=='贷' and #DC_IND=='2'){
+				showmsg('['+#DFACC_NO+'] 不允许记借方帐!');
+			//	return(false);
+			}
+		}
+		
+		//侯毅20091013宁夏 除省中心外，清算中心不允许跨机构账务处理
+		commsend_001();
+		$FD16='5567';
+		$FD91=#DFBR_NO;
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if($KINBR=='88002' or delspace($FD59)==$KINBR)
+		{
+			return(true);
+		}
+		else
+		{
+			showmsg('本机构不能记此单位的账务!!!');
+			return(false);
+		}
+		//侯毅添加结束
+  }"
+	 </ONLOSTFOCUS>
+	</ITEM> 
+ 	<ITEM LINE="15"   COL="15" NAME="#AC_NAME"    TYPE="%-60s"   INPUT="TEXT" FUNCTIONS=""/> 
+  <ITEM LINE="16"   COL="15" NAME="#AVBALCR"    TYPE="%-2s"    INPUT="TEXT"    FUNCTIONS="T()V(NB)"/>
+	<!--<ITEM LINE="16"   COL="19" NAME="#AC_BAL"     TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/> -->
+	<ITEM LINE="16"   COL="19" NAME="#AC_BAL"     TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM LINE="17"   COL="15" NAME="#ZY_TP"      TYPE="%-2s"    INPUT="SELECT"    FUNCTIONS=""> 
+  <SELECT>
+		<OPTION VALUE="01" TITLE="备用金"/>
+		<OPTION VALUE="02" TITLE="货款"/> 
+		<OPTION VALUE="03" TITLE="营业款"/> 
+		<OPTION VALUE="04" TITLE="费用"/> 
+		<OPTION VALUE="05" TITLE="付款"/> 
+		<OPTION VALUE="06" TITLE="工资"/> 
+		<OPTION VALUE="31" TITLE="自输摘要"/> 
+		</SELECT>
+  </ITEM>
+  <ITEM NAME="#SZY_TP"      TYPE="%-20s"   FUNCTIONS="S(#ZY_TP,#ZY_TP)">
+   <ONLOSTFOCUS>
+  "{
+  	enable(#CZY_TP, true);
+	  if(#ZY_TP != '31'){
+		#CZY_TP = #SZY_TP;
+		show(#CZY_TP,true);
+		enable(#CZY_TP, false);
+	}
+	else
+	{
+		#CZY_TP = '';
+		show(#CZY_TP,true);
+		enable(#CZY_TP,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="17"  COL="22" INPUT="TEXT" VISABLE="FALSE" NAME="#CZY_TP" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#GO"         TYPE="%1s"  FUNCTIONS=""/>
+  
+<ITEM NAME="#DSCPT" TYPE="%-20s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	#DSCPTS=substr(#CZY_TP,0,10);			
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#DSCPTS" TYPE="%-20s"	FUNCTIONS=""/>
+<ITEM NAME="#STRANTYP"	TYPE="%-4s" FUNCTIONS="S(#TRANTYP,#TRANTYP)"/> 
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+   
+    
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示信息">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+print(03,30,'特殊转账记账');
+print(05,20,'本方科目:[15]',#ACC_NO);
+print(06,20,'对方科目:[8]',#DFACC_NO);
+print(07,20,'本方机构: [5    ]     对方机构:[5    ]',$KINBR,#DFBR_NO);
+print(08,20,'交易金额: [21                       ]',ltrim(comma(itoa(#TX_AMT,'%16.2f'),21)));
+print(09,20,'流 水 号: [6]',$FD4);
+//print(09,20,'流 水 号: [6]',substr($FD126,2,6));
+print(10,20,'操 作 员: [6]',$FD7);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印专用凭证" >
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+	print_nxywpz1();	
+  print( 7,10,'本行机构号: [5]       对方机构号: [5]',$KINBR,#DFBR_NO);
+  print( 8,10,'本行账号: [15]',#ACC_NO);
+  print( 9,10,'本行名称: [60]',#ACC_NAME);  
+  print(10,10,'对方科目: [8]',#DFACC_NO);
+  print(11,10,'对方名称: [60]',#AC_NAME); 
+  print(12,10,'交易金额: [21]',ltrim(comma(itoa(#TX_AMT,'%16.2f'),21)));   
+	printacdtl_1();
+	print_nxywpz2();	
+}"
+</PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+	//showmsg('CK='+#ACT_LX_CK);
+	//showmsg(#ACT_LX);
+}"
+</LASTWORK>
+</TRANSACTION>
+<!----
+insert into tx_def values('3210','科目转帐记账','10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000','1','1','2');
+insert into tx_flow_def values('3210',0,'3210','#$');
+insert into tx_sub_def values('3210','科目转帐记账','sp3210','0','0');
+
+---->
+

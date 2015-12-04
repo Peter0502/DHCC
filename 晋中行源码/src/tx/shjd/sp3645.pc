@@ -1,0 +1,71 @@
+/***************************************************************************************
+*交易名称: 事后监督标志位配置程序
+*文件名称: sp3645.pc
+*
+*
+*功能描述: 对应前台的4012.XML 
+*改造者  : lyz
+*改造日期: 20070109
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "flag_tranpara_c.h"
+
+int sp3645()
+{
+	int ret=0;
+	struct flag_tranpara_c sFlag_tranpara;
+	char jycode[5];
+	char ysname[21];
+	char cflag_value[11];
+	char cflag_mean[41];
+	char ctext[501];
+	char tmp[20];
+
+	memset(tmp,0x00,sizeof(tmp));
+	memset(&sFlag_tranpara,0x00,sizeof(struct flag_tranpara_c));
+	memset(jycode,0x00,sizeof(jycode));
+	memset(ysname,0x00,sizeof(ysname));
+	memset(cflag_value,0x00,sizeof(cflag_value));
+	memset(cflag_mean,0x00,sizeof(cflag_mean));
+	memset(ctext,0x00,sizeof(ctext));
+
+	pub_base_sysinit();
+
+	get_fd_data("0340",tmp);
+	get_fd_data("0250",ysname);
+	get_fd_data("0370",cflag_value);
+	get_fd_data("0270",cflag_mean);
+
+	zip_space(ysname);
+	zip_space(tmp);
+	memcpy(jycode,tmp,sizeof(jycode)-1);
+	
+	memcpy(sFlag_tranpara.trancode,jycode,sizeof(sFlag_tranpara.trancode)-1);
+	memcpy(sFlag_tranpara.name,ysname,sizeof(sFlag_tranpara.name)-1);
+	memcpy(sFlag_tranpara.flag_value,cflag_value,sizeof(sFlag_tranpara.flag_value)-1);
+	memcpy(sFlag_tranpara.flag_mean,cflag_mean,sizeof(sFlag_tranpara.flag_mean)-1);
+	
+	ret=Flag_tranpara_Ins(sFlag_tranpara,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"插入记录出错!![%d]. [%s]--[%d]",ret,__FILE__,__LINE__);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

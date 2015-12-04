@@ -1,0 +1,246 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"com_acc_br_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int com_acc_br_con ( struct com_acc_br_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct com_acc_br_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->acc_hrt);
+	zip_tail(ps->br_no);
+	zip_tail(ps->ind);
+}
+int Com_acc_br_Debug(struct com_acc_br_c *ps){
+	vtcp_log("com_acc_br_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("com_acc_br_c.acc_hrt=[%s]\n",ps->acc_hrt);
+	vtcp_log("com_acc_br_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("com_acc_br_c.ind=[%s]\n",ps->ind);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Com_acc_br_Sel(reply,com_acc_br_c,fmtstr,va_alist)
+char    *reply;
+struct  com_acc_br_c *com_acc_br_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Com_acc_br_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Com_acc_br_Fet_Sel( com_acc_br_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Com_acc_br_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Com_acc_br_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,com_acc_br.* FROM com_acc_br WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE com_acc_br_sel FROM :comm;
+	EXEC SQL DECLARE sel_com_acc_br CURSOR FOR com_acc_br_sel;
+
+	EXEC SQL OPEN sel_com_acc_br;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Com_acc_br_Fet_Sel ( struct com_acc_br_c *com_acc_br_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_com_acc_br INTO :com_acc_br_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch com_acc_br error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch com_acc_br finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(com_acc_br_c);
+
+	return 0;
+}
+
+int Com_acc_br_Clo_Sel (){
+	EXEC SQL CLOSE sel_com_acc_br;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Com_acc_br_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,com_acc_br.* FROM com_acc_br WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE com_acc_br_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_com_acc_br CURSOR FOR com_acc_br_upd;
+
+	EXEC SQL OPEN upd_com_acc_br;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Com_acc_br_Fet_Upd( struct com_acc_br_c *com_acc_br_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_com_acc_br INTO :com_acc_br_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH com_acc_br finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(com_acc_br_c);
+
+	return 0;
+}
+
+int Com_acc_br_Upd_Upd( struct com_acc_br_c com_acc_br_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE com_acc_br SET acc_hrt=:com_acc_br_c.acc_hrt,
+			br_no=:com_acc_br_c.br_no,
+			ind=:com_acc_br_c.ind
+	WHERE rowid=:com_acc_br_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Com_acc_br_Del_Upd(struct com_acc_br_c com_acc_br_c , char * reply  ){
+
+	EXEC SQL DELETE FROM com_acc_br WHERE rowid=:com_acc_br_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Com_acc_br_Clo_Upd( ){
+	EXEC SQL CLOSE upd_com_acc_br;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Com_acc_br_Ins( struct com_acc_br_c com_acc_br_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO com_acc_br VALUES (:com_acc_br_c.acc_hrt,
+			:com_acc_br_c.br_no,
+			:com_acc_br_c.ind);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT com_acc_br error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

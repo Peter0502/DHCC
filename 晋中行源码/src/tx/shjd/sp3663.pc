@@ -1,0 +1,138 @@
+/*****************************************************
+* 文 件 名:  sp3663.pc
+* 功能描述： 增加操作员    (前台:6011.XML)
+* 作    者:  xyy
+* 完成日期： 2007-1-9 16:41
+* 修改记录： 
+* 修 改 人:  YXJ
+* 日    期:  2007-03-19
+* 修改内容:  只对com_tel表操作
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "chkpas_c.h"
+#include "com_tel_c.h"
+#include "com_branch_c.h"
+int  sp3663()
+{
+	int cnt=0;
+	struct com_tel_c wd_com_tel;
+	struct com_branch_c wd_com_branch;
+    	char cBrno  [BRNO_LEN+1];
+    	char cTlrno [5];
+    	char cTel   [5];
+    	char cName  [21];
+    	char cTxtype[2];
+
+    	memset(cBrno     , 0 , sizeof(cBrno));
+    	memset(cTlrno    , 0 , sizeof(cTlrno));
+    	memset(cTel    , 0 , sizeof(cTel));
+    	memset(cName     , 0 , sizeof(cName));
+    	memset(cTxtype   , 0 , sizeof(cTxtype));
+
+    	vtcp_log("[%s][%d] 增加操作员开始\n",__FILE__,__LINE__);
+    	pub_base_sysinit();
+    	/***这里从前台得到数值***/
+    	get_fd_data("0020",cBrno);
+    	get_fd_data("0070",cTel);
+    	get_fd_data("0920",cTlrno);
+    	get_fd_data("0720",cTxtype);
+    	get_fd_data("0630",cName);
+    
+    	vtcp_log("[%s][%d]这里看一下前台传过来的值是否正确,yeah!",__FILE__,__LINE__);
+    	vtcp_log("[%s][%d]cBrno  == [%s]",__FILE__,__LINE__,cBrno);
+    	vtcp_log("[%s][%d]cTlrno == [%s]",__FILE__,__LINE__,cTlrno);
+    	vtcp_log("[%s][%d]cName  == [%s]",__FILE__,__LINE__,cName);
+    	vtcp_log("[%s][%d]cTxtype== [%s]",__FILE__,__LINE__,cTxtype);
+
+  	/**检查行号是否存在**/
+  	g_reply_int = Com_branch_Sel(g_pub_tx.reply,&wd_com_branch,"br_no='%s' ",cBrno);
+  	if(g_reply_int){
+      		sprintf( acErrMsg,"[%s][%d][%s]此行不存在",__FILE__,__LINE__,cBrno);
+      		strcpy( g_pub_tx.reply, "P015" );
+      		set_zd_data(DC_GET_MSG,acErrMsg);
+      		WRITEMSG
+      		goto ErrExit;
+  	}
+  	vtcp_log("[%s][%d]cBrno=[%s]\n",__FILE__,__LINE__,cBrno);
+  
+  	/*只有超级管理员才可以增加操作员*/
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+  	g_reply_int = Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s' ",cTel);
+  	if(g_reply_int){
+      		sprintf( acErrMsg,"[%s][%d]没有此超级管理员[%s]", __FILE__,__LINE__,cTel);
+      		strcpy( g_pub_tx.reply, "P015" );
+      		set_zd_data(DC_GET_MSG,acErrMsg);
+      		WRITEMSG
+      		goto ErrExit;
+  	}
+  	vtcp_log("[%s][%d]cTel=[%s]",__FILE__,__LINE__,cTel);
+  	if(wd_com_tel.lvl[0]!='7'){
+      		sprintf( acErrMsg,"[%s][%d]只有超级管理员才可做此工作[%s]", __FILE__,__LINE__,cTel);
+      		strcpy( g_pub_tx.reply, "P015" );
+      		set_zd_data(DC_GET_MSG,acErrMsg);
+      		WRITEMSG
+      		goto ErrExit;
+  	}
+  	/**检查是否增加过此操作员*/
+	g_reply_int = Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s'",cTlrno);
+    	if(g_reply_int != 0 && g_reply_int != 100){
+        	sprintf(acErrMsg,"查询柜员信息表错误!!");
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+    	else if (g_reply_int == 0){
+        	sprintf(acErrMsg,"柜员号已经存在!!");
+        	WRITEMSG
+        	strcpy(g_pub_tx.reply,"O115");
+        	goto ErrExit;
+    	}
+  	/**在操作员控制档（com_tel）中增加一条记录**/
+  	memset(&wd_com_tel,0,sizeof(wd_com_tel));
+  	memcpy(wd_com_tel.br_no,cBrno,sizeof(wd_com_tel.br_no)-1);
+  	memcpy(wd_com_tel.tel,cTlrno,sizeof(wd_com_tel.tel)-1);
+  	memcpy(wd_com_tel.name,cName,sizeof(wd_com_tel.name)-1);
+	memcpy(wd_com_tel.pwd,"=0839;",sizeof(wd_com_tel.pwd)-1);
+	wd_com_tel.pwd_date=g_pub_tx.tx_date;
+	pub_base_EnDes(g_pub_tx.tx_date,"",wd_com_tel.pwd);
+  	memcpy(wd_com_tel.csts,"2",sizeof(wd_com_tel.csts)-1);
+	if(cTxtype[0]=='0'){
+		memcpy(wd_com_tel.lvl,"4",sizeof(wd_com_tel.lvl)-1);
+  		memcpy(wd_com_tel.tx_type,"0010000000",sizeof(wd_com_tel.tx_type)-1);
+	}
+	else{
+		memcpy(wd_com_tel.lvl,"2",sizeof(wd_com_tel.lvl)-1);
+  		memcpy(wd_com_tel.tx_type,"0100000000",sizeof(wd_com_tel.tx_type)-1);
+	}
+	vtcp_log("---------INSERT com_tel MSG----------");
+	vtcp_log("tel [%s]",wd_com_tel.tel);
+	vtcp_log("br_no [%s]",wd_com_tel.br_no);
+	vtcp_log("name [%s]",wd_com_tel.name);
+	vtcp_log("lvl [%s]",wd_com_tel.lvl);
+	vtcp_log("csts [%s]",wd_com_tel.csts);
+	vtcp_log("pwd_date [%d]",wd_com_tel.pwd_date);
+	vtcp_log("tx_type [%s]",wd_com_tel.tx_type);
+	vtcp_log("---------INSERT com_tel MSG END----------");
+  	g_reply_int =  Com_tel_Ins(wd_com_tel,g_pub_tx.reply);
+  	vtcp_log("[%s][%d]getHere",__FILE__,__LINE__);
+  	if( g_reply_int ){
+      		sprintf( acErrMsg,"[%s][%d]插入com_tel表出错[%d]", __FILE__,__LINE__,g_reply_int);
+      		strcpy( g_pub_tx.reply, "P015" );
+      		set_zd_data(DC_GET_MSG,acErrMsg);
+      		WRITEMSG
+      		goto ErrExit;
+  	}
+ 	vtcp_log("[%s][%d]dh170100程序顺利完成!",__FILE__,__LINE__);
+	OkExit:
+        strcpy( g_pub_tx.reply, "0000" );
+        sprintf(acErrMsg,"操作员增加成功 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 0;
+	ErrExit:
+        sprintf(acErrMsg,"操作员增加失败 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 1;
+}

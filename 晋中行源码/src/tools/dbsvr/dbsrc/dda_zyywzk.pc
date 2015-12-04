@@ -1,0 +1,278 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"dda_zyywzk_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int dda_zyywzk_con ( struct dda_zyywzk_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct dda_zyywzk_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->inst_no);
+	zip_tail(ps->hz_bank_no);
+	zip_tail(ps->ywtjbm);
+	zip_tail(ps->item_no);
+	zip_tail(ps->year);
+}
+int Dda_zyywzk_Debug(struct dda_zyywzk_c *ps){
+	vtcp_log("dda_zyywzk_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("dda_zyywzk_c.inst_no=[%s]\n",ps->inst_no);
+	vtcp_log("dda_zyywzk_c.hz_bank_no=[%s]\n",ps->hz_bank_no);
+	vtcp_log("dda_zyywzk_c.ywtjbm=[%s]\n",ps->ywtjbm);
+	vtcp_log("dda_zyywzk_c.item_no=[%s]\n",ps->item_no);
+	vtcp_log("dda_zyywzk_c.lst_ybal=[%f]\n",ps->lst_ybal);
+	vtcp_log("dda_zyywzk_c.lst_sbal=[%f]\n",ps->lst_sbal);
+	vtcp_log("dda_zyywzk_c.lst_mbal=[%f]\n",ps->lst_mbal);
+	vtcp_log("dda_zyywzk_c.lst_dbal=[%f]\n",ps->lst_dbal);
+	vtcp_log("dda_zyywzk_c.balance=[%f]\n",ps->balance);
+	vtcp_log("dda_zyywzk_c.tdy_accu=[%f]\n",ps->tdy_accu);
+	vtcp_log("dda_zyywzk_c.days=[%ld]\n",ps->days);
+	vtcp_log("dda_zyywzk_c.year=[%s]\n",ps->year);
+	vtcp_log("dda_zyywzk_c.last_accu=[%f]\n",ps->last_accu);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Dda_zyywzk_Sel(reply,dda_zyywzk_c,fmtstr,va_alist)
+char    *reply;
+struct  dda_zyywzk_c *dda_zyywzk_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Dda_zyywzk_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Dda_zyywzk_Fet_Sel( dda_zyywzk_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Dda_zyywzk_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Dda_zyywzk_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,dda_zyywzk.* FROM dda_zyywzk WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE dda_zyywzk_sel FROM :comm;
+	EXEC SQL DECLARE sel_dda_zyywzk CURSOR FOR dda_zyywzk_sel;
+
+	EXEC SQL OPEN sel_dda_zyywzk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Dda_zyywzk_Fet_Sel ( struct dda_zyywzk_c *dda_zyywzk_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_dda_zyywzk INTO :dda_zyywzk_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch dda_zyywzk error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch dda_zyywzk finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(dda_zyywzk_c);
+
+	return 0;
+}
+
+int Dda_zyywzk_Clo_Sel (){
+	EXEC SQL CLOSE sel_dda_zyywzk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Dda_zyywzk_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,dda_zyywzk.* FROM dda_zyywzk WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE dda_zyywzk_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_dda_zyywzk CURSOR FOR dda_zyywzk_upd;
+
+	EXEC SQL OPEN upd_dda_zyywzk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Dda_zyywzk_Fet_Upd( struct dda_zyywzk_c *dda_zyywzk_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_dda_zyywzk INTO :dda_zyywzk_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH dda_zyywzk finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(dda_zyywzk_c);
+
+	return 0;
+}
+
+int Dda_zyywzk_Upd_Upd( struct dda_zyywzk_c dda_zyywzk_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE dda_zyywzk SET inst_no=:dda_zyywzk_c.inst_no,
+			hz_bank_no=:dda_zyywzk_c.hz_bank_no,
+			ywtjbm=:dda_zyywzk_c.ywtjbm,
+			item_no=:dda_zyywzk_c.item_no,
+			lst_ybal=:dda_zyywzk_c.lst_ybal,
+			lst_sbal=:dda_zyywzk_c.lst_sbal,
+			lst_mbal=:dda_zyywzk_c.lst_mbal,
+			lst_dbal=:dda_zyywzk_c.lst_dbal,
+			balance=:dda_zyywzk_c.balance,
+			tdy_accu=:dda_zyywzk_c.tdy_accu,
+			days=:dda_zyywzk_c.days,
+			year=:dda_zyywzk_c.year,
+			last_accu=:dda_zyywzk_c.last_accu
+	WHERE rowid=:dda_zyywzk_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Dda_zyywzk_Del_Upd(struct dda_zyywzk_c dda_zyywzk_c , char * reply  ){
+
+	EXEC SQL DELETE FROM dda_zyywzk WHERE rowid=:dda_zyywzk_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Dda_zyywzk_Clo_Upd( ){
+	EXEC SQL CLOSE upd_dda_zyywzk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Dda_zyywzk_Ins( struct dda_zyywzk_c dda_zyywzk_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO dda_zyywzk VALUES (:dda_zyywzk_c.inst_no,
+			:dda_zyywzk_c.hz_bank_no,
+			:dda_zyywzk_c.ywtjbm,
+			:dda_zyywzk_c.item_no,
+			:dda_zyywzk_c.lst_ybal,
+			:dda_zyywzk_c.lst_sbal,
+			:dda_zyywzk_c.lst_mbal,
+			:dda_zyywzk_c.lst_dbal,
+			:dda_zyywzk_c.balance,
+			:dda_zyywzk_c.tdy_accu,
+			:dda_zyywzk_c.days,
+			:dda_zyywzk_c.year,
+			:dda_zyywzk_c.last_accu);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT dda_zyywzk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

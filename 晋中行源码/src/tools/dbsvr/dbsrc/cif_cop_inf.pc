@@ -1,0 +1,346 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_cop_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_cop_inf_con ( struct cif_cop_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_cop_inf_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->reg_country);
+	zip_tail(ps->cur_no);
+	zip_tail(ps->crd_no);
+	zip_tail(ps->units_license);
+	zip_tail(ps->g_tax_no);
+	zip_tail(ps->d_tax_no);
+	zip_tail(ps->credit_no);
+	zip_tail(ps->license);
+	zip_tail(ps->eco_attri);
+	zip_tail(ps->ent_attri);
+	zip_tail(ps->credit);
+	zip_tail(ps->region);
+	zip_tail(ps->supervior);
+	zip_tail(ps->director);
+	zip_tail(ps->belong_bank);
+	zip_tail(ps->belong_stat);
+	zip_tail(ps->mana_orga_moda);
+	zip_tail(ps->bd_corp_orga_moda);
+	zip_tail(ps->corp_size);
+	zip_tail(ps->corp_act_mode);
+	zip_tail(ps->corp_mana_sts);
+	zip_tail(ps->ap_qualife);
+	zip_tail(ps->artificial_person);
+	zip_tail(ps->ap_id);
+	zip_tail(ps->cif_scopes);
+}
+int Cif_cop_inf_Debug(struct cif_cop_inf_c *ps){
+	vtcp_log("cif_cop_inf_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_cop_inf_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_cop_inf_c.reg_date=[%ld]\n",ps->reg_date);
+	vtcp_log("cif_cop_inf_c.reg_country=[%s]\n",ps->reg_country);
+	vtcp_log("cif_cop_inf_c.reg_fund=[%f]\n",ps->reg_fund);
+	vtcp_log("cif_cop_inf_c.cur_no=[%s]\n",ps->cur_no);
+	vtcp_log("cif_cop_inf_c.crd_no=[%s]\n",ps->crd_no);
+	vtcp_log("cif_cop_inf_c.units_license=[%s]\n",ps->units_license);
+	vtcp_log("cif_cop_inf_c.g_tax_no=[%s]\n",ps->g_tax_no);
+	vtcp_log("cif_cop_inf_c.d_tax_no=[%s]\n",ps->d_tax_no);
+	vtcp_log("cif_cop_inf_c.credit_no=[%s]\n",ps->credit_no);
+	vtcp_log("cif_cop_inf_c.license=[%s]\n",ps->license);
+	vtcp_log("cif_cop_inf_c.eco_attri=[%s]\n",ps->eco_attri);
+	vtcp_log("cif_cop_inf_c.ent_attri=[%s]\n",ps->ent_attri);
+	vtcp_log("cif_cop_inf_c.credit=[%s]\n",ps->credit);
+	vtcp_log("cif_cop_inf_c.region=[%s]\n",ps->region);
+	vtcp_log("cif_cop_inf_c.supervior=[%s]\n",ps->supervior);
+	vtcp_log("cif_cop_inf_c.director=[%s]\n",ps->director);
+	vtcp_log("cif_cop_inf_c.belong_bank=[%s]\n",ps->belong_bank);
+	vtcp_log("cif_cop_inf_c.belong_stat=[%s]\n",ps->belong_stat);
+	vtcp_log("cif_cop_inf_c.mana_orga_moda=[%s]\n",ps->mana_orga_moda);
+	vtcp_log("cif_cop_inf_c.bd_corp_orga_moda=[%s]\n",ps->bd_corp_orga_moda);
+	vtcp_log("cif_cop_inf_c.corp_size=[%s]\n",ps->corp_size);
+	vtcp_log("cif_cop_inf_c.corp_act_mode=[%s]\n",ps->corp_act_mode);
+	vtcp_log("cif_cop_inf_c.paicl_up_capital=[%f]\n",ps->paicl_up_capital);
+	vtcp_log("cif_cop_inf_c.corp_mana_sts=[%s]\n",ps->corp_mana_sts);
+	vtcp_log("cif_cop_inf_c.ap_qualife=[%s]\n",ps->ap_qualife);
+	vtcp_log("cif_cop_inf_c.artificial_person=[%s]\n",ps->artificial_person);
+	vtcp_log("cif_cop_inf_c.ap_id=[%s]\n",ps->ap_id);
+	vtcp_log("cif_cop_inf_c.cif_scopes=[%s]\n",ps->cif_scopes);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_cop_inf_Sel(reply,cif_cop_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_cop_inf_c *cif_cop_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_cop_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_cop_inf_Fet_Sel( cif_cop_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_cop_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_cop_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_cop_inf.* FROM cif_cop_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_cop_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_cop_inf CURSOR FOR cif_cop_inf_sel;
+
+	EXEC SQL OPEN sel_cif_cop_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_cop_inf_Fet_Sel ( struct cif_cop_inf_c *cif_cop_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_cop_inf INTO :cif_cop_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_cop_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_cop_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_cop_inf_c);
+
+	return 0;
+}
+
+int Cif_cop_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_cop_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_cop_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_cop_inf.* FROM cif_cop_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_cop_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_cop_inf CURSOR FOR cif_cop_inf_upd;
+
+	EXEC SQL OPEN upd_cif_cop_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_cop_inf_Fet_Upd( struct cif_cop_inf_c *cif_cop_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_cop_inf INTO :cif_cop_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_cop_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_cop_inf_c);
+
+	return 0;
+}
+
+int Cif_cop_inf_Upd_Upd( struct cif_cop_inf_c cif_cop_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_cop_inf SET cif_no=:cif_cop_inf_c.cif_no,
+			reg_date=:cif_cop_inf_c.reg_date,
+			reg_country=:cif_cop_inf_c.reg_country,
+			reg_fund=:cif_cop_inf_c.reg_fund,
+			cur_no=:cif_cop_inf_c.cur_no,
+			crd_no=:cif_cop_inf_c.crd_no,
+			units_license=:cif_cop_inf_c.units_license,
+			g_tax_no=:cif_cop_inf_c.g_tax_no,
+			d_tax_no=:cif_cop_inf_c.d_tax_no,
+			credit_no=:cif_cop_inf_c.credit_no,
+			license=:cif_cop_inf_c.license,
+			eco_attri=:cif_cop_inf_c.eco_attri,
+			ent_attri=:cif_cop_inf_c.ent_attri,
+			credit=:cif_cop_inf_c.credit,
+			region=:cif_cop_inf_c.region,
+			supervior=:cif_cop_inf_c.supervior,
+			director=:cif_cop_inf_c.director,
+			belong_bank=:cif_cop_inf_c.belong_bank,
+			belong_stat=:cif_cop_inf_c.belong_stat,
+			mana_orga_moda=:cif_cop_inf_c.mana_orga_moda,
+			bd_corp_orga_moda=:cif_cop_inf_c.bd_corp_orga_moda,
+			corp_size=:cif_cop_inf_c.corp_size,
+			corp_act_mode=:cif_cop_inf_c.corp_act_mode,
+			paicl_up_capital=:cif_cop_inf_c.paicl_up_capital,
+			corp_mana_sts=:cif_cop_inf_c.corp_mana_sts,
+			ap_qualife=:cif_cop_inf_c.ap_qualife,
+			artificial_person=:cif_cop_inf_c.artificial_person,
+			ap_id=:cif_cop_inf_c.ap_id,
+			cif_scopes=:cif_cop_inf_c.cif_scopes
+	WHERE rowid=:cif_cop_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_cop_inf_Del_Upd(struct cif_cop_inf_c cif_cop_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_cop_inf WHERE rowid=:cif_cop_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_cop_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_cop_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_cop_inf_Ins( struct cif_cop_inf_c cif_cop_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_cop_inf VALUES (:cif_cop_inf_c.cif_no,
+			:cif_cop_inf_c.reg_date,
+			:cif_cop_inf_c.reg_country,
+			:cif_cop_inf_c.reg_fund,
+			:cif_cop_inf_c.cur_no,
+			:cif_cop_inf_c.crd_no,
+			:cif_cop_inf_c.units_license,
+			:cif_cop_inf_c.g_tax_no,
+			:cif_cop_inf_c.d_tax_no,
+			:cif_cop_inf_c.credit_no,
+			:cif_cop_inf_c.license,
+			:cif_cop_inf_c.eco_attri,
+			:cif_cop_inf_c.ent_attri,
+			:cif_cop_inf_c.credit,
+			:cif_cop_inf_c.region,
+			:cif_cop_inf_c.supervior,
+			:cif_cop_inf_c.director,
+			:cif_cop_inf_c.belong_bank,
+			:cif_cop_inf_c.belong_stat,
+			:cif_cop_inf_c.mana_orga_moda,
+			:cif_cop_inf_c.bd_corp_orga_moda,
+			:cif_cop_inf_c.corp_size,
+			:cif_cop_inf_c.corp_act_mode,
+			:cif_cop_inf_c.paicl_up_capital,
+			:cif_cop_inf_c.corp_mana_sts,
+			:cif_cop_inf_c.ap_qualife,
+			:cif_cop_inf_c.artificial_person,
+			:cif_cop_inf_c.ap_id,
+			:cif_cop_inf_c.cif_scopes);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_cop_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

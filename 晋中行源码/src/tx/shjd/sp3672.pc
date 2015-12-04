@@ -1,0 +1,379 @@
+/***************************************************************************************
+*交易名称: 事后监督流程配置维护
+*文件名称: sp3672.pc
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070111
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "tranpara_c.h"
+#include "flag_tranpara_c.h"
+
+struct tranpara_c gTranpara;
+
+int sp3672()
+{
+	int ret=0;
+	char flag[2];
+	char jycode[5];
+	char subtxcode[5];
+	char ysname[21];
+	char yslength[3];
+	char zdname[11];
+	char zdtype[2];
+	char lstnumx[7];
+	char xjycode[5];
+	char xsubtxcode[5];
+	char xysname[21];
+	char jdtype[2];
+	int lsnum=0;
+
+	memset(jycode,0x00,sizeof(jycode));
+	memset(subtxcode,0x00,sizeof(subtxcode));
+	memset(ysname,0x00,sizeof(ysname));
+	memset(zdname,0x00,sizeof(zdname));
+	memset(yslength,0x00,sizeof(yslength));
+	memset(zdtype,0x00,sizeof(zdtype));
+	memset(lstnumx,0x00,sizeof(lstnumx));
+	memset(xjycode,0x00,sizeof(xjycode));
+	memset(xsubtxcode,0x00,sizeof(xsubtxcode));
+	memset(xysname,0x00,sizeof(xysname)); 
+	memset(flag,0x00,sizeof(flag));
+	memset(jdtype,0x00,sizeof(jdtype));
+	memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+	pub_base_sysinit();
+
+	get_fd_data("0670",flag);
+  vtcp_log("[%s][%d]flag==[%s]",__FILE__,__LINE__,flag);
+	switch(flag[0])
+	{
+		case '0': /*刷新*/
+			ret=refresh_recd();
+			if(ret) goto ErrExit;
+			break;
+		case '1': /*修改*/
+			get_zd_data("0340",jycode);
+			get_zd_data("0920",subtxcode);
+			get_zd_data("0370",ysname);
+			get_zd_data("0210",yslength);
+			get_zd_data("0730",zdname);
+			get_zd_data("0680",zdtype);
+			get_zd_data("0280",lstnumx);
+			get_zd_data("0350",xjycode);
+			get_zd_data("0380",xysname);
+			get_zd_data("0490",xsubtxcode);
+			get_zd_data("0690",jdtype);
+			vtcp_log("jycode[%s]",jycode);
+			vtcp_log("jdtype[%s]",jdtype);
+			vtcp_log("subtxcode[%s]",subtxcode);
+			vtcp_log("zdtype[%s]",zdtype);
+			ret=update_recd(jycode,subtxcode,ysname,yslength,zdname,zdtype,lstnumx,xjycode,xsubtxcode,xysname,jdtype);
+			if(ret) goto ErrExit;
+			break;
+		case '2': /*删除*/
+			get_zd_data("0350",xjycode);
+			get_zd_data("0920",xsubtxcode);
+			get_zd_data("0380",xysname);
+			ret=del_recd(xjycode,xsubtxcode,xysname);
+			if(ret) goto ErrExit;
+			break;
+		case '3': /*增加*/
+			get_zd_data("0340",jycode);
+			get_zd_data("0920",subtxcode);
+			get_zd_data("0370",ysname);
+			get_zd_data("0210",yslength);
+			get_zd_data("0730",zdname);
+			get_zd_data("0680",zdtype);
+			get_zd_data("0690",jdtype);
+			get_zd_data("0280",lstnumx);
+			
+			
+			ret=sql_count("tranpara"," trancode='%s' ",jycode);
+			lsnum=ret+1;
+
+			ret=add_recd(jycode,subtxcode,ysname,yslength,zdname,zdtype,lstnumx,lsnum,jdtype);
+			if(ret) goto ErrExit;
+			break;
+		default:
+			sprintf(acErrMsg,"我不认识这个操作符啊.");
+			WRITEMSG
+			goto ErrExit;
+	}
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}
+int refresh_recd()
+{
+	int ret=0;
+	FILE *fp;
+	char filename[100];
+	int cnt=0;
+	char tmpbuf1[10];
+	char tmpbuf2[10];
+
+	memset(filename,0x00,sizeof(filename));
+	memset(tmpbuf1,0x00,sizeof(tmpbuf1));
+	memset(tmpbuf2,0x00,sizeof(tmpbuf2));
+  vtcp_log("[%s][%d]开始了refresh程序",__FILE__,__LINE__);
+	ret=Tranpara_Dec_Sel(g_pub_tx.reply," trancode in (select trancode from shjdcode where substr(text,1,1)='1') order by trancode,subtxcode");
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]声明出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		memset(tmpbuf1,0x00,sizeof(tmpbuf1));
+		memset(tmpbuf2,0x00,sizeof(tmpbuf2));
+		memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+		ret=Tranpara_Fet_Sel(&gTranpara,g_pub_tx.reply);
+		if(ret == 100)
+		{ 
+		    if(!cnt)
+		    {
+		    	   sprintf(acErrMsg,"[%s][%d]声明出错!![%d]",__FILE__,__LINE__,ret);
+			       WRITEMSG
+			       goto ErrExit;
+		    }
+		    break;
+		}    
+		else if(ret)
+		{
+			sprintf(acErrMsg,"[%s][%d]FETCH出错!![%d]",__FILE__,__LINE__,ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		if(!cnt)
+		{
+			pub_base_AllDwnFilName(filename);
+			fp=fopen(filename,"w");
+			if(!fp)
+			{
+				sprintf(acErrMsg," open file [%s] error ",filename );
+				WRITEMSG
+				strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+			}
+		}
+		if(gTranpara.xdtl_flag[0] == '0')
+			sprintf(tmpbuf1,"字符型");
+		else if(gTranpara.xdtl_flag[0] == '1')
+			sprintf(tmpbuf1,"浮点型");
+		if(gTranpara.xdtl_flag[1] == '0')
+			sprintf(tmpbuf2,"人工审票");
+		else if(gTranpara.xdtl_flag[1] == '1')
+			sprintf(tmpbuf2,"机器监督");
+		cnt++;
+		fprintf(fp,"%s|%s|%s|%s|%s|%s|%s|%s|\n",gTranpara.trancode,gTranpara.subtxcode,gTranpara.name,gTranpara.length,gTranpara.xdtl_name,tmpbuf1,tmpbuf2,gTranpara.xdtl_no);
+		vtcp_log("[%s][%d]gTranpara.trancode=[%s]",__FILE__,__LINE__,gTranpara.trancode);
+		vtcp_log("[%s][%d]gTranpara.name=====[%s]",__FILE__,__LINE__,gTranpara.name);
+		vtcp_log("[%s][%d]gTranpara.length===[%s]",__FILE__,__LINE__,gTranpara.length);
+		vtcp_log("[%s][%d]gTranpara.xdtl_name=[%s]",__FILE__,__LINE__,gTranpara.xdtl_name);
+		vtcp_log("[%s][%d]gTranpara.xdtl_flag=[%s]",__FILE__,__LINE__,gTranpara.xdtl_flag);
+		vtcp_log("[%s][%d]gTranpara.xdtl_no=[%s]",__FILE__,__LINE__,gTranpara.xdtl_no);
+	}
+	Tranpara_Clo_Sel();
+	if(!cnt)
+	{
+		strcpy(g_pub_tx.reply,"S049");
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data( DC_FILE_SND,"1");
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+int update_recd(char *jycode,char *subtxcode,char *ysname,char *yslength,char *zdname,char *zdtype,char *lstnumx,char *xjycode,char *xsubtxcode,char *xysname,char *jdtype)
+{
+	int ret=0;
+
+	memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+	vtcp_log("[%s][%d]开始了update程序 >>>>>>>>>>>>jdtype[%s]",__FILE__,__LINE__,jdtype);
+	ret=sql_count("shjdcode"," trancode='%s' and substr(text,1,1)='1' ",xjycode);
+	if(!ret)
+	{
+		strcpy(g_pub_tx.reply,"SH01");
+		sprintf(acErrMsg,"[%s][%d]此交易[%s]不需要监督,",__FILE__,__LINE__,xjycode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	ret=Tranpara_Dec_Upd(g_pub_tx.reply,"trancode='%s' and subtxcode='%s' and xdtl_name='%s'",xjycode,xsubtxcode,zdname);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]声明出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Tranpara_Fet_Upd(&gTranpara,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]FETCH出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	memcpy(gTranpara.trancode,jycode,sizeof(gTranpara.trancode)-1);
+	memcpy(gTranpara.subtxcode,subtxcode,sizeof(gTranpara.subtxcode)-1);
+	memcpy(gTranpara.name,ysname,sizeof(gTranpara.name)-1);
+	memcpy(gTranpara.length,yslength,sizeof(gTranpara.length)-1);
+	memcpy(gTranpara.xdtl_name,zdname,sizeof(gTranpara.xdtl_name)-1);
+	memcpy(gTranpara.xdtl_flag,zdtype,1);
+	memcpy(gTranpara.xdtl_flag+1,jdtype,1);
+	memcpy(gTranpara.xdtl_no,lstnumx,sizeof(gTranpara.xdtl_no)-1);
+	ret=Tranpara_Upd_Upd(gTranpara,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]UPDATE出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	Tranpara_Clo_Upd();
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+int del_recd(char *xjycode,char *xsubtxcode,char *xysname)
+{
+	int ret=0;
+	int countnum=0;
+	int xcountnum=0;
+	int xxcountnum=0;
+  vtcp_log("[%s][%d]开始了del程序",__FILE__,__LINE__);
+	memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+
+	ret=Tranpara_Sel(g_pub_tx.reply,&gTranpara,"trancode='%s' and subtxcode='%s'",xjycode,xsubtxcode);	
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]查询出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	countnum=gTranpara.recno;
+	xxcountnum=countnum;
+	ret=sql_execute("delete from tranpara where trancode='%s' and subtxcode='%s'",xjycode,xsubtxcode);	
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]DELETE tranpara出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=sql_execute("delete from flag_tranpara where trancode='%s' and name='%s'",xjycode,xysname);	
+	if(ret!=0 && ret!=100)
+	{
+		sprintf(acErrMsg,"[%s][%d]DELETE tranpara出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+	
+	ret=Tranpara_Dec_Sel(g_pub_tx.reply,"recno > %d and trancode='%s'",countnum,xjycode);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]DEC_SEL出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		ret=Tranpara_Fet_Sel(&gTranpara,g_pub_tx.reply);
+		if(ret == 100) goto OkExit;
+		if(ret)
+		{
+			sprintf(acErrMsg,"[%s][%d]FETCH出错!![%d],",__FILE__,__LINE__,ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		xcountnum=gTranpara.recno;
+		ret=Tranpara_Dec_Upd(g_pub_tx.reply,"recno =%d and trancode='%s'",xcountnum,xjycode);
+		if(ret)
+		{
+			sprintf(acErrMsg,"[%s][%d]声明游标出错!![%d],",__FILE__,__LINE__,ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		ret=Tranpara_Fet_Upd(&gTranpara,g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"[%s][%d]FETCH出错!![%d],",__FILE__,__LINE__,ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		gTranpara.recno=xxcountnum;
+		ret=Tranpara_Upd_Upd(gTranpara,g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"[%s][%d]UPDATE出错!![%d],",__FILE__,__LINE__,ret);
+			WRITEMSG
+			goto ErrExit;
+		}
+		xxcountnum++;
+		Tranpara_Clo_Upd();
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+
+int add_recd(char *jycode,char *subtxcode,char *ysname,char *yslength,char *zdname,char *zdtype,char *lstnumx,int lsnum,char *jdtype)
+{
+	int ret=0;
+	 
+	memset(&gTranpara,0x00,sizeof(struct tranpara_c));
+	vtcp_log("[%s][%d]开始了update程序",__FILE__,__LINE__);
+	memcpy(gTranpara.trancode,jycode,sizeof(gTranpara.trancode)-1);
+	memcpy(gTranpara.subtxcode,subtxcode,sizeof(gTranpara.subtxcode)-1);
+	memcpy(gTranpara.name,ysname,sizeof(gTranpara.name)-1);
+	memcpy(gTranpara.length,yslength,sizeof(gTranpara.length)-1);
+	memcpy(gTranpara.xdtl_name,zdname,sizeof(gTranpara.xdtl_name)-1);
+	memcpy(gTranpara.xdtl_flag,zdtype,1);
+	memcpy(gTranpara.xdtl_flag+1,jdtype,1);
+	memcpy(gTranpara.xdtl_no,lstnumx,sizeof(gTranpara.xdtl_no)-1);
+	gTranpara.recno=lsnum;
+	ret=sql_count("shjdcode"," trancode='%s' and substr(text,1,1)='1' ",jycode);
+	if(!ret)
+	{
+		strcpy(g_pub_tx.reply,"SH01");
+		sprintf(acErrMsg,"[%s][%d]此交易[%s]不需要监督,",__FILE__,__LINE__,jycode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Tranpara_Ins(gTranpara,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]INSERT出错!![%d],",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}

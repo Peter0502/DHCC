@@ -1,0 +1,470 @@
+/***************************************************************
+* 文 件 名: gD502.c
+* 功能描述: 支行50203,52202,52203,52206转入到清算52203,50202,50203,50205科目
+*               借	   贷	贷		贷		    	贷	借  	借	借
+* 作    者: ligl
+* 完成日期: 2006-12-28 12:23
+*
+* 修改记录：
+*    日    期:
+*    修 改 人:
+*    修改内容:
+*
+**************************************************************/
+#define MYRETERR if(ret){ \
+        sprintf(acErrMsg,"sql erro!! [%d]",ret); \
+        WRITEMSG \
+		    goto ErrExit;\
+	}
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "com_parm_c.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "gl_sub_c.h"
+#include "com_item_c.h"
+char  def_br_no[6];
+char  def_tel[5];
+gD502()
+{
+   int ret=0;
+	double c_bal=0.00, d_bal=0.00;
+	char dc_ind;
+	struct com_parm_c sCom_parm;
+	struct com_branch_c sCom_branch;
+	struct com_sys_parm_c sCom_sys_parm;
+	struct gl_sub_c sGl_sub;
+	struct com_item_c sCom_item;
+	double sum52203cbal=0.00;
+	double sum50202dbal=0.00;
+	double sum50203dbal=0.00;
+	double sum50205dbal=0.00;
+	FILE *fp2=NULL;
+	char filename1[64];
+	FILE *fp1=NULL;
+	char filename2[64];
+	char tmp_cxamt[21],vstr[60],tmp_cxamt1[21],tmp_cxamt2[21],tmp_cxamt3[21],tmp_cxamt4[21],tmp_cxamt5[21];
+  memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+  memset(tmp_cxamt1,0x00,sizeof(tmp_cxamt1));
+  memset(tmp_cxamt2,0x00,sizeof(tmp_cxamt2));
+  memset(tmp_cxamt3,0x00,sizeof(tmp_cxamt3));
+  memset(tmp_cxamt4,0x00,sizeof(tmp_cxamt4));
+  memset(vstr,0x00,sizeof(vstr));
+	memset(&sGl_sub , 0 , sizeof(sGl_sub));
+	memset(&sCom_parm , 0 , sizeof(sCom_parm));
+	memset(&sCom_branch, 0  ,sizeof(sCom_branch));
+	memset(&sCom_sys_parm, 0 , sizeof(sCom_sys_parm));
+	memset(&sCom_item, 0 , sizeof(sCom_item));
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+	set_zd_long( DC_TRACE_CNT,1 );
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "得到交易日期失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*** 初始化全局变量 ***/
+	if(pub_base_sysinit())
+	{
+		strcpy(acErrMsg,"初始化全局变量出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/ 
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/ 
+	strcpy( g_pub_tx.ac_wrk_ind,"000" ); /*不核对凭证号，零金额不计流水、明细*/ 
+	strcpy( g_pub_tx.end_note_no,g_pub_tx.beg_note_no); 
+	strcpy( g_pub_tx.prt_ind,"0" ); /*不登折*/ 
+	g_pub_tx.svc_ind=9001;  /*内部帐存取*/ 
+	strcpy(g_pub_tx.prt_ind,"0"); 
+	strcpy(g_pub_tx.hst_ind,"1"); /*日间入明细*/
+	g_pub_tx.tx_date = sCom_sys_parm.sys_date;
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type='4' and wrk_sts!='*'");
+	if(ret)
+	{
+		strcpy(acErrMsg,"定义机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		ret=Com_branch_Fet_Sel(&sCom_branch,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+		strcpy(acErrMsg,"读取机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+		}
+
+		memcpy(g_pub_tx.tel,sCom_branch.br_no+1,2);
+		memcpy(g_pub_tx.tel+2,"99",2);
+		set_zd_data(DC_TEL,g_pub_tx.tel);
+		memcpy(g_pub_tx.tx_br_no,sCom_branch.br_no,5);
+		memset(filename1,0x0,sizeof(filename1));
+    sprintf(filename1,"%s/report/%5s/gD502.txt",getenv("HOME"),sCom_branch.br_no);
+   	fp2 = fopen( filename1,"w" ); 
+    if( fp2==NULL )
+    {
+     			sprintf(acErrMsg," open file [%s] error ",filename1 );
+     			WRITEMSG
+     			strcpy( g_pub_tx.reply,"S047" );
+     			return 1;
+    } 
+   			double d_amt=0.00,c_amt=0.00;				
+				ret = sql_sum_double("gl_sub", "dr_bal", &d_amt,"br_no='%s' and acc_hrt in('52202','52203','52206')",sCom_branch.br_no);
+				MYRETERR
+				ret = sql_sum_double("gl_sub", "cr_bal", &c_amt,"br_no='%s' and acc_hrt='50203'",sCom_branch.br_no);
+    		MYRETERR
+				double bal=0.00;
+				bal=d_amt-c_amt;
+				double d1_amt=0.00,c1_amt=0.00,d2_amt=0.00,c2_amt=0.00;				
+				ret = sql_sum_double("dc_log", "amt", &d1_amt,"tx_opn_br_no='%s' and acc_hrt in('52202','52203','52206') and dc_ind='1' and sts='0'",sCom_branch.br_no);
+				MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &c1_amt,"tx_opn_br_no='%s' and acc_hrt in('52202','52203','52206') and dc_ind='2' and sts='0'",sCom_branch.br_no);
+				MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &d2_amt,"tx_opn_br_no='%s' and acc_hrt='50203' and dc_ind='1' and sts='0'",sCom_branch.br_no);
+    		MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &c2_amt,"tx_opn_br_no='%s' and acc_hrt='50203' and dc_ind='2' and sts='0'",sCom_branch.br_no);
+    		MYRETERR
+				double bal1=0.00,bal2=0.00;
+				bal1=d1_amt-c1_amt; 
+				bal2=c2_amt-d2_amt; 
+		  	memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+      	sprintf( tmp_cxamt, "%.2f" ,bal+bal1-bal2);
+    		pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+        fprintf(fp2,"                        %s 支行划清算传票\n", BANK_CNAME);                        
+				fprintf(fp2,"                  ---------------------------------------------\n");                  
+				fprintf(fp2, "       营业机构: %s              交易日期: %ld                 流水号: %ld\n",sCom_branch.br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+				fprintf(fp2, " ┌──────┬───────────────────────────────────┐\n");
+				fprintf(fp2, " │  划转金额  │￥%-21s                                               │\n",tmp_cxamt);
+				fprintf(fp2, " ├──────┼───────────────────┬──┬────────────┤\n");
+		ret=Gl_sub_Dec_Sel(g_pub_tx.reply,"(acc_hrt='52202' or acc_hrt='52203' or acc_hrt='52206' or acc_hrt='50203') and br_no='%s'",sCom_branch.br_no);
+		if(ret)
+		{
+		strcpy(acErrMsg,"定义机构总帐游标出错!");
+		WRITEMSG
+		goto ErrExit;
+		}
+		while(1)
+		{
+			ret=Gl_sub_Fet_Sel(&sGl_sub,g_pub_tx.reply);
+			if(ret==100)
+			{
+				break;
+			}
+			if(ret)
+			{
+				strcpy(acErrMsg,"读取帐务游标出错!");
+				WRITEMSG
+				goto ErrExit;
+			}
+			strncpy(g_pub_tx.brf,"数据转出",sizeof(g_pub_tx.brf));
+			set_zd_data("1211","");
+			set_zd_data("121A","");
+			set_zd_data("0152","");
+			set_zd_data("1214","" );
+			set_zd_data("1215","" );
+      set_zd_double("1218",0.00 );
+			if(sGl_sub.dr_bal!=0)
+			{
+				/* 贷方处理支行 */
+				memset(&sCom_item, 0 , sizeof(sCom_item));
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",sGl_sub.acc_hrt);
+				if(ret)
+				{
+					sprintf(acErrMsg,"根据[%s]查询科目错误",sGl_sub.acc_hrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				memcpy(g_pub_tx.opn_br_no,sCom_branch.br_no,5);
+				double dr_amt=0.00,cr_amt=0.00;				
+				ret = sql_sum_double("dc_log", "amt", &dr_amt,"tx_opn_br_no='%s' and acc_hrt='%s' and dc_ind='1' and sts='0'",sCom_branch.br_no,sGl_sub.acc_hrt);
+				MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &cr_amt,"tx_opn_br_no='%s' and acc_hrt='%s' and dc_ind='2' and sts='0'",sCom_branch.br_no,sGl_sub.acc_hrt);
+				MYRETERR
+				double dc_bal=0.00;
+				dc_bal=dr_amt-cr_amt;	
+				/*********如果为50201机构的那么52202科目,需要减去5000 20061231 ,不需要减了2007-1-31 19:13******/	
+				if(memcmp(sCom_branch.br_no,"50201",5)==0 && memcmp(sGl_sub.acc_hrt,"52202",5)==0)
+				{
+					g_pub_tx.tx_amt1=sGl_sub.dr_bal+dc_bal;/*支行贷方*/
+				}
+				else if(memcmp(sCom_branch.br_no,"50201",5)==0 && memcmp(sGl_sub.acc_hrt,"52203",5)==0)
+				{
+					g_pub_tx.tx_amt1=sGl_sub.dr_bal+dc_bal;/*支行贷方*/
+				}
+				else
+				{
+					g_pub_tx.tx_amt1=sGl_sub.dr_bal+dc_bal;/*支行贷方*/
+				}
+				/***************/
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				sprintf(acErrMsg, "处理机构[%s]科目[%s]贷方余额[%.2f]---------->",sCom_branch.br_no,sGl_sub.acc_hrt,g_pub_tx.tx_amt1);
+				WRITEMSG
+				set_zd_data("1211",sCom_item.acc_no);
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152",sGl_sub.acc_hrt);
+				ret = pubf_acct_proc("A017");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "记机构%s的%s科目会计帐错误!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				/* 处理借方清算*/
+				vtcp_log("aaaaaaaaaaaaaaaaaaaaa[%s]\n",sGl_sub.acc_hrt);
+				char qingsuan_acchrt[6];
+				memset(qingsuan_acchrt,0x00,sizeof(qingsuan_acchrt));
+				if(memcmp(sGl_sub.acc_hrt,"52202",5)==0)
+				{
+					memcpy(qingsuan_acchrt,"50202",5);
+					sum50202dbal=sum50202dbal+g_pub_tx.tx_amt1;
+				}
+				else if(memcmp(sGl_sub.acc_hrt,"52203",5)==0)
+				{
+					memcpy(qingsuan_acchrt,"50203",5);
+					sum50203dbal=sum50203dbal+g_pub_tx.tx_amt1;
+				}
+				else
+				{
+					memcpy(qingsuan_acchrt,"50205",5);
+					sum50205dbal=sum50205dbal+g_pub_tx.tx_amt1;
+				}
+				memset(&sCom_item, 0 , sizeof(sCom_item));
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",qingsuan_acchrt);
+				if(ret)
+				{
+					sprintf(acErrMsg,"根据[%s]查询科目错误",qingsuan_acchrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				vtcp_log("bbbbbbbbbbbbbbbbbbbbbbbbbbbbb[%s]\n",qingsuan_acchrt);
+				/*g_pub_tx.tx_amt1= sGl_sub.dr_bal+dc_bal;*/				
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='0';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				memcpy(g_pub_tx.opn_br_no,QS_BR_NO,5);
+				sprintf(acErrMsg, "同时处理[%s]到清算科目[%s]--[%.2lf]-------->",sCom_branch.br_no,qingsuan_acchrt,g_pub_tx.tx_amt1);
+				WRITEMSG
+				set_zd_data("1201",sCom_item.acc_no);	
+				set_zd_double("1208",g_pub_tx.tx_amt1);
+				set_zd_data("120A",g_pub_tx.brf);
+				set_zd_data("1205",g_pub_tx.ct_ind); 
+				set_zd_data("1204",g_pub_tx.cur_no);
+				set_zd_data("0152",qingsuan_acchrt);
+				ret = pubf_acct_proc("A016");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "记机构%s的%s科目会计帐错误!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				vtcp_log("cccccccccccccccccccccccccccccccc[%s]\n",sGl_sub.acc_hrt);
+				set_zd_data("1201","");
+				set_zd_data("120A","");
+				set_zd_data("1204","" );
+				set_zd_data("1205","" );
+      	set_zd_double("1208",0.00 );
+      	set_zd_data("1211","");
+				set_zd_data("121A","");
+				set_zd_data("1214","" );
+				set_zd_data("1215","" );
+      	set_zd_double("1218",0.00 );	
+      	memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+      	sprintf( tmp_cxamt, "%.2f" ,g_pub_tx.tx_amt1);
+    		pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+				fprintf(fp2, " │  贷方科目  │%-5s       ￥%-21s   │    │                        │\n",sGl_sub.acc_hrt,tmp_cxamt);   
+			}
+			if(sGl_sub.cr_bal!=0)
+			{
+				/* 贷方处理支行 */
+				memset(&sCom_item, 0 , sizeof(sCom_item));
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",sGl_sub.acc_hrt);
+				if(ret)
+				{
+					sprintf(acErrMsg,"根据[%s]查询科目错误",sGl_sub.acc_hrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				memcpy(g_pub_tx.opn_br_no,sCom_branch.br_no,5);
+				double dr1_amt=0.00,cr1_amt=0.00;				
+				ret = sql_sum_double("dc_log", "amt", &dr1_amt,"tx_opn_br_no='%s' and acc_hrt='%s' and dc_ind='1' and sts='0'",sCom_branch.br_no,sGl_sub.acc_hrt);
+				MYRETERR
+				ret = sql_sum_double("dc_log", "amt", &cr1_amt,"tx_opn_br_no='%s' and acc_hrt='%s' and dc_ind='2' and sts='0'",sCom_branch.br_no,sGl_sub.acc_hrt);
+				MYRETERR
+				double dc1_bal=0.00;
+				dc1_bal=cr1_amt-dr1_amt;
+				/*********如果为50201机构的那么50203科目******/	
+				if(memcmp(sCom_branch.br_no,"50201",5)==0)
+				{
+				g_pub_tx.tx_amt1=sGl_sub.cr_bal+dc1_bal;/*支行贷方*/
+				}
+				else
+				{
+				g_pub_tx.tx_amt1=sGl_sub.cr_bal+dc1_bal;/*支行贷方*/
+				}
+				/***************/
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='0';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				sprintf(acErrMsg, "处理机构[%s]科目[%s]贷方余额[%.2lf]---------->",sCom_branch.br_no,sGl_sub.acc_hrt,g_pub_tx.tx_amt1);
+				WRITEMSG
+				set_zd_data("1201",sCom_item.acc_no);
+				set_zd_double("1208",g_pub_tx.tx_amt1);
+				set_zd_data("120A",g_pub_tx.brf);
+				set_zd_data("1205",g_pub_tx.ct_ind); 
+				set_zd_data("1204",g_pub_tx.cur_no);
+				set_zd_data("0152",sGl_sub.acc_hrt);
+				ret = pubf_acct_proc("A016");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "记机构%s的%s科目会计帐错误!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				/* 处理借方清算*/
+				vtcp_log("aaaaaaaaaaaaaaaaaaaaa[%s]\n",sGl_sub.acc_hrt);
+				char qingsuan_acchrt[6];
+				memset(qingsuan_acchrt,0x00,sizeof(qingsuan_acchrt));
+				if(memcmp(sGl_sub.acc_hrt,"50203",5)==0)
+				{
+					memcpy(qingsuan_acchrt,"52203",5);
+					sum52203cbal=sum52203cbal+g_pub_tx.tx_amt1;
+				}
+				memset(&sCom_item, 0 , sizeof(sCom_item));
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",qingsuan_acchrt);
+				if(ret)
+				{
+					sprintf(acErrMsg,"根据[%s]查询科目错误",qingsuan_acchrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				vtcp_log("bbbbbbbbbbbbbbbbbbbbbbbbbbbbb[%s]\n",qingsuan_acchrt);
+				
+				/*g_pub_tx.tx_amt1=sGl_sub.cr_bal+dc1_bal;*/				
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				memcpy(g_pub_tx.opn_br_no,QS_BR_NO,5);
+				sprintf(acErrMsg, "同时处理[%s]到清算科目[%s]----[%.2lf]------>",sCom_branch.br_no,qingsuan_acchrt,g_pub_tx.tx_amt1);
+				WRITEMSG
+				set_zd_data("1211",sCom_item.acc_no);	
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152",qingsuan_acchrt);
+				ret = pubf_acct_proc("A017");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "记机构%s的%s科目会计帐错误!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+								vtcp_log("cccccccccccccccccccccccccccccccc[%s]\n",sGl_sub.acc_hrt);
+				set_zd_data("1211","");
+				set_zd_data("121A","");
+				set_zd_data("1214","" );
+				set_zd_data("1215","" );
+      	set_zd_double("1218",0.00 );
+      	set_zd_data("1201","");
+				set_zd_data("120A","");
+				set_zd_data("1204","" );
+				set_zd_data("1205","" );
+      	set_zd_double("1208",0.00 );
+      	memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+      	sprintf( tmp_cxamt, "%.2f" ,g_pub_tx.tx_amt1);
+    		pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+				fprintf(fp2, " │            │                                      │摘要│        数据调整        │\n");
+				fprintf(fp2, " │  借方科目  │50203       ￥%-21s   │    │                        │\n",tmp_cxamt);   
+			}
+		}
+		Gl_sub_Clo_Sel();
+	 			fprintf(fp2, " └──────┴───────────────────┴──┴────────────┘\n");
+   			fprintf(fp2, "\n\n\n");
+				fclose(fp2);
+	}
+	Com_branch_Clo_Sel();
+	
+	memset(filename2,0x0,sizeof(filename2));
+  sprintf(filename2,"%s/report/%s/gD502.txt",getenv("HOME"), QS_BR_NO);
+   	fp1 = fopen( filename2,"w" ); 
+    if( fp1==NULL )
+    {
+     			sprintf(acErrMsg," open file [%s] error ",filename2 );
+     			WRITEMSG
+     			strcpy( g_pub_tx.reply,"S047" );
+     			return 1;
+    } 
+    memset(tmp_cxamt1,0x00,sizeof(tmp_cxamt1));
+    sprintf( tmp_cxamt1, "%.2f" ,sum52203cbal);
+    pub_rpt_flttomon( tmp_cxamt1,tmp_cxamt1);	/* 小写金额 */
+    memset(tmp_cxamt2,0x00,sizeof(tmp_cxamt2));
+    sprintf( tmp_cxamt2, "%.2f" ,sum50202dbal);
+    pub_rpt_flttomon( tmp_cxamt2,tmp_cxamt2);	/* 小写金额 */
+    memset(tmp_cxamt3,0x00,sizeof(tmp_cxamt3));
+    sprintf( tmp_cxamt3, "%.2f" ,sum50203dbal);
+    pub_rpt_flttomon( tmp_cxamt3,tmp_cxamt3);	/* 小写金额 */
+    memset(tmp_cxamt4,0x00,sizeof(tmp_cxamt4));
+    sprintf( tmp_cxamt4, "%.2f" ,sum50205dbal);
+    pub_rpt_flttomon( tmp_cxamt4,tmp_cxamt4);	/* 小写金额 */
+   memset(tmp_cxamt5,0x00,sizeof(tmp_cxamt5));
+    sprintf( tmp_cxamt5, "%.2f" ,sum50202dbal+sum50203dbal+sum50205dbal-sum52203cbal);
+    pub_rpt_flttomon( tmp_cxamt5,tmp_cxamt5);	/* 小写金额 */
+    
+    fprintf(fp1,"                          %s 支行划清算传票\n", BANK_CNAME);                        
+		fprintf(fp1,"                      ---------------------------------------------\n");                  
+		fprintf(fp1, "      营业机构: %s                  交易日期: %ld               流水号: %ld\n",QS_BR_NO, g_pub_tx.tx_date,g_pub_tx.trace_no);
+		fprintf(fp1, " ┌──────┬───────────────────────────────────┐\n");
+		fprintf(fp1, " │  划转金额  │￥%-21s                                               │\n",tmp_cxamt5);
+		fprintf(fp1, " ├──────┼───────────────────┬──┬────────────┤\n");
+		fprintf(fp1, " │  贷方科目  │52203  ￥%-21s        │    │                        │\n",tmp_cxamt1);   
+		fprintf(fp1, " │            │                                      │摘要│        数据调整        │\n");
+		fprintf(fp1, " │  借方科目  │50202  ￥%-21s        │    │                        │\n",tmp_cxamt2);   
+		fprintf(fp1, " │  借方科目  │50203  ￥%-21s        │    │                        │\n",tmp_cxamt3);   
+		fprintf(fp1, " │  借方科目  │50205  ￥%-21s        │    │                        │\n",tmp_cxamt4);   
+	 	fprintf(fp1, " └──────┴───────────────────┴──┴────────────┘\n");
+   	fprintf(fp1, "\n\n\n");
+		fclose(fp1);
+
+OkExit:
+    sql_commit();   /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+		sprintf(acErrMsg,"转入处理成功![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+    sql_rollback(); /*--事务回滚--*/
+	sprintf(acErrMsg,"转入处理失败![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}

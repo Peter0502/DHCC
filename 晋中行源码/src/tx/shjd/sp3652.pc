@@ -1,0 +1,196 @@
+/******************************************************************************
+*交易名称：柜员签退(事后)		                                      *
+*功能描述: 本模块主要功能是实现柜员的日终签退处理                             *
+*编写人：  ligl                                                               *
+*编写日期：2007-1-15 17:35                                                    *
+*修改日期：                                                                   *
+*数据库表:                                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error.[%d]",ret ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "public.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "com_tel_c.h"
+#include "shjd_tlrpoot_c.h"
+EXEC SQL INCLUDE sqlca ;
+int sp3652()
+{
+	int    total=0;
+	int    xnum=0,ret=0;
+	int    temp=0,i=0;
+	char   brno    [6];
+	char   QT_BRNO [5]; /**注意这里以后需要更改xyy**/
+	char   QT_TLRNO[5]; /*已改lyz*/
+	int	c_sts;
+	char 	err_msg[31];
+	struct shjd_tlrvsbrn_c shjd_tlrvsbrn;
+	
+	memset(brno          , 0 , sizeof(brno));
+	memset(QT_TLRNO      , 0 , sizeof(QT_TLRNO));
+	memset(QT_BRNO       , 0 , sizeof(QT_BRNO));
+	memset(&shjd_tlrvsbrn, 0 , sizeof(struct shjd_tlrvsbrn_c));
+	memset(err_msg,'\0',sizeof(err_msg));
+	
+  	pub_base_sysinit();
+  	get_fd_data("0070",QT_TLRNO);
+  	vtcp_log("[%s][%d]QT_TLRNO==[%s]",__FILE__,__LINE__,QT_TLRNO);
+  
+	pub_base_strpack(QT_TLRNO);
+	/*******检查柜员状态**************/
+	c_sts=get_tel_csts(QT_TLRNO);
+	vtcp_log(">>>>c_sts[%d]",c_sts);
+	switch(c_sts){
+		case 0:
+			break;
+		case 1:
+			strcpy(err_msg,"临时签退");
+			break;
+		case 2:
+			strcpy(err_msg,"已签退");
+			break;
+		case 3:
+			strcpy(err_msg,"锁定");
+			break;
+		case 4:
+			strcpy(err_msg,"删除");
+			break;
+		default:
+			strcpy(err_msg,"未知状态");
+	}
+	if(c_sts){
+		vtcp_log("[%s][%d]柜员状态错误[%s]",__FILE__,__LINE__,err_msg);
+		sprintf(acErrMsg,"柜员状态错误[%s]",err_msg);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/**********检查柜员监督情况******************/
+  	ret=Shjd_tlrvsbrn_Dec_Sel(g_pub_tx.reply,"tlrno='%s'",QT_TLRNO);	
+	ERR_DEAL
+	while(1){
+		memset(brno,0,sizeof(brno));
+	  	memset(&shjd_tlrvsbrn, 0, sizeof(struct shjd_tlrvsbrn_c));
+	  	ret=Shjd_tlrvsbrn_Fet_Sel(&shjd_tlrvsbrn,g_pub_tx.reply);	
+	  	if(ret==100) break;
+	  	ERR_DEAL
+	  	memcpy(brno,shjd_tlrvsbrn.brno,sizeof(brno)-1);
+	  	vtcp_log("[%s][%d]brno==[%s]",__FILE__,__LINE__,brno);
+		temp=sql_count("trace_log","tx_br_no='%s' and stat='0'",brno);
+		if(temp!=0){
+			total ++;
+		}
+	}
+  	Shjd_tlrvsbrn_Clo_Sel();
+	if(total!=0){
+		vtcp_log("[%s][%d]这里把67域赋值1",__FILE__,__LINE__);
+		set_zd_data("0670","1");
+	}
+	else
+	{
+		g_reply_int=upd_com_tel_down(QT_TLRNO);
+		if(g_reply_int){
+			goto ErrExit;
+		}
+		g_reply_int=upd_tlrpoot_down(QT_TLRNO);
+		if(g_reply_int){
+			goto ErrExit;
+		}
+		set_zd_data("0670","0");
+	}
+	vtcp_log("[%s][%d]==end Process====\n",__FILE__,__LINE__);
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	/*
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	*/
+	if(memcmp(g_pub_tx.reply,"0000",4)==0)
+		strcpy(g_pub_tx.reply,"0120");
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+}
+int get_tel_csts(char tel[])
+{
+	int ret=0;
+	struct com_tel_c wd_com_tel;
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+	g_reply_int=Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s'",tel);
+	if(g_reply_int){
+		vtcp_log("[%s][%d]查询柜员表出错[%d]",__FILE__,__LINE__,g_reply_int);
+		sprintf(acErrMsg,"[%s][%d]查询柜员表出错[%d]",__FILE__,__LINE__,g_reply_int);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		return 1;
+	}
+	ret=atoi(wd_com_tel.csts);
+	vtcp_log("<<<<csts[%s] ret[%d]",wd_com_tel.csts,ret);
+	return ret;
+}
+int upd_com_tel_down(char tel[])
+{
+	struct com_tel_c wd_com_tel;
+	memset(&wd_com_tel,'\0',sizeof(wd_com_tel));
+	g_reply_int = Com_tel_Dec_Upd(g_pub_tx.reply,"tel='%s'",tel);
+        if(g_reply_int != 0){
+        	sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",g_reply_int);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+    	}           
+        g_reply_int = Com_tel_Fet_Upd(&wd_com_tel,g_pub_tx.reply);
+	if (g_reply_int != 0){
+        	sprintf(acErrMsg,"FETCH ERROR !! [%d]",g_reply_int);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+        }
+	memset(wd_com_tel.csts,'\0',sizeof(wd_com_tel.csts));
+	memcpy(wd_com_tel.csts,"2",sizeof(wd_com_tel.csts)-1);
+        g_reply_int = Com_tel_Upd_Upd(wd_com_tel,g_pub_tx.reply);
+        if (g_reply_int != 0){
+        	sprintf(acErrMsg,"修改表com_tel出错!!!");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+        }
+        Com_tel_Clo_Sel();
+	return 0;
+}
+int upd_tlrpoot_down(char tel[])
+{
+	struct shjd_tlrpoot_c wd_shjd_tlrpoot;
+	memset(&wd_shjd_tlrpoot,'\0',sizeof(wd_shjd_tlrpoot));
+	g_reply_int = Shjd_tlrpoot_Dec_Upd(g_pub_tx.reply,"tlrno='%s'",tel);
+        if(g_reply_int != 0){
+        	sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",g_reply_int);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+    	}           
+        g_reply_int = Shjd_tlrpoot_Fet_Upd(&wd_shjd_tlrpoot,g_pub_tx.reply);
+	if (g_reply_int != 0){
+        	sprintf(acErrMsg,"FETCH ERROR !! [%d]",g_reply_int);
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+        }
+	memset(wd_shjd_tlrpoot.downtime,'\0',sizeof(wd_shjd_tlrpoot.downtime));
+	sprintf(wd_shjd_tlrpoot.downtime,"%ld",g_pub_tx.tx_time);
+        g_reply_int = Shjd_tlrpoot_Upd_Upd(wd_shjd_tlrpoot,g_pub_tx.reply);
+        if (g_reply_int != 0){
+        	sprintf(acErrMsg,"修改表shjd_tlrpoot出错!!!");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return g_reply_int;
+        }
+        Shjd_tlrpoot_Clo_Sel();
+	return 0;
+}

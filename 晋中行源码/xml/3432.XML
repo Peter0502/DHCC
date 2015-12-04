@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="3432  存款账户机构迁移"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	//取得操作柜员的级别 #TEL_LVL
+	initfd();
+	commsend_001();
+	$FD16='9121';
+	$FD92=$TLRNO;
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#TEL_LVL=$FD68;
+	initfd();
+	commsend_001();
+	$FD30=#ACTNO;
+	$FD91=#NEWBRNO;
+	$FD53=#ACTSEQ;
+	$FD64=#TXBR;
+	$FD68=#TEL_LVL;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(3432                            存款账户机构迁移)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=3432)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<!--输入变量-->
+<ITEM NAME="#TEL_LVL" TYPE="%-1s" FUNCTIONS=""/>
+<!---ITEM LINE="5"   COL="11" TYPE="%-10s" FUNCTIONS="T(账户类型:)"/--->
+<ITEM LINE="5"   COL="11" TYPE="%-10s" FUNCTIONS="T(迁移类型:)"/>
+<ITEM LINE="6"   COL="11" TYPE="%-10s" FUNCTIONS="T(交易机构:)"/>
+<ITEM LINE="7"   COL="11" TYPE="%-10s" FUNCTIONS="T(存款账号:)"/>
+<ITEM NAME="#LACSEQ" LINE="7"   COL="40" TYPE="%-9s" FUNCTIONS="T(账户序号:)" INPUT="LABEL" VISABLE="FALSE" />
+<ITEM LINE="8"   COL="11" TYPE="%-10s" FUNCTIONS="T(存款户名:)"/>
+<ITEM LINE="10"  COL="11" TYPE="%-64s" FUNCTIONS="T(------------------------原机构信息------------------------)"/>
+<ITEM LINE="11"  COL="11" TYPE="%-10s" FUNCTIONS="T(机 构 号:)"/>
+<ITEM LINE="12"  COL="11" TYPE="%-10s" FUNCTIONS="T(机构名称:)"/>
+<!----
+<ITEM LINE="13"  COL="11" TYPE="%-10s" FUNCTIONS="T(账户余额:)"/>
+---->
+<ITEM LINE="15"  COL="11" TYPE="%-64s" FUNCTIONS="T(------------------------新机构信息------------------------)"/>
+
+<ITEM LINE="16"  COL="11" TYPE="%-9s" FUNCTIONS="T(机 构 号:)"/>
+<ITEM LINE="17"  COL="11" TYPE="%-9s" FUNCTIONS="T(机构名称:)"/>
+
+
+<!---ITEM NAME="#ZHLX"   LINE="5"   COL="20" TYPE="%-1s" DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="活期"/>
+		<OPTION VALUE="1" TITLE="定期"/>
+	</SELECT>
+</ITEM--->
+
+<ITEM NAME="#QYLX"   LINE="5"   COL="20" TYPE="%-1s" DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T()V(NB)">
+	<SELECT>
+		<!---OPTION VALUE="0" TITLE="单一序号"/--->
+		<OPTION VALUE="1" TITLE="该账户下的全部"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#QQYLX" TYPE="%-20s"   FUNCTIONS="S(#QYLX,#QYLX)"/>
+<ITEM NAME="#ZHLX" TYPE="%-4s"     FUNCTIONS="T()"/>
+<ITEM NAME="#TXBR" INPUT="LABEL" LINE="6" COL="20" TYPE="%-6s" FUNCTIONS="T($KINBR)V(NB)"/>
+
+<ITEM NAME="#ACTNO" INPUT="TEXT" LINE="7" COL="20" TYPE="%-19s" FUNCTIONS="T()V(NB)">
+<ONLOSTFOCUS>
+"{
+	dim @info as string;
+	dim @seqn as string;
+	dim @opn_date as string;
+	dim @prdt_name as string;
+	dim @bal as string;
+	dim @act_sts as string;
+	dim @selid as number;
+	dim @seqn1 as number;
+	dim @cnt as number;
+	dim @line as string;
+	dim @sql as string;
+	dim @tota as string;
+	dim @f as file;
+
+	initfd();
+	commsend_001();
+	$FD16='9598';
+	@sql='select ac_id from dd_mst where ac_id in(select ac_id from mdm_ac_rel where ac_no='+chr(39)+delspace(#ACTNO)+chr(39)+')';
+	$FD123=@sql;
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if( len(@tota) &lt; 2)
+	{
+	initfd();
+		commsend_001();
+		$FD16='9598';
+		@sql='select ac_id from td_mst where ac_id in(select ac_id from mdm_ac_rel where ac_no='+chr(39)+delspace(#ACTNO)+chr(39)+')';
+		$FD123=@sql;
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if( len(@tota) &gt; 1)
+		{
+			#ZHLX='定期';
+		}
+	}
+	else
+	{
+		#ZHLX='活期';
+	}
+	
+	initfd();
+	commsend_001();
+	$FD16='9598';
+	@sql='select sum(cnt) from note_cheq_mst where ac_id in(select ac_id from mdm_ac_rel where ac_no='+chr(39)+delspace(#ACTNO)+chr(39)+') and cnt>0';
+	$FD123=@sql;
+	@tota=callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(true);
+	}
+	//showmsg(itoa(len(delspace(@tota))));
+	//showmsg(@tota);
+	@cnt=val(strfld(@tota,'|',0));
+	if( @cnt>0 )
+	{
+		showmsg('客户还有['+itoa(@cnt)+']个凭证尚未清理！');
+		return(false);
+	}
+	initfd();
+	commsend_001();
+	$FD102 = #ACTNO;
+	$FD16 = '9731';
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (false);
+	}
+	//#YE=val($FD42,0.01);
+	#NAME = $FD25;
+	#OLDBENO = $FD2;
+	if( #OLDBENO!=$KINBR ){
+		showmsg('非本机构账户');
+		return(false);
+	}
+	//20130819 此处控制个人账户不允许做迁移
+	dim @cif_type as string;
+	@cif_type=substr($FD102,227,1);
+	if(@cif_type=='1')
+	{
+		showmsg('个人存款户，不允许迁移机构！');
+		return (false);
+	}
+	if(#QYLX == '0')
+	{
+		show(#LACSEQ,true);
+		show(#ACTSEQ,true);
+		list_init(7,66,8,10);
+		list_setcolcnt(5);
+		list_setcol(0,'序 号', 8);
+		list_setcol(1,'开户日期',10);
+		list_setcol(2,'产品类型',16);
+		list_setcol(3,'余    额',16);
+		list_setcol(4,'账户状态',8);
+
+		initfd();
+		commsend_001();
+		$FD16='9655';
+		$FD37=#ACTNO;
+		@tota=callserver();
+		savefiletxt('../tmp/6666_3432.txt',@tota);
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		@f=openfile('../tmp/6666_3432.txt','r');
+		if(@f &lt; 0){
+			showmsg('打开回传文件错误就');
+			return(false);
+		}
+		while(true)
+		{
+			@line=readline(@f);
+			if(@line!='')
+			{
+				@seqn=strfld(@line,'|',0);
+				@opn_date=strfld(@line,'|',1);
+				@opn_date=substr(@opn_date,2,6);
+				@prdt_name=strfld(@line,'|',2);
+				@bal=strfld(@line,'|',3);
+				@act_sts=strfld(@line,'|',4);
+				if(@act_sts=='1'){
+					@act_sts='正常';}
+				else if(@act_sts=='3'){
+					@act_sts='挂失结清';}
+				else if(@act_sts=='4'){
+					@act_sts='开户更正';}
+				else if(@act_sts=='5'){
+					@act_sts='临时销户';}
+				else if(@act_sts=='#'){
+					@act_sts='计息结束';}
+				else if(@act_sts=='*'){
+					@act_sts='销户';}
+				list_additem('',@seqn,@opn_date,@prdt_name,@bal,@act_sts);
+			}else{
+				break;
+			}
+		}
+		closefile(@f);
+		@selid=list_work();
+		if(@selid &lt; 0)
+		{
+			list_del();
+			refresh();
+			showmsg('没有得到分账户信息');
+			return(true);
+		}
+		@selid=0;
+		@selid=list_getselid();
+		@seqn1=list_gettext(@selid,0);
+		#ACTSEQ=@seqn1;
+		//list_del();
+		//refresh();
+	}else{
+		show(#LACSEQ,false);
+		show(#ACTSEQ,false);
+	}
+	initfd();
+	commsend_001();
+	$FD16='9598';
+	$FD123='select br_name from com_branch where br_no='+chr(39)+#OLDBENO+chr(39);
+	@info=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#OLDNAME=strfld(@info,'|',0);
+	refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="7"  COL="55" TYPE="%-4s" VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+<ITEM NAME="#NAME"      LINE="8"   COL="20" TYPE="%-50s"     FUNCTIONS="" />
+<ITEM NAME="#OLDBENO"  LINE="11"   COL="20"  TYPE="%-5s" INPUT="LABEL" FUNCTIONS=""/>
+<ITEM NAME="#OLDNAME"  LINE="12"   COL="20"  TYPE="%-60s" INPUT="LABEL" FUNCTIONS=""/>
+
+<!----
+<ITEM NAME="#YE" INPUT="LABEL" LINE="13" COL="20" TYPE="%17.2f" FUNCTIONS=""/>
+---->
+<ITEM NAME="#NEWBRNO"     INPUT="TEXT"     LINE="16"   COL="20"  INPUT="TEXT"   " TYPE="%-5s"     FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+	dim @info as string;
+	if(#OLDBENO == #NEWBRNO)
+	{
+		showmsg('请输入其他机构！');
+		return(false);
+	}
+	initfd();
+	commsend_001();
+	$FD16='9598';
+	$FD123='select br_name from com_branch where br_no='+chr(39)+#NEWBRNO+chr(39);
+	@info=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#NEWNAME=strfld(@info,'|',0);
+	if( #NEWNAME=='' )
+	{
+		showmsg('机构号不存在,请重新输入！');
+		return(false);
+	}
+	refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#NEWNAME"     LINE="17"   COL="20"   TYPE="%-50s"     FUNCTIONS="" />
+<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	$KINDNO='00';
+	dim @head as string;
+	@head='机构名称:'+delspace(substr($BRNAME,14,16))+'     交易代码:3432     交易名称:存款账户机构迁移';
+	//if($REPRINT=='true')
+	//{
+	//	reprint_nx();
+	//}
+	print( 4,35,'\L0存款账户机构迁移\L1');
+	print( 5,12,'[80]',@head);
+	print( 6,12,'迁移类型:[16]       账户类型:[4]',#QQYLX,#ZHLX);
+	print( 7,12,'账号:[19]       账户余额:[20]',#ACTNO,#YE);
+	print( 8,12,'户名:[60]',#NAME);
+	print( 9,12,'原机构号:[5]                 原机构名称:[16]',#OLDBENO,delspace(substr(#OLDNAME,14,16)));
+	print(10,12,'迁移到机构:[5]               迁移到机构名称:[16]',#NEWBRNO,delspace(substr(#NEWNAME,14,16)));
+	//print_tail();
+	print_sq();
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

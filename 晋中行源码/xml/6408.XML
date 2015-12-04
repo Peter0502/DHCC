@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="6408 同业拆借台账查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$FD12='4508';
+	$TXNO='9986';
+	$FD44=#DQRQ;
+	$FD39=#CJJE;
+	$FD39=itoa(#CJJE*100,'%016.0f');
+    $FD67=#CJLX;
+    $FD68=#ZT;	
+	$FD73=#HTH;
+	$FD45=#OPN_DATE;//---开户日期---
+	commsend_001();
+	callserver();
+	$TXNO=@txno_bak;
+    if($FD12!='0000')
+	   {
+	   showmsg(geterror());
+	   return(false);
+	   }
+   $FD16='4508';
+   $MSGTYPE='03001';
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(6408                        同业拆借台账查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4508)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="8" COL="10">
+  <ITEM LINE="0" COL="0" TYPE="%-10s" FUNCTIONS="T(合 同 号:)"/>
+  <ITEM LINE="2" COL="0" TYPE="%-10s" FUNCTIONS="T(拆借类型:!)"/>
+  <ITEM LINE="4" COL="0" TYPE="%-10s" FUNCTIONS="T(拆借金额:)"/>
+  <ITEM LINE="6" COL="0" TYPE="%-10s" FUNCTIONS="T(到期日期:)"/>
+  <ITEM LINE="8" COL="0" TYPE="%-10s" FUNCTIONS="T(开户日期:)"/>
+  <ITEM LINE="10" COL="0" TYPE="%-10s" FUNCTIONS="T(状    态:!)"/>
+
+  <ITEM NAME="#HTH" INPUT="TEXT" LINE="0" COL="11" TYPE="%-10s" FUNCTIONS=""/>  
+  <ITEM NAME="#CJLX" INPUT="SELECT" LINE="2" COL="11" TYPE="%-1s" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="同业拆入"/>
+		<OPTION VALUE="2" TITLE="同业拆出"/>
+		</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#FLAGCJLX" TYPE="%8s" FUNCTIONS="S(#CJLX,#CJLX)"/>
+
+  <ITEM NAME="#CJJE" INPUT="TEXT" LINE="4" COL="11" TYPE="%17.2f" FUNCTIONS="J(#LCJJE)"/>
+  <ITEM NAME="#LCJJE" TYPE="%-16s" FUNCTIONS="X(#CJJE)"/>
+  <ITEM NAME="#DQRQ" INPUT="TEXT" LINE="6" COL="11" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#OPN_DATE" INPUT="TEXT" LINE="8" COL="11" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#ZT" INPUT="SELECT" LINE="10" COL="11" TYPE="%-1s" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="*" TITLE="销户"/>
+		<OPTION VALUE="1" TITLE="录入"/>
+	    <OPTION VALUE="2" TITLE="已经记帐"/>	
+		</SELECT>
+  </ITEM>  
+
+  <ITEM NAME="#FLAGZT" TYPE="%8s" FUNCTIONS="S(#ZT,#ZT)"/>
+</BLOCK>
+  <!--输出变量--->
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+    <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+	<ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+	<ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="同业拆借台账查询!">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	 $KINDNO='00';
+	  print( 4, 30,'4508 同业拆借台账查询');
+	  print( 6, 20,'合 同 号:[8]', #HTH);
+	  print( 7, 20,'拆借类型:[8]', #FLAGCJLX);
+	  print( 8, 20,'拆借金额:[16], #LCJJE);
+	  print( 9, 20,'到期日期:[8]', #DQRQ);
+	  print(10, 20,'状    态:[8]', #FLAGZT);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="打印凭条">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	 $KINDNO='00';
+	 print( 5, 20,'机构名称:[30]',$BRNAME);  
+	 print( 5, 2,'代码:6408');
+	 print( 5, 13,'交易:同业拆借台账查询');
+	 
+	 print( 8, 16,'[4]     [2]     [2]',#YEAR,#MON,#DAY);
+	 print( 9,  8,'[5]',$FD2);
+	 print( 9, 24,'6408 同业拆借台账查询');
+	 print( 10, 10,'合 同 号:[8]', #HTH);
+	 print( 11, 10,'拆借类型:[8]', #FLAGCJLX);
+	 print(12, 10,'拆借金额:[16], #LCJJE);
+	 print(13, 10,'到期日期:[8]', #DQRQ);
+	 print(14, 10,'状    态:[8]', #FLAGZT);
+	 
+	 print( 24,20,'备注:');
+	 print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	 print( 24,5,'柜员:[4]',$FD7);
+	 print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

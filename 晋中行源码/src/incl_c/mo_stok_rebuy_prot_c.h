@@ -1,0 +1,29 @@
+#ifndef __mo_stok_rebuy_prot_CH__
+#define __mo_stok_rebuy_prot_CH__
+struct mo_stok_rebuy_prot_c{
+	char      rowid[20];
+	char      pact_no[21];
+	char      br_no[6];
+	long      ac_id;
+	long      ac_seqn;
+	char      buy_type[2];
+	char      tcht_type[21];
+	double    par_value;
+	double    bal;
+	long      sign_date;
+	long      matr_date;
+	long      term;
+	double    pledge_rate;
+	double    rate;
+	double    over_rate;
+	char      opt_acno[25];
+	char      opt_name[51];
+	long      reg_date;
+	long      trace_no;
+	char      brf[41];
+	char      sts[2];
+	char      tel[5];
+	char      chk[5];
+	char      auth[5];
+};
+#endif 

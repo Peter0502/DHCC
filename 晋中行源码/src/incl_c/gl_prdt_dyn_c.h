@@ -1,0 +1,57 @@
+#ifndef __gl_prdt_dyn_CH__
+#define __gl_prdt_dyn_CH__
+struct gl_prdt_dyn_c{
+	char      rowid[20];
+	long      date;
+	char      prdt_no[4];
+	char      br_no[6];
+	double    cr_bal;
+	long      ac_cnt;
+	double    intst_acm;
+	double    lcd_bal;
+	long      l_ac_cnt;
+	long      d_opn_cnt;
+	long      d_cls_cnt;
+	long      rdd_cnt;
+	long      rcd_cnt;
+	double    rdd_amt;
+	double    rcd_amt;
+	long      cdd_cnt;
+	long      ccd_cnt;
+	double    cdd_amt;
+	double    ccd_amt;
+	double    tdcr_bal;
+	long      td_ac_cnt;
+	long      td_opn_cnt;
+	long      td_cls_cnt;
+	long      td_dr_cnt;
+	long      td_cr_cnt;
+	double    td_dr_amt;
+	double    td_cr_amt;
+	double    m_cr_bal;
+	long      m_ac_cnt;
+	long      m_opn_cnt;
+	long      m_cls_cnt;
+	long      m_dr_cnt;
+	long      m_cr_cnt;
+	double    m_dr_amt;
+	double    m_cr_amt;
+	double    q_cr_bal;
+	long      q_ac_cnt;
+	long      q_opn_cnt;
+	long      q_cls_cnt;
+	long      q_dr_cnt;
+	long      q_cr_cnt;
+	double    q_dr_amt;
+	double    q_cr_amt;
+	double    y_cr_bal;
+	long      y_ac_cnt;
+	long      y_opn_cnt;
+	long      y_cls_cnt;
+	long      y_dr_cnt;
+	long      y_cr_cnt;
+	double    y_dr_amt;
+	double    y_cr_amt;
+	char      spe_ind[4];
+};
+#endif 

@@ -1,0 +1,305 @@
+/*************************************************************
+* 文 件 名: rpt974.c
+* 功能描述：网点存款结息合计的清单
+*
+* 作    者: mike
+* 完成日期: 2003年09月15日
+**************************************************************/
+#define ERR_DEAL if( sqlca.sqlcode ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#define ERR_DEAL1 if( ret ) {\
+		sprintf( acErrMsg, "ret error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+EXEC SQL INCLUDE sqlca.h;
+#include "com_branch_c.h"
+#include "intst_hst_c.h"
+
+struct com_sys_parm_c	s_com_sys_parm;
+
+int page=0;
+int line=0;
+int line_file=0;
+char vpfm[21];
+char t_str[41];
+int opncnt;
+FILE    *fp; 
+int ret = 0;
+EXEC SQL BEGIN DECLARE SECTION;
+	struct intst_hst_c	tIntst_hst;
+	struct com_branch_c	tCom_branch;
+EXEC SQL END DECLARE SECTION;
+
+
+int get_ratio_cxxhqd(int bli,int bll,char str[100]);
+
+rpt974()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	long intst_date1=0;
+	long intst_date2=0;
+EXEC SQL END DECLARE SECTION;
+	int ttlnum;
+	char fname[100];
+	char filename[100];
+
+	memset( &s_com_sys_parm , 0x00 , sizeof(struct com_sys_parm_c));
+	memset( &tCom_branch , 0x00 , sizeof(struct com_branch_c));
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	/**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+/*
+	strcpy( filename , "BJwdjxqd" );	
+	strcpy(vpfm, "wdjxqd" );
+*/
+	strcpy( filename , "RPT974");
+	strcpy(vpfm, "RPT974");
+	EXEC SQL select rowid,com_branch.* into :tCom_branch from com_branch where br_type='6';
+	ERR_DEAL
+
+	page=1;
+	line_file=1;
+	/* 删除原文件 */
+	ret = pub_rpt_rmfile(tCom_branch.br_no , filename , 0 );
+	ERR_DEAL1
+	/* 打开文件 */	
+	ret = pub_rpt_openfile( &fp, tCom_branch.br_no , filename );
+	ERR_DEAL1
+	/* 打印页首 */
+	ret = print_head();
+	ERR_DEAL1
+	
+	intst_date2=g_pub_tx.tx_date;
+	EXEC SQL declare wd_intst_cur cursor for 
+		select br_no,prdt_no,cur_no,sum(fct_intst),sum(intst_tax)
+		from intst_hst
+	where pt_ind='1' and intst_date=:intst_date2 
+	group by br_no,prdt_no,cur_no
+	order by br_no,prdt_no,cur_no;
+	ERR_DEAL
+
+	EXEC SQL open wd_intst_cur;
+	ttlnum=0;
+	while(1)
+	{
+		memset(&tIntst_hst,0x00,sizeof(struct intst_hst_c));
+		EXEC SQL fetch wd_intst_cur into :tIntst_hst.br_no,:tIntst_hst.prdt_no,:tIntst_hst.cur_no,:tIntst_hst.fct_intst,:tIntst_hst.intst_tax;
+		if( sqlca.sqlcode==1403 )
+		{
+			if( ttlnum )
+			{
+				/* 打页尾 */
+				ret = print_tail();
+				ERR_DEAL1
+				fclose(fp);
+			}
+			break;
+		}
+		else if( sqlca.sqlcode )
+		{
+			sprintf(acErrMsg,"读取结息表异常出错!");
+			WRITEMSG			
+			goto ErrExit;			
+		}
+		
+    	/* 打印信息 */
+		ret = print_body();
+		ERR_DEAL1
+		line_file++;
+		if( line_file>50 )	/* 大于50行换页 */
+		{
+			line_file=0;
+			page++;
+			/* 打印页尾 */
+			ret = print_tail();
+			ERR_DEAL1
+			/* 打印页首 */
+			ret = print_head();
+			ERR_DEAL1
+		}
+		ttlnum++;
+	}		
+	EXEC SQL close wd_intst_cur;
+	
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成网点计息交易清单成功!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"生成网点计息清单失败!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+/* 中间函数 */
+int Make_yeb_sub( char vrec[3] )
+{	
+	ret=pub_rpt_read_pfm_qd(fp,&line,vpfm,"0001",vrec,&opncnt,get_ratio_cxxhqd);
+	ERR_DEAL1
+	
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+
+/* 打印表首 */
+int print_head( )
+{
+	char vrec[3];
+	
+	strcpy( vrec,"HH" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL1
+	
+	strcpy( vrec,"AA" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL1
+		
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+
+/* 打印表尾 */
+int print_tail( )
+{
+	char vrec[3];
+
+	strcpy( vrec,"CC" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL1
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+
+/* 打印表体 */
+int print_body( )
+{
+	char vrec[3];
+
+	strcpy( vrec,"BB" );
+	ret = Make_yeb_sub(vrec);
+	ERR_DEAL1
+	
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+
+/* 赋值函数 */
+int get_ratio_cxxhqd( bli,bll,str )
+int bli,bll;
+char str[100];
+{ 
+EXEC SQL BEGIN DECLARE SECTION;
+	struct com_branch_c	vCom_branch;
+EXEC SQL END DECLARE SECTION;
+	char vhm[101]; 
+	char vstr[101]; 
+	char l_kmm[31];
+	char amt_tmp[21]; 
+	char tmp_inf[21];
+	char fmt[10]; 
+	int i=0; 
+	long tmpdate=0;
+	char tmpname[51];
+	char tmpac_no[51];
+	
+	switch( bli ) 
+	{ 
+		case 'A': /* 交易日期 */
+			pub_base_deadlineD(g_pub_tx.tx_date,-1,&tmpdate);
+			sprintf( t_str , "%4d年%2d月%2d日" , tmpdate/10000 , tmpdate%10000/100 , tmpdate%100 );
+			sprintf(fmt,"%%-%ds",bll); 
+			sprintf( str , fmt , t_str ); 
+			break;
+		case 'B': /* 机构编码 */
+			sprintf(fmt,"%%-%ds",bll); 
+			sprintf( str , fmt , tCom_branch.br_no ); 
+			break; 
+		case 'C': /* 机构名称 */
+			pub_base_strpack( tCom_branch.br_name ); 
+			sprintf( t_str , "%s    ( %5s )" , tCom_branch.br_name , tCom_branch.br_no); 
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, t_str);
+			break;
+		case 'D': /* 页码 */
+			sprintf(fmt,"%%%dld",bll); 
+			sprintf(str, fmt, page); 
+			break; 
+		case 'E': /*机构编码*/
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt , tIntst_hst.br_no); 
+			break; 
+		case 'M': /*机构名称*/
+			EXEC SQL select rowid,com_branch.* into :vCom_branch from com_branch
+			where br_no=:tIntst_hst.br_no;
+			if( sqlca.sqlcode )
+			{
+				sprintf(acErrMsg, "查询公共机构编码表错误! [%d]", ret);
+				WRITEMSG
+				goto ErrExit;
+			}
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt , vCom_branch.br_name); 
+			break; 
+		case 'H': /* 产品 */
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf( str, fmt , tIntst_hst.prdt_no);
+			break;
+		case 'J': /* 利息 */
+			sprintf( amt_tmp, "%.2lf" , tIntst_hst.fct_intst ); 
+			pub_rpt_flttomon( amt_tmp,amt_tmp );
+							
+			sprintf(fmt,"%%%ds",bll); 		
+			sprintf( str, fmt, amt_tmp ); 
+			break;
+		case 'F': /* 利息税 */
+			sprintf( amt_tmp, "%.2lf" , tIntst_hst.intst_tax ); 
+			pub_rpt_flttomon( amt_tmp,amt_tmp );
+							
+			sprintf(fmt,"%%%ds",bll); 		
+			sprintf( str, fmt, amt_tmp ); 
+			break;
+		default : 
+			memset( str,' ',bll ); 
+			break; 
+	} 
+	
+GoodExit: 
+	return 0; 
+ErrExit: 
+	return 1; 
+}

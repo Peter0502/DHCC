@@ -1,0 +1,30 @@
+#ifndef __fn_redempt_hst_CH__
+#define __fn_redempt_hst_CH__
+struct fn_redempt_hst_c{
+        char      rowid[20];
+        long      tx_date;
+        long      trace_no;
+        char      tx_br_no[6];
+        char      pact_no[21];
+        char      prdt_code[21];
+        char      ac_no[25];
+        long      ac_id;
+        long      ac_seqn;
+        char      chnl_type[5];
+        double    redempt_amt;
+        double    redempt_chrg_amt;
+        double    return_rate;
+        long      ic_date;
+        double    fct_intst;
+        double    return_capital;
+        double    profit_amt;
+        char      profit_flag[2];
+        char      tel[7];
+        long      return_date;
+        long      return_trace_no;
+        char      sts[2];
+        long      buy_date;
+        long      buy_trace_no;
+        char      filler[61];
+};
+#endif 

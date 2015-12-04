@@ -1,0 +1,559 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11100000000000000000000000000000" TITLE="6223 卡签约信息查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<!--
+<COMMSEND>"{
+	//与神码通讯开始 
+	dim @buffer as string;
+	dim @selid as number;
+	initfd();
+	commsend_001();
+	$FD16='6223';
+	$FD30=#ACTNO;
+	$FD18=$TXNO;
+	$FD75=$MSR2;
+	$FD76=$MSR3;
+	@buffer=callagn();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if(@buffer=='')
+	{
+		showmsg('未找到记录!');
+		return(false);
+	}
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME+'mif',@buffer);
+	list_init(17,78,5,1);
+	list_setcolcnt(4);
+	list_setcol(0,'交易名称',20);
+	list_setcol(1,'开通标志',14);
+	list_setcol(2,'签约日期',22);
+	list_setcol(3,'解约日期',22);
+	list_load('../tmp/'+$KINBR+$TTYNAME+'mif');
+	list_work();
+	@selid=list_work();
+	if(@selid &lt; 0)
+	{
+		list_del();
+		rerun();
+		return(true);
+	}
+	list_del();
+	return(true);
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+-->
+<FIRSTWORK>
+"{
+}"
+</FIRSTWORK>
+
+	<!--VARIABLE UPLOOP="TRUE"-->
+	<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(6223                          卡业务签约信息查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=6223)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=1400)"/>
+  <ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(6223)"/>      <!---交易代码--->
+  <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(卡信息查询)"/>  <!---交易名称--->
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#LDQFS" LINE="6"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="21" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#LACTNO" LINE="7"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(账/卡号:)"/>
+   <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="7" COL="21" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#ACTNO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="7"  COL="21" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#ACTNO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#ACTNO"  TYPE="%-19s"  FUNCTIONS="" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+   	if((substr(#ACTNO,0,6)=='621223' or substr(#ACTNO,0,6)=='621780') and len(rtrim($MSR2))!=37)
+    {
+       showmsg('刷卡错误,请重试!');
+       //return(false);
+    }
+    
+    if(substr(#ACTNO,0,6)!='621223' and substr(#ACTNO,0,6)!='621780')
+    {
+       showmsg('输入卡号错误');
+       return(false);
+    }
+    
+    #MSR2BAK=$MSR2;
+	#MSR3BAK=$MSR3;
+	$MSR2='';
+	$MSR3='';
+	
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#LDYFS" LINE="8"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(打印方式: )"/>
+<ITEM LINE="8" COL="21" TYPE="%-1s"  NAME="#DYFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="普通查询打印"/>
+			<OPTION VALUE="1" TITLE="业务回执打印"/>
+		</SELECT>
+</ITEM>
+<ITEM NAME="#LPASSWD" LINE="9"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(密   码:)"/>
+<!--<ITEM NAME="#PASSWD" INPUT="TEXT" DEVICE="KEYBORD" LINE="11"  COL="21"  TYPE="%-6s" VISABLE="TRUE" FUNCTIONS="i()"/>-->
+<ITEM  LINE="9"  COL="21"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+	<ONLOSTFOCUS>
+		"{
+			if(substr(#ACTNO,0,6) == '621223' or substr(#ACTNO,0,6) == '621780')
+				{
+					initfd();
+					commsend_001();
+					$FD16='7007';
+					$FD30=#ACTNO;
+					$FD79=#PASSWORD;
+					$FD68='4';
+					callagn();
+					if($FD12!='0000')
+					{
+						showmsg(geterror());
+						return (false);
+					}
+				}	
+		 	}"
+		</ONLOSTFOCUS>
+</ITEM>
+<!--凭证打印中用到的变量-->
+<ITEM NAME="#CUSTOME_NAME" TYPE="%-50s"  FUNCTIONS=""/>
+<ITEM NAME="#KA_ZHONGLEI" TYPE="%-50s"  FUNCTIONS=""/>
+<ITEM NAME="#KAIKA_DATE" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#KA_STATE" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#GS_STATE" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#KAIHU_BRANCH" TYPE="%-5s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_1" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_1" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_1" TYPE="%-17s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_1" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#TEL_1" TYPE="%-4s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_2" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_2" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_2" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_2" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#TEL_2" TYPE="%-4s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_3" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_3" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_3" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_3" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#TEL_3" TYPE="%-4s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_4" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_4" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_4" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_4" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#TEL_4" TYPE="%-4s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_5" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_5" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_5" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_5" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#TEL_5" TYPE="%-4s"  FUNCTIONS=""/>
+<ITEM NAME="#JIAOYI_NAME_6" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#STATE_6" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#QY_DATE_6" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#JY_DATE_6" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#PARCH_BDZH" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#CUSTOME_NAME" TYPE="%-50s"  FUNCTIONS=""/>
+<ITEM NAME="#MOBILE_PHONE"  TYPE="%-38s"  FUNCTIONS=""/>
+<ITEM NAME="#MOBILE_PHONE2" TYPE="%-38s"  FUNCTIONS=""/>
+<ITEM NAME="#PAY_ACCT_NO" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#PAY_DAY_AMT" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#PAY_TRAN_AMT" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#CFT_ACCT_NO" TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#CFT_DAY_AMT" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#CFT_TRAN_AMT" TYPE="%-8s"  FUNCTIONS=""/>
+<ITEM NAME="#CERTTYPE20" TYPE="%-6s" FUNCTIONS=""/>
+<ITEM NAME="#CERTNO20"   TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#PINGT"  TYPE="%-12s"   FUNCTIONS=""/>
+
+<ITEM NAME="#MOB_STS"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#TX_DATE"  TYPE="%-16s"   FUNCTIONS=""/>
+<ITEM NAME="#DX_JY_DATE"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#DX_TEL"  TYPE="%-4s"   FUNCTIONS=""/>
+<ITEM NAME="#DX_MOBILE"  TYPE="%-36s"   FUNCTIONS=""/>
+
+<!--添加返回亲子关联信息的变量 add by lq 20151014-->
+<ITEM NAME="#PARCH_STS"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#PARCH_STS_TMP"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#PARCH_QY_DATE"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#PARCH_JY_DATE"  TYPE="%-8s"   FUNCTIONS=""/>
+<ITEM NAME="#PARCH_BDZH"  TYPE="%-20s"   FUNCTIONS=""/>
+
+<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+
+	$TXNO='9734';
+	$FD30=#ACTNO;
+	commsend_001();
+	callserver();
+	if($FD12!='0000'){
+	showmsg(geterror());
+	return(false);
+		}
+	#CERTTYPE20=$FD68;
+	#CERTNO20 = $FD62;
+	
+	#MOB_STS = $FD25;
+	#TX_DATE = $FD86;
+	#DX_JY_DATE = $FD87;
+	#DX_TEL = $FD92;
+	#DX_MOBILE = $FD81;
+	
+	//查询2320，返回亲子关联信息 add by lq 20151014
+	initfd();
+	commsend_001();
+	$FD16='2320';//校验是否签约亲子关联
+	$FD68='2';
+	$FD30=#ACTNO;
+	callserver();
+	if($FD12!='0000')
+	{
+	    showmsg(geterror());
+	    return(false);
+	}
+	#PARCH_STS_TMP = $FD69;
+	if(#PARCH_STS_TMP == '1')
+	{
+		#PARCH_STS='开通';
+	}
+	else if(#PARCH_STS_TMP == '0')
+	{
+		#PARCH_STS='关闭';
+	}
+	#PARCH_QY_DATE = $FD44;
+	#PARCH_JY_DATE = $FD45;
+	#PARCH_BDZH = $FD33;
+
+	//与神码通讯开始 
+	dim @buffer as string;
+	dim @selid as number;
+	initfd();
+	commsend_001();
+	$FD16='6223';
+	$FD30=#ACTNO;
+	$FD18=$TXNO;
+	$FD75=#MSR2BAK;
+	$FD76=#MSR3BAK;
+	$FD79=#PASSWORD;
+	@buffer=callagn();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if($FD72=='1')
+	{
+		showmsg('该卡尚未激活,无签约信息!');
+		return(false);
+	}
+	if(@buffer=='')
+	{
+		showmsg('未找到记录!');
+		return(false);
+	}
+	#PINGT=delspace(itoa(val($FD37),'%12d'));
+	
+	dim @tmp as string; 
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME+'mif',@buffer);
+	list_init(17,78,5,1);
+	list_setcolcnt(5);
+	list_setcol(0,'交易名称',20);
+	list_setcol(1,'开通标志',14);
+	list_setcol(2,'签约日期/有效日期',22);
+	list_setcol(3,'解约日期',22);
+	list_setcol(4,'操作柜员',20);
+	list_load('../tmp/'+$KINBR+$TTYNAME+'mif');
+	@tmp='';
+	@tmp=list_gettext(0,0);
+	#JIAOYI_NAME_1=@tmp;
+	@tmp='';
+	@tmp=list_gettext(0,1);
+	#STATE_1=#MOB_STS;
+	@tmp='';
+	@tmp=list_gettext(0,2);
+	#QY_DATE_1=#TX_DATE;
+	@tmp='';
+	@tmp=list_gettext(0,3);
+	#JY_DATE_1=#DX_JY_DATE;
+	@tmp='';
+	@tmp=list_gettext(0,4);
+	#TEL_1=#DX_TEL;
+	@tmp='';
+	@tmp=list_gettext(0,5);
+	#MOBILE_PHONE=#DX_MOBILE;
+	@tmp='';
+	@tmp=list_gettext(1,0);
+	#JIAOYI_NAME_2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(1,1);
+	#STATE_2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(1,2);
+	#QY_DATE_2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(1,3);
+	#JY_DATE_2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(1,4);
+	#TEL_2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(2,0);
+	#JIAOYI_NAME_3=@tmp;
+	@tmp='';
+	@tmp=list_gettext(2,1);
+	#STATE_3=@tmp;
+	@tmp='';
+	@tmp=list_gettext(2,2);
+	#QY_DATE_3=@tmp;
+	@tmp='';
+	@tmp=list_gettext(2,3);
+	#JY_DATE_3=@tmp;
+	@tmp='';
+	@tmp=list_gettext(2,4);
+	//#TEL_3=@tmp;
+	#MOBILE_PHONE2=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,0);
+	#JIAOYI_NAME_4=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,1);
+	#STATE_4=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,2);
+	#QY_DATE_4=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,3);
+	#JY_DATE_4=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,4);
+	#TEL_4=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,6);
+	#PAY_TRAN_AMT=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,7);
+	#PAY_DAY_AMT=@tmp;
+	@tmp='';
+	@tmp=list_gettext(3,8);
+	#PAY_ACCT_NO=@tmp;
+	@tmp='';
+	@tmp=list_gettext(4,0);
+	#JIAOYI_NAME_5=@tmp;
+	@tmp='';
+	@tmp=list_gettext(4,1);
+	#STATE_5=@tmp;
+	@tmp='';
+	@tmp=list_gettext(4,2);
+	#QY_DATE_5=@tmp;
+	@tmp='';
+	@tmp=list_gettext(4,3);
+	#JY_DATE_5=@tmp;
+	@tmp='';
+	@tmp=list_gettext(4,4);
+	#TEL_5=@tmp;
+	@tmp='';
+	@tmp='';
+	@tmp=list_gettext(4,6);
+	#CFT_TRAN_AMT=@tmp;
+	@tmp='';
+	@tmp='';
+	@tmp=list_gettext(4,7);
+	#CFT_DAY_AMT=@tmp;
+	@tmp='';
+	@tmp='';
+	@tmp=list_gettext(4,8);
+	#CFT_ACCT_NO=@tmp;
+	#JIAOYI_NAME_6='金太阳卡';
+	#STATE_6=#PARCH_STS;
+	#QY_DATE_6=#PARCH_QY_DATE;
+	#JY_DATE_6=#DX_JY_DATE;
+	@tmp='';
+	@tmp=list_gettext(9,3);
+	#CUSTOME_NAME=@tmp;
+	@tmp='';
+	@tmp=list_gettext(8,3);
+	#KAIKA_DATE=@tmp;
+	@tmp='';
+	@tmp=list_gettext(7,1);
+	#KA_STATE=@tmp;
+	@tmp='';
+	@tmp=list_gettext(7,3);
+	#GS_STATE=@tmp;
+	@tmp='';
+	@tmp=list_gettext(9,1);
+	#KAIHU_BRANCH=@tmp;
+	runoutput();
+  rerun();
+	
+}"
+</ONCLICK>
+</ITEM>
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="开户签约信息回执" CHECK="#DYFS=0">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(6, 16,'卡    号:[20                    ]    客户姓名:[19               ]    开户机构:[5     ]',#ACTNO,#CUSTOME_NAME,#KAIHU_BRANCH);
+    if(delspace(#CERTTYPE20)=='1')
+    {
+    print(7, 16,'证件类型:[20                    ]    证件号码:[19               ]','身份证',#CERTNO20);
+    }
+    else
+    {
+    print(7, 16,'证件类型:[20                    ]    证件号码:[15               ]',#CERTTYPE20,#CERTNO20);
+    }
+    if(substr(#ACTNO,6,2)=='56' or substr(#ACTNO,6,2)=='01' or substr(#ACTNO,6,2)=='44' or substr(#ACTNO,6,2)=='77' or substr(#ACTNO,6,2)=='95' or substr(#ACTNO,6,2)=='99')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆普卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='68')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='58')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆限量版卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='98')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝女卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='96')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝男卡',#KAIKA_DATE);
+    }
+    print(10, 16,'---------------------------------------------------------------------------------');
+    print(11, 16,'签约项目名称 签约状态 签约日期/变更日期 解约日期 签约手机号  单笔限额 单日限额  绑定账号 ');
+    print(12, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_1,#STATE_1,#QY_DATE_1,#JY_DATE_1,#MOBILE_PHONE,'','','');
+    print(13, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_2,#STATE_2,#QY_DATE_2,#JY_DATE_2,'','','','');
+    print(14, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_3,#STATE_3,#QY_DATE_3,#JY_DATE_3,#MOBILE_PHONE2,'','','');
+    print(15, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_4,#STATE_4,#QY_DATE_4,#JY_DATE_4,'',#PAY_TRAN_AMT,#PAY_DAY_AMT,#PAY_ACCT_NO);
+    print(16, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_5,#STATE_5,#QY_DATE_5,#JY_DATE_5,'',#CFT_TRAN_AMT,#CFT_DAY_AMT,#CFT_ACCT_NO);
+    print(17, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_6,#STATE_6,#QY_DATE_6,#JY_DATE_6,'','','',#PARCH_BDZH);
+    print(24,20,'交易日期:[8] [8]',$HDATE,@txtime);
+    print(24,27,'柜员:[4]',$FD7);
+    print(24,5,'平台流水号:[6]',#PINGT);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="开户回执打印" CHECK="#DYFS=1">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,25,'查询操作成功!');
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="开户签约信息回执打印" CHECK="#DYFS=1">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(6, 16,'卡    号:[20                    ]    客户姓名:[19               ]    开户机构:[5     ]',#ACTNO,#CUSTOME_NAME,#KAIHU_BRANCH);
+    if(delspace(#CERTTYPE20)=='1')
+    {
+    print(7, 16,'证件类型:[20                    ]    证件号码:[19               ]','身份证',#CERTNO20);
+    }
+    else
+    {
+    print(7, 16,'证件类型:[20                    ]    证件号码:[15               ]',#CERTTYPE20,#CERTNO20);
+    }
+    if(substr(#ACTNO,6,2)=='56' or substr(#ACTNO,6,2)=='01' or substr(#ACTNO,6,2)=='44' or substr(#ACTNO,6,2)=='77' or substr(#ACTNO,6,2)=='95' or substr(#ACTNO,6,2)=='99')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆普卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='68')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='58')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆限量版卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='98')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝女卡',#KAIKA_DATE);
+    }
+    if(substr(#ACTNO,6,2)=='96')
+    {
+    print(8, 16,'开卡种类:[20                    ]    发卡日期:[20                    ]','九州方圆淘宝男卡',#KAIKA_DATE);
+    }
+    print(10, 16,'---------------------------------------------------------------------------------');
+    print(11, 16,'签约项目名称 签约状态 签约日期/变更日期 解约日期 签约手机号  单笔限额 单日限额  绑定账号 ');
+    print(12, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_1,#STATE_1,#QY_DATE_1,#JY_DATE_1,#MOBILE_PHONE,'','','');
+    print(13, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_2,#STATE_2,#QY_DATE_2,#JY_DATE_2,'','','','');
+    print(14, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_3,#STATE_3,#QY_DATE_3,#JY_DATE_3,#MOBILE_PHONE2,'','','');
+    print(15, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_4,#STATE_4,#QY_DATE_4,#JY_DATE_4,'',#PAY_TRAN_AMT,#PAY_DAY_AMT,#PAY_ACCT_NO);
+    print(16, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_5,#STATE_5,#QY_DATE_5,#JY_DATE_5,'',#CFT_TRAN_AMT,#CFT_DAY_AMT,#CFT_ACCT_NO);
+    print(17, 16,'[12        ] [8     ]     [8             ]    [8     ] [11      ] [8     ] [8     ] [20      ]',#JIAOYI_NAME_6,#STATE_6,#QY_DATE_6,#JY_DATE_6,'','','',#PARCH_BDZH);
+    print(24,20,'交易日期:[8] [8]',$HDATE,@txtime);
+    print(24,27,'柜员:[4]',$FD7);
+    print(24,5,'平台流水号:[6]',#PINGT);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

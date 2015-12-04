@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1838         账户管理)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3" COL="3"  TYPE="%-60s"  FUNCTIONS=
+		"T(1838                            账户管理)"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s"  FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1838)"/>
+	<ITEM NAME="#TXNAME"    TYPE="%-30s"  FUNCTIONS="T(账户管理)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T()"/>
+  	<ITEM NAME="#CustomId" TYPE="%-8s" FUNCTIONS="T()"/>
+	<ITEM LINE="5" COL="3"  TYPE="%-10s"  FUNCTIONS="T(操作类型：)"/>
+	<ITEM LINE="5" COL="13" NAME="#OperType" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="登记"/>
+			<OPTION VALUE="2" TITLE="修改"/>
+			<OPTION VALUE="3" TITLE="注销"/>
+		</SELECT>	
+	</ITEM>
+	<ITEM LINE="6" COL="3"  TYPE="%-10s" FUNCTIONS="T(账    号：)"/>
+	<ITEM LINE="6" COL="13" NAME="#Account"  TYPE="%-20s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			if (#OperType == '1')
+			{
+				$FD16='1404';
+				$FD18='pbp';
+				$FD30=#Account;
+				$FD73='00001000';
+				callagnpbp();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				if ($KINBR != $FD2)
+				{
+					showmsg('不是本机构账号，不可做该交易');
+					return(false);
+				}
+				#AcctNm=$FD25;/*户名*/
+				//核心账户类型1个人2对公3内部帐
+				if ($FD67 == '2')
+				{	
+					//山西同城账户类型1对公，2个人
+					#AcctType = '1';
+				}
+				else
+				{
+					showmsg('非对公用户，不登记！');
+					return(false);				
+				}
+				//#AcctType=$FD67;/*账户类型1个人2对公3内部帐*/
+				refresh();
+				
+				enable(#AcctNm,false);
+				enable(#AcctType,false);
+				enable(#AcctAttr,false);
+				if(#AcctType == '1')
+				{
+					dim @str1 as string;
+					dim @str2 as string;
+					dim @accattr as string;
+					initfd();
+					commsend_001();
+					
+					$FD16 = '8101';
+					$FD38 = #Account;
+					@str1 = callserver();
+					if($FD12 != '0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+					#OpenDt = strfld(@str1, '|',12);
+					#OpenBnkNo = strfld(@str1, '|',11);
+					//#ComCode = strfld(@str1, '|',28);
+					#CustomId = strfld(@str1, '|',25); //客户号
+					@accattr = strfld(@str1, '|',17);
+					if(delspace(@accattr) == '基本户')
+					{
+						#AcctAttr = '1';
+					}
+					if(delspace(@accattr) == '一般户')
+					{
+						#AcctAttr = '2';
+					}
+					if(delspace(@accattr) == '专用存款户')
+					{
+						#AcctAttr = '3';
+					}
+					if(delspace(@accattr) == '临时存款户')
+					{
+						#AcctAttr = '4';
+					}
+					if(delspace(@accattr) == '个人存款户（储蓄户）')
+					{
+						#AcctAttr = '5';
+					}			
+					if(delspace(@accattr) == '协定（理财）户')
+					{
+						#AcctAttr = '6';
+					}
+					if(delspace(@accattr) == '公积金活期户（个人）')
+					{
+						#AcctAttr = '7';
+					}
+					
+					initfd();
+					commsend_001();
+					$FD16 = '9896';
+					$FD28 = #CustomId;
+					@str2 = callserver();
+					if($FD12 != '0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+					#ComCode = $FD62;
+				//	#Industry = $FD68;
+					#Licence = $FD63;
+					enable(#OpenBnkNo, false);
+					enable(#OpenDt, false);
+					enable(#ComCode, false);
+					enable(#Licence, false);
+				//	enable(#Industry, false);
+				}
+				else 
+				{
+					showmsg('非对公用户，不登记！');
+					return(false);
+				}
+			}
+			else
+			{
+				dim @tota as string;
+				dim @column as string;
+				dim @where as string;
+				@column='ac_name,ac_type,ac_attr,ac_cur,ac_cash,ac_opnbnk,ac_opndt,ac_code,ac_idno,ac_industry'; 
+		                @where = 'ac_no='+'|'+#Account+'|';
+		                $FD16='1114';
+				$FD18='pbp';
+				$FD28='sxps';
+		                $FD96=@column;
+		                $FD76=@where;
+		                $FD81='sxps_acct_mangr';
+		                $FD101='60|4|2|4|4|32|8|32|32|4';
+				callagnpbp();
+				if($FD12 !='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				
+				@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		                @tota=delspace(@tota);
+		                #AcctNm=strfld(@tota,'|',0);
+		                #AcctType =strfld(@tota,'|',1);
+		                #AcctAttr =strfld(@tota,'|',2);
+		                #CurCode =strfld(@tota,'|',3);
+		                #CurType = strfld(@tota, '|',4);
+		                #OpenBnkNo = strfld(@tota, '|',5);
+		                #OpenDt = strfld(@tota, '|',6);
+		                #ComCode = strfld(@tota, '|',7);
+		                #Licence = strfld(@tota, '|',8);
+		      		#Industry = strfld(@tota, '|',9);
+		                enable(#OpenBnkNo, false);
+				enable(#AcctNm, false);
+				enable(#AcctType, false);
+				enable(#AcctAttr, false);
+				#CurType = '0';
+		                showall();
+		                refresh();
+					
+			}
+			if(#AcctType == '1')
+			{
+				showblock('BLOCK1',true,true);
+			}
+			else
+			{
+				showblock('BLOCK1',false,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="3"  TYPE="%-10s"      FUNCTIONS="T(账户名称：)"/>
+	<ITEM LINE="7" COL="13"  NAME="#AcctNm"    TYPE="%-60s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="8" COL="3"   TYPE="%-10s"      FUNCTIONS="T(账户类型：)"/>
+	<ITEM NAME="#O_ActType" TYPE="%-10s" FUNCTIONS="S(#AcctType,#AcctType)"/>
+	<ITEM LINE="8" COL="13"  NAME="#AcctType"  TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(2)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="对公"/>
+			<OPTION VALUE="2" TITLE="个人"/>
+		</SELECT>
+	</ITEM>	
+	<ITEM LINE="8" COL="37"  TYPE="%-10s" FUNCTIONS="T(账户性质：)"/>
+	<ITEM NAME="#O_AcctAttr" TYPE="%-20s" FUNCTIONS="S(#AcctAttr,#AcctAttr)"/>
+	<ITEM LINE="8" COL="47"  NAME="#AcctAttr" TYPE="%-1s" INPUT="TEXT" FUNCTIONS="T(1)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="基本户"/>
+			<OPTION VALUE="2" TITLE="一般户"/>
+			<OPTION VALUE="3" TITLE="专用存款户"/>
+			<OPTION VALUE="4" TITLE="临时存款户"/>
+			<OPTION VALUE="5" TITLE="个人存款户（储蓄户）"/>
+			<OPTION VALUE="6" TITLE="协定（理财）户"/>
+			<OPTION VALUE="7" TITLE="公积金活期户（个人）"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="9" COL="3"  TYPE="%-10s"   	  FUNCTIONS="T(开户日期：)"/>
+	<ITEM LINE="9" COL="13" NAME="#OpenDt" 	  TYPE="%-8s" 	INPUT="TEXT" 		FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="9" COL="37" TYPE="%-12s" 			FUNCTIONS="T(开户机构号：)"/>
+	<ITEM LINE="9" COL="47" NAME="#OpenBnkNo" TYPE="%-28s" 	INPUT="TEXT" 		FUNCTIONS="T()V(NB)"/>	
+	<ITEM LINE="10" COL="3"  TYPE="%-10s" 			FUNCTIONS="T(货币代码：)"/>
+	<ITEM LINE="10" COL="13" NAME="#CurCode" 	TYPE="%-3s" 	INPUT="SELECT"  FUNCTIONS="T(CNY)V(NB)">
+	<SELECT>
+			<OPTION VALUE ="CNY" TITLE="1.人民币" />
+	</SELECT>			
+	</ITEM>	
+	<ITEM NAME="#O_CrCode" TYPE="%-20s" FUNCTIONS="S(#CurCode,#CurCode)"/>
+	<ITEM LINE="10" COL="37" TYPE="%-10s" 		FUNCTIONS="T(钞汇类型：)"/>
+	<ITEM NAME="#O_CurType" TYPE="%-20s" 		FUNCTIONS="S(#CurType,#CurType)"/>
+	<ITEM LINE="10" COL="47" NAME="#CurType" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="0.丙钞"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+			"{
+				if (#OperType == '3')
+				{
+					goitem(#OK);
+				}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="BLOCK1" LINE="11"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="3"   TYPE="%-12s" 		 FUNCTIONS="T(企业代码证：)" />
+	<ITEM LINE="0"  COL="15"  NAME="#ComCode"  TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM LINE="0"  COL="37"  TYPE="%-12s" 		 FUNCTIONS="T(开户许可证：)" />
+	<ITEM LINE="0"  COL="49"  NAME="#Licence"  TYPE="%-26s" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM LINE="1"  COL="3"  TYPE="%-12s" 		 FUNCTIONS="T(账户行业：)" />
+	<ITEM LINE="1"  COL="15"  NAME="#Industry"  TYPE="%-4s" INPUT="SELECT" FUNCTIONS="T()V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="0.农业"/>
+			<OPTION VALUE="2" TITLE="1.林业"/>
+			<OPTION VALUE="3" TITLE="2.畜牧业"/>
+			<OPTION VALUE="4" TITLE="3.渔业"/>
+			<OPTION VALUE="5" TITLE="4.服务业"/>
+			<OPTION VALUE="6" TITLE="5.纺织业"/>
+			<OPTION VALUE="7" TITLE="6.其他"/>			
+		</SELECT>
+	</ITEM>	
+	</BLOCK>
+
+	<ITEM LINE="21"  COL="59"  NAME="#OK" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+	"{
+		initfd();
+		commsend_001();
+		
+		$FD16='2041';
+		$FD18='pbp';
+		$FD60=#OpenBnkNo;
+		$FD30=#Account;
+		$FD25=#AcctNm;
+		$FD68=#AcctType;
+		$FD69=#AcctAttr;
+		$FD50=#CurCode;
+		$FD70=#CurType;
+		$FD44=#OpenDt;
+		$FD62=#Licence;
+		$FD31=#ComCode;
+		$FD72=#OperType;
+		$FD92=#Industry;
+		callagnpbp();
+		
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81=#TXNAME;
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end
+		runoutput();
+		showall();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();	 		 	
+ 
+		print(5, 3,'账    号:[20]       账户名称：[32]',#Account,#AcctNm);
+		print(6, 3,'账户类型:[20]       账户性质：[32]',#O_ActType,getseltitle(#AcctAttr,#AcctAttr));
+		print(7, 3,'开户日期:[20]       开户机构：[32]',#OpenDt,#OpenBnkNo);
+		print(8, 3,'货币代码:[20]       钞汇类型：[20]',#O_CrCode,#O_CurType);
+		if(#AcctAttr == '1')
+		{
+			print(9,3,'企业代码证:[20]       开户许可证：[20]',#ComCode,#Licence);
+			print(10,3,'账户行业:[8]     ',getseltitle(#Industry,#Industry));
+		}
+ 
+		PrintTxTail();		
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		//$KINDNO='00';
+		//dim @txtime as string;
+		//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		PrintTxHead();
+		//print( 3, 10,'机构名称:[30]',$BRNAME);
+		//print( 3, 0,'代码:2041');
+		//print( 3, 5,'交易:账户信息维护'); 		 	
+ 
+		print(5, 3,'账    号：[20]       账户名称：[32]',#Account,#AcctNm);
+		print(6, 3,'账户类型：[20]       账户性质：[32]',#O_ActType,getseltitle(#AcctAttr,#AcctAttr));
+		print(7, 3,'开户日期：[20]       开户机构：[32]',#OpenDt,#OpenBnkNo);
+		print(8, 3,'货币代码：[20]       钞汇类型：[20]',#O_CrCode,#O_CurType);
+		if(#AcctAttr == '1')
+		{
+			print(9,3,'企业代码证：[20]     开户许可证：[20]',#ComCode,#Licence);
+			print(10,3,'账户行业：[8]     ',getseltitle(#Industry,#Industry));
+		}
+ 
+		PrintTxTail();		
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,257 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"lv_chk852_d_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int lv_chk852_d_con ( struct lv_chk852_d_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct lv_chk852_d_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->lw_flg);
+	zip_tail(ps->pkgno);
+	zip_tail(ps->pay_qs_no);
+	zip_tail(ps->packid);
+	zip_tail(ps->filler);
+}
+int Lv_chk852_d_Debug(struct lv_chk852_d_c *ps){
+	vtcp_log("lv_chk852_d_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("lv_chk852_d_c.lw_flg=[%s]\n",ps->lw_flg);
+	vtcp_log("lv_chk852_d_c.pkgno=[%s]\n",ps->pkgno);
+	vtcp_log("lv_chk852_d_c.pay_qs_no=[%s]\n",ps->pay_qs_no);
+	vtcp_log("lv_chk852_d_c.pack_date=[%ld]\n",ps->pack_date);
+	vtcp_log("lv_chk852_d_c.packid=[%s]\n",ps->packid);
+	vtcp_log("lv_chk852_d_c.filler=[%s]\n",ps->filler);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Lv_chk852_d_Sel(reply,lv_chk852_d_c,fmtstr,va_alist)
+char    *reply;
+struct  lv_chk852_d_c *lv_chk852_d_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Lv_chk852_d_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Lv_chk852_d_Fet_Sel( lv_chk852_d_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Lv_chk852_d_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Lv_chk852_d_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,lv_chk852_d.* FROM lv_chk852_d WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE lv_chk852_d_sel FROM :comm;
+	EXEC SQL DECLARE sel_lv_chk852_d CURSOR FOR lv_chk852_d_sel;
+
+	EXEC SQL OPEN sel_lv_chk852_d;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Lv_chk852_d_Fet_Sel ( struct lv_chk852_d_c *lv_chk852_d_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_lv_chk852_d INTO :lv_chk852_d_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch lv_chk852_d error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch lv_chk852_d finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(lv_chk852_d_c);
+
+	return 0;
+}
+
+int Lv_chk852_d_Clo_Sel (){
+	EXEC SQL CLOSE sel_lv_chk852_d;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Lv_chk852_d_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,lv_chk852_d.* FROM lv_chk852_d WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE lv_chk852_d_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_lv_chk852_d CURSOR FOR lv_chk852_d_upd;
+
+	EXEC SQL OPEN upd_lv_chk852_d;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Lv_chk852_d_Fet_Upd( struct lv_chk852_d_c *lv_chk852_d_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_lv_chk852_d INTO :lv_chk852_d_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH lv_chk852_d finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(lv_chk852_d_c);
+
+	return 0;
+}
+
+int Lv_chk852_d_Upd_Upd( struct lv_chk852_d_c lv_chk852_d_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE lv_chk852_d SET lw_flg=:lv_chk852_d_c.lw_flg,
+			pkgno=:lv_chk852_d_c.pkgno,
+			pay_qs_no=:lv_chk852_d_c.pay_qs_no,
+			pack_date=:lv_chk852_d_c.pack_date,
+			packid=:lv_chk852_d_c.packid,
+			filler=:lv_chk852_d_c.filler
+	WHERE rowid=:lv_chk852_d_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Lv_chk852_d_Del_Upd(struct lv_chk852_d_c lv_chk852_d_c , char * reply  ){
+
+	EXEC SQL DELETE FROM lv_chk852_d WHERE rowid=:lv_chk852_d_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Lv_chk852_d_Clo_Upd( ){
+	EXEC SQL CLOSE upd_lv_chk852_d;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Lv_chk852_d_Ins( struct lv_chk852_d_c lv_chk852_d_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO lv_chk852_d VALUES (:lv_chk852_d_c.lw_flg,
+			:lv_chk852_d_c.pkgno,
+			:lv_chk852_d_c.pay_qs_no,
+			:lv_chk852_d_c.pack_date,
+			:lv_chk852_d_c.packid,
+			:lv_chk852_d_c.filler);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT lv_chk852_d error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

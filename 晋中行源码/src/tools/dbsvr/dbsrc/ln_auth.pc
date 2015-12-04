@@ -1,0 +1,349 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"ln_auth_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int ln_auth_con ( struct ln_auth_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct ln_auth_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->pact_no);
+	zip_tail(ps->name);
+	zip_tail(ps->pay_ac_no);
+	zip_tail(ps->save_ac_no);
+	zip_tail(ps->save_mdm_code);
+	zip_tail(ps->sts);
+	zip_tail(ps->prdt_no);
+	zip_tail(ps->type);
+	zip_tail(ps->ln_type);
+	zip_tail(ps->flt_flag);
+	zip_tail(ps->intst_type);
+	zip_tail(ps->chg_ac_sts);
+	zip_tail(ps->repay_type);
+	zip_tail(ps->trust_no);
+	zip_tail(ps->bail_cif_no);
+	zip_tail(ps->cms_tx_br_no);
+	zip_tail(ps->cms_tel);
+	zip_tail(ps->filler1);
+	zip_tail(ps->filler2);
+}
+int Ln_auth_Debug(struct ln_auth_c *ps){
+	vtcp_log("ln_auth_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("ln_auth_c.pact_no=[%s]\n",ps->pact_no);
+	vtcp_log("ln_auth_c.name=[%s]\n",ps->name);
+	vtcp_log("ln_auth_c.time_lmt=[%ld]\n",ps->time_lmt);
+	vtcp_log("ln_auth_c.amt=[%f]\n",ps->amt);
+	vtcp_log("ln_auth_c.rate=[%f]\n",ps->rate);
+	vtcp_log("ln_auth_c.pay_ac_no=[%s]\n",ps->pay_ac_no);
+	vtcp_log("ln_auth_c.pay_ac_id=[%ld]\n",ps->pay_ac_id);
+	vtcp_log("ln_auth_c.save_ac_no=[%s]\n",ps->save_ac_no);
+	vtcp_log("ln_auth_c.save_ac_id=[%ld]\n",ps->save_ac_id);
+	vtcp_log("ln_auth_c.save_mdm_code=[%s]\n",ps->save_mdm_code);
+	vtcp_log("ln_auth_c.sts=[%s]\n",ps->sts);
+	vtcp_log("ln_auth_c.intst_amt=[%f]\n",ps->intst_amt);
+	vtcp_log("ln_auth_c.over_rate=[%f]\n",ps->over_rate);
+	vtcp_log("ln_auth_c.cmpd_rate=[%f]\n",ps->cmpd_rate);
+	vtcp_log("ln_auth_c.fine_rate=[%f]\n",ps->fine_rate);
+	vtcp_log("ln_auth_c.prdt_no=[%s]\n",ps->prdt_no);
+	vtcp_log("ln_auth_c.mtr_date=[%ld]\n",ps->mtr_date);
+	vtcp_log("ln_auth_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("ln_auth_c.type=[%s]\n",ps->type);
+	vtcp_log("ln_auth_c.ln_type=[%s]\n",ps->ln_type);
+	vtcp_log("ln_auth_c.flt_rate=[%f]\n",ps->flt_rate);
+	vtcp_log("ln_auth_c.beg_date=[%ld]\n",ps->beg_date);
+	vtcp_log("ln_auth_c.flt_flag=[%s]\n",ps->flt_flag);
+	vtcp_log("ln_auth_c.intst_type=[%s]\n",ps->intst_type);
+	vtcp_log("ln_auth_c.chg_ac_sts=[%s]\n",ps->chg_ac_sts);
+	vtcp_log("ln_auth_c.repay_type=[%s]\n",ps->repay_type);
+	vtcp_log("ln_auth_c.trust_no=[%s]\n",ps->trust_no);
+	vtcp_log("ln_auth_c.bail_cif_no=[%s]\n",ps->bail_cif_no);
+	vtcp_log("ln_auth_c.cms_tx_br_no=[%s]\n",ps->cms_tx_br_no);
+	vtcp_log("ln_auth_c.cms_tel=[%s]\n",ps->cms_tel);
+	vtcp_log("ln_auth_c.filler1=[%s]\n",ps->filler1);
+	vtcp_log("ln_auth_c.filler2=[%s]\n",ps->filler2);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Ln_auth_Sel(reply,ln_auth_c,fmtstr,va_alist)
+char    *reply;
+struct  ln_auth_c *ln_auth_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Ln_auth_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Ln_auth_Fet_Sel( ln_auth_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Ln_auth_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Ln_auth_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,ln_auth.* FROM ln_auth WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_auth_sel FROM :comm;
+	EXEC SQL DECLARE sel_ln_auth CURSOR FOR ln_auth_sel;
+
+	EXEC SQL OPEN sel_ln_auth;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_auth_Fet_Sel ( struct ln_auth_c *ln_auth_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_ln_auth INTO :ln_auth_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch ln_auth error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch ln_auth finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_auth_c);
+
+	return 0;
+}
+
+int Ln_auth_Clo_Sel (){
+	EXEC SQL CLOSE sel_ln_auth;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Ln_auth_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,ln_auth.* FROM ln_auth WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_auth_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_ln_auth CURSOR FOR ln_auth_upd;
+
+	EXEC SQL OPEN upd_ln_auth;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_auth_Fet_Upd( struct ln_auth_c *ln_auth_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_ln_auth INTO :ln_auth_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH ln_auth finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_auth_c);
+
+	return 0;
+}
+
+int Ln_auth_Upd_Upd( struct ln_auth_c ln_auth_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE ln_auth SET pact_no=:ln_auth_c.pact_no,
+			name=:ln_auth_c.name,
+			time_lmt=:ln_auth_c.time_lmt,
+			amt=:ln_auth_c.amt,
+			rate=:ln_auth_c.rate,
+			pay_ac_no=:ln_auth_c.pay_ac_no,
+			pay_ac_id=:ln_auth_c.pay_ac_id,
+			save_ac_no=:ln_auth_c.save_ac_no,
+			save_ac_id=:ln_auth_c.save_ac_id,
+			save_mdm_code=:ln_auth_c.save_mdm_code,
+			sts=:ln_auth_c.sts,
+			intst_amt=:ln_auth_c.intst_amt,
+			over_rate=:ln_auth_c.over_rate,
+			cmpd_rate=:ln_auth_c.cmpd_rate,
+			fine_rate=:ln_auth_c.fine_rate,
+			prdt_no=:ln_auth_c.prdt_no,
+			mtr_date=:ln_auth_c.mtr_date,
+			cif_no=:ln_auth_c.cif_no,
+			type=:ln_auth_c.type,
+			ln_type=:ln_auth_c.ln_type,
+			flt_rate=:ln_auth_c.flt_rate,
+			beg_date=:ln_auth_c.beg_date,
+			flt_flag=:ln_auth_c.flt_flag,
+			intst_type=:ln_auth_c.intst_type,
+			chg_ac_sts=:ln_auth_c.chg_ac_sts,
+			repay_type=:ln_auth_c.repay_type,
+			trust_no=:ln_auth_c.trust_no,
+			bail_cif_no=:ln_auth_c.bail_cif_no,
+			cms_tx_br_no=:ln_auth_c.cms_tx_br_no,
+			cms_tel=:ln_auth_c.cms_tel,
+			filler1=:ln_auth_c.filler1,
+			filler2=:ln_auth_c.filler2
+	WHERE rowid=:ln_auth_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Ln_auth_Del_Upd(struct ln_auth_c ln_auth_c , char * reply  ){
+
+	EXEC SQL DELETE FROM ln_auth WHERE rowid=:ln_auth_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_auth_Clo_Upd( ){
+	EXEC SQL CLOSE upd_ln_auth;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Ln_auth_Ins( struct ln_auth_c ln_auth_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO ln_auth VALUES (:ln_auth_c.pact_no,
+			:ln_auth_c.name,
+			:ln_auth_c.time_lmt,
+			:ln_auth_c.amt,
+			:ln_auth_c.rate,
+			:ln_auth_c.pay_ac_no,
+			:ln_auth_c.pay_ac_id,
+			:ln_auth_c.save_ac_no,
+			:ln_auth_c.save_ac_id,
+			:ln_auth_c.save_mdm_code,
+			:ln_auth_c.sts,
+			:ln_auth_c.intst_amt,
+			:ln_auth_c.over_rate,
+			:ln_auth_c.cmpd_rate,
+			:ln_auth_c.fine_rate,
+			:ln_auth_c.prdt_no,
+			:ln_auth_c.mtr_date,
+			:ln_auth_c.cif_no,
+			:ln_auth_c.type,
+			:ln_auth_c.ln_type,
+			:ln_auth_c.flt_rate,
+			:ln_auth_c.beg_date,
+			:ln_auth_c.flt_flag,
+			:ln_auth_c.intst_type,
+			:ln_auth_c.chg_ac_sts,
+			:ln_auth_c.repay_type,
+			:ln_auth_c.trust_no,
+			:ln_auth_c.bail_cif_no,
+			:ln_auth_c.cms_tx_br_no,
+			:ln_auth_c.cms_tel,
+			:ln_auth_c.filler1,
+			:ln_auth_c.filler2);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_auth error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

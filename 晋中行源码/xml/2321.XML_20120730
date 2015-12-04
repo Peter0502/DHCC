@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="2321 身份证验证查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(2321                           身份证验证查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"        TYPE="%-4s"  FUNCTIONS="T($TXNO=9321)"/>
+  <ITEM NAME="#MSGTYPE"     TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+	
+	<ITEM LINE="9" COL="10" TYPE="%-10s" FUNCTIONS="T(查询方式:)"/>
+	<ITEM LINE="9" COL="20" TYPE="%1s" NAME="#SOURCE_INFO"  INPUT="SELECT" FUNCTIONS="T(2)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="根据账号查询"/>
+			<OPTION VALUE="2" TITLE="根据客户信息查询"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#SOURCE_INFO=='1')
+			{
+				showblock('ACTNO',true,false);
+				showblock('CIF',false,false);
+			}
+			else
+			{
+				showblock('ACTNO',false,false);
+				showblock('CIF',true,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="ACTNO" LINE="11" COL="10" VISABLE="FALSE">
+		<ITEM LINE="1" COL="0" TYPE="%-10s" NAME="#LACNO" FUNCTIONS="T(账    号:)"/>
+		<ITEM LINE="1" COL="10" TYPE="%-19s" NAME="#ACNO"  FUNCTIONS="T()V(NB)" INPUT="TEXT" />
+	</BLOCK>
+	<BLOCK NAME="CIF" LINE="11" COL="10" VISABLE="FALSE">
+		<ITEM LINE="0" COL="0" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+		<ITEM LINE="0" COL="10" TYPE="%8d" INPUT="TEXT"   NAME="#CIFNO"   FUNCTIONS="T()"/>
+		<ITEM LINE="1" COL="0" TYPE="%-10s" FUNCTIONS="T(客户名称:)"/>
+		<ITEM LINE="1" COL="10" TYPE="%-50s" INPUT="TEXT" NAME="#CIFNAME" FUNCTIONS="T()"/>
+		<ITEM LINE="2" COL="0" TYPE="%-10s" FUNCTIONS="T(身 份 证:)"/>
+		<ITEM LINE="2" COL="10" TYPE="%-18s" INPUT="TEXT" NAME="#IDNO" FUNCTIONS="T()"/>
+		<ITEM LINE="4" COL="0" TYPE="%-10s" FUNCTIONS="T(维护柜员:)"/>
+		<ITEM LINE="4" COL="10" TYPE="%-6s" FUNCTIONS="T()" NAME="#TEL" INPUT="TEXT"/>
+		<ITEM LINE="5" COL="0" TYPE="%-10s" FUNCTIONS="T(维护机构:)"/>
+		<ITEM LINE="5" COL="10" TYPE="%-5s" FUNCTIONS="T()" NAME="#BRNO" INPUT="TEXT" />
+		<ITEM LINE="6" COL="0" TYPE="%-10s" FUNCTIONS="T(维护日期:)"/>
+		<ITEM LINE="6" COL="10" TYPE="%8d" FUNCTIONS="T()" NAME="#DATE" INPUT="TEXT" />
+		<ITEM NAME="#TEMP" TYPE="%-10s" FUNCTIONS="">
+			<ONLOSTFOCUS>
+			"{
+				if(#SOURCE_INFO=='2')
+				{
+					dim @temp as string;
+					@temp=#CIFNO+#CIFNAME+#IDNO+#TEL+#BRNO+#DATE;
+					if(len(@temp) &lt; 4)
+					{
+						showmsg('请输入的查询信息太少');
+						return(false);
+					}
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	</BLOCK>
+	
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  	<ONCLICK>
+  	"{
+  		dim @tota as string;
+  		initfd();
+  		commsend_001();
+  		$FD16='9321';
+  		$FD67=#SOURCE_INFO;
+  		$FD30=#ACNO;
+  		$FD25=#CIFNAME;
+  		$FD28=#CIFNO;
+  		$FD62=#IDNO;
+  		$FD44=#DATE;
+  		$FD92=#TEL;
+  		$FD2=#BRNO;
+  		@tota=callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+			if(autolist(@tota))
+			{
+				list_work();
+			}
+  	}"
+  	</ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE>
+	NOTHING
+	</PACKAGE>
+</RESPONSE>
+
+</TRANSACTION>

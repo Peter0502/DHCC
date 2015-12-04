@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7205 券别登记" 
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<FIRSTWORK RERUN="TRUE">"{
+        initfd();
+        dim @tota as string;
+        $TXNO='9205';
+        commsend_001();
+        $FD21='01';
+        @tota=callserver();
+        if($FD12!='0000')
+    	  {
+		showmsg(geterror());
+	  	return(true);
+    	  }
+    	  #ACBAL=comma(itoa(val($FD25),'%.2f'),16);
+    	 // #MBBAL=val($FD41,0.01);
+	//showmsg($FD25);
+    	  show(#ACBAL,true);
+    	  enable(#ACBAL,false);
+
+        }"
+</FIRSTWORK>
+
+<VARIABLE UPLOOP="FALSE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7205                            券别登记)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=7774)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+
+  <ITEM NAME="#BOX"   TYPE="%-1s" FUNCTIONS=""/>
+  <IMPORT>MONEY100.IMP</IMPORT>
+  <IMPORT>MONEY50.IMP</IMPORT>
+  <IMPORT>MONEY20.IMP</IMPORT>
+  <IMPORT>MONEY10.IMP</IMPORT>
+  <IMPORT>MONEY5.IMP</IMPORT>
+  <IMPORT>MONEY2.IMP</IMPORT>
+  <IMPORT>MONEY1.IMP</IMPORT>
+  <IMPORT>MONEY05.IMP</IMPORT>
+  <IMPORT>MONEY02.IMP</IMPORT>
+  <IMPORT>MONEY01.IMP</IMPORT>
+  <IMPORT>MONEY005.IMP</IMPORT>
+  <IMPORT>MONEY002.IMP</IMPORT>
+  <IMPORT>MONEY001.IMP</IMPORT>
+  <ITEM LINE="19" COL="5"  TYPE="%-12s"   FUNCTIONS="T(未登记余额:)"/>
+  <ITEM LINE="19" COL="17" TYPE="%16s"   NAME="#ACBAL" INPUT="TEXT" DEVICE="NONE" FUNCTIONS="">
+    <ONLOSTFOCUS>
+    "{
+	if(substr($TLRNO,2,2)=='98')
+	{
+		showmsg('98柜员不需要登记券别!');
+		return(false);
+	}
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="20" COL="5"  TYPE="%-12s"   FUNCTIONS="T(已录入合计:)"/>
+  <ITEM LINE="20" COL="17" TYPE="%-16s"   NAME="#TOTAL" INPUT="LABEL" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @balance as number;
+
+	if(substr(#TOTAL,0,1) == '-')
+	{
+		#XNTOTAL = '-'+#XNTOTAL;
+	}
+	@balance = val(#ACBAL)-val(#TOTAL);
+	//showmsg(itoa(@balance,'%17.2f'));
+	#MBBAL   = comma(itoa(@balance,'%.2f'),16);
+    	show(#MBBAL,true);
+    	enable(#MBBAL,false);
+	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="19" COL="49" TYPE="%-10s"   FUNCTIONS="T(差额:)"/>
+  <ITEM LINE="19" COL="55" TYPE="%-16s"   NAME="#MBBAL" INPUT="TEXT" DEVICE="NONE" FUNCTIONS=""/>
+
+  <ITEM NAME="#XACBAL"  TYPE="%-21s"     FUNCTIONS="X(#ACBAL)">
+  <ONLOSTFOCUS>
+  "{
+	if(val(#MBBAL) != 0.00)
+	{
+		showmsg('差额必须为零!');
+		return(false);
+	}
+	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#XNTOTAL" TYPE="%-21s"     FUNCTIONS="X(#TOTAL)"/>
+  <ITEM NAME="#OK" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	commsend_001();
+	$FD21='01';
+	$FD70='9';   //登记券别标志
+	$FD95 = itoa(val(#MONEY100),'%016d')+'|'+itoa(val(#MONEY50),'%016d')+'|'+itoa(val(#MONEY20),'%016d')+'|'+itoa(val(#MONEY10),'%016d')+'|'+itoa(val(#MONEY5),'%016d')+'|'+itoa(val(#MONEY2),'%016d')+'|'+itoa(val(#MONEY1),'%016d')+'|'+itoa(val(#MONEY05),'%016d')+'|'+itoa(val(#MONEY02),'%016d')+'|'+itoa(val(#MONEY01),'%016d')+'|'+itoa(val(#MONEY005),'%016d')+'|'+itoa(val(#MONEY002),'%016d')+'|'+itoa(val(#MONEY001),'%016d')+'|';
+	//runoutput();
+	submit();
+	//if(#BOX == '1')
+	//{
+		//#BOX='0';
+		//close('#MONEYBOX');
+	//}
+	//closeall();
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN"  DESC="显示信息">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 7,20,'券别输入完毕');
+		print( 9,15,'未登记余额:[21]',ltrim(#ACBAL));
+		print(10,15,'登记  合计:[21]',ltrim(#TOTAL));
+		print(11,15,'差      额:[16]',ltrim(#MBBAL));
+		print(12,15,'流   水  号:[ 6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

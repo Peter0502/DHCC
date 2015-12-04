@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2309 客户生活信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD28=#KHH;
+	$FD34=#SHXH;
+	$FD22=#SHFSMX;
+	$FD68=#CZLX;
+	$FD67=#SHFSLB;
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(2309                        客户生活信息维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=1310)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  <ITEM LINE="6" COL="12" TYPE="%-10s" FUNCTIONS="T(操作类型:!)"/>
+  <ITEM NAME="#CZLX" INPUT="SELECT" LINE="6" COL="22" TYPE="%-1s" FUNCTIONS="T(1)">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="修改"/>
+		<OPTION VALUE="2" TITLE="删除"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCZLX" TYPE="%-4s"      FUNCTIONS="S(#CZLX,#CZLX)"/>
+  
+  <ITEM LINE="8"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+  <ITEM LINE="10" COL="12" TYPE="%-9s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="12" COL="12" TYPE="%-9s" FUNCTIONS="T(生活序号:)"/>
+  <ITEM LINE="15" COL="12" TYPE="%-14s" FUNCTIONS="T(生活方式类别:!)"/>
+  <ITEM LINE="17" COL="12" TYPE="%-14s" FUNCTIONS="T(生活方式明细:!)"/>
+  <ITEM NAME="#KHH"  INPUT="TEXT" LINE="10" COL="22" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SHXH" INPUT="TEXT" LINE="12" COL="22" TYPE="%4d"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+ "{	initfd();	
+    commsend_001();
+ 		$FD16='9891';
+		$FD28=#KHH;
+	  $FD34=#SHXH;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#SHFSLB=delspace($FD67);
+		show(#SHFSLB,true);
+ 
+  dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$TXNO='9798';
+	commsend_001();
+	@tota=callserver();	
+	$TXNO=@txno_bak;
+	setsel(#SHFSMX,@tota,'o5t20o1v2o2');
+	show(#SHFSMX,true);
+	if(#CZLX == '2')
+	{
+		goitem(#SUBMIT);
+	}
+}"
+ </ONLOSTFOCUS>
+  </ITEM> 
+
+  <ITEM NAME="#SHFSLB" INPUT="SELECT"	ENABLE="FALSE" LINE="15" COL="27" TYPE="%-1s" FUNCTIONS="">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="读书"/>
+		<OPTION VALUE="2" TITLE="音乐"/>
+		<OPTION VALUE="3" TITLE="运动"/>
+		<OPTION VALUE="4" TITLE="旅游"/>
+		<OPTION VALUE="5" TITLE="电视"/>
+		<OPTION VALUE="6" TITLE="电影"/>
+		<OPTION VALUE="7" TITLE="上网"/>
+		<OPTION VALUE="8" TITLE="交通工具"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SSHFSLB" TYPE="%-8s"      FUNCTIONS="S(#SHFSLB,#SHFSLB)"/>
+
+	<ITEM NAME="#SHFSMX" INPUT="SELECT" LINE="17" COL="27" TYPE="%-2s" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#SSHFSMX" TYPE="%-20s"     FUNCTIONS="S(#SHFSMX,#SHFSMX)"/>
+   
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="客户生活信息">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		if(#CZLX == '1')
+		{
+			print( 3,30,'客户生活信息[4]',#SCZLX);
+			print( 5,22,'客   户   号: [ 8]',#KHH);
+			print( 6,22,'生 活  序 号: [ 4]',#SHXH);
+			print( 7,22,'生活方式类别: [ 8]',#SSHFSLB);
+			print( 8,22,'生活方式明细: [20]',#SSHFSMX);
+		}
+		else
+		{
+			print( 3,30,'客户生活信息[4]',#SCZLX);
+			print( 5,22,'客 户 号: [ 8]',#KHH);
+			print( 6,22,'生活序号: [ 4]',#SHXH);
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="客户生活信息">
+NOTHING
+</PACKAGE>
+        <PRINT>
+        "{
+            $KINDNO='00';
+            dim @txtime  as string;
+            @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+             print( 5, 20,'机构名称:[30]',$BRNAME);
+             print( 5, 2,'代码:2309');
+             print( 5, 13,'交易:客户生活信息维护');
+
+             if(#CZLX == '1')
+         {
+              print( 7,30,'客户生活信息[4]',#SCZLX);
+              print( 9,22,'客   户   号: [ 8]',#KHH);
+              print(10,22,'生 活  序 号: [ 4]',#SHXH);
+              print(11,22,'生活方式类别: [ 8]',#SSHFSLB);
+              print(12,22,'生活方式明细: [20]',#SSHFSMX);
+              print( 24,20,'备注:')
+              print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+              print( 24,5,'柜员:[4]',$FD7);
+              print( 24,5,'流水号:[6]',$FD4);
+
+          }
+         else
+                {
+                        print( 7,30,'客户生活信息[4]',#SCZLX);
+                        print( 9,22,'客 户 号: [ 8]',#KHH);
+                        print(10,22,'生活序号: [ 4]',#SHXH);
+                        print( 24,20,'备注:')
+                        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                        print( 24,5,'柜员:[4]',$FD7);
+                        print( 24,5,'流水号:[6]',$FD4);
+ 
+                 }
+        }"
+        </PRINT>
+</RESPONSE>
+</TRANSACTION>

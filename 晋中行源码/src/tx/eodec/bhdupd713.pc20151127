@@ -1,0 +1,1029 @@
+/*************************************************************
+* 文 件 名: bhdupd712.c
+* 功能描述：检查总分
+*         在原30的基础上增加汇总功能
+*         即把27的功能加上可实现随时检查平衡功能
+*         只检查总分而且是各个机构的,不检查gl_mst的总分
+* 作    者: jyw
+* 完成日期: 2006年10月30日
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+
+#include "public.h"
+#include "gl_mst_c.h"
+#include "gl_sub_c.h"
+#include "com_item_c.h"
+#include "com_branch_c.h"
+EXEC SQL include sqlca;
+
+#define  DEAL	if( sqlca.sqlcode && sqlca.sqlcode!=1403) { sprintf(acErrMsg,"数据库操作错误![%d]",sqlca.sqlcode);	WRITEMSG return -1; }
+
+bhdupd713()
+{
+	int ret = 0;
+    struct dd_mst_c dd_mst_c;
+    struct dd_parm_c dd_parm_c;
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct com_branch_c sCom_branch;
+	EXEC SQL END DECLARE SECTION;
+
+    memset(&dd_mst_c,0x0,sizeof(struct dd_mst_c));
+    memset(&dd_parm_c,0x0,sizeof(struct dd_parm_c));
+	memset(&sCom_branch,0x00,sizeof(struct com_branch_c));
+
+    ret=sql_begin(); /*打开事务*/
+    if(ret != 0)
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+/****20080109
+goto ErrExit;
+****/
+
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+/*
+    ret = check_dc_log();
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"会计流水检查错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+*/
+	/*准备总分检查临时表*/
+
+	/*JYW   建立临时表存放检查数据*/
+	EXEC SQL drop table tmptable cascade constraint;
+	if( sqlca.sqlcode && sqlca.sqlcode!=-942)
+	{
+		sprintf(acErrMsg,"检查总分平衡准备错误![%d]",sqlca.sqlcode);
+		WRITEMSG
+		return -1;
+	}
+	EXEC SQL create table tmptable(
+		opn_br_no    varchar2(5),
+        prdt_no        varchar2(3),
+        tmpbal          number(16,2)
+       );
+	vtcp_log("create tmptable over");
+	EXEC SQL create index tmptable_idx on tmptable(opn_br_no,prdt_no);
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检查总分平衡准备错误![%d]",sqlca.sqlcode);
+		WRITEMSG
+		return -1;
+	}
+	vtcp_log(" create index over");
+	/*临时表创建结束*/
+
+	/*JYW 将定期和活期分户数据按机构和产品分类导入临时表*/
+	EXEC SQL insert into tmptable 
+		select opn_br_no,prdt_no,sum(bal)
+			FROM dd_mst where ac_sts!='*'
+		group by opn_br_no,prdt_no 
+	union
+		select opn_br_no,prdt_no,sum(bal)
+			FROM td_mst where ac_sts!='*'
+		group by opn_br_no,prdt_no;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检查总分平衡准备错误![%d]",sqlca.sqlcode);
+		WRITEMSG
+		return -1;
+	}
+	/*临时表数据准备完成*/
+/***
+	ret =check_gl_mst_bal(); *检查总帐汇总后平衡关系*
+	if( ret )
+	{
+        sprintf(acErrMsg,"总分平衡检查错误!");
+        WRITEMSG
+        goto ErrExit;
+	}
+********/
+	/*检查各个机构的会计流水是否平衡*/
+	/*检查各个机构的总分平衡关系*/
+	EXEC SQL DECLARE cur_br CURSOR FOR
+		select rowid,com_branch.* from com_branch
+			where br_type not in('0','6','7') and wrk_sts !='*'  
+		order by br_no;
+	if(sqlca.sqlcode!=0){
+		sprintf(acErrMsg,"Declare机构游标出错![%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+		}
+	EXEC SQL OPEN cur_br;
+	if(sqlca.sqlcode!=0){
+		sprintf(acErrMsg,"打开机构游标出错![%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+		}
+	while(1){
+		memset(&sCom_branch,0x00,sizeof(struct com_branch_c));
+
+		EXEC SQL FETCH cur_br INTO :sCom_branch;
+		if( sqlca.sqlcode==1403)break;
+		else if( sqlca.sqlcode ){
+			sprintf(acErrMsg,"数据库错误![%d]",sqlca.sqlcode);
+			WRITEMSG
+			EXEC SQL close cur_br;
+			goto ErrExit;
+			}
+		printf("开始检查机构:[%s][%s].....",sCom_branch.br_no,sCom_branch.br_name);
+/*
+		ret=check_dc_log_branch(sCom_branch.br_no);
+		if(ret){
+			sprintf(acErrMsg,"机构[%s]会计流水检查错误!",sCom_branch.br_no);
+			WRITEMSG
+			EXEC SQL close cur_br;
+			goto ErrExit;
+			}
+*/
+		ret=check_gl_sub_bal(sCom_branch.br_no);
+		if(ret){
+			sprintf(acErrMsg,"机构[%s]总分检查错误!",sCom_branch.br_no);
+			WRITEMSG
+		/*	EXEC SQL close cur_br;*/
+			printf("不平\n");
+		/*	goto ErrExit;*/
+			}
+		printf("平\n");
+		}
+
+	EXEC SQL close cur_br;
+
+OkExit:
+	EXEC SQL drop table tmptable;
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"对帐务平衡的检查成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"对帐务平衡的检查失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+
+/*检查总帐汇总后平衡关系JYW*/
+
+int check_gl_mst_bal()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	short    flag=0;
+	short    flag1=0;
+	double  gl_mst_d_amt=0.00;			/*** 总帐中总借 ***/
+	double  gl_mst_c_amt=0.00;			/*** 总帐中总贷 ***/
+	double  sum_dd_bal=0.00;
+	double  sum_td_bal=0.00;
+	double  sum_ln_bal=0.00;
+	double  sum_in_bal=0.00;
+	double  sum_dc_dbal=0.00;                   /*dc_log中的借方发生和*/
+	double  sum_dc_cbal=0.00;                   /*dc_log中的贷方发生和*/
+	char	acc_hrt[6];
+	struct	gl_mst_c	sGl_mst;
+	struct	com_item_c	sCom_item;
+	int		T_num=0;
+EXEC SQL END DECLARE SECTION;
+
+	/*** 没有汇总的总帐总借总贷检查 ***/
+	EXEC SQL select sum(dr_bal),sum(cr_bal) into :gl_mst_d_amt,:gl_mst_c_amt
+	from gl_mst a,com_item b where substr(a.acc_hrt,1,1)<'6' and  a.acc_hrt=b.acc_hrt
+	and b.acc_lvl='1';
+
+	/*汇总会计流水当日发生数据*/
+	/*不用检查总借总贷因为dc_log平衡总借总贷也会平衡了*/
+	DEAL
+	if( pub_base_CompDblVal(gl_mst_d_amt,gl_mst_c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"总帐中总借总贷不相等![%lf][%lf]",gl_mst_d_amt,gl_mst_c_amt);
+		WRITEMSG
+		return -1;
+	}
+	vtcp_log("总借总贷检查完成[%d]",__LINE__);
+
+	
+	/*定义取总帐记录游标*/
+	EXEC SQL DECLARE gl_cur CURSOR FOR
+		SELECT   rowid,gl_mst.* 
+		FROM      gl_mst 
+		WHERE
+		cur_no IN ( select cur_no from com_cur_no_code  where use_ind='Y' );
+	DEAL
+
+	EXEC SQL OPEN gl_cur;
+	DEAL
+
+	/*逐笔取出总帐记录进行比较*/
+	while(1)
+	{
+		memset(&sGl_mst,0x00,sizeof(struct gl_mst_c));
+		memset(&sCom_item,0x00,sizeof(struct com_item_c));
+		EXEC SQL FETCH gl_cur INTO :sGl_mst;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+		EXEC SQL SELECT rowid,com_item.* INTO :sCom_item
+		FROM com_item WHERE acc_hrt=:sGl_mst.acc_hrt;
+		DEAL
+
+		/*汇总科目与子科目关系不检查,因为都要汇总*/
+		/*** 该科目为子科目，有分户，检查总分平衡 ***/
+		if( sCom_item.acc_knd[0]=='1' || sCom_item.acc_knd[0]=='2' )
+		{
+			sum_dc_dbal=0.00;
+			sum_dc_cbal=0.00;
+
+			/*该科目的发生汇总*/
+			EXEC SQL select sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1))
+				INTO :sum_dc_dbal :flag,:sum_dc_cbal :flag1
+				from dc_log 
+				where acc_hrt=:sGl_mst.acc_hrt
+		       	and opn_br_no=:sGl_mst.br_no and sts='0';
+
+				if( flag )sum_dc_dbal=0.00;
+				if( flag1 )sum_dc_cbal=0.00;
+
+			switch(sCom_item.in_ind[0])
+			{
+				case 'D':					/*** 存款 ***/
+					vtcp_log("存款类总帐分户帐平衡检查[%s]开始[%d]",sGl_mst.acc_hrt,__LINE__);
+					EXEC SQL SELECT sum(a.tmpbal) INTO :sum_dd_bal :flag 
+					FROM tmptable a,dd_parm b,dc_acc_rel c
+					WHERE a.prdt_no = b.prdt_no 
+					AND b.dc_code=c.dc_code 
+					AND b.cur_no=:sGl_mst.cur_no 
+					AND c.acc_hrt=:sCom_item.acc_hrt 
+					AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+					where dc_br_no=:sGl_mst.br_no) ;
+					DEAL
+					if( flag ) sum_dd_bal=0.00;
+
+					EXEC SQL SELECT sum(a.tmpbal) INTO :sum_td_bal :flag 
+					FROM tmptable a,td_parm b,dc_acc_rel c
+					WHERE a.prdt_no = b.prdt_no 
+					AND b.dc_code=c.dc_code 
+					AND b.cur_no=:sGl_mst.cur_no 
+					AND c.acc_hrt=:sCom_item.acc_hrt 
+					AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+					where dc_br_no=:sGl_mst.br_no) ;
+					DEAL
+					if( flag ) sum_td_bal=0.00;
+
+
+										
+					if( pub_base_CompDblVal(sum_dd_bal+sum_td_bal,sGl_mst.cr_bal
+						 +sum_dc_cbal-sum_dc_dbal)!=0 )
+					{
+						sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf][%lf]",
+						sGl_mst.acc_hrt,sGl_mst.cr_bal+sum_dc_cbal-sum_dc_dbal,sum_dd_bal,sum_td_bal);
+						WRITEMSG
+						return -1;
+					}
+					vtcp_log("存款类总帐分户帐平衡检查[%s]完成[%d]",sGl_mst.acc_hrt,__LINE__);
+					break;
+				case 'L':					/*** 贷款 ***/
+					vtcp_log("贷款类总帐分户帐平衡检查[%s]开始[%d]",sGl_mst.acc_hrt,__LINE__);
+					if( strcmp(sGl_mst.acc_hrt,"13301") 
+						&& strncmp(sGl_mst.acc_hrt,"705",3) && strncmp(sGl_mst.acc_hrt,"130",3) )
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b,dc_acc_rel c
+						WHERE a.ac_sts='1' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no AND b.dc_code=c.dc_code 
+						AND c.acc_hrt=:sCom_item.acc_hrt
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_mst.acc_hrt,"13001")==0 )	/* 逾期90天内贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='2' AND b.cur_no=:sGl_mst.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf][%d]\n",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_mst.acc_hrt,"13002")==0 )	/* 逾期90天外贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='5' AND b.cur_no=:sGl_mst.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf][%d]\n",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_mst.acc_hrt,"13003")==0 )	/* 呆滞贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='3' AND b.cur_no=:sGl_mst.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf][%d]\n",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_mst.acc_hrt,"13004")==0 )	/* 呆帐贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='4' AND b.cur_no=:sGl_mst.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf][%d]\n",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_mst.acc_hrt,"13301")==0 )
+					{
+						EXEC SQL SELECT sum(a.in_lo_intst) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no 
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no)   
+						AND a.prdt_no IN ( SELECT prdt_no FROM ln_parm 
+						WHERE dc_code IN(SELECT dc_code FROM dc_acc_rel WHERE acc_hrt='13301')) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+
+					/**************************************************************************** 
+					JYW增加对13302的总分检查,后来长治商行决定将所有应收利息都用13301,所以不检查了
+					* JYW增加对13302的总分检查*
+					else if( strcmp(sGl_mst.acc_hrt,"13302")==0 )
+					{
+						EXEC SQL SELECT sum(a.in_lo_intst) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no 
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no)   *JYW修改增加以下区分13302的分户*
+						AND a.prdt_no IN ( SELECT prdt_no FROM ln_parm 
+						WHERE dc_code IN(SELECT dc_code FROM dc_acc_rel WHERE acc_hrt='13302')) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",sGl_mst.acc_hrt,sGl_mst.dr_bal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					***********************JYW END **************************************/
+					else if(strcmp(sGl_mst.acc_hrt,"70501")==0 )	/** 70501表外利息 **/
+					{
+						EXEC SQL SELECT sum(a.out_lo_intst) 
+						INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平1.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if(strcmp(sGl_mst.acc_hrt,"70502")==0 )	/** 70502 表外复利**/
+					{
+						EXEC SQL SELECT sum(a.cmpd_lo_intst) 
+						INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平2.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					vtcp_log("贷款类总帐分户帐平衡检查[%s]完成[%d]",sGl_mst.acc_hrt,__LINE__);
+					break;
+				case 'I':					/*** 内部帐 ***/
+					vtcp_log("内部类总帐分户帐平衡检查[%s]开始[%d]",sGl_mst.acc_hrt,__LINE__);
+					if( strcmp(sCom_item.acc_hrt,"10101")==0	)	/*** 现金 ***/
+					{
+						EXEC SQL SELECT sum(bal) INTO :sum_in_bal :flag
+						FROM cash_mst
+						WHERE cur_no=:sGl_mst.cur_no
+						AND br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_in_bal=0.00;
+						if(	pub_base_CompDblVal(sum_in_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else
+					{
+					if(strncmp(sGl_mst.acc_hrt,"244",3)!=0){
+						EXEC SQL SELECT sum(a.bal) INTO :sum_in_bal :flag
+						FROM in_mst a,in_parm b,dc_acc_rel c
+						WHERE sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_mst.cur_no AND b.dc_code=c.dc_code 
+						AND c.acc_hrt=:sCom_item.acc_hrt
+						AND a.opn_br_no IN (select tx_br_no from tx_dc_br_rel
+						where dc_br_no=:sGl_mst.br_no) ;
+						DEAL
+						if( flag ) sum_in_bal=0.00;
+						if( sGl_mst.dc_ind[0]=='1' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						if( sGl_mst.dc_ind[0]=='2' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						if( sGl_mst.dc_ind[0]=='0' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_mst.dr_bal+sum_dc_dbal-sum_dc_cbal-sGl_mst.cr_bal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",
+							sGl_mst.acc_hrt,sGl_mst.cr_bal-sum_dc_cbal-sGl_mst.cr_bal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						}
+					
+					}
+					vtcp_log("内部类总帐分户帐平衡检查[%s]开始[%d]",sGl_mst.acc_hrt,__LINE__);
+					break;
+				case 'A':					/*** 考核帐只能核对全行总数 ***/
+					break;
+				default:
+					sprintf(acErrMsg,"科目类型错误![%s]",sCom_item.in_ind);
+					WRITEMSG
+					return -1;
+			}
+		}
+	}
+
+	EXEC SQL CLOSE gl_cur;
+
+	return 0;
+}
+
+/*** 检查会计流水平衡 ***/
+int check_dc_log()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	short		flag=0,flag1=0;
+	double  d_amt=0.00;					/*** 流水帐中总借 ***/
+	double  c_amt=0.00;					/*** 流水帐中总贷 ***/
+EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL SELECT count(*) INTO :flag 
+	FROM dc_log WHERE dc_ind!='1' and dc_ind!='2' and sts='0';
+	DEAL
+	if( flag )
+	{
+		sprintf(acErrMsg,"会计流水帐中有非借非贷记录![%d]",flag);
+		WRITEMSG
+		return -1;
+	}
+	EXEC SQL SELECT count(*) INTO :flag 
+	FROM dc_log WHERE ct_ind!='1' and ct_ind!='2' and sts='0';
+	DEAL
+	if( flag )
+	{
+		sprintf(acErrMsg,"会计流水帐中有非现金非转账记录![%d]",flag);
+		WRITEMSG
+		return -1;
+	}
+
+	EXEC SQL SELECT sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1)) 
+	INTO :d_amt :flag,:c_amt :flag1
+	FROM dc_log WHERE ct_ind='1' and substr(acc_hrt,1,1)<'6' and sts='0';
+	DEAL
+	if( flag )	d_amt=0.00;
+	if( flag1 )	c_amt=0.00;
+	if( pub_base_CompDblVal(d_amt,c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"会计流水帐中现金借贷不相等![%lf][%lf]",d_amt,c_amt);
+		WRITEMSG
+		return -1;
+	}
+
+	EXEC SQL SELECT sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1))
+	INTO :d_amt :flag,:c_amt :flag1
+	FROM dc_log WHERE ct_ind='2' and substr(acc_hrt,1,1)<'6' and sts='0';
+	DEAL
+	if( flag )	d_amt=0.00;
+	if( flag1 )	c_amt=0.00;
+	if( pub_base_CompDblVal(d_amt,c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"会计流水帐中转账借贷不相等![%lf][%lf]",d_amt,c_amt);
+		WRITEMSG
+		return -1;
+	}
+	return 0;
+}
+
+int check_gl_sub_bal(char *br_no)
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	short    flag=0;
+	short    flag1=0;
+	double  gl_sub_d_amt=0.00;			/*** 支行总帐中总借 ***/
+	double  gl_sub_c_amt=0.00;			/*** 支行总帐中总贷 ***/
+	double  sum_dd_bal=0.00;
+	double  sum_td_bal=0.00;
+	double  sum_ln_bal=0.00;
+	double  sum_in_bal=0.00;
+	double  sum_dc_dbal=0.00;           /*dc_log中的借方发生和*/
+	double  sum_dc_cbal=0.00;           /*dc_log中的贷方发生和*/
+	char	acc_hrt[6];
+	char	sBr_no[6];
+	struct	gl_sub_c	sGl_sub;
+	struct	com_item_c	sCom_item;
+	int		T_num=0;
+EXEC SQL END DECLARE SECTION;
+	
+	strcpy(sBr_no,br_no);
+
+	/*** 没有汇总的总帐总借总贷检查 ***/
+	EXEC SQL select sum(dr_bal),sum(cr_bal) into :gl_sub_d_amt,:gl_sub_c_amt
+	from gl_sub a,com_item b where substr(a.acc_hrt,1,1)<'6' and  a.acc_hrt=b.acc_hrt
+	and b.acc_lvl='1' and a.br_no=:sBr_no ;
+
+	/*汇总会计流水当日发生数据*/
+	/*不用检查总借总贷因为dc_log平衡总借总贷也会平衡了*/
+	DEAL
+	if( pub_base_CompDblVal(gl_sub_d_amt,gl_sub_c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"支行总帐中总借总贷不相等![%s][%lf][%lf]",sBr_no,gl_sub_d_amt,gl_sub_c_amt);
+		WRITEMSG
+		return -1;
+	}
+	vtcp_log("支行[%s]总借总贷检查完成[%d]",sBr_no,__LINE__);
+
+	/*定义取总帐记录游标*/
+	EXEC SQL DECLARE gl_subcur CURSOR FOR
+		SELECT   rowid,gl_sub.* 
+		FROM      gl_sub 
+		WHERE
+		cur_no IN ( select cur_no from com_cur_no_code  where use_ind='Y' )
+		and br_no=:sBr_no;
+	DEAL
+
+	EXEC SQL OPEN gl_subcur;
+	DEAL
+
+	/*逐笔取出总帐记录进行比较*/
+	while(1)
+	{
+		memset(&sGl_sub,0x00,sizeof(struct gl_sub_c));
+		memset(&sCom_item,0x00,sizeof(struct com_item_c));
+		EXEC SQL FETCH gl_subcur INTO :sGl_sub;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+		EXEC SQL SELECT rowid,com_item.* INTO :sCom_item
+		FROM com_item WHERE acc_hrt=:sGl_sub.acc_hrt;
+		DEAL
+
+		/*汇总科目与子科目关系不检查,因为都要汇总*/
+		/*** 该科目为子科目，有分户，检查总分平衡 ***/
+		if( sCom_item.acc_knd[0]=='1' || sCom_item.acc_knd[0]=='2' )
+		{
+			sum_dc_dbal=0.00;
+			sum_dc_cbal=0.00;
+
+			/*该科目的发生汇总*/
+			EXEC SQL select sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1))
+				INTO :sum_dc_dbal :flag,:sum_dc_cbal :flag1
+				from dc_log 
+				where acc_hrt=:sGl_sub.acc_hrt
+		       	and tx_opn_br_no=:sGl_sub.br_no and sts='0';
+
+				if( flag )sum_dc_dbal=0.00;
+				if( flag1 )sum_dc_cbal=0.00;
+
+			switch(sCom_item.in_ind[0])
+			{
+				case 'D':					/*** 存款 ***/
+					vtcp_log("[%s][%s]存款类总帐分户帐平衡检查开始",sBr_no,sGl_sub.acc_hrt);
+					EXEC SQL SELECT sum(a.tmpbal) INTO :sum_dd_bal :flag 
+					FROM tmptable a,dd_parm b,dc_acc_rel c
+					WHERE a.prdt_no = b.prdt_no 
+					AND b.dc_code=c.dc_code 
+					AND b.cur_no=:sGl_sub.cur_no 
+					AND c.acc_hrt=:sCom_item.acc_hrt 
+					AND a.opn_br_no = :sBr_no ;
+					DEAL
+					if( flag ) sum_dd_bal=0.00;
+
+					EXEC SQL SELECT sum(a.tmpbal) INTO :sum_td_bal :flag 
+					FROM tmptable a,td_parm b,dc_acc_rel c
+					WHERE a.prdt_no = b.prdt_no 
+					AND b.dc_code=c.dc_code 
+					AND b.cur_no=:sGl_sub.cur_no 
+					AND c.acc_hrt=:sCom_item.acc_hrt 
+					AND a.opn_br_no = :sBr_no;
+					DEAL
+					if( flag ) sum_td_bal=0.00;
+										
+					if( fabs(pub_base_CompDblVal(sum_dd_bal+sum_td_bal,sGl_sub.cr_bal
+						 +sum_dc_cbal-sum_dc_dbal))>0.001 )
+					{
+						sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf][%lf]",
+						sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal+sum_dc_cbal-sum_dc_dbal,sum_dd_bal,sum_td_bal);
+						WRITEMSG
+						return -1;
+					}
+					vtcp_log("[%s][%s]存款类总帐分户帐平衡检查完成",sBr_no,sGl_sub.acc_hrt);
+					break;
+				case 'L':					/*** 贷款 ***/
+					vtcp_log("[%s][%s]贷款类总帐分户帐平衡检查开始",sBr_no,sGl_sub.acc_hrt);
+					if( strcmp(sGl_sub.acc_hrt,"13301") 
+						&& strncmp(sGl_sub.acc_hrt,"705",3) && strncmp(sGl_sub.acc_hrt,"130",3) )
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b,dc_acc_rel c
+						WHERE a.ac_sts='1' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no AND b.dc_code=c.dc_code 
+						AND c.acc_hrt=:sCom_item.acc_hrt
+						AND a.opn_br_no = :sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_sub.acc_hrt,"13001")==0 )	/* 逾期90天内贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='2' AND b.cur_no=:sGl_sub.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no = :sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf][%d]\n",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_sub.acc_hrt,"13002")==0 )	/* 逾期90天外贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='5' AND b.cur_no=:sGl_sub.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no = :sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf][%d]\n",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_sub.acc_hrt,"13003")==0 )	/* 呆滞贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='3' AND b.cur_no=:sGl_sub.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no =:sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf][%d]\n",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_sub.acc_hrt,"13004")==0 )	/* 呆帐贷款 */
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts='4' AND b.cur_no=:sGl_sub.cur_no
+						AND a.prdt_no=b.prdt_no
+						AND a.opn_br_no =:sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf][%d]\n",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal,__LINE__);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if( strcmp(sGl_sub.acc_hrt,"13301")==0 )
+					{
+						EXEC SQL SELECT sum(a.in_lo_intst) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no 
+						AND a.opn_br_no = :sBr_no
+						AND a.prdt_no IN ( SELECT prdt_no FROM ln_parm 
+						WHERE dc_code IN(SELECT dc_code FROM dc_acc_rel WHERE acc_hrt='13301')) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+
+					/**************************************************************************** 
+					JYW增加对13302的总分检查,后来长治商行决定将所有应收利息都用13301,所以不检查了
+					* JYW增加对13302的总分检查*
+					else if( strcmp(sGl_sub.acc_hrt,"13302")==0 )
+					{
+						EXEC SQL SELECT sum(a.in_lo_intst) INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no 
+						AND a.opn_br_no = :sBr_no *JYW修改增加以下区分13302的分户*
+						AND a.prdt_no IN ( SELECT prdt_no FROM ln_parm 
+						WHERE dc_code IN(SELECT dc_code FROM dc_acc_rel WHERE acc_hrt='13302')) ;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"[%s]科目总分不平.[%lf][%lf]",sGl_sub.acc_hrt,sGl_sub.dr_bal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					***********************JYW END **************************************/
+					else if(strcmp(sGl_sub.acc_hrt,"70501")==0 )	/** 70501表外利息 **/
+					{
+						EXEC SQL SELECT sum(a.out_lo_intst) 
+						INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no
+						AND a.opn_br_no = :sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平1.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else if(strcmp(sGl_sub.acc_hrt,"70502")==0 )	/** 70502 表外复利**/
+					{
+						EXEC SQL SELECT sum(a.cmpd_lo_intst) 
+						INTO :sum_ln_bal :flag
+						FROM ln_mst a,ln_parm b
+						WHERE a.ac_sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no
+						AND a.opn_br_no =:sBr_no;
+						DEAL
+						if( flag ) sum_ln_bal=0.00;
+						if( pub_base_CompDblVal(sum_ln_bal,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平2.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_ln_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					vtcp_log("[%s][%s]贷款类总帐分户帐平衡检查机构完成",sBr_no,sGl_sub.acc_hrt);
+					break;
+				case 'I':					/*** 内部帐 ***/
+					vtcp_log("[%s][%s]内部类总帐分户帐平衡检查开始",sBr_no,sGl_sub.acc_hrt);
+					if( strcmp(sCom_item.acc_hrt,"10101")==0	)	/*** 现金 ***/
+					{
+						EXEC SQL SELECT sum(bal) INTO :sum_in_bal :flag
+						FROM cash_mst
+						WHERE cur_no=:sGl_sub.cur_no
+						AND br_no =:sBr_no;
+						DEAL
+						if( flag ) sum_in_bal=0.00;
+						if(	pub_base_CompDblVal(sum_in_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+					}
+					else
+					{
+					/*if(strncmp(sGl_sub.acc_hrt,"244",3)!=0)*/
+					{
+						EXEC SQL SELECT sum(a.bal) INTO :sum_in_bal :flag
+						FROM in_mst a,in_parm b,dc_acc_rel c
+						WHERE sts!='*' AND a.prdt_no = b.prdt_no
+						AND b.cur_no=:sGl_sub.cur_no AND b.dc_code=c.dc_code 
+						AND c.acc_hrt=:sCom_item.acc_hrt
+						AND a.opn_br_no =:sBr_no;
+						DEAL
+						if( flag ) sum_in_bal=0.00;
+						if( sGl_sub.dc_ind[0]=='1' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						if( sGl_sub.dc_ind[0]=='2' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal-sum_dc_dbal+sum_dc_cbal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						if( sGl_sub.dc_ind[0]=='0' 
+							&& pub_base_CompDblVal(sum_in_bal,sGl_sub.dr_bal+sum_dc_dbal-sum_dc_cbal-sGl_sub.cr_bal)!=0 )
+						{
+							sprintf(acErrMsg,"机构[%s][%s]科目总分不平.[%lf][%lf]",
+							sBr_no,sGl_sub.acc_hrt,sGl_sub.cr_bal-sum_dc_cbal-sGl_sub.cr_bal,sum_in_bal);
+							WRITEMSG
+							return -1;
+						}
+						}
+					
+					}
+					vtcp_log("[%s][%s]内部类总帐分户帐平衡检查机构完成",sBr_no,sGl_sub.acc_hrt);
+					break;
+				case 'A':					/*** 考核帐只能核对全行总数 ***/
+					break;
+				default:
+					sprintf(acErrMsg,"科目类型错误![%s]",sCom_item.in_ind);
+					WRITEMSG
+					return -1;
+			}
+		}
+	}
+
+	EXEC SQL CLOSE gl_subcur;
+
+	return 0;
+}
+/*** 检查会计流水平衡 ***/
+int check_dc_log_branch(char *br_no)
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	short		flag=0,flag1=0;
+	double  d_amt=0.00;					/*** 流水帐中总借 ***/
+	double  c_amt=0.00;					/*** 流水帐中总贷 ***/
+	char sBr_no[6];
+EXEC SQL END DECLARE SECTION;
+
+	strcpy(sBr_no,br_no);
+
+	EXEC SQL SELECT count(*) INTO :flag 
+	FROM dc_log WHERE dc_ind!='1' and dc_ind!='2' and sts='0'
+	and tx_tx_br_no=:sBr_no;
+	DEAL
+	if( flag )
+	{
+		sprintf(acErrMsg,"机构[%s]会计流水帐中有非借非贷记录![%d]",sBr_no,flag);
+		WRITEMSG
+		return -1;
+	}
+	EXEC SQL SELECT count(*) INTO :flag 
+	FROM dc_log WHERE ct_ind!='1' and ct_ind!='2' and sts='0'
+	and tx_tx_br_no=:sBr_no;
+	DEAL
+	if( flag )
+	{
+		sprintf(acErrMsg,"机构[%s]会计流水帐中有非现金非转账记录![%d]",sBr_no,flag);
+		WRITEMSG
+		return -1;
+	}
+
+	EXEC SQL SELECT sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1)) 
+	INTO :d_amt :flag,:c_amt :flag1
+	FROM dc_log WHERE ct_ind='1' and substr(acc_hrt,1,1)<'6' and sts='0'
+	and tx_tx_br_no=:sBr_no;
+	DEAL
+	if( flag )	d_amt=0.00;
+	if( flag1 )	c_amt=0.00;
+	if( pub_base_CompDblVal(d_amt,c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"机构[%s]会计流水帐中现金借贷不相等![%lf][%lf]",sBr_no,d_amt,c_amt);
+		WRITEMSG
+		return -1;
+	}
+
+	EXEC SQL SELECT sum(amt*(2-dc_ind)),sum(amt*(dc_ind-1))
+	INTO :d_amt :flag,:c_amt :flag1
+	FROM dc_log WHERE ct_ind='2' and substr(acc_hrt,1,1)<'6' and sts='0'
+	and tx_tx_br_no=:sBr_no;
+	DEAL
+	if( flag )	d_amt=0.00;
+	if( flag1 )	c_amt=0.00;
+	if( pub_base_CompDblVal(d_amt,c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"机构[%s]会计流水帐中转账借贷不相等![%lf][%lf]",sBr_no,d_amt,c_amt);
+		WRITEMSG
+		return -1;
+	}
+	return 0;
+}

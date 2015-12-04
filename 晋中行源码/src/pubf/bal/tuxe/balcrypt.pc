@@ -1,0 +1,770 @@
+/******************************************************************************\
+ * BAL Cryptographic Server
+ *
+ * File: balcrypt.c  Date: 1998-11-10  Author: Fu, Song
+ * Service:  BAL_CRYPT
+ *
+ * Note: Used for key management, after connection established, clients will
+ *       call BAL_AUTH to request working key, and mac key
+ *
+\******************************************************************************/
+
+/**** C header files *****/
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <time.h>
+
+/**** Tuxedo header files ****/
+#include <atmi.h>
+
+/**** APP header files *****/
+#include "balcrypt.h"
+
+/**** ESQL header files ****/
+EXEC SQL include sqlca;
+EXEC SQL include "balhostvar.h";
+
+int balcrypt_get_downloadkey(unsigned char [],  unsigned char []);
+int balcrypt_generate_mackey(char []);
+int balcrypt_generate_wrkkey(char []);
+int balcrypt_is_nullkey(char []);
+int balcrypt_encryptkey(T_CryptRply *);
+int balcrypt_savekey(T_CryptReq *, T_CryptRply* );
+int balcrypt_generate_key(T_CryptRply *);
+int balcrypt_check_req(T_CryptReq *);
+int bal_read_clientkey(T_CryptReq*, T_CryptRply*);
+void balcrypt_main(TPSVCINFO *);
+void bal_dumpmesg(char*, char*, int);
+
+/******************************************************************************\
+ * Service Initialization
+\******************************************************************************/
+int tpsvrinit(int argc, char** argv)
+{
+	if( -1 == tpopen() )
+	{
+		userlog("ERROR(%d): tpopen() failed! - %s",
+				tperrno,
+				tpstrerror(tperrno));
+		return -1;
+	}
+/****
+	if( -1 == bal_open_database() )
+	{
+		userlog("ERROR open databasse");
+		return -1;
+	}
+****/
+	if( -1 == tpadvertise("BAL_CRYPT", balcrypt_main ) )
+	{
+		userlog("ERROR(%d): tpadvertise() failed! - %s",
+				tperrno,
+				tpstrerror(tperrno));
+		return -1;
+	}
+
+	return 0;
+}
+
+/******************************************************************************\
+ * Service Done
+\******************************************************************************/
+int srvdone(int argc, char** argv)
+{
+	if( -1 == tpunadvertise("BAL_CRYPT") )
+	{
+		userlog("ERROR(%d): tpunadvertise() failed! - %s",
+				tperrno,
+				tpstrerror(tperrno));
+		return -1;
+	}
+
+	if( -1 == bal_close_database() )
+	{
+		userlog("ERROR close databse");
+		return -1;
+	}
+	if( -1 == tpclose() )
+	{
+		userlog("ERROR(%d): tpclose() failed! - %s",
+				tperrno,
+				tpstrerror(tperrno));
+		return -1;
+	}
+	return 0;
+}
+
+/******************************************************************************\
+ * Service Entry
+\******************************************************************************/
+void balcrypt_main(TPSVCINFO *tpinfo )
+{
+	T_CryptReq 	*crypt_req;
+	T_CryptRply *crypt_rply;
+	int			ret;
+	int         txflag;
+
+
+	txflag = 0;
+	if( tpgetlev() == 0 )
+	{
+		if( -1 == tpbegin(30, 0L) )
+		{
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_KEYGEN_ERROR, NULL, 0, 0);
+		}
+		txflag = 1;
+	}
+
+	switch(tpinfo->data[0])
+	{
+	case CRYPTREQ_ALLOCKEY:
+		crypt_req = (T_CryptReq*)tpinfo->data;
+
+		/***** allocate tpbuffer for reply  *****/
+		crypt_rply = (T_CryptRply*)tpalloc("CARRAY", NULL, sizeof(T_CryptRply));
+		if( NULL == crypt_rply )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_ALLOCATE_ERROR, NULL, 0, 0);
+		}
+
+		/***** check req if valid *****/
+		if( -1 == balcrypt_check_req(crypt_req) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_REQ_INVALID, NULL, 0, 0);
+		}
+
+		/***** init reply buffer  *****/
+		crypt_rply->reqtype = crypt_req->reqtype;
+		memcpy(crypt_rply->branch_no, 
+			   crypt_req->branch_no, 
+			   sizeof(crypt_rply->branch_no));
+		memcpy(crypt_rply->tty, crypt_req->tty, sizeof(crypt_rply->tty));
+		crypt_rply->flags = crypt_req->flags;
+
+		/***** generate plain wrkkey or plain mackey per req->flags *****/
+		if( -1 == balcrypt_generate_key(crypt_rply) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_KEYGEN_ERROR, NULL, 0, 0);
+			return;
+		}
+
+		/***** save key into database, key will be encrypted  *****/
+		if( -1 == balcrypt_savekey(crypt_req, crypt_rply) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_SAVEKEY_ERROR, NULL, 0, 0);
+		}
+
+		/***** encrypt mac key or working key by download key *****/
+		if( -1 == balcrypt_encryptkey(crypt_rply) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_ENCRYPTKEY_ERROR, NULL, 0, 0);
+			return;
+		}
+
+		/***** OK, return response ******/
+		if( txflag )
+		{
+			if( -1 == tpcommit(0L) )
+			{
+				pubf_comm_free_buf();
+				tpreturn(TPFAIL, BALCRYPT_KEYGEN_ERROR, NULL, 0, 0);
+			}
+		}
+		pubf_comm_free_buf();
+		tpreturn(TPSUCCESS, 0, (char*)crypt_rply, sizeof(T_CryptRply), 0);
+
+		break;
+	case CRYPTREQ_READCLKEY:
+		crypt_req = (T_CryptReq*)tpinfo->data;
+
+		/***** allocate tpbuffer for reply  *****/
+		crypt_rply = (T_CryptRply*)tpalloc("CARRAY", NULL, sizeof(T_CryptRply));
+		if( NULL == crypt_rply )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_ALLOCATE_ERROR, NULL, 0, 0);
+		}
+
+		/***** check req if valid *****/
+		if( -1 == balcrypt_check_req(crypt_req) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_REQ_INVALID, NULL, 0, 0);
+		}
+
+		/***** init reply buffer  *****/
+		crypt_rply->reqtype = crypt_req->reqtype;
+		memcpy(crypt_rply->branch_no, 
+			   crypt_req->branch_no, 
+			   sizeof(crypt_rply->branch_no));
+		memcpy(crypt_rply->tty, crypt_req->tty, sizeof(crypt_rply->tty));
+
+		if( -1 == bal_read_clientkey(crypt_req, crypt_rply) )
+		{
+			if( txflag )
+			{
+				tpabort(0L);
+			}
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_READKEY_ERROR, NULL, 0, 0);
+		}
+
+		/***** OK, return response ******/
+		if( -1 == tpcommit(0L) )
+		{
+			pubf_comm_free_buf();
+			tpreturn(TPFAIL, BALCRYPT_KEYGEN_ERROR, NULL, 0, 0);
+		}
+		pubf_comm_free_buf();
+
+		tpreturn(TPSUCCESS, 0, (char*)crypt_rply, sizeof(T_CryptRply), 0);
+		break;
+	default:
+		if( txflag )
+		{
+			tpabort(0L);
+		}
+		pubf_comm_free_buf();
+		tpreturn(TPFAIL, BALCRYPT_UNKNOWN_REQ, NULL, 0, 0 );
+		break;
+	}
+}
+
+/******************************************************************************\
+ * check req if valid
+ * input: crypt_req
+ * output: none
+ * return: -1, invalid
+ *          0, valid
+\******************************************************************************/
+int balcrypt_check_req(T_CryptReq *crypt_req)
+{
+	if( crypt_req == NULL )
+		return -1;
+
+	/*** Add code here ***/
+
+	return 0;
+}
+
+/******************************************************************************\
+ * generate key per rply->flags
+ * input:  crypt_rply->flags, default is to generate both.
+ * output: crypt_rply->mackkey
+ *         crypt_rply->wrkkey
+ * return: -1, error
+ *			0, success
+\******************************************************************************/
+int balcrypt_generate_key(T_CryptRply *crypt_rply)
+{
+	if( crypt_rply == NULL )
+		return -1;
+
+	switch(crypt_rply->flags)
+	{
+	case CRYPTREQ_NOMAC:
+		memset(crypt_rply->mackey, 0, sizeof(crypt_rply->mackey));
+		return balcrypt_generate_wrkkey(crypt_rply->wrkkey);
+	case CRYPTREQ_NOWRK:
+		memset(crypt_rply->wrkkey, 0, sizeof(crypt_rply->wrkkey));
+		return balcrypt_generate_mackey(crypt_rply->mackey);
+	case CRYPTREQ_NOMACWRK:
+		memset(crypt_rply->mackey, 0, sizeof(crypt_rply->mackey));
+		memset(crypt_rply->wrkkey, 0, sizeof(crypt_rply->wrkkey));
+		return 0;
+	default:
+		if( -1 == balcrypt_generate_wrkkey(crypt_rply->wrkkey) )
+			return -1;
+		if( -1 == balcrypt_generate_mackey(crypt_rply->mackey) )
+			return -1;
+		return 0;
+	}
+}
+
+/******************************************************************************\
+ * save mackey or workkey to balwrkkey table
+ * input: crypt_req
+ *        crypt_rply
+ * global: g_hv_balwrkkey
+ * output: none
+ * return: -1, FAIL
+ *          0, OK
+\******************************************************************************/
+int balcrypt_savekey(T_CryptReq *crypt_req, T_CryptRply* crypt_rply)
+{
+	time_t 		now_time;
+	struct tm 	*now_tm;
+	unsigned char		appkey1[8];
+	unsigned char		appkey2[8];
+	unsigned char		tmpwrkkey[16];
+	unsigned char		tmpmackey[16];
+
+	/**** prepare the record *****/
+	memset(&g_hv_balwrkkey, 0, sizeof(g_hv_balwrkkey));
+	memcpy(g_hv_balwrkkey.branch_no,
+		   crypt_req->branch_no,
+		   sizeof(g_hv_balwrkkey.branch_no) - 1 );
+	memcpy(g_hv_balwrkkey.tty,
+		   crypt_req->tty,
+		   sizeof(g_hv_balwrkkey.tty) - 1 );
+	memcpy(g_hv_balwrkkey.ip,
+		   crypt_req->ip,
+		   sizeof(g_hv_balwrkkey.ip) - 1 );
+	memcpy(g_hv_balwrkkey.pid,
+		   crypt_req->pid,
+		   sizeof(g_hv_balwrkkey.pid) - 1 );
+
+	balcrypt_cnv_binary(crypt_rply->wrkkey, tmpwrkkey);
+	balcrypt_cnv_binary(&crypt_rply->wrkkey[16], &tmpwrkkey[8]);
+	balcrypt_cnv_binary(crypt_rply->mackey, tmpmackey);
+	balcrypt_cnv_binary(&crypt_rply->mackey[16], &tmpmackey[8]);
+
+	now_time = time(NULL);
+	now_tm	 = localtime(&now_time);
+	sprintf(g_hv_balwrkkey.time, "%4d%02d%02d%02d%02d%02d",
+			now_tm->tm_year + 1900,
+			now_tm->tm_mon  + 1,
+			now_tm->tm_mday,
+			now_tm->tm_hour,
+			now_tm->tm_min,
+			now_tm->tm_sec);
+
+	/**** encrypt keys before save them to table ***/
+	balcrypt_get_appkey(appkey1, appkey2);
+	if( ! balcrypt_is_nullkey(crypt_rply->mackey) )
+	{
+		chitty_encipher(appkey1, 
+					  appkey2, 
+					  tmpmackey, 
+					  16);
+		balcrypt_cnv_ascii(tmpmackey, g_hv_balwrkkey.mackey);
+		balcrypt_cnv_ascii(&tmpmackey[8],&g_hv_balwrkkey.mackey[16]);
+	}
+	if( ! balcrypt_is_nullkey(crypt_rply->wrkkey) )
+	{
+		chitty_encipher(appkey1, 
+					  appkey2, 
+					  tmpwrkkey,
+					  16);
+		balcrypt_cnv_ascii(tmpwrkkey, g_hv_balwrkkey.workkey, tmpwrkkey);
+		balcrypt_cnv_ascii(&tmpwrkkey[8], &g_hv_balwrkkey.workkey[16]);
+	}
+
+	EXEC SQL select pid into :g_hv_balwrkkey.pid from balwrkkey 
+		WHERE branch_no	= :g_hv_balwrkkey.branch_no AND 
+	  	      tty		= :g_hv_balwrkkey.tty;
+
+	memcpy(g_hv_balwrkkey.pid,
+		   crypt_req->pid,
+		   sizeof(g_hv_balwrkkey.pid) - 1 );
+
+	if( SQLCODE == 0 )
+	{
+		/** save it to the  balwrkkey table **/
+		EXEC SQL update balwrkkey SET
+			ip			= :g_hv_balwrkkey.ip,
+			pid			= :g_hv_balwrkkey.pid,
+			workkey		= :g_hv_balwrkkey.workkey,
+			mackey		= :g_hv_balwrkkey.mackey,
+			time		= :g_hv_balwrkkey.time
+		WHERE branch_no	= :g_hv_balwrkkey.branch_no AND 
+	  		tty			= :g_hv_balwrkkey.tty;
+
+	} 
+	else if( sqlca.sqlcode == 100 ) /** row not found **/
+	{
+		EXEC SQL insert into balwrkkey 
+			( branch_no, tty, ip, pid, workkey, mackey, time )
+		VALUES (
+			:g_hv_balwrkkey.branch_no,
+		  	:g_hv_balwrkkey.tty,
+			:g_hv_balwrkkey.ip,
+			:g_hv_balwrkkey.pid,
+			:g_hv_balwrkkey.workkey,
+			:g_hv_balwrkkey.mackey,
+			:g_hv_balwrkkey.time);
+	}
+
+	if( sqlca.sqlcode != 0 )
+	{
+		userlog("ERROR(%d): save key failed!", sqlca.sqlcode);
+		balcrypt_error(crypt_req, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+		return -1;
+	}
+
+	return 0;
+}
+
+/******************************************************************************\
+ * Before download keys, use download key encrypt them.
+ * Input: crypt_rply->mackey
+ *        crypt_rply->wrkkey
+ * Output: crypt_rply->mackey
+ *         crypt_rply->wrkkey
+ * Return: 0, OK
+ *         -1, FAIL
+\******************************************************************************/
+int balcrypt_encryptkey(T_CryptRply *crypt_rply)
+{
+	unsigned char download_key1[8];
+	unsigned char download_key2[8];
+
+	if( -1 == balcrypt_get_downloadkey(download_key1, download_key2) )
+	{
+		balcrypt_error(NULL, CRYPTERROR_GETDOWNLOADKEY, -1 );
+		return -1;
+	}
+
+	if( ! balcrypt_is_nullkey(crypt_rply->mackey))
+	{
+		chitty_encipher(download_key1, 
+					  download_key2, 
+					  crypt_rply->mackey,
+					  sizeof(crypt_rply->mackey));
+	}
+	if( ! balcrypt_is_nullkey(crypt_rply->wrkkey))
+	{
+		chitty_encipher(download_key1, 
+					  download_key2, 
+					  crypt_rply->wrkkey,
+					  sizeof(crypt_rply->wrkkey));
+	}
+
+	return 0;
+}
+
+/******************************************************************************\
+ * key is ascii key, if null string, key is null
+\******************************************************************************/
+int balcrypt_is_nullkey(char key[])
+{
+	return (strlen(key) == 0);
+}
+
+/******************************************************************************\
+ * generate one 32B ascii workking key
+\******************************************************************************/
+int balcrypt_generate_wrkkey(char wrkkey[])
+{
+    pid_t           		pid;
+    struct timeval  		now_tv;
+	int             		seed;
+    unsigned long   		l1, l2, l3, l4;
+	char            		kstr[33];
+	static unsigned int		counter = 1;
+
+    pid = getpid();
+    gettimeofday(&now_tv, NULL);
+
+    seed = ( now_tv.tv_sec * 100 + now_tv.tv_usec / 10000) + counter; 
+	if( seed & 0x01 )
+	{
+		seed ^= now_tv.tv_sec;
+	}
+	else
+	{
+		seed ^= now_tv.tv_sec * now_tv.tv_sec;
+	}
+
+	srandom(seed);
+    l1 = random();
+    l2 = random();
+	l3 = random();
+	l4 = random();
+
+    l1 ^= now_tv.tv_sec;
+    l2 ^= pid;
+	l3 ^= pid ^ now_tv.tv_usec;
+	l4 ^= now_tv.tv_sec ^ pid;
+
+    memset(kstr, 0, 33);
+    sprintf(kstr, "%08X%08X%08X%08X", l1, l2, l3, l4 );
+    memcpy(wrkkey, kstr, 32);
+
+	counter += 1;
+
+    return 0;
+}
+
+/******************************************************************************\
+ * generate one 32B ascii mac key
+\******************************************************************************/
+int balcrypt_generate_mackey(char mackey[])
+{
+    pid_t           		pid;
+    struct timeval  		now_tv;
+	int             		seed;
+    unsigned long   		l1, l2, l3, l4;
+	char            		kstr[33];
+	static unsigned int		counter = 1;
+
+    pid = getpid();
+    gettimeofday(&now_tv, NULL);
+
+    seed = ( now_tv.tv_sec * 100 + now_tv.tv_usec / 10000) + counter; 
+	if( seed & 0x01 )
+	{
+		seed ^= now_tv.tv_sec * pid;
+	}
+	else
+	{
+		seed ^= now_tv.tv_sec * now_tv.tv_sec * pid;
+	}
+
+	srandom(seed);
+    l1 = random();
+    l2 = random();
+	l3 = random();
+	l4 = random();
+
+    l1 ^= now_tv.tv_sec;
+    l2 ^= pid;
+	l3 ^= pid ^ now_tv.tv_usec;
+	l4 ^= now_tv.tv_sec ^ pid;
+
+    memset(kstr, 0, 33);
+    sprintf(kstr, "%08X%08X%08X%08X", l1, l2, l3, l4 );
+    memcpy(mackey, kstr, 32);
+
+	counter += 1;
+
+    return 0;
+}
+
+/******************************************************************************\
+ * get download key from balcrypkey on current date
+ * Input: none
+ * Output: key1, 8B binary key
+ *         key2, 8B binary key
+ * Global: g_hv_balcryptokey, host variable for balcrypkey table.
+ * Return: 0, OK
+ *         -1, failed
+ * Note:   two download keys in the table indexed by 1 and 2, 
+ *         according begin_time, select the latest download key.
+ *         After fetching it from the table, use app key decrypt it
+ *         then convert it to two 8B binary keys.
+\******************************************************************************/
+int balcrypt_get_downloadkey(unsigned char key1[],  unsigned char key2[])
+{
+    key1[0]= 'k';
+    key1[1]= '.';
+    key1[2]= '8';
+    key1[3]= '(';
+    key1[4]= '~';
+    key1[5]= 'k';
+    key1[6]= 'Z';
+    key1[7]= 'q';
+
+    key2[0]= '&';
+    key2[1]= '-';
+    key2[2]= '+';
+    key2[3]= 'x';
+    key2[4]= '?';
+    key2[5]= '^';
+    key2[6]= '~';
+    key2[7]= 'k';
+
+	return 0;
+/******
+	unsigned char 	appkey1[8], appkey2[8];
+	char     		now_strtime[9]; ** yyyymmdd**
+	time_t 			now_time;
+	struct tm 		*now_tm;
+
+	**** select latest encryped download key ****
+	memset(&g_hv_balcryptokey, 0, sizeof(g_hv_balcryptokey));
+	g_hv_balcryptokey.type[0] = CRYPTKEY_DOWNLOAD;
+
+	EXEC SQL declare crypt_cur cursor 
+	FOR select key1, key2, begin_time 
+	FROM balcrypkey
+	WHERE type = :g_hv_balcryptokey.type
+	ORDER BY begin_time desc;
+
+	if( sqlca.sqlcode != 0 )
+	{
+		balcrypt_error(NULL, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+		return -1;
+	}
+
+	EXEC SQL open crypt_cur;
+	if( sqlca.sqlcode != 0 )
+	{
+		balcrypt_error(NULL, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+		return -1;
+	}
+
+	EXEC SQL fetch crypt_cur into 
+		 :g_hv_balcryptokey.key1,
+		 :g_hv_balcryptokey.key2,
+		 :g_hv_balcryptokey.begin_time;
+
+	if( sqlca.sqlcode != 0 )
+	{
+		balcrypt_error(NULL, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+		return -1;
+	}
+
+	EXEC SQL close crypt_cur;
+
+	if( sqlca.sqlcode != 0 )
+	{
+		balcrypt_error(NULL, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+		return -1;
+	}
+
+	EXEC SQL free crypt_cur;
+
+	now_time = time(NULL);
+
+	now_time = time(NULL);
+	now_tm	 = localtime(&now_time);
+	sprintf(now_strtime, "%4d%02d%02d",
+			now_tm->tm_year + 1900,
+			now_tm->tm_mon  + 1,
+			now_tm->tm_mday);
+
+	if( atol(now_strtime) < atol(g_hv_balcryptokey.begin_time) )
+	{
+		balcrypt_error(NULL, CRYPTERROR_BEGINTIME, -1);
+		return -1;
+	}
+
+	**** decrypt download key with app key *****
+	balcrypt_cnv_binary(g_hv_balcryptokey.key1, key1);
+	balcrypt_cnv_binary(g_hv_balcryptokey.key2, key2);
+	balcrypt_get_appkey(appkey1, appkey2);
+	chitty_decipher(appkey1,
+					appkey2,
+					key1,
+					8);
+	chitty_decipher(appkey1,
+					appkey2,
+					key2,
+					8);
+	*******/
+}
+
+int bal_read_clientkey(T_CryptReq* crypt_req, T_CryptRply* crypt_rply)
+{
+    memset(&g_hv_balwrkkey, 0, sizeof(g_hv_balwrkkey));
+    memcpy(g_hv_balwrkkey.branch_no,
+		   crypt_req->branch_no,
+		   sizeof(crypt_req->branch_no));
+    memcpy(g_hv_balwrkkey.tty,
+		   crypt_req->tty,
+		   sizeof(crypt_req->tty));
+
+    EXEC SQL select workkey, mackey
+        INTO :g_hv_balwrkkey.workkey, :g_hv_balwrkkey.mackey
+        FROM balwrkkey
+        WHERE branch_no = :g_hv_balwrkkey.branch_no AND
+              tty       = :g_hv_balwrkkey.tty;
+    if( sqlca.sqlcode != 0 )
+    {
+        balcrypt_error(NULL, CRYPTERROR_DATABBASE, sqlca.sqlcode);
+        return -1;
+    }
+	
+	memcpy(crypt_rply->wrkkey, 
+           g_hv_balwrkkey.workkey, 
+           sizeof(crypt_rply->wrkkey));
+	memcpy(crypt_rply->mackey, 
+           g_hv_balwrkkey.mackey, 
+           sizeof(crypt_rply->mackey));
+
+	return 0;
+}
+
+void bal_dumpmesg(char* prompt, char* text, int len)
+{
+    FILE* fp;
+    int  i;
+    int  j;
+
+#ifdef BAL_DEBUG
+
+    fp = fopen("MESG.LOG", "a");
+    if( NULL == fp)
+        return;
+
+    fprintf(fp, "===================================\n");
+    fprintf(fp, "%s\n", prompt);
+    fprintf(fp, "mesglen = [%d]\n", len);
+    for( i = 0; i < len; i+= 16)
+    {
+        for( j = 0; j < 16; j++)
+        {
+            if( i + j < len )
+            {
+                fprintf(fp, "%02X ", (unsigned char)text[i+j]);
+            }
+            else
+            {
+                fprintf(fp, "   ");
+            }
+
+            if( j == 16 / 2 - 1 )
+            {
+                fprintf(fp, " ");
+            }
+
+        }
+
+        for( j = 0; j < 16 && i + j < len; j++)
+        {
+            if( isprint(text[i + j]) )
+            {
+                fprintf(fp, "%c", text[i+j]);
+            }
+            else
+            {
+                fprintf(fp,".");
+            }
+        }
+
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+
+#endif
+
+}
+

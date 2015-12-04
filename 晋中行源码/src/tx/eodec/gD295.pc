@@ -1,0 +1,1663 @@
+/*************************************************************
+* if(wd_td_mst.ac_id==100072356)
+*     国家邮政局邮政储汇局利率用分户利率
+* 文 件 名: gD295.c
+* 功能描述：计提定期利息
+
+计提日期为计提月的20日晚翻盘后执行,否则计算天数有问题
+处理原理是以当前日期倒推X月为周期计算利息.
+如果计息周期变动，注意调整周期参数，防止重计，漏计.
+记帐是按照sub_tx_code=D295配置的,如果有变动改dc_entry表即可
+**************************************************************/
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+
+
+/** 计提周期, X(月) **/
+#define  JTZQ        1
+/*#define  DATE061104  20061104  长治是要分上线前和上线后这里不分了*/
+#define  DATE061104  19000101
+
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "com_branch_c.h"
+#include "com_item_c.h"
+#include "dc_acc_rel_c.h"
+#include "com_sys_parm_c.h"
+#include "zjgl_mst_c.h"
+#include "zjgl_hst_c.h"
+#include "gl_sub_c.h"
+#include "com_cur_no_code_c.h"
+#include "com_parm_c.h"
+#include "mo_opn_cls_c.h"
+#include "td_list_c.h"
+
+char jidu[3];
+	struct td_list_c sTd_list;
+	struct com_sys_parm_c com_sys_parm;
+
+gD295()
+{
+	int ret=0,i=0;
+	struct com_branch_c sCom_branch;
+	
+	memset(&sTd_list,0x00,sizeof(struct td_list_c));
+  /** 打开事务 **/
+  ret=sql_begin(); 
+	if(ret != 0)
+		MYRETERR
+
+	EXEC SQL delete from td_list;
+
+  /** 取流水号 **/
+  if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+  {
+		sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+  }
+  set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+
+
+  /** 初始化全局变量 **/
+  ret = 0;
+	pub_base_sysinit();
+
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm,"1=1");
+	MYRETERR
+
+	g_pub_tx.tx_date = com_sys_parm.lst_date;
+
+  switch(JTZQ)
+  {
+		case 1 :  /* 按月 */
+			sprintf(acErrMsg,"按月计提定期利息![%d]!",com_sys_parm.sys_date);
+			WRITEMSG
+			break;
+		case 3 : /* 按季 */
+			sprintf(acErrMsg,"按季计提定期利息![%d]!",com_sys_parm.sys_date);
+			WRITEMSG
+			break;
+  }
+  
+	ret = Com_branch_Dec_Sel ( g_pub_tx.reply , "br_type in('4','5') order by br_no");
+	if( ret )
+	{
+		sprintf(acErrMsg,"执行Com_branch_Dec_Sel出错[%s]!!!",g_pub_tx.reply);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1) 
+	{
+		memset(&sTd_list,0x00,sizeof(struct td_list_c));
+		memset(&sCom_branch,0x0,sizeof(sCom_branch));
+		ret = Com_branch_Fet_Sel ( &sCom_branch, g_pub_tx.reply );
+		if (ret == 100)
+		{
+			vtcp_log("全部计提完毕\n");
+			break;
+		}
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Com_branch_Fet_Sel出错[%s]!!!",g_pub_tx.reply);
+			WRITEMSG
+			goto ErrExit;
+		}
+		pub_base_strpack( sCom_branch.br_no );
+
+  		set_zd_long( DC_TRACE_CNT,++i);
+		vtcp_log("开始计提【%s】机构\n",sCom_branch.br_no);
+		ret = igD0287_calculate_intst(sCom_branch.br_no);	/* 计提函数 */
+		MYRETERR
+	}
+		  
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int igD0287_calculate_intst(char *br_no)
+{
+	int    ret = 0;
+	long    days = 0;
+	long    days_tmp = 0;
+	int    l_term = 0;
+	long   is_date = 0;
+	long   lE_date=0;
+	long   is_date_tmp = 0;
+	long   ie_date_tmp = 0;
+	double td_rate = 0.0;
+	double dd_rate  = 0.0;
+	double tax_rate = 0.0;
+	double dg_tot_intst = 0.0,cx_tot_intst=0;
+	double sig_intst = 0.0;
+	double tmp_intst = 0.0;
+	double bal_tmp   = 0.0;
+	double tax_tmp   = 0.0;
+	struct td_mst_c wd_td_mst;
+	struct td_parm_c wd_td_parm;
+	struct mo_opn_cls_c wd_mo_opn_cls;
+	char tmp_cif_no[20];
+
+  /* 取得个人所得税税率 */
+  ret = pub_base_GetRate(SLBH,g_pub_tx.tx_date, &tax_rate);/* 此函数已置了reply */
+  if (ret)
+  {
+		sprintf(acErrMsg,"取个人所得税率错误[%d]!",ret);
+		return 1;
+  }
+
+	/* 个人定期，零整，教育，存本取息  在两个计提周期内销户的也得提*/
+	ret = Td_mst_Dec_Sel( g_pub_tx.reply , " intst_type<>'0' and ac_sts in('1','*') and prdt_no in \
+		   (select prdt_no from td_parm where put_ind='Y') and opn_br_no='%s' order by prdt_no,ac_id ",br_no);
+	if(ret)
+	{
+		sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+		WRITEMSG
+		return(ret);
+	}
+	while(1)
+  {
+		days     = 0;
+		days_tmp = 0;
+		is_date  = 0;
+		l_term = 0;
+		sig_intst = 0.0;
+		bal_tmp = 0.0;
+		dd_rate=0.0;td_rate=0.0;
+		ret = Td_mst_Fet_Sel( &wd_td_mst,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+		    sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+		    WRITEMSG
+		    return(ret);
+		}
+
+		/** 根据计提周期计算起息日期 **/
+		is_date = igD0287_GetLstTermDay();
+		/** 如果开户日大于上次提取日，起息日从开户日开始 **/
+		if(is_date<wd_td_mst.ic_date)
+		{
+			is_date = wd_td_mst.ic_date;
+		}
+		
+		/* 起息日大于当前日期 */
+		if(is_date>g_pub_tx.tx_date)
+		{
+			sprintf(acErrMsg,"起息日期错误![%d]",ret);
+			WRITEMSG
+			return(-1);
+		}
+		
+		if(wd_td_mst.ac_sts[0]=='*')
+		{
+			if(is_date>wd_td_mst.lst_date)/* 上次计提日已经大于销户日了说明上次已经提过了 */
+				continue;
+			memset(&wd_mo_opn_cls,'\0',sizeof(wd_mo_opn_cls));
+			ret = Mo_opn_cls_Sel(g_pub_tx.reply,&wd_mo_opn_cls,"ac_id='%ld'",wd_td_mst.ac_id);
+			if(ret)
+			{
+				sprintf(acErrMsg,"查找开销户登记簿错误![%d]",ret);
+				WRITEMSG
+				return(ret);
+			}
+			wd_td_mst.bal=wd_mo_opn_cls.amt;	/* 将销户时的销户金额在赋回去为了下面算利息 */
+		}
+
+		/** 取产品信息 **/
+		ret = Td_parm_Sel(g_pub_tx.reply,&wd_td_parm,"prdt_no='%s'",wd_td_mst.prdt_no);
+		if(ret)
+		{
+			sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+			WRITEMSG
+			return(ret);
+		}
+		
+		/** 根据定期产品取利率 **/
+		ret = pub_base_getllz(wd_td_parm.rate_no,wd_td_parm.cur_no,
+		      wd_td_mst.ic_date,&td_rate);
+		if (ret != 0)
+		{
+			sprintf(acErrMsg,"取利率错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"W110");
+			return ret;
+		}
+		if(memcmp(wd_td_mst.prdt_no,"257",3)==0 || memcmp(wd_td_mst.prdt_no,"258",3)==0){
+			vtcp_log("协议存款取分户中的利率[%ld]\n",wd_td_mst.ac_id);
+		td_rate=wd_td_mst.rate;
+		}
+		/* modified by liuxuan 2006-12-19 * 长治的特殊户
+		if(wd_td_mst.ac_id==100072356){
+			vtcp_log("国家邮政局邮政储汇局利率用分户利率[%ld][%.2f]\n",wd_td_mst.ac_id,wd_td_mst.rate);
+		td_rate=wd_td_mst.rate;
+		}
+    */ 
+		/** 取活期产品利率 **/
+		ret = pub_base_getllz("100",wd_td_parm.cur_no,
+		      g_pub_tx.tx_date,&dd_rate);
+		if (ret != 0)
+		{
+			sprintf(acErrMsg,"取利率错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"W110");
+			return ret;  
+		}
+		sTd_list.ac_id=wd_td_mst.ac_id;
+		sTd_list.ac_seqn=wd_td_mst.ac_seqn;
+		memcpy(sTd_list.opn_br_no,wd_td_mst.opn_br_no,sizeof(wd_td_mst.opn_br_no));
+
+		sTd_list.tx_date=com_sys_parm.sys_date;
+		ret=iGetBeg_end_date(&wd_td_mst,&is_date, &lE_date,&td_rate);
+        if(ret)
+        {
+            sprintf(acErrMsg, "![%d]", ret);
+            WRITEMSG
+            strcpy(g_pub_tx.reply, "W110");
+            return ret;
+        }
+        vtcp_log("[%s][%d]td_rate==[%.2f]\n",__FILE__,__LINE__,td_rate);
+        vtcp_log("[%s][%d]tfr_ind==[%c],is_date=[%d],iE_date=[%d]\n",__FILE__,__LINE__,wd_td_mst.tfr_ind[0],is_date,lE_date);
+
+		if(wd_td_mst.tfr_ind[0] == 'Y') /** 本金和利息自动转存 **/
+		{
+			vtcp_log("[%s][%d]mtr_date1==[%ld]ac_sts=[%s]\n",__FILE__,__LINE__,wd_td_mst.mtr_date,wd_td_mst.ac_sts);
+			vtcp_log("[%s][%d]is_date2==[%ld] lst_date=[%ld]\n",__FILE__,__LINE__,is_date,wd_td_mst.lst_date);
+			if(wd_td_mst.ac_sts[0]=='*')
+			{
+                if(wd_td_mst.mtr_date<=wd_td_mst.lst_date) /** 已经过到期日的或刚到期的 **/
+                {
+                    vtcp_log("[%s][%d]is_date3==[%ld]mtr_date =[%d] ###跟踪001###\n",__FILE__,__LINE__,is_date,wd_td_mst.mtr_date);
+                     /**add by zyl 20120617**/
+                     is_date = igD0287_GetLstTermDay(1);
+                     vtcp_log("[%s][%d]is_date7==[%ld]\n",__FILE__,__LINE__,is_date);
+                     /**end by zyl 20120617**/
+                    if(is_date < wd_td_mst.mtr_date )/*到期日在两个计提日之间，需要分段计算*/
+                    {
+                         ret = pub_base_CalDays( is_date , wd_td_mst.mtr_date , "0" , &days );
+                         if (ret != 0)
+                         {
+                              sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                              WRITEMSG
+                              return ret;
+                         }
+                         vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                         sig_intst = (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+                         sig_intst = pub_base_PubDround_1(sig_intst);
+                         
+                         sTd_list.td_rate=td_rate;
+                         sTd_list.td_day=days;
+                         sTd_list.td_lx=sig_intst;
+                         sTd_list.td_amt=wd_td_mst.bal;
+                         sTd_list.flag[0]='0';
+                         ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                         
+                         /** 活期部分利息 **/
+                         ret = pub_base_CalDays( wd_td_mst.mtr_date , wd_td_mst.lst_date , "0"  , &days );
+                         if (ret != 0)
+                         {
+                              sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                              WRITEMSG
+                              return ret;
+                         } 
+                         tmp_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                         tmp_intst = pub_base_PubDround_1(tmp_intst);
+                         sig_intst+=tmp_intst;
+                         vtcp_log("[%s][%d]非自动,过期1,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                         
+                         sTd_list.dd_rate=dd_rate;
+                         sTd_list.dd_day=days;
+                         sTd_list.dd_amt=wd_td_mst.bal;
+                         sTd_list.dd_lx=tmp_intst;
+                         sTd_list.flag[0]='1';
+                         ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                    }
+                    else/***对于自动转存的情况，那么就要考虑是否到了第二个周期了***/
+                    {
+                        /** 计算当期计算利息的余额 **/
+                        is_date_tmp = wd_td_mst.ic_date;
+                        ie_date_tmp = wd_td_mst.mtr_date;
+                        bal_tmp = wd_td_mst.bal;
+                        vtcp_log("[%s][%d] 销户账户金额是[%lf]",__FILE__,__LINE__,bal_tmp);
+                        long ie_date_next = 0;
+                        while(ie_date_tmp<wd_td_mst.lst_date)
+                        {
+                            ret = pub_base_CalDays( is_date_tmp , ie_date_tmp , "0" , &days );
+                            if (ret != 0)
+                            {
+                                sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                                WRITEMSG
+                                return ret;
+                            }
+                             ret = pub_base_getllz(wd_td_parm.rate_no,wd_td_parm.cur_no,is_date_tmp,&td_rate);
+                            if (ret != 0)
+                             {
+                                 sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                 WRITEMSG
+                                 strcpy(g_pub_tx.reply,"W110");
+                                 return ret;
+                             }
+                            sig_intst = (bal_tmp * td_rate * days) / (360 * 100) ;
+                            sig_intst = pub_base_PubDround_1(sig_intst);
+                        
+                            tax_tmp = sig_intst * tax_rate;
+                            tax_tmp = pub_base_PubDround_1(tax_tmp);
+                        
+                            bal_tmp+=(sig_intst-tax_tmp);
+
+                        
+                            /** 重新调整起息到期日 **/
+                            is_date_tmp = ie_date_tmp;
+                            ie_date_next= ie_date_tmp;
+                            if( wd_td_parm.term_type[0]=='D' )
+                            {
+                                l_term=wd_td_parm.term;
+                                pub_base_deadlineD(is_date_tmp,l_term,&ie_date_tmp);
+                            }
+                            else if( wd_td_parm.term_type[0]=='Y' )
+                            {
+                                l_term=wd_td_parm.term*12;
+                                pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+                            }
+                            else if( wd_td_parm.term_type[0]=='M' )
+                            {
+                                l_term=wd_td_parm.term;
+                                pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+                            }
+                        }
+                        vtcp_log("[%s][%d] 自动转存N次后的到期日应为[%d][%d]",__FILE__,__LINE__,ie_date_tmp,wd_td_mst.lst_date);
+                        vtcp_log("[%s][%d] 自动转存N-1次后的到期日应为[%d][%d]",__FILE__,__LINE__,ie_date_next,wd_td_mst.lst_date);
+                        /*****再次和销户日期比较*****/
+                        if(ie_date_next<wd_td_mst.lst_date)/***自动转存N-1次的到期日期小于销户日期的话,分两部分***/
+                        {
+                            if(is_date < ie_date_next )
+                            {
+                                ret = pub_base_CalDays( is_date , ie_date_next , "0" , &days );
+                                if (ret != 0)
+                                {
+                                     sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                                     WRITEMSG
+                                     return ret;
+                                }
+                                vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                                
+                                struct td_parm_c sTd_parm_new;
+                                memset(&sTd_parm_new, 0 , sizeof(sTd_parm_new));
+                                
+                                ret=Td_parm_Sel(g_pub_tx.reply,&sTd_parm_new,"prdt_no='%s'",wd_td_mst.prdt_no);
+                                if(ret)
+                                {
+                                    Td_parm_Debug(&sTd_parm_new);
+                                    vtcp_log("%s,%d 得到定期产品错误 ret=[%d]",__FILE__,__LINE__,ret);
+                                    return ret;
+                                }
+                                vtcp_log("[%s][%d] is_date_tmp=[%d]",__FILE__,__LINE__,is_date_tmp);
+                                /**得到 自动转存N-1次的开户日期.用于取rate**/
+                                if( wd_td_parm.term_type[0]=='D' )
+                                {
+                                    l_term=wd_td_parm.term;
+                                    pub_base_deadlineD(is_date_tmp,-l_term,&is_date_tmp);
+                                }
+                                else if( wd_td_parm.term_type[0]=='Y' )
+                                {
+                                    l_term=wd_td_parm.term*12;
+                                    pub_base_deadlineM(is_date_tmp,-l_term,&is_date_tmp);
+                                }
+                                else if( wd_td_parm.term_type[0]=='M' )
+                                {
+                                    l_term=wd_td_parm.term;
+                                    pub_base_deadlineM(is_date_tmp,-l_term,&is_date_tmp);
+                                }
+                                vtcp_log("[%s][%d] is_date_tmp=[%d]",__FILE__,__LINE__,is_date_tmp);
+                                ret = pub_base_getllz(sTd_parm_new.rate_no,sTd_parm_new.cur_no, is_date_tmp, &td_rate);
+                                if(ret)
+                                {
+                                    vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+                                    return ret;
+                                }
+                                
+                                sig_intst = (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+                                sig_intst = pub_base_PubDround_1(sig_intst);
+                         
+                         sTd_list.td_rate=td_rate;
+                         sTd_list.td_day=days;
+                         sTd_list.td_lx=sig_intst;
+                         sTd_list.td_amt=wd_td_mst.bal;
+                         sTd_list.flag[0]='0';
+                         ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                                
+                                /** 活期部分利息 **/
+                                 /** 活期部分利息查找利率20120906**/
+                              ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                               if (ret != 0)
+                                {
+                                   sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                   WRITEMSG
+                                   strcpy(g_pub_tx.reply,"W110");
+                                   return ret;  
+                                }
+                                ret = pub_base_CalDays( ie_date_next , wd_td_mst.lst_date , "0"  , &days );
+                                if (ret != 0)
+                                {
+                                     sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                                     WRITEMSG
+                                     return ret;
+                                } 
+                                tmp_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                                tmp_intst = pub_base_PubDround_1(tmp_intst);
+                                sig_intst+=tmp_intst;
+                                sTd_list.dd_rate=dd_rate;
+                                sTd_list.dd_day=days;
+                                sTd_list.dd_amt=wd_td_mst.bal;
+                                sTd_list.dd_lx=tmp_intst;
+                                sTd_list.flag[0]='1';
+                                ret=Td_list_Ins(sTd_list,g_pub_tx.reply);;
+                           if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                                vtcp_log("[%s][%d]非自动,过期1,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                            }
+                            else
+                            {   /** 活期部分利息查找利率20120906**/
+                              ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                               if (ret != 0)
+                                {
+                                   sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                   WRITEMSG
+                                   strcpy(g_pub_tx.reply,"W110");
+                                   return ret;  
+                                }
+                                ret = pub_base_CalDays( is_date , wd_td_mst.lst_date , "0"  , &days );
+                                if (ret != 0)
+                                {
+                                    sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                                    WRITEMSG
+                                    return ret;
+                                }
+                                
+                                sig_intst =  (bal_tmp * dd_rate * days) / (360 * 100) ;
+                                sig_intst = pub_base_PubDround_1(sig_intst);
+                                
+                                sTd_list.dd_rate=dd_rate;
+                                sTd_list.dd_day=days;
+                                sTd_list.dd_amt=bal_tmp;
+                                sTd_list.dd_lx=sig_intst;
+                                sTd_list.flag[0]='1';
+                                ret=Td_list_Ins(sTd_list,g_pub_tx.reply);;
+                           if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                                vtcp_log("[%s][%d]自动,过期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                            }
+                        }
+                        else/***第二次到期日还没有到***/
+                        {   
+                        	  /** 活期部分利息查找利率20120906**/
+                           ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                            if (ret != 0)
+                             {
+                                sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                WRITEMSG
+                                strcpy(g_pub_tx.reply,"W110");
+                                return ret;  
+                             }
+                            ret = pub_base_CalDays( is_date , wd_td_mst.lst_date , "0"  , &days );
+                            if (ret != 0)
+                            {
+                                sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                                WRITEMSG
+                                return ret;
+                            }
+                            sig_intst =  (bal_tmp * dd_rate * days) / (360 * 100) ;
+                            sig_intst = pub_base_PubDround_1(sig_intst);
+
+                         sTd_list.dd_rate=dd_rate;
+                         sTd_list.dd_day=days;
+                         sTd_list.dd_amt=bal_tmp;
+                         sTd_list.dd_lx=sig_intst;
+                         sTd_list.flag[0]='1';
+                         ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                            
+                            vtcp_log("[%s][%d] bal=[%.2f] rate=[%.2f] days=[%d]\n",__FILE__,__LINE__,bal_tmp,dd_rate,days);
+                            vtcp_log("[%s][%d]自动,过期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                        }
+                    }
+                }
+                else
+                {  /**没到期 自动转存,且第一期未到期的情况.**/
+                    /** 活期部分利息查找利率20120906**/
+                         ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                          if (ret != 0)
+                             {
+                                sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                WRITEMSG
+                                strcpy(g_pub_tx.reply,"W110");
+                                return ret;  
+                             }
+                    ret = pub_base_CalDays( is_date , wd_td_mst.lst_date , "0" , &days );
+                    if (ret != 0)
+                    {
+                         sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                         WRITEMSG
+                         return ret;
+                    }
+                    sig_intst =  (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                    sig_intst = pub_base_PubDround_1(sig_intst);
+                      
+                      sTd_list.dd_rate=dd_rate;
+                      sTd_list.dd_day=days;
+                      sTd_list.dd_amt=wd_td_mst.bal;
+                      sTd_list.dd_lx=sig_intst;
+                      sTd_list.flag[0]='1';
+                      ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                          {
+                            sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                            WRITEMSG	
+                             return ret;
+                          }
+                    vtcp_log("[%s][%d]自动,未期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                }
+               
+            }
+            else/****账户非销户的!!****/
+            {
+                /**mod by gongll 2012/4/10 17:21:16**/
+                vtcp_log("[%s][%d]mtr_date2==[%ld]\n", __FILE__, __LINE__, wd_td_mst.mtr_date);
+                if (wd_td_mst.mtr_date < g_pub_tx.tx_date) 
+                {
+                    /**add by zyl 20120614**/
+                    double dBal_tmp = 0.0;
+                    long lDateadd = 0;
+                    long lDaysall = 0;
+                    long lOldicdate = 0;
+                    double dIntstadd = 0.0;
+                    char cCurno[3];
+                    char cRateno[4];
+                    memset(cRateno,0x00,sizeof(cRateno));
+                    memset(cCurno,0x00,sizeof(cCurno));
+                    /**end by zyl 20120614**/
+                    /** 已经过到期日的 **/
+                    /** 计算当期计算利息的余额 **/
+                    is_date_tmp = wd_td_mst.ic_date;/*起息日*/
+                    ie_date_tmp = wd_td_mst.mtr_date;/*到期日*/
+                    bal_tmp = wd_td_mst.bal;
+                    vtcp_log("[%s][%d] is_date_tmp=[%d][%d][%d][%f]",__FILE__,__LINE__,is_date_tmp,is_date,ie_date_tmp,td_rate);
+                         
+                    while (ie_date_tmp < g_pub_tx.tx_date) 
+                    {
+                        ret = pub_base_CalDays(is_date_tmp, ie_date_tmp, "0", &days);
+                        if (ret != 0) 
+                        {
+                            sprintf(acErrMsg, "天数计算错误![%d]", ret);
+                            WRITEMSG
+                            return ret;
+                        }
+                        ret = pub_base_getllz(wd_td_parm.rate_no,wd_td_parm.cur_no,is_date_tmp,&td_rate);
+                       if (ret != 0)
+                         {
+                         sprintf(acErrMsg,"取利率错误![%d]",ret);
+                           WRITEMSG
+                           strcpy(g_pub_tx.reply,"W110");
+                          return ret;
+                         }
+                        sig_intst = (bal_tmp * td_rate * days) / (360 * 100);
+                        sig_intst = pub_base_PubDround_1(sig_intst);
+                
+                        tax_tmp = sig_intst * tax_rate;
+                        tax_tmp = pub_base_PubDround_1(tax_tmp);
+                        
+                        dBal_tmp = bal_tmp;
+                        bal_tmp += (sig_intst - tax_tmp);
+                
+                        /** 重新调整起息到期日 **/
+                        lOldicdate = is_date_tmp;
+                        is_date_tmp = ie_date_tmp;
+                        if (wd_td_parm.term_type[0] == 'D') 
+                        {
+                            l_term = wd_td_parm.term;
+                            pub_base_deadlineD(is_date_tmp, l_term, &ie_date_tmp);
+                        } 
+                        else if (wd_td_parm.term_type[0] == 'Y') 
+                        {
+                            l_term = wd_td_parm.term * 12;
+                            pub_base_deadlineM(is_date_tmp, l_term, &ie_date_tmp);
+                        } 
+                        else if (wd_td_parm.term_type[0] == 'M') 
+                        {
+                            l_term = wd_td_parm.term;
+                            pub_base_deadlineM(is_date_tmp, l_term, &ie_date_tmp);
+                        }
+                    }
+                    /******modify by xyy 2011/10/14 11:10:13 如果到期日在本次计提和上次计提之间的话************/
+                    vtcp_log("[%s][%d] is_date_tmp=[%d][%d][%d]   #####跟踪#####",__FILE__,__LINE__,is_date_tmp,is_date,ie_date_tmp);
+                    
+                    if((wd_td_mst.mtr_date <= is_date) && (is_date <= is_date_tmp) && (is_date_tmp < g_pub_tx.tx_date) )
+                    {
+                        ret = pub_base_CalDays(is_date_tmp, g_pub_tx.tx_date, "0", &days);
+                        if (ret != 0)
+                        {
+                            sprintf(acErrMsg, "天数计算错误![%d]", ret);
+                            WRITEMSG
+                            return ret;
+                        }
+                        struct td_parm_c sTd_parm_new;
+                        memset(&sTd_parm_new, 0 , sizeof(sTd_parm_new));
+                        
+                        ret=Td_parm_Sel(g_pub_tx.reply,&sTd_parm_new,"prdt_no='%s'",wd_td_mst.prdt_no);
+                        if(ret)
+                        {
+                            Td_parm_Debug(&sTd_parm_new);
+                            vtcp_log("%s,%d 得到定期产品错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        vtcp_log("[%s][%d] is_date_tmp=[%d]",__FILE__,__LINE__,is_date_tmp);
+                        strcpy(cCurno,sTd_parm_new.cur_no);
+                        strcpy(cRateno,sTd_parm_new.rate_no);
+                        ret = pub_base_getllz(sTd_parm_new.rate_no,sTd_parm_new.cur_no, is_date_tmp, &td_rate);
+                        if(ret)
+                        {
+                            vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        
+                        sig_intst = (bal_tmp * td_rate * days) / (360 * 100);
+                        sig_intst = pub_base_PubDround_1(sig_intst);
+                    }
+                    else
+                    {
+                        ret = pub_base_CalDays(is_date, g_pub_tx.tx_date, "0", &days);
+                        if (ret != 0) 
+                        {
+                            sprintf(acErrMsg, "天数计算错误![%d]", ret);
+                            WRITEMSG
+                            return ret;
+                        }
+                        
+                        struct td_parm_c sTd_parm_new;
+                        memset(&sTd_parm_new, 0 , sizeof(sTd_parm_new));
+                        
+                        ret=Td_parm_Sel(g_pub_tx.reply,&sTd_parm_new,"prdt_no='%s'",wd_td_mst.prdt_no);
+                        if(ret)
+                        {
+                            Td_parm_Debug(&sTd_parm_new);
+                            vtcp_log("%s,%d 得到定期产品错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        vtcp_log("[%s][%d] is_date_tmp=[%d]",__FILE__,__LINE__,is_date_tmp);
+                        strcpy(cCurno,sTd_parm_new.cur_no);
+                        strcpy(cRateno,sTd_parm_new.rate_no);
+                        ret = pub_base_getllz(sTd_parm_new.rate_no,sTd_parm_new.cur_no, is_date_tmp, &td_rate);
+                        if(ret)
+                        {
+                            vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        
+                        sig_intst = (bal_tmp * td_rate * days) / (360 * 100);
+                        sig_intst = pub_base_PubDround_1(sig_intst);
+
+                    }
+                    /*******end by xyy 2011/10/14 11:10:29 ********/
+                    /**add by zyl 20120614**/
+                    vtcp_log("[%s][%d] bal_tmp=[%lf] days=[%ld] td_rate=[%lf]\n", __FILE__, __LINE__,bal_tmp,days,td_rate);
+                    lDateadd = igD0287_GetLstTermDay(1);
+                    ret = pub_base_CalDays(lDateadd, g_pub_tx.tx_date, "0", &lDaysall);
+                    if (ret != 0)
+                    {
+                        sprintf(acErrMsg, "天数计算错误![%d]", ret);
+                        WRITEMSG
+                        return ret;
+                    }
+                    ret = pub_base_getllz(cRateno,cCurno,lOldicdate,&td_rate);
+                    if(ret)
+                    {
+                        vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+                        return ret;
+                    }
+                    /****/
+                    vtcp_log("[%s][%d] dBal_tmp=[%lf] days=[%ld] td_rate=[%lf] lOldicdate=[%ld]\n", __FILE__, __LINE__,dBal_tmp,lDaysall-days,td_rate,lOldicdate);
+                    dIntstadd = (dBal_tmp * td_rate * (lDaysall-days)) / (360 * 100);
+                    dIntstadd = pub_base_PubDround_1(dIntstadd);
+                    sig_intst += dIntstadd;
+                    
+                    sTd_list.td_rate=td_rate;
+                    sTd_list.td_day=lDaysall;
+                    sTd_list.td_lx=sig_intst;
+                    sTd_list.td_amt=dBal_tmp;
+                    sTd_list.flag[0]='0';
+                    ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                    if(ret)
+                    {
+                      sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                      WRITEMSG
+                      return ret;
+                    }
+                    
+                    /**end by zyl 20120614**/
+                    vtcp_log("[%s][%d]自动,过期,days=[%ld] td_rate=[%lf]\n", __FILE__, __LINE__,days,td_rate);
+                    vtcp_log("[%s][%d]自动,过期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n", __FILE__, __LINE__, wd_td_mst.ac_id, is_date, sig_intst);
+                }
+                else 
+                {/** 没到期或刚到期的 **/
+                	vtcp_log("[%s][%d]##终止日计算##,lE_date==[%d]\n", __FILE__, __LINE__,lE_date);
+                    ret = pub_base_CalDays(is_date, lE_date, "0", &days);
+                    if (ret != 0) 
+                    {
+                        sprintf(acErrMsg, "天数计算错误![%d]", ret);
+                        WRITEMSG
+                            return ret;
+                    }
+                    vtcp_log("[%s][%d]bal=[%.2f] rate=[%.2f] days=[%ld]\n", __FILE__, __LINE__,wd_td_mst.bal,td_rate,days);
+                    sig_intst = (wd_td_mst.bal * td_rate * days) / (360 * 100);
+                    sig_intst = pub_base_PubDround_1(sig_intst);
+                        sTd_list.td_rate=td_rate; 
+                        sTd_list.td_day=days;
+                        sTd_list.td_lx=sig_intst;
+                        sTd_list.td_amt=wd_td_mst.bal;
+                        sTd_list.flag[0]='0';
+                        ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                        {
+                          sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                          WRITEMSG
+                          return ret;
+                        }
+                    vtcp_log("[%s][%d]自动,未期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n", __FILE__, __LINE__, wd_td_mst.ac_id, is_date, sig_intst);
+                }
+                /*end by gongll 2012/4/10 17:21:39*/
+            }
+        }
+
+		else if(wd_td_mst.tfr_ind[0] == 'P') /** 本金自动转存，利息转活期 **/
+		{
+			if(wd_td_mst.mtr_date<g_pub_tx.tx_date) /** 已经过到期日的 **/
+			{
+				/** 计算当期计算利息的余额 **/
+			  if(wd_td_mst.ic_date<DATE061104) /* 上线前开户每月30天算 */
+			  {
+					is_date_tmp = wd_td_mst.ic_date;
+					ie_date_tmp = wd_td_mst.mtr_date;
+					bal_tmp = wd_td_mst.bal;
+					while(ie_date_tmp<g_pub_tx.tx_date)
+					{
+						ret = pub_base_CalDays( is_date_tmp , ie_date_tmp , "1" , &days );
+						if (ret != 0)
+						{
+							sprintf(acErrMsg,"天数计算错误![%d]",ret);
+							WRITEMSG
+							return ret;
+						}
+						sig_intst = (bal_tmp * td_rate * days) / (360 * 100) ;
+						sig_intst = pub_base_PubDround_1(sig_intst);
+						
+						tax_tmp = sig_intst * tax_rate;
+						tax_tmp = pub_base_PubDround_1(tax_tmp);
+						
+						bal_tmp+=(sig_intst-tax_tmp);
+						
+						/** 重新调整起息到期日 **/
+						is_date_tmp = ie_date_tmp;
+						if( wd_td_parm.term_type[0]=='D' )
+						{
+							l_term=wd_td_parm.term;
+							pub_base_deadlineD(is_date_tmp,l_term,&ie_date_tmp);
+						}
+						else if( wd_td_parm.term_type[0]=='Y' )
+						{
+							l_term=wd_td_parm.term*12;
+							pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+						}
+						else if( wd_td_parm.term_type[0]=='M' )
+						{
+							l_term=wd_td_parm.term;
+							pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+						}
+					}
+					ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "1" , &days );
+					if (ret != 0)
+					{
+						sprintf(acErrMsg,"天数计算错误![%d]",ret);
+						WRITEMSG
+						return ret;
+					}
+					sig_intst =  (bal_tmp * td_rate * days) / (360 * 100) ;
+					sig_intst = pub_base_PubDround_1(sig_intst);
+			  }
+				else{ /* 上线后开户实际天数算 */
+					is_date_tmp = wd_td_mst.ic_date;
+			   	ie_date_tmp = wd_td_mst.mtr_date;
+			   	bal_tmp = wd_td_mst.bal;
+			   	while(ie_date_tmp<g_pub_tx.tx_date)
+			   	{
+						ret = pub_base_CalDays( is_date_tmp , ie_date_tmp , "0" , &days );
+						if (ret != 0)
+						{
+							sprintf(acErrMsg,"天数计算错误![%d]",ret);
+							WRITEMSG
+							return ret;
+						}
+						sig_intst = (bal_tmp * td_rate * days) / (360 * 100) ;
+						sig_intst = pub_base_PubDround_1(sig_intst);
+						
+						tax_tmp = sig_intst * tax_rate;
+						tax_tmp = pub_base_PubDround_1(tax_tmp);
+						
+						bal_tmp+=(sig_intst-tax_tmp);
+						
+						/** 重新调整起息到期日 **/
+						is_date_tmp = ie_date_tmp;
+						if( wd_td_parm.term_type[0]=='D' )
+						{
+							l_term=wd_td_parm.term;
+							pub_base_deadlineD(is_date_tmp,l_term,&ie_date_tmp);
+						}
+						else if( wd_td_parm.term_type[0]=='Y' )
+						{
+							l_term=wd_td_parm.term*12;
+							pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+						}
+						else if( wd_td_parm.term_type[0]=='M' )
+						{
+							l_term=wd_td_parm.term;
+							pub_base_deadlineM(is_date_tmp,l_term,&ie_date_tmp);
+						}
+		  		}
+		      ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "0" , &days );
+			    if (ret != 0)
+		      {
+						sprintf(acErrMsg,"天数计算错误![%d]",ret);
+						WRITEMSG
+						return ret;
+		      }
+		      sig_intst =  (bal_tmp * td_rate * days) / (360 * 100) ;
+		      sig_intst = pub_base_PubDround_1(sig_intst);
+		      
+		      sTd_list.td_day=days;
+		      sTd_list.td_lx=sig_intst;
+		      sTd_list.td_amt=wd_td_mst.bal;
+		      sTd_list.dd_amt=sig_intst;
+		      sTd_list.flag[0]='0';
+			  }
+			}else{  /** 没到期或刚到期的 **/
+				/* 起息日小于上线日 */
+		 		if(wd_td_mst.ic_date<DATE061104)
+		    {
+					ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "1" , &days );
+					if (ret != 0)
+					{
+						sprintf(acErrMsg,"天数计算错误![%d]",ret);
+						WRITEMSG
+						return ret;
+					}
+				}else {
+					ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "0" , &days );
+		      if (ret != 0)
+		      {
+						sprintf(acErrMsg,"天数计算错误![%d]",ret);
+						WRITEMSG
+						return ret;
+		      }
+		    }
+				sig_intst =  (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+				sig_intst = pub_base_PubDround_1(sig_intst);
+				
+				sTd_list.td_lx=sig_intst;
+				sTd_list.td_day=days;
+				sTd_list.td_amt=wd_td_mst.bal;
+				sTd_list.dd_amt=sig_intst;
+				sTd_list.flag[0]='0';
+			}
+			ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+			if(ret)
+			{
+				sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+				WRITEMSG
+				return ret;
+			}
+		}
+        else/***不是自动转存的***/
+        {
+            vtcp_log("[%s][%d]mtr_date3==[%ld] ac_sts=[%s]\n",__FILE__,__LINE__,wd_td_mst.mtr_date,wd_td_mst.ac_sts);
+            vtcp_log("[%s][%d]is_date4==[%ld] lst_date=[%ld]\n",__FILE__,__LINE__,is_date,wd_td_mst.lst_date);
+            if(wd_td_mst.ac_sts[0]=='*')
+            {
+                if(wd_td_mst.mtr_date<=wd_td_mst.lst_date) /** 已经过到期日的或刚到期的 **/
+                {
+                    /* 到期日期在本期里的 */
+                    vtcp_log("[%s][%d]is_date5==[%ld]mtr_date =[%d]\n",__FILE__,__LINE__,is_date,wd_td_mst.mtr_date);
+                    is_date = igD0287_GetLstTermDay(1);
+                    vtcp_log("[%s][%d]is_date5==[%ld]mtr_date =[%d]\n",__FILE__,__LINE__,is_date,wd_td_mst.mtr_date);
+                    if(is_date < wd_td_mst.mtr_date)
+                    {
+                        ret = pub_base_CalDays( is_date , wd_td_mst.mtr_date , "0" , &days );
+                        if (ret != 0)
+                        {
+                             sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                             WRITEMSG
+                             return ret;
+                        }
+                        vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                        vtcp_log("[%s][%d]bal==[%.2f]\n",__FILE__,__LINE__,wd_td_mst.bal);
+                        vtcp_log("[%s][%d]dd_rate==[%.2f]\n",__FILE__,__LINE__,dd_rate);
+                        vtcp_log("[%s][%d]td_rate==[%.2f]\n",__FILE__,__LINE__,td_rate);
+                        vtcp_log("[%s][%d]opn_date==[%ld]\n",__FILE__,__LINE__,wd_td_mst.opn_date);
+                        struct td_parm_c sTd_parm_new;
+                        memset(&sTd_parm_new, 0 , sizeof(sTd_parm_new));
+                        
+                        ret=Td_parm_Sel(g_pub_tx.reply,&sTd_parm_new,"prdt_no='%s'",wd_td_mst.prdt_no);
+                        if(ret)
+                        {
+                            Td_parm_Debug(&sTd_parm_new);
+                            vtcp_log("%s,%d 得到定期产品错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        ret = pub_base_getllz(sTd_parm_new.rate_no,sTd_parm_new.cur_no,wd_td_mst.opn_date,&td_rate);
+                        if(ret)
+                        {
+                            vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+                            return ret;
+                        }
+                        vtcp_log("[%s][%d]td_rate==[%.2f]\n",__FILE__,__LINE__,td_rate);
+                        sig_intst = (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+                        sig_intst = pub_base_PubDround_1(sig_intst);
+                        sTd_list.td_rate=td_rate;
+                        sTd_list.td_day=days;
+                        sTd_list.td_lx=sig_intst;
+                        sTd_list.td_amt=wd_td_mst.bal;
+                        sTd_list.flag[0]='0';
+                        if(ret)
+                        {
+                          sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                          WRITEMSG
+                          return ret;
+                        }
+                        /** 活期部分利息***/
+                        ret = pub_base_CalDays( wd_td_mst.mtr_date , wd_td_mst.lst_date , "0"  , &days );
+                        if (ret != 0)
+                        {
+                             sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                             WRITEMSG
+                             return ret;
+                        } 
+                        tmp_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                        tmp_intst = pub_base_PubDround_1(tmp_intst);
+                        sig_intst+=tmp_intst;
+                       sTd_list.dd_rate=dd_rate;
+                       sTd_list.dd_day=days;
+                       sTd_list.dd_amt=wd_td_mst.bal;
+                       sTd_list.dd_lx=sig_intst;
+                       sTd_list.flag[0]='1';
+                       ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                       if(ret)
+                       {
+                       sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                       WRITEMSG
+                       return ret;
+                       }
+                        vtcp_log("[%s][%d]非自动,过期1,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                    }
+                    else
+                    {
+                        /** 活期部分利息查找利率20120906**/
+                         ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                          if (ret != 0)
+                             {
+                                sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                WRITEMSG
+                                strcpy(g_pub_tx.reply,"W110");
+                                return ret;  
+                             }
+                        ret = pub_base_CalDays( is_date , wd_td_mst.lst_date , "0"  , &days );
+                        if (ret != 0)
+                        {
+                             sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                             WRITEMSG
+                             return ret;
+                        }
+                        vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                        sig_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                        sig_intst = pub_base_PubDround_1(sig_intst);
+                       sTd_list.dd_rate=dd_rate;
+                       sTd_list.dd_day=days;
+                       sTd_list.dd_amt=wd_td_mst.bal;
+                       sTd_list.dd_lx=sig_intst;
+                       sTd_list.flag[0]='1';
+                       ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                       if(ret)
+                       {
+                       sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                       WRITEMSG
+                       return ret;
+                       }
+                        vtcp_log("[%s][%d]非自动,过期2,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                    }
+                }
+                else
+                {  /** 没到期的 **/
+                	   long is_date_ad = 0;
+                	   is_date_ad = igD0287_GetLstTermDay(1);
+                	   if(wd_td_mst.ic_date<=is_date_ad)
+                	   {
+                	   	   is_date=is_date_ad;
+                	   	   /****/
+                	   }
+                	   /** 活期部分利息查找利率20120906**/
+                         ret = pub_base_getllz("100",wd_td_parm.cur_no,wd_td_mst.lst_date,&dd_rate);
+                          if (ret != 0)
+                             {
+                                sprintf(acErrMsg,"取利率错误![%d]",ret);
+                                WRITEMSG
+                                strcpy(g_pub_tx.reply,"W110");
+                                return ret;  
+                             }
+                    ret = pub_base_CalDays( is_date , wd_td_mst.lst_date ,"0"  , &days );
+                    if (ret != 0)
+                    {
+                         sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                         WRITEMSG
+                         return ret;
+                    }
+                    vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                    vtcp_log("[%s][%d]bal==[%.2f]\n",__FILE__,__LINE__,wd_td_mst.bal);
+                    vtcp_log("[%s][%d]rate==[%.2f]\n",__FILE__,__LINE__,dd_rate);
+                    sig_intst =  (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                    sig_intst = pub_base_PubDround_1(sig_intst);
+                       sTd_list.dd_rate=dd_rate;
+                       sTd_list.dd_day=days;
+                       sTd_list.dd_amt=wd_td_mst.bal;
+                       sTd_list.dd_lx=sig_intst;
+                       sTd_list.flag[0]='1';
+                       ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                       if(ret)
+                       {
+                       sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                       WRITEMSG
+                       return ret;
+                       }
+                    vtcp_log("[%s][%d]非自动,未期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                }
+            }
+            else/****账户非销户的!!****/
+            {
+                if(wd_td_mst.mtr_date<g_pub_tx.tx_date) /** 已经过到期日的 **/
+                {
+                    /* 到期日期在本期里的 */
+                    vtcp_log("[%s][%d]is_date6==[%ld]\n",__FILE__,__LINE__,is_date);
+                    /**add by zyl 20120617**/
+                    is_date = igD0287_GetLstTermDay(1);
+                    vtcp_log("[%s][%d]is_date7==[%ld]\n",__FILE__,__LINE__,is_date);
+                      ret = pub_base_getllz(wd_td_parm.rate_no,wd_td_parm.cur_no,wd_td_mst.ic_date,&td_rate);
+                    if (ret != 0)
+                     {
+                      sprintf(acErrMsg,"取利率错误![%d]",ret);
+                       WRITEMSG
+                      strcpy(g_pub_tx.reply,"W110");
+                     return ret;
+                       }
+                    /**end by zyl 20120617**/
+                    if(is_date<wd_td_mst.mtr_date)
+                    {
+                         ret = pub_base_CalDays( is_date , wd_td_mst.mtr_date , "0" , &days );
+                         if (ret != 0)
+                         {
+                              sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                              WRITEMSG
+                              return ret;
+                         }
+                         vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                         sig_intst = (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+                         sig_intst = pub_base_PubDround_1(sig_intst);
+                        sTd_list.td_rate=td_rate;
+                        sTd_list.td_day=days;
+                        sTd_list.td_lx=sig_intst;
+                        sTd_list.td_amt=wd_td_mst.bal;
+                        sTd_list.flag[0]='0';
+                        ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                        if(ret)
+                        {
+                          sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                          WRITEMSG
+                          return ret;
+                        }
+                         /** 活期部分利息 **/
+                         ret = pub_base_CalDays( wd_td_mst.mtr_date , g_pub_tx.tx_date , "0"  , &days );
+                          if (ret != 0)
+                         {
+                              sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                              WRITEMSG
+                              return ret;
+                         }
+                         vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                         tmp_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                         tmp_intst = pub_base_PubDround_1(tmp_intst);
+                         vtcp_log("[%s][%d]tmp_intst==[%.2f]\n",__FILE__,__LINE__,tmp_intst);
+                         sig_intst+=tmp_intst;
+                       sTd_list.dd_rate=dd_rate;
+                       sTd_list.dd_day=days;
+                       sTd_list.dd_amt=wd_td_mst.bal;
+                       sTd_list.dd_lx=tmp_intst;
+                       sTd_list.flag[0]='1';
+                       ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                       if(ret)
+                       {
+                       sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                       WRITEMSG
+                       return ret;
+                       }
+                         vtcp_log("[%s][%d]非自动,过期1,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                    }
+                    else    /* 本期在到期日外的 */
+                    {
+                         /** 活期部分利息 **/
+                      ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "0" , &days );
+                      if (ret != 0)
+                      {
+                           sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                           WRITEMSG
+                           return ret;
+                      }
+                      vtcp_log("[%s][%d]days==[%ld]\n",__FILE__,__LINE__,days);
+                      sig_intst = (wd_td_mst.bal * dd_rate * days) / (360 * 100) ;
+                      sig_intst = pub_base_PubDround_1(sig_intst);
+                      
+                      sTd_list.dd_rate=dd_rate;
+                      sTd_list.dd_day=days;
+                       sTd_list.dd_amt=wd_td_mst.bal;
+                       sTd_list.dd_lx=sig_intst;
+                       sTd_list.flag[0]='1';
+                       ret=Td_list_Ins(sTd_list,g_pub_tx.reply);
+                       if(ret)
+                       {
+                       sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                       WRITEMSG
+                       return ret;
+                       }
+                      vtcp_log("[%s][%d]非自动,过期2,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                    }
+                }else{  /** 没到期或刚到期的 **/
+                    vtcp_log("[%s][%d]##终止日计算##,is_date==[%d],lE_date==[%d]\n", __FILE__, __LINE__,is_date,lE_date);
+                   /**  ret = pub_base_CalDays( is_date , lE_date , cCif_type , &days );此处不对sxd**/
+                   ret = pub_base_CalDays( is_date , g_pub_tx.tx_date , "0" , &days );
+                    if (ret != 0)
+                    {
+                         sprintf(acErrMsg,"天数计算错误![%d]",ret);
+                         WRITEMSG
+                         return ret;
+                    }
+                    vtcp_log("[%s][%d]计提天数为，days==[%ld]\n",__FILE__,__LINE__,days);
+                    sig_intst =  (wd_td_mst.bal * td_rate * days) / (360 * 100) ;
+                    sig_intst = pub_base_PubDround_1(sig_intst);
+                    sTd_list.td_rate=td_rate;
+                    sTd_list.td_day=days;
+                    sTd_list.td_lx=sig_intst;
+                    sTd_list.td_amt=wd_td_mst.bal;
+                    sTd_list.flag[0]='0';
+                    if(ret)
+                    {
+                      sprintf(acErrMsg,"insert td_list is error![%d]",ret);
+                      WRITEMSG
+                      return ret;
+                    }
+                    vtcp_log("[%s][%d]非自动,未期,此帐号[%ld]起息日[%ld]利息为[%.2f]\n",__FILE__,__LINE__,wd_td_mst.ac_id,is_date,sig_intst);
+                }
+                memset(&sTd_list,0x00,sizeof(struct td_list_c));
+            }
+        }
+		sprintf(tmp_cif_no,"%ld",wd_td_mst.cif_no);
+		if(tmp_cif_no[0]=='1'){
+			cx_tot_intst+=sig_intst;
+		}
+		else if(tmp_cif_no[0]=='5'){
+			dg_tot_intst+=sig_intst;
+		}
+		else{
+			vtcp_log("此帐号【%ld】的客户号[%ld]不正确\n",wd_td_mst.ac_id,wd_td_mst.cif_no);
+			strcpy(g_pub_tx.reply,"C007");
+			return(-1);
+		}
+  }
+  
+	Td_mst_Clo_Sel ();
+	if(cx_tot_intst+dg_tot_intst>0.005){
+		vtcp_log("开始记总帐\n");
+		if(cal_zongzhang(br_no,cx_tot_intst,dg_tot_intst))
+			return(-1);
+	}
+	return(0);
+}
+
+int cal_zongzhang(char *br_no,double cx_amt,double dg_amt)
+{
+	FILE *fp1=NULL;
+	char filename[64];
+	int ret=0;
+    set_zd_data( "0151", "ACHR" );	/* 将0151设置成achr则不取产品分录表dc_acc_rel */
+	strcpy( g_pub_tx.brf, "计提利息" );
+	strcpy( g_pub_tx.tx_br_no,  br_no);
+	strcpy( g_pub_tx.opn_br_no, br_no);
+
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.ac_wrk_ind,"000001001"); 
+	set_zd_double( "0390", cx_amt);	
+	set_zd_double( "0400", dg_amt);
+	strcpy( g_pub_tx.sub_tx_code, "D295" );
+	ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"会计记帐不成功!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	memset(filename,0x0,sizeof(filename));
+	sprintf(filename,"%s/report/%5s/gD295.txt",getenv("HOME"),br_no);
+	fp1 = fopen( filename,"w" );   /*该文件用来记录正确处理结果*/
+	if( fp1==NULL )
+	{
+		sprintf(acErrMsg," open file [%s] error ",filename );
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"S047" );
+		return(-1);
+	}
+	char tmp_cxamt[21],tmp_dgamt[21];
+	sprintf( tmp_cxamt, "%.2f" ,cx_amt);
+	pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);
+	sprintf( tmp_dgamt, "%.2f" ,dg_amt);
+	pub_rpt_flttomon( tmp_dgamt,tmp_dgamt);
+
+	fprintf(fp1,"\n\n\n\n\n\n\n");
+	fprintf(fp1, "                               %2s月份定期计提传票\n",jidu);
+	fprintf(fp1,"\n");
+	fprintf(fp1, "       机构号: %5s               交易日期: %ld             流水号: %ld       \n",br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+	fprintf(fp1, " ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n");
+	fprintf(fp1, " ┃                                                                                            ┃\n");
+	fprintf(fp1, " ┃  借: 52104      贷: 26002                                                                  ┃\n");
+	fprintf(fp1, " ┃--------------------------------------------------------------------------------------------┃\n");
+	fprintf(fp1, " ┃  交易金额：￥%-21s                   摘要:计提储蓄利息                     ┃\n",tmp_cxamt);
+	fprintf(fp1, " ┃--------------------------------------------------------------------------------------------┃\n");
+	fprintf(fp1, " ┃                                                                                            ┃\n");
+	fprintf(fp1, " ┃  借: 52102      贷: 26001                                                                  ┃\n");
+	fprintf(fp1, " ┃--------------------------------------------------------------------------------------------┃\n");
+	fprintf(fp1, " ┃  交易金额：￥%-21s                   摘要:计提对公利息                     ┃\n",tmp_dgamt);
+	fprintf(fp1, " ┃                                                                                            ┃\n");
+	fprintf(fp1, " ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n");
+	fprintf(fp1, "             事后监督:                    复    核:                      记    帐:    \n");
+	fprintf(fp1,"\n\n\n\n\n\n\n\n\n");
+	fclose(fp1);
+
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}
+int igD0287_GetLstTermDay()
+{
+	int  iyear = 0;
+	int  imonth = 0;
+	int  iday = 0;
+	long ilstday = 0;
+	
+	iday = g_pub_tx.tx_date%100;
+	imonth = (g_pub_tx.tx_date/100)%100;
+	iyear = (int)(g_pub_tx.tx_date/10000);
+	
+	switch(imonth){
+		case 1:
+			strcpy(jidu,"01");
+			break;
+		case 2:
+			strcpy(jidu,"02");
+			break;
+		case 3:
+			strcpy(jidu,"03");
+			break;
+		case 4:
+			strcpy(jidu,"04");
+			break;
+		case 5:
+			strcpy(jidu,"05");
+			break;
+		case 6:
+			strcpy(jidu,"06");
+			break;
+		case 7:
+			strcpy(jidu,"07");
+			break;
+		case 8:
+			strcpy(jidu,"08");
+			break;
+		case 9:
+			strcpy(jidu,"09");
+			break;
+		case 10:
+			strcpy(jidu,"10");
+			break;
+		case 11:
+			strcpy(jidu,"11");
+			break;
+		case 12:
+			strcpy(jidu,"12");
+			break;
+	}
+	
+	imonth-=JTZQ;
+	if(imonth==0)
+	{
+		 imonth=12;
+		 iyear--;
+	}else if(imonth==-1){
+	   imonth=11;
+		 iyear--;
+	}else if(imonth==-2){
+	   imonth=10;
+		 iyear--;
+	}else if(imonth==-3){
+	   imonth=9;
+		 iyear--;
+	}else if(imonth==-4){
+	   imonth=8;
+		 iyear--;
+	}else if(imonth==-5){
+	   imonth=7;
+		 iyear--;
+	}else if(imonth==-6){
+	   imonth=6;
+		 iyear--;
+	}else if(imonth==-7){
+	   imonth=5;
+		 iyear--;
+	}else if(imonth==-8){
+	   imonth=4;
+		 iyear--;
+	}else if(imonth==-9){
+	   imonth=3;
+		 iyear--;
+	}else if(imonth==-10){
+	   imonth=2;
+		 iyear--;
+	}else if(imonth==-11){
+	   imonth=1;
+		 iyear--;
+	}
+	ilstday=iyear*10000+imonth*100+iday;
+	
+	return(ilstday);
+}
+igD0287_GetNxtTermDay( int i_cyc_type)
+{
+    int             iyear = 0;
+    int             imonth = 0;
+    int             iday = 0;
+    long            ilstday = 0;
+
+    iday = g_pub_tx.tx_date % 100;
+    imonth = (g_pub_tx.tx_date / 100) % 100;
+    iyear = (int) (g_pub_tx.tx_date / 10000);
+    if(i_cyc_type==1)
+    { /* 按月提取 */
+        imonth ++;
+        if (imonth == 13) 
+        {
+            imonth = 1;
+            iyear++;
+        }
+    }
+    else
+    {
+        /* 按季度提取 */
+        if(imonth==3)
+        {
+              imonth = 6;
+        }
+        else if(imonth==6)
+        {
+              imonth = 9;
+        }
+        else if(imonth==9)
+        {
+            imonth = 12;
+        }
+        else if(imonth==12)
+        {
+            imonth = 1;
+            iyear++;
+        }
+    }
+    ilstday = iyear * 10000 + imonth * 100 + iday;
+    return (ilstday);
+}
+/**************************************************************************
+* 函数名称：iGetBeg_end_date                                              *
+* 描    述：得到指定定期帐户的计提开始，结束日期和计提所用金额            *
+* 参数描述：                                                              *
+*    input  struct td_mst_c 定期产品主表                                  *
+*    output                                                               *
+*           long   *iCal_beg 计算的计提开始日期                           *
+*           long   *iCal_end 计算的计提到期日期                           *
+*           double *dCal_rate 计算用的利率                                *
+* 注意：本函数不支持利率分段的情况，如果是分段情况，请另外写函数处理      *
+*       本函数只考虑了帐户状态正常情况，如果不正常请在增加代码处理        *
+*       本函数用到全局变量g_pub_tx.tx_date,使用前请设置正确               *
+**************************************************************************/
+int iGetBeg_end_date(struct td_mst_c * wp_td_mst,long * iCal_beg, long * iCal_end,double *dCal_rate)
+{
+    long iIc_date=0,iMtr_date=0;
+    struct td_parm_c sTd_parm;
+    double dd_rate=0,td_rate=0;
+    int ret=0;
+    int term=0;/**存期**/
+    long iLst_id_date=0,iNxt_id_date=0;
+    iLst_id_date=igD0287_GetLstTermDay(1);
+    iNxt_id_date=igD0287_GetNxtTermDay(1);
+    memset(&sTd_parm, 0 , sizeof(sTd_parm));
+    memcpy(sTd_parm.prdt_no,wp_td_mst->prdt_no,sizeof(sTd_parm.prdt_no)-1);
+    ret=Td_parm_Sel(g_pub_tx.reply,&sTd_parm,"prdt_no='%s'",sTd_parm.prdt_no);
+    if(ret)
+    {
+        Td_parm_Debug(&sTd_parm);
+        vtcp_log("%s,%d 得到定期产品错误 ret=[%d]",__FILE__,__LINE__,ret);
+        return ret;
+    }
+    /* 得到活期利率 */
+    ret = pub_base_getllz("100", sTd_parm.cur_no, g_pub_tx.tx_date, &dd_rate);
+    if(ret)
+    {
+        vtcp_log("%s,%d 得到活期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+        return ret;
+    }
+    /* 得到定期利率 modify by xyy 2011-10-15 11:30 for YXCZ 
+    ret = pub_base_getllz(sTd_parm.rate_no,sTd_parm.cur_no, g_pub_tx.tx_date, &td_rate);
+    ******/
+    ret = pub_base_getllz(sTd_parm.rate_no,sTd_parm.cur_no,wp_td_mst->ic_date , &td_rate);
+    if(ret)
+    {
+        vtcp_log("%s,%d 得到定期产品利率错误 ret=[%d]",__FILE__,__LINE__,ret);
+        return ret;
+    }
+    /* 根据产品找到存期 */
+        vtcp_log("%s,%d 得到定期产品利率 term=[%d]",__FILE__,__LINE__,sTd_parm.term);
+    if(sTd_parm.term_type[0]=='Y')
+    {
+        term=sTd_parm.term*12;
+    }
+    else if(sTd_parm.term_type[0]=='M')
+    {
+        term=sTd_parm.term;
+    }    
+    else
+    {
+                    vtcp_log("%s,%d 存期=%d错误",__FILE__,__LINE__,sTd_parm.term);
+                return -1;
+    }
+    vtcp_log("%s,%d 存期=%d",__FILE__,__LINE__,term);
+    switch(term)
+    {
+        case 3:            case 6:            case 12:            case 24:
+        case 36:        case 60:      case 72:          case 96: break;
+        default:
+            vtcp_log("%s,%d 存期=%d错误",__FILE__,__LINE__,sTd_parm.term);
+            return -1;
+    }
+    /* 根据整整自动转存标志找到新的整整的起息日期,ic_date */
+    if(wp_td_mst->tfr_ind[0]=='Y')
+    {
+        /****modify by xyy 2011/10/14 10:05:07 for YXCZ******
+        iGetTfr_indDate_for_295(term,iIc_date,g_pub_tx.tx_date,&iIc_date,&iMtr_date);
+        *******************/
+        iGetTfr_indDate_for_295(term,wp_td_mst->ic_date,g_pub_tx.tx_date,&iIc_date,&iMtr_date);
+    }
+    else
+    {
+        iIc_date=wp_td_mst->ic_date;
+        iMtr_date=wp_td_mst->mtr_date;
+    }
+    vtcp_log("%s,%d 帐号起息（开户）日期是=%ld",__FILE__,__LINE__,iIc_date);
+    vtcp_log("%s,%d iLst_id_date=%ld",__FILE__,__LINE__,iLst_id_date);
+    vtcp_log("%s,%d iNxt_id_date=%ld",__FILE__,__LINE__,iNxt_id_date);
+    if(iIc_date<iLst_id_date) 
+    {
+        /* 起息(开户)日期<上次计提日期 */
+        if(iMtr_date<iLst_id_date)
+        {
+            /* 如果到期日期<上次计提日，由于状态是正常的，则计提到开始日期是上次计提日期，计算本段时间内的活期利息 */
+            *iCal_beg=iLst_id_date;
+            /* 得到活期利率  */
+            *dCal_rate=dd_rate;
+        } 
+        else if(iLst_id_date<=iMtr_date && iMtr_date<g_pub_tx.tx_date)/*sxd把这里and后的=去掉*/
+        {
+            /* 如果上次计提日<到期日<=本次计提日之间，由于状态正常，则计提开始日按到期日计算(上线第一次应按上次计提日计算) */
+            *iCal_beg=iMtr_date;
+            /* 得到活期利率 */
+            *dCal_rate=dd_rate;
+        }
+        else if(g_pub_tx.tx_date <=iMtr_date)
+        {
+            /* 如果本次计提日<=到期日期，按上次计提日期作为提取开始日期  */
+            *iCal_beg=iLst_id_date;
+            /* 取整整利率 */
+            *dCal_rate=td_rate;
+        }
+    }
+    else if(iLst_id_date<=iIc_date && iIc_date<g_pub_tx.tx_date)
+    {
+        /* 如果上次计提日<开户日期<=本次计提日，按开户日期作为提取开始日期 */
+        *iCal_beg=iIc_date;
+        /* 取整整利率 */
+        *dCal_rate=td_rate;
+    }
+    else
+    {
+        vtcp_log("%s,%d 出现不明异常情况，具体参数信息如下",__FILE__,__LINE__);
+        vtcp_log("%s,%d 上次计提日期[%ld]当前计提日期=[%ld],下次计提日期[%ld]",__FILE__,__LINE__,iLst_id_date,g_pub_tx.tx_date,iNxt_id_date);
+        vtcp_log("%s,%d 涉及到的id号=%ld,起息日期=%ld,到期日期=%ld",__FILE__,__LINE__,wp_td_mst->ac_id,wp_td_mst->ic_date,wp_td_mst->mtr_date);
+        if(wp_td_mst->tfr_ind[0]=='Y')
+            vtcp_log("%s,%d 由于是自动转存，所以计算的起息日期=%ld,到期日期=%ld",__FILE__,__LINE__,iIc_date,iMtr_date);
+    }
+    /* 计算结束日期 */
+/*    2，计提结束日期的处理
+*    如果上次计提日<到期日<=本次计提日，由于状态正常，则结束日期是本次计提日期
+     如果本次计提日<到期日<=下次计提日，则按结束日期是到期日期
+     如果下次计提日<到期日期期之后，则结束日期是本次计提日期
+
+     如果到期日期<=上次计提日期，由于状态正常，结束日期是本次计提日期          *
+*    如果上次计提日<到期日<=本次计提日，由于状态正常，则结束日期是本次计提日期 *
+     如果本次计提日<到期日<=下次计提日，则按结束日期是到期日期                 *
+     如果下次计提日<到期日期期之后，则结束日期是本次计提日期                   *
+*/
+    if(iMtr_date<=iLst_id_date)
+    {
+        /* 如果到期日期<=上次计提日期，由于状态正常，结束日期是本次计提日期 */
+        *iCal_end=g_pub_tx.tx_date;
+    }
+    else if(iLst_id_date < iMtr_date && iMtr_date<=g_pub_tx.tx_date)
+    {
+        *iCal_end=g_pub_tx.tx_date;
+    }
+    else if(g_pub_tx.tx_date<iMtr_date && iMtr_date <=iNxt_id_date)
+    {
+        /* 如果本次计提日<到期日<=下次计提日，则按结束日期是到期日期 */
+        *iCal_end=iMtr_date;
+    }
+    else if(iNxt_id_date < iMtr_date)
+    {
+        /* 如果下次计提日<到期日期期之后，则结束日期是本次计提日期 */
+        *iCal_end=g_pub_tx.tx_date;
+    }
+    else
+    {
+        vtcp_log("%s,%d 出现不明异常情况，具体参数信息如下",__FILE__,__LINE__);
+        vtcp_log("%s,%d 上次计提日期[%ld]当前计提日期=[%ld],下次计提日期[%ld]",__FILE__,__LINE__,iLst_id_date,g_pub_tx.tx_date,iNxt_id_date);
+        vtcp_log("%s,%d 涉及到的id号=%ld,起息日期=%ld,到期日期=%ld",__FILE__,__LINE__,wp_td_mst->ac_id,wp_td_mst->ic_date,wp_td_mst->mtr_date);
+        if(wp_td_mst->tfr_ind[0]=='Y')
+            vtcp_log("%s,%d 由于是自动转存，所以计算的起息日期=%ld,到期日期=%ld",__FILE__,__LINE__,iIc_date,iMtr_date);
+    }
+    return (0);
+}
+int iGetTfr_indDate_for_295(int term,long ic_date,long tx_date,long * new_ic_date,long * new_end_date)
+{
+    long lNic_date=0;
+    long end_date=0;
+    while(end_date < tx_date)
+    {
+        pub_base_deadlineM(ic_date,term,&end_date);
+        lNic_date=ic_date;
+        ic_date=end_date;
+    }
+    *new_ic_date=lNic_date;
+    *new_end_date=end_date;
+    return 0;
+}
+

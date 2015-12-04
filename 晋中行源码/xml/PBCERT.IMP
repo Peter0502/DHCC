@@ -1,0 +1,168 @@
+<!----开户输入证件类型---->
+  <ITEM LINE="0"  COL="0"  TYPE="%-10s" FUNCTIONS="T(证件类型:!)" INPUT="LABEL" VISABLE="TRUE"/>
+  <ITEM LINE="0"  COL="30" TYPE="%-10s" FUNCTIONS="T(证件号码:)"  INPUT="LABEL" VISABLE="TRUE"/>
+  <ITEM LINE="1"  COL="0"  TYPE="%-61s" FUNCTIONS="T(-------------------------------------------------------------)"/>
+  <ITEM LINE="3"  COL="0"  TYPE="%-10s" FUNCTIONS="T(介质种类:!)"/>
+  <ITEM LINE="4"  COL="0"  TYPE="%-10s" FUNCTIONS="T(卡    号:)"/>
+  <ITEM LINE="5"  COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="6"  COL="0"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="8"  COL="0"  TYPE="%-10s" FUNCTIONS="T(密码支取:!)"/>
+  <ITEM LINE="8"  COL="30" NAME="#A1"   TYPE="%-10s" INPUT="LABEL" 
+	FUNCTIONS="T(支取密码:)" VISABLE="FALSE"/>
+  <ITEM LINE="9" COL="0"   NAME="#A2" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件支取:)"/>
+  <ITEM LINE="10" COL="0"  NAME="#A3" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)" VISABLE="FALSE"/>
+  <ITEM LINE="11" COL="0" NAME="#A4" TYPE="%-10s" INPUT="LABEL" 
+	FUNCTIONS="T(证件号码:)" VISABLE="FALSE" />
+
+  <ITEM LINE="0"  COL="10" TYPE="%-1s" NAME="#ZJLX" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(1)" INPUT="SELECT" VISABLE="TRUE">
+    <SELECT>
+        <OPTION VALUE="1" TITLE="身份证"/>
+        <OPTION VALUE="2" TITLE="户口薄"/>
+        <OPTION VALUE="3" TITLE="护照  "/>
+        <OPTION VALUE="4" TITLE="军官证"/>
+        <OPTION VALUE="5" TITLE="回乡证"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#CZJLX"      TYPE="%6s"   FUNCTIONS="S(#ZJLX,#ZJLX)"/>
+  <ITEM LINE="0"  COL="40" TYPE="%-20s" NAME="#ZJHM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)" INPUT="TEXT" VISABLE="TRUE">
+  <ONLOSTFOCUS>
+	"{
+		dim @tota as string;
+		commsend_001();
+		$FD16=#QTXNO;
+		commsend_116();
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		commrecv_116();
+		setsel(#JZZL,@tota,'o5t20o1v4o2');	
+		showblock('PBCERT',true,true);
+		show(#JZZL,true);
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="3"  COL="10" TYPE="%-4s"  NAME="#JZZL" DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+	"{
+		dim @tota  as string;
+		dim @crdno as string; //凭证号码
+		commsend_001();
+		$FD16='9729';
+		$FD116 =#JZZL;
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#PSWDCD=substr($FD115,1,1);
+		#CERTCD=substr($FD115,14,1);
+		show(#PSWDCD,true);
+		show(#CERTCD,true);
+		setsel(#PRODNO,@tota,'o5t20o1v3o2');
+		if(#JZZL!='0020'){
+			goitem(#VOCNUM);
+			#CARDNO='                   ';
+			show(#CARDNO,false);
+		}
+		else
+		{
+			show(#CARDNO,true);
+		}
+		$FD12  = '2103';
+		$FD16  = '9738';   //关于卡的通讯
+		$FD116 = space(4)+#CARDNO;
+		callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@crdno = substr($FD116,125,16);
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="4"  COL="10" TYPE="%-19s" NAME="#CARDNO"   DEVICE="KEYBOARD" INPUT="TEXT"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+	"{
+		#VOCNUM='000000000'+substr(#CARDNO,11,7);
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="5"  COL="10" TYPE="%16d" NAME="#VOCNUM" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		commsend_001();
+		$FD16='9782';
+		if(#JZZL=='0020')
+		{
+			$FD116=#JZZL+#CARDNO+space(102)+#VOCNUM;
+		}
+		else
+		{
+			$FD116=#JZZL+space(121)+#VOCNUM;
+		}
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6" COL="10" TYPE="%-50s" NAME="#CUSTNAME" 	DEVICE="KEYBOARD" INPUT="LABEL" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="8" COL="10" TYPE="%-1s" NAME="#PSWDCD"	DEVICE="KEYBOARD"  FUNCTIONS="T(N)V(NB)" VISABLE="FALSE" FUNCTIONS="T(N)">
+    <SELECT LINE="0" COL="0">
+        <OPTION VALUE="N" TITLE="否"/>
+        <OPTION VALUE="Y" TITLE="是"/>
+    </SELECT>
+  <ONLOSTFOCUS>
+	"{
+		if(#PSWDCD=='Y') {
+			show(#A1,true);
+			show(#PASSWD,true);
+		}else{
+			show(#A1,false);
+			show(#PASSWD,false);
+		}
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="8" COL="40" TYPE="%6d" NAME="#PASSWD"	DEVICE="PINPAD" INPUT="TEXT" FUNCTIONS="V(NB)i()I()" VISABLE="FALSE"/>
+  <ITEM LINE="9" COL="10" TYPE="%-1s" NAME="#CERTCD"	DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T(N)V(NB)">
+    <SELECT >
+        <OPTION VALUE="N" TITLE="否"/>
+        <OPTION VALUE="Y" TITLE="是"/>
+    </SELECT>
+  <ONLOSTFOCUS>
+	"{
+		if(#CERTCD=='Y'){
+			show(#A3,true);
+			show(#A4,true);
+			show(#ZJLX2,true);
+			show(#ZJHM2,true);
+		}else{
+			show(#A3,false);
+			show(#A4,false);
+			show(#ZJLX2,false);
+			show(#ZJHM2,false);
+		}
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="10"  COL="10" TYPE="%-1s" NAME="#ZJLX2" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(1)" INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="T(#ZJLX)">
+    <SELECT>
+        <OPTION VALUE="1" TITLE="身份证"/>
+        <OPTION VALUE="2" TITLE="户口薄"/>
+        <OPTION VALUE="3" TITLE="护照  "/>
+        <OPTION VALUE="4" TITLE="军官证"/>
+        <OPTION VALUE="5" TITLE="回乡证"/>
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="11" COL="10" TYPE="%-20s" NAME="#ZJHM2" INPUT="TEXT" FUNCTIONS="T(#ZJHM)V(NB)" VISABLE="FALSE"/>
+<!-- 定义callserver的返回变量 -->
+<!--  完毕 -->

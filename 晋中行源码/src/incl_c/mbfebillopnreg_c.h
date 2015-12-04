@@ -1,0 +1,50 @@
+#ifndef __mbfebillopnreg_CH__
+#define __mbfebillopnreg_CH__
+struct mbfebillopnreg_c{
+	char      rowid[20];
+	char      pact_no[9];
+	char      tx_br_no[6];
+	long      tx_date;
+	char      billtype[2];
+	char      payeracc[21];
+	char      payername[61];
+	char      payeraddr[61];
+	char      recipientacc[33];
+	char      recipientname[61];
+	double    amount;
+	char      cashbillbkno[13];
+	char      brf[21];
+	long      rec_trace_no;
+	char      rec_tel[5];
+	char      billcode[9];
+	char      billofxchngseal[11];
+	long      signdate;
+	long      sign_trace_no;
+	char      sign_tel[5];
+	char      payeropenaccbkcode[13];
+	long      printno;
+	long      dep_trace_no;
+	long      consigndate;
+	long      canceldate;
+	long      cancelflowno;
+	char      cancel_tel[5];
+	long      prmptpaydate;
+	double    repudiationamnt;
+	double    redundantamnt;
+	char      recipientopenaccbk[13];
+	char      lastbillholderacc[33];
+	char      lastbillholdername[61];
+	long      los_rpt_date;
+	char      los_rpt_tel[5];
+	char      los_rpt_bookno[11];
+	long      clos_rpt_date;
+	char      clos_rpt_tel[5];
+	char      incomeacno[25];
+	char      incometime[15];
+	long      incomeflowno;
+	char      incometel[5];
+	char      billsts[2];
+	char      useind[2];
+	char      los_rpt_ind[2];
+};
+#endif 

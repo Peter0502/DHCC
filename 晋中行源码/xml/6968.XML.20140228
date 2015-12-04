@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="6968 行内ATM加清钞"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD92=#DFGY;
+	$FD86=#DFGYTC;
+	$FD67=#TJFS;
+	$FD21=#BZ;
+	$FD41=getitems('#TJJE');
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(6968                          行内ATM加清钞)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5203)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="6"  COL="3" TYPE="%-64s" FUNCTIONS=
+    "T(                           【 行内ATM加清钞 】)"/>
+  <ITEM LINE="8"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+     <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(行内ATM加清钞)"/>
+
+  <ITEM LINE="10" COL="16" TYPE="%-9s" FUNCTIONS="T(操作方式!)"/>
+  <ITEM LINE="12" COL="16" TYPE="%-9s" FUNCTIONS="T(ATM 柜员:)"/>
+  <ITEM LINE="14" COL="16" TYPE="%-9s" FUNCTIONS="T(币    种!)"/>
+  <ITEM LINE="16" COL="16" TYPE="%-9s" FUNCTIONS="T(实际金额:)"/>
+  <ITEM NAME="#TJFS" INPUT="SELECT" LINE="10" COL="25" TYPE="%-1s" FUNCTIONS="T(2)">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="1.ATM加钞"/>
+		<OPTION VALUE="2" TITLE="2.ATM清钞"/>
+<!--
+		<OPTION VALUE="3" TITLE="3.收回"/>
+-->
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#DFGY" INPUT="TEXT" LINE="12" COL="25" TYPE="%-4s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+        
+        dim @a as number;
+        dim @b as number;
+        dim @tota as string;
+	
+	if(#TJFS=='1'){//加钞时ATM金额必须为空
+		commsend_001();
+		$FD16='9598';
+		$FD123='select bal from cash_mst where bal=0.0 and tel='+chr(39)+#DFGY+chr(39);
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if(@tota==''){
+			showmsg('加钞时ATM没有清钞');
+			return(false);
+		}
+	}
+	initfd();
+        commsend_001();
+        $FD16='9121';
+        $FD92=#DFGY;
+        callserver();
+        if($FD12!='0000')
+        {
+                showmsg(geterror());
+                return(false);
+        }
+        #LVL1=$FD68;
+        #LVL2=$FD69;
+
+        //if(#LVL1!='5')  普通柜员之间可以互相调现金和凭证
+		if(0)
+        {
+					if(#TJFS=='1')
+					{
+						//mod by wangzhe 20090721
+						if(#LVL2 != '5')
+						{
+							showmsg('普通柜员不能对现金库管员外的柜员做现金付出和现金收回操作');
+							return(false);
+						}
+					
+						//showmsg('777');
+						//showmsg('非现金库管员，不能做现金付出和现金收回');
+						//return(false);
+						//end by wangzhe
+					}
+        }
+    //add by wangzhe 20091123
+		if(#LVL2!='9')
+		{
+			showmsg('不可以调剂给非ATM柜员');
+			return(false);
+		}
+
+		initfd();
+		commsend_001();
+ 		$FD16='9718';
+		$FD92=#DFGY;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//#DFGYTC=delspace($FD62);
+		#DFGYTC=delspace($FD86);
+		if($KINBR != $FD91)
+		{
+			showmsg('只能在本机构之间调剂');
+			return(false);
+		}
+		show(#DFGYTC,true);
+		enable(#DFGYTC,false);
+ }"
+ </ONLOSTFOCUS>  
+  </ITEM>
+  <ITEM NAME="#DFJG" TYPE="%-5s" FUNCTIONS=""/>
+  <ITEM NAME="#DFGYTC" INPUT="TEXT" LINE="12" COL="31" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#BZ" INPUT="SELECT" LINE="14" COL="25" TYPE="%-2s" FUNCTIONS="T(01)">
+  <SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  <ONLOSTFOCUS>
+ "{
+ 	dim @tota as string;	
+	initfd();
+    commsend_001();
+ 		$FD16='9714';
+ 		$FD21=#BZ;
+ 		$FD67=#TJFS;
+ 		$FD92=#DFGY;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	if(0){		//柜员签退的时候检查柜员的一些情况所以这就不检查了
+		initfd();
+		commsend_001();
+ 		$FD16='9300';
+ 		$FD21=#BZ;
+ 		$FD92=#DFGY;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}
+		if (#TJFS!='1') 
+		{
+		#TJJE= val($FD41, 0.01);
+		enable(#TJJE, false);
+		}
+ }"
+ </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TJJE" INPUT="TEXT" LINE="16" COL="25" TYPE="%17.2f" FUNCTIONS="V(0000000000000001,0000999999999999)"/>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#NAME1"  TYPE="%-20s" FUNCTIONS="S(#TJFS,#TJFS)"/>
+  <ITEM NAME="#NAME5"  TYPE="%-20s" FUNCTIONS="S(#BZ,#BZ)"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  <ITEM NAME="#LVL1"  TYPE="%1s" FUNCTIONS="" />
+  <ITEM NAME="#LVL2"  TYPE="%1s" FUNCTIONS="" />
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="行内ATM加清钞">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+          print( 2,  24,'交易名称:行内ATM加清钞');
+          print( 4,  20,'交易机构:[5]',$FD2);
+	  print( 5,  20,'交易日期:[4]年[2]月[2]日',#YEAR,#MON,#DAY);  
+	  print( 6,  20,'流水号码:[6]',$FD4);
+	  print( 7,  20,'操 作 员:[6]',$FD7);
+	  print( 8,  20,'操作方式:[20 ]',#NAME1);
+	  print( 9,  20,'ATM 柜员:[4  ]  [20]',#DFGY,#DFGYTC);
+	  print( 10, 20,'币    种:[20 ]',#NAME5); 
+	  print( 11, 20,'金    额:[20 ]',ltrim(comma(itoa(#TJJE,'%17.2f'),16)));
+	}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码: 6968');
+	print( 5,13,'交易:行内ATM加清钞');
+	
+	print( 7,20,'操作方式:[20 ]',#NAME1);
+	print( 8,20,'ATM 柜员:[4  ]  [20]',#DFGY,#DFGYTC);
+	print( 9,20,'币    种:[20 ]',#NAME5); 
+	print(10,20,'金    额:[20 ]',ltrim(comma(itoa(#TJJE,'%17.2f'),16)));
+	printacdtl_1();
+	print(24,20,'备注:');
+    print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+    print(24,5,'柜员:[4]',$FD7);
+    print(24, 5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

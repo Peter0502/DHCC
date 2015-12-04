@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1828  申请调整临时透支额度"
+	xmlns="http：//www.otd.org/MENU" xmlns：W3CNS="http：//www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3" COL="3"  TYPE="%-40s"  FUNCTIONS="T(1828           申请调整临时透支额度 )"/>
+  
+ 	<ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+ 	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1828)"/>
+	<ITEM NAME="#TXNAME"  TYPE="%-30s"  FUNCTIONS="T(申请调整临时透支额度)"/>
+ 	<ITEM LINE="8" COL="15" TYPE="%-14s" FUNCTIONS="T(币      种)"/>
+	
+	<ITEM LINE="8" COL="29" TYPE="%-5s"   NAME="#CurrCode"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(CNY)V(NB)">
+		<SELECT>
+			<OPTION VALUE="CNY"  TITLE="人民币"/>
+			<OPTION VALUE="USD"  TITLE="美 元"/>
+			<OPTION VALUE="HKD"  TITLE="港 币"/>
+			<OPTION VALUE="EUR"  TITLE="欧 元"/>
+			<OPTION VALUE="GBP"  TITLE="英 镑"/>
+			<OPTION VALUE="JPY"  TITLE="日 元"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+			"{
+				enable(#CurrType,false);
+			}"	
+		</ONLOSTFOCUS>
+	</ITEM>
+ 	
+	<ITEM LINE="10" COL="15"  TYPE="%-14s"  FUNCTIONS="T( 钞 汇  类 型:)"/>
+	<ITEM LINE="10" COL="29"  TYPE="%-1s"   NAME="#CurrType"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="丙钞"/>
+			<OPTION VALUE="2" TITLE="甲汇"/>		
+			<OPTION VALUE="3" TITLE="乙钞"/>
+			<OPTION VALUE="4" TITLE="乙汇"/>
+			<OPTION VALUE="6" TITLE="丙汇"/>
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="12" COL="15"  TYPE="%-14s"    FUNCTIONS="T(临时透支额度:)"/>
+<ITEM LINE="12" COL="29"  TYPE="%16.2f"   NAME="#Overdraft"  INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T()V(0.000000000000001,9999999999999999)"/>
+	<ITEM NAME="#CurrCodeNm"      TYPE="%-6s"   FUNCTIONS="S(#CurrCode,#CurrCode)"/>
+	<ITEM NAME="#CurrTypeNm"      TYPE="%-4s"   FUNCTIONS="S(#CurrType,#CurrType)"/>
+	
+	<ITEM LINE="20"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+		<ONCLICK>
+  			"{
+				initfd();
+				commsend_001();
+				
+				$FD16='2305';
+				$FD18='pbp';
+				$FD28='sxps';
+				$FD23=#CurrCode;
+				$FD35=#CurrType;
+				
+				$FD41=itoa(#Overdraft,'%.2f');
+				
+				callagnpbp();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				//生成核心流水-start
+				dim @bak_fd81 as string;
+				@bak_fd81=$FD81;
+				$FD81=#TXNAME;
+				gethxtraceno();
+				$FD81=@bak_fd81;
+				//生成核心流水-end	
+				runoutput();
+				rerun();
+				refresh();
+  			}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+<PRINT>
+	"{
+	  		PrintTxHead();
+			print( 4, 27, '币        种： [16]',#CurrCodeNm);
+			print( 6, 27, '钞 汇  类 型： [20]',#CurrTypeNm);
+			print( 8, 27, '临时透支额度： [20]',ltrim(itoa(#Overdraft,'%.2f')));
+			print(10, 27, '交 易  状 态： [20]','申请成功');
+			PrintTxTail();
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		//$KINDNO='00';
+		//dim @txtime as string;
+		//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		PrintTxHead();
+		//print( 3, 10,'机构名称:[30]',$BRNAME);
+		//print( 3, 0,'代码:2305');
+		//print( 3, 5,'交易:申请调整临时透支额度');
+		print( 5, 27, '币        种： [16]',#CurrCodeNm);
+		print( 7, 27, '钞 汇  类 型： [20]',#CurrTypeNm);
+		print( 9, 27, '临时透支额度： [20]',ltrim(itoa(#Overdraft,'%.2f')));
+		print(11, 27, '交 易  状 态： [20]','申请成功');
+	
+		PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

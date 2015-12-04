@@ -1,0 +1,564 @@
+#include "find_debug.h" 
+/*************************************************
+* 文 件 名:     pubf_pubdb_delcretable.ec
+* 功能描述：    
+* 作    者:     power
+* 完成日期：    2004年03月08日
+* 修改记录：    并且删除一个月前的总帐流水表gl_mst_hst,利息税sum_tax,trace_log_rz,dc_log_rz
+* 日    期:
+* 修 改 人:
+* 修改内容:
+*************************************************/
+
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "doc_dic_c.h"
+EXEC SQL INCLUDE SQLCA;
+/**********************************************************************
+ * 函 数 名：   pub_pubdb_delcretable
+ * 函数功能：   删除并新建备份表
+ * 作者/时间：  20040308
+ *
+ * 参数：
+ *     输入: 
+ *     输出: 
+ *     返回: <>0失败
+             =0成功
+ *
+ * 修改历史：
+ *
+ ********************************************************************/
+int pub_pubdb_delcretable()
+{
+		sprintf(acErrMsg,"备份数据开始");
+		WRITEMSG
+	EXEC SQL delete from auth_ac_rec where 1=1;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 )
+	{
+		sprintf(acErrMsg,"删除授权表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/**------- power 删除授权表，否则有流水号重复 -------**/
+	EXEC SQL delete from auth_code where 1=1;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 )
+	{
+		sprintf(acErrMsg,"删除授权表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    /* 删除备份表,并建立备份表 */
+    EXEC SQL drop table dc_log_bk;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	if( pub_pubdb_recrttab("dc_log","dc_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into DC_LOG_BK 
+		select *
+		from DC_LOG
+		where sts='0' ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立分录流水备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+	EXEC SQL insert into dc_log_rz
+		select *
+		from DC_LOG
+		where  1=1 ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"分录流水表导入日志数据表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+
+	if( pub_pubdb_droptab("trace_log_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+	if( pub_pubdb_recrttab("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into TRACE_LOG_BK select * from TRACE_LOG;
+    if (sqlca.sqlcode != 0)
+    {
+        sprintf(acErrMsg,"INSERT TRACE_LOG_BK ERROR@ !![%d]",sqlca.sqlcode);
+        WRITEMSG
+        return 1;
+    }
+
+	if( pub_pubdb_recrtidx("trace_log","trace_log_bk") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+		sprintf(acErrMsg,"建立分录流水备份表ok!!");
+		WRITEMSG
+
+	EXEC SQL insert into trace_log_rz
+		select *
+		from trace_log
+		where  1=1 ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"业务流水表导入日志数据表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+
+	if( pub_pubdb_droptab("dd_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table dd_mst_bk
+    (
+        opn_br_no       char(5),
+        prdt_no         char(3),
+        bal             number(16,2),
+		cnt				number(9)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into DD_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from DD_MST
+		where ac_sts!='*'
+		group by opn_br_no,prdt_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index dd_mst_bk_1 on dd_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立活期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("td_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table td_mst_bk
+    (
+        opn_br_no       char(5),
+        prdt_no         char(3),
+        bal             number(16,2),
+		cnt				number(9)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into TD_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from TD_MST
+		where ac_sts!='*'
+		group by opn_br_no,prdt_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index td_mst_bk_1 on td_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立定期帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("ln_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table ln_mst_bk
+    (
+        opn_br_no       char(5),
+        prdt_no         char(3),
+        bal             number(16,2),
+        in_lo_intst     number(16,2),
+        out_lo_intst    number(16,2),
+        cmpd_lo_intst   number(16,2),
+        gage_amt        number(16,2),
+		cnt				number(9)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into LN_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),sum(in_lo_intst),
+			sum(out_lo_intst),sum(cmpd_lo_intst),sum(gage_amt),count(*)
+		from LN_MST
+		group by opn_br_no,prdt_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index ln_mst_bk_1 on ln_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立贷款帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	if( pub_pubdb_droptab("in_mst_bk") ) 
+	{
+		TRACE
+		goto ErrExit;
+	}
+
+    EXEC SQL create table in_mst_bk
+    (
+        opn_br_no       char(5),
+        prdt_no         char(3),
+        bal             number(16,2),
+		cnt				number(9)
+    );
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL insert into IN_MST_BK 
+		select opn_br_no,prdt_no,sum(bal),count(*)
+		from IN_MST
+		group by opn_br_no,prdt_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    EXEC SQL create unique index in_mst_bk_1 on in_mst_bk (opn_br_no,prdt_no);
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"建立内部帐户主文件备份表错误!! [%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+	/*	不进行删除否则索引也没了
+	if( pub_pubdb_droptab( "trace_log" ) )
+	{
+		TRACE
+	 	goto ErrExit;
+	}
+	if( pub_pubdb_recrttab("trace_log_bk","trace_log") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	if( pub_pubdb_recrtidx("trace_log","trace_log") ) 
+	{
+		sprintf(acErrMsg,"建立业务流水表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	*/
+/** rem by LiuHuafeng 20061224
+	EXEC SQL truncate table trace_log;
+*******************************/
+	EXEC SQL delete from trace_log;
+	if(sqlca.sqlcode){
+		sprintf(acErrMsg,"truncate trace_log 错误!![%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+/**** rem by LiuHuafeng 20061224
+	EXEC SQL truncate table tx_log;    
+***********************************/
+	EXEC SQL delete from tx_log;    
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"delete tx_log 错误!![%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*----------------------------------------------------------------*/
+/*
+	if( pub_pubdb_droptab( "tx_log" ) )
+	{
+		TRACE
+	 	goto ErrExit;
+	}
+	EXEC SQL truncate table tx_log;
+*/
+/***
+	if( pub_pubdb_recrttab("tx_log","tx_log") ) 
+	{
+		sprintf(acErrMsg,"建立业务通讯日志表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	if( pub_pubdb_recrtidx("tx_log","tx_log") ) 
+	{
+		sprintf(acErrMsg,"建立业务通讯日志表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+*****/
+	/*----------------------------------------------------------------*/
+
+	if( pub_pubdb_droptab( "dc_log" ) )
+	{
+		TRACE
+	 	goto ErrExit;
+	}
+	if( pub_pubdb_recrttab("dc_log_bk","dc_log") ) 
+	{
+		sprintf(acErrMsg,"建立会计流水表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	if( pub_pubdb_recrtidx("dc_log","dc_log") ) 
+	{
+		sprintf(acErrMsg,"建立会计流水表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL delete from gl_mst_hst where "date"< \
+	 (select to_number(to_char(to_date(to_char(lst_date),'YYYYMMDD')-31,'YYYYMMDD')) from com_sys_parm);
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"删除 gl_mst_hst 出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL delete from sum_tax where "date"< \
+	 (select to_number(to_char(to_date(to_char(lst_date),'YYYYMMDD')-31,'YYYYMMDD')) from com_sys_parm);
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"删除 sum_tax 出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL delete from trace_log_rz where tx_date< \
+	 (select to_number(to_char(to_date(to_char(lst_date),'YYYYMMDD')-31,'YYYYMMDD')) from com_sys_parm);
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"删除 trace_log_rz 出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL delete from dc_log_rz where tx_date< \
+	 (select to_number(to_char(to_date(to_char(lst_date),'YYYYMMDD')-31,'YYYYMMDD')) from com_sys_parm);
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"删除 dc_log_rz 出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    return 0;
+ErrExit:
+	return 1;
+}
+pub_pubdb_droptab( char *tabname )
+{
+	int ret=0;
+
+	pub_base_strpack( tabname );
+	ret = sql_execute( "drop table %s",tabname );
+	if( ret ) goto ErrExit;
+
+	sprintf( acErrMsg,"drop table [%s] ok",tabname );
+	WRITEMSG
+    return 0;
+ErrExit:
+	sprintf( acErrMsg,"drop table [%s] error",tabname );
+	WRITEMSG
+	return 1;
+}
+pub_pubdb_recrttab( char *tabname,char *newname )
+{
+	int ret=0;
+	struct doc_dic_c vdoc;
+	char senc[3000];
+	char tmpstr[100];
+	int i=0;
+
+	MEMSET_DEBUG( senc,0,sizeof(senc) );
+	pub_base_strpack( tabname );
+	pub_base_strpack( newname );
+	
+	sprintf(senc,"create table %s as select * from %s where 1=2",newname,tabname);
+/**
+	ret=Doc_dic_Dec_Sel( g_pub_tx.reply,"tab='%s' order by seqn ",tabname );
+	if( ret ) goto ErrExit;
+
+	while(1)
+	{
+		ret=Doc_dic_Fet_Sel( &vdoc , g_pub_tx.reply );
+		if( ret==100 ) break;
+		if( ret ) goto ErrExit;
+
+		if( !strncmp(vdoc.type,"table",5) )
+		{
+			sprintf( senc,"create table %s (",newname );
+		}
+		else if( !strncmp(vdoc.type,"index",5) )
+		{
+			;
+		}
+		else if( !strncmp(vdoc.type,"Uindex",6) )
+		{
+			;
+		}
+		else
+		{
+			pub_base_strpack( vdoc.fied );
+			pub_base_strpack( vdoc.type );
+			if( !strncmp(vdoc.type,"char",4) )
+			{
+				sprintf( tmpstr,"%s %s(%d)",vdoc.fied,vdoc.type,vdoc.leng );
+			}
+			**
+			else if( !strncmp(vdoc.type,"decimal",4) )
+			**
+			else if( !strncmp(vdoc.type,"number",6) )
+			{
+			 if(vdoc.dec == 0)
+			 {
+			 	  if(!strncmp(vdoc.fied,"date",4)) ** 对于保留字date的处理 **
+			 	  {
+			 			sprintf( tmpstr,"\"%s\" %s(%d)",\
+						vdoc.fied,vdoc.type,vdoc.leng);
+				  }else{
+				  	sprintf( tmpstr,"%s %s(%d)",\
+						vdoc.fied,vdoc.type,vdoc.leng);
+				  }
+			 } else {
+					sprintf( tmpstr,"%s %s(%d,%d)",\
+					vdoc.fied,vdoc.type,vdoc.leng,vdoc.dec );
+			 }
+			}
+			else
+			{
+				sprintf( tmpstr,"%s %s",vdoc.fied,vdoc.type );
+			}
+			if( i )
+				strcat( senc,", " );
+			strcat( senc,tmpstr );
+			i++;
+		}
+	}
+	strcat( senc,") " );
+	Doc_dic_Clo_Sel();
+****/
+
+
+	vtcp_log(" SENC[%s]",senc);
+	ret = sql_execute( senc );
+	if( ret ) goto ErrExit;
+
+	sprintf(acErrMsg,"crt tab [%s] ok",tabname);
+	WRITEMSG
+    return 0;
+ErrExit:
+	sprintf(acErrMsg,"crt tab [%s] error",tabname);
+	WRITEMSG
+	return 1;
+}
+pub_pubdb_recrtidx( char *tabname,char *newname )
+{
+	int ret=0;
+	struct doc_dic_c vdoc;
+	char senc[3000];
+	int i=0;
+
+	MEMSET_DEBUG( senc,0,sizeof(senc) );
+	pub_base_strpack( tabname );
+	pub_base_strpack( newname );
+
+	ret=Doc_dic_Dec_Sel( g_pub_tx.reply,"tab='%s' and type in('index','Uindex')"
+		,tabname );
+	if( ret ) goto ErrExit;
+
+	while(1)
+	{
+		ret=Doc_dic_Fet_Sel( &vdoc , g_pub_tx.reply );
+		if( ret==100 ) break;
+		if( ret ) goto ErrExit;
+
+		pub_base_strpack( vdoc.list );
+
+		i++;
+
+		if( !strncmp(vdoc.type,"index",5) )
+		{
+			sprintf( senc,"create index %s_%d on %s(%s)",
+				newname, i, newname, vdoc.list );
+			ret = sql_execute( senc );
+			if( ret ) goto ErrExit;
+		}
+		else if( !strncmp(vdoc.type,"Uindex",6) )
+		{
+			sprintf( senc,"create unique index %s_%d on %s(%s)",
+				newname, i, newname, vdoc.list );
+			ret = sql_execute( senc );
+			if( ret ) goto ErrExit;
+		}
+	}
+
+	Doc_dic_Clo_Sel();
+
+    return 0;
+ErrExit:
+	return 1;
+}

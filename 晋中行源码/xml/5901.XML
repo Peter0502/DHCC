@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5901 同城提出"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+	  commsend_001();
+	   //验印 start 20131212 wudawei
+if(substr(#ACTNO,0,1)=='5'  and $FD68=='1')
+{
+		dim @rs as string;
+		showhelp('系统提示','开始调取验印系统... ');
+		if(#VOCTYPE=='299')
+		{
+			@rs = judgeone(#ACTNO,'299','0',$HDATE,#TXAMT,'1');
+		}else
+		{			
+			@rs = judgeone(#ACTNO,#VOCTYPE,#VOCNUM,$HDATE,#TXAMT,'1');
+		}
+		
+		if(@rs=='1')
+		{
+			showmsg('验印不通过！');
+			return(false);
+		}
+		else if(@rs=='0')
+		{       
+			showmsg('验印通过！');
+				
+		}else
+		{       
+			showmsg('验印失败请重新验印！');
+			return(false);		
+		}
+}
+	//验印 end 20131212 wudawei
+}"
+</COMMSEND>
+<COMMRECV>"{
+	savescr('../tmp/'+$FD7+$FD4+'.scr');
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(5901                         同城票据提出  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=5901)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   <!--输入变量-->
+  <ITEM LINE="6"   COL="3"  TYPE="%-18s" FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="7"   COL="3"  TYPE="%-18s" FUNCTIONS="T(币    种:)"/>
+  <ITEM LINE="8"   COL="3"  TYPE="%-14s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9"   COL="3"  TYPE="%-18s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="11"  COL="3"  TYPE="%-14s" FUNCTIONS="T(交易金额:)"/>
+  <ITEM LINE="12"  COL="3"  TYPE="%-14s" FUNCTIONS="T(凭证类型:)"/>
+  <ITEM LINE="12"  COL="51" TYPE="%-8s"  FUNCTIONS="T(凭证号:)"/>
+  <ITEM LINE="14"  COL="3"  TYPE="%-70s" FUNCTIONS="T(--------------------------------------------------------------------)"/>
+
+  <ITEM LINE="15"   COL="3" TYPE="%-14s" FUNCTIONS="T(收款人帐号:)"/>
+  <ITEM LINE="16"   COL="3" TYPE="%-14s" FUNCTIONS="T(收款人名称:)"/>
+  <ITEM LINE="18"   COL="3" TYPE="%-14s" FUNCTIONS="T(提入行代号:)"/>
+  <ITEM LINE="19"   COL="3" TYPE="%-14s" FUNCTIONS="T(对方机构名:)"/>
+
+  <ITEM NAME="#ACCOUNTNO"  TYPE="%-7s" FUNCTIONS="T(4080100)"/>
+
+  <ITEM NAME="#ACTNO"  LINE="6" COL="17" TYPE="%-19s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+	 <ONLOSTFOCUS>
+   "{
+		initfd();
+		$FD30=#ACTNO;
+		commsend_001();
+		$FD16='9930';
+	    if( substr(#ACTNO,0,1)=='9' or len(#ACTNO) &lt;7){
+	       $FD68='6';  // 内部帐或者科目
+	    }
+	    else{
+	       $FD68='1'; // 对公户
+	    }
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#CURCD=$FD21;
+		#CUSTNAME=$FD25;
+		#YEJD=$FD22;
+		#AVBAL=val($FD41, 0.01);
+		//showmsg($FD30);
+		#ACTNO=$FD30;
+		//showmsg(#ACTNO);
+	}"
+	 </ONLOSTFOCUS>
+   </ITEM>
+  <ITEM NAME="#ACTTYPE"  TYPE="%-1s" FUNCTIONS="T($FD68)"/>
+   <ITEM NAME="#CURCD" INPUT="SELECT" LINE="7" COL="17" TYPE="%-2s" ENABLE="FALSE" FUNCTIONS="T(01)">
+  	<SELECT>
+  		<OPTION VALUE="01" TITLE="01人民币 "/>
+  	</SELECT>
+</ITEM>
+
+   <ITEM NAME="#CUSTNAME" LINE="8" COL="17" TYPE="%-40s" FUNCTIONS=""/>
+   <ITEM NAME="#YEJD" LINE="9" COL="17" TYPE="%-2s" FUNCTIONS=""/>
+   <ITEM NAME="#AVBAL" TYPE="%17.2f"  FUNCTIONS="J(#XAVBAL)"/>
+   <ITEM LINE="9" COL="21" NAME="#XAVBAL"  TYPE="%-16s"  FUNCTIONS="X(#AVBAL)"/>
+   <ITEM NAME="#TXAMT"	 LINE="11" COL="17" TYPE="%17.2f" DEVICE="KEYBOARD"	FUNCTIONS="V(0000000000000001,0000099999999999)">
+	 <ONLOSTFOCUS>
+   "{
+		dim @list1 as string;
+		dim @list2 as string;
+		dim @i as number;
+		dim @tota as string;
+
+		initfd();
+		commsend_001();
+		$FD16='9966';
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#PRODNO=$FD23;
+		@i = 0;
+		while('0230' == substr(@tota, @i, 4)){
+			@i = @i + 31;
+		}
+		@list1=substr(@tota, 0 , @i+1);
+		@list2=substr(@tota, @i, len(@tota)-@i);
+		setsel(#VOCDSCPT,@list1,'o5t20o1v3o2');
+		setsel(#VOCTYPE,@list2,'o5t20o1v3o2');
+	}"
+	 </ONLOSTFOCUS>
+	 </ITEM>
+	<ITEM NAME="#XTXAMT" TYPE="%-21s" FUNCTIONS="X(#TXAMT)"/>
+	<ITEM NAME="#PRODNO" TYPE="%-3s" FUNCTIONS=""/>
+   <ITEM NAME="#VOCTYPE" INPUT="SELECT" LINE="12"  COL="17" TYPE="%-3s" FUNCTIONS="T(001)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="001" TITLE="001 现金支票 "/>
+  	</SELECT>
+	</ITEM>
+   <ITEM NAME="#TMP28"  TYPE="%-28s" 	FUNCTIONS=""/>
+   <ITEM NAME="#TMP56"  TYPE="%-50s" 	FUNCTIONS=""/>
+   <ITEM NAME="#CHANGENO"  TYPE="%-10s" 	FUNCTIONS=""/>
+   <ITEM NAME="#BR_NAME"  TYPE="%-50s" 	FUNCTIONS=""/>
+<ITEM NAME="#VOCNUM"	 LINE="12" COL="59" TYPE="%16d" DEVICE="KEYBOARD"	FUNCTIONS="">
+   <ONLOSTFOCUS>
+   "{
+	if(#VOCTYPE != '299' and #VOCNUM == '')
+	{
+		showmsg('必须输入凭证号码!');
+		return(false);
+	}
+   }"
+   </ONLOSTFOCUS>
+   </ITEM>
+  <ITEM NAME="#CASHACTNO"  LINE="15" COL="17" TYPE="%-32s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#CASHNAME"  LINE="16" COL="17" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#CASHBRNO"  LINE="18" COL="17" TYPE="%10d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+	 <ONLOSTFOCUS>
+   "{
+		dim @tota as string;
+
+		initfd();
+		commsend_001();
+		$FD16='9559';		//校验输入的交换行号是否正确
+		$FD86=#CASHBRNO;
+		@tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#CASHBRNAME=$FD96;
+		#CHANGENO=$FD87;		//交易机构的交换行号
+		#BR_NAME=$FD81;		//交易机构的行名
+
+		// 为主函数准备报文
+		initfd();
+		$FD21=#CURCD;
+		$FD30=#ACTNO;
+		$FD40=getitems('#TXAMT'); // 当是科目记帐的时候金额赋到这个域
+		$FD25=#CUSTNAME;
+		$FD58=#VOCNUM;
+		$FD66='1'; //付款帐号的借贷标志
+		$FD20='2'; //408的走帐
+		$FD67='2'; // 1现金  2转帐
+		$FD68=#ACTTYPE;
+		$FD69='1'; // 1提出  2提入
+		$FD70='2'; // 1登记  2记帐  8已打印  9取消
+		$FD71='2'; //对方帐号的借贷 和 画面上第一个帐号的借贷是相反的
+		$FD87=#CHANGENO;		//交易机构的交换行号
+		$FD89=#VOCTYPE;
+		$FD81=#BR_NAME;		//交易机构的行名
+		//用96域放收款人帐号、收款人户名、提入行行号、提入行行名
+		$FD96=getitems('#CASHACTNO#TMP28#CASHNAME#CASHBRNO#TMP56#CASHBRNAME');
+	}"
+	 </ONLOSTFOCUS>
+	 </ITEM>
+  <ITEM NAME="#CASHBRNAME"  LINE="19" COL="17" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+   <ITEM NAME="#VOCDSCPT"  TYPE="%-2s" 	FUNCTIONS=""/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+ 
+    </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码: 5901');
+	print( 5,13,'交易名称: 同城票据提出');
+	print( 7, 38,'\L0同城票据提出\L1');
+	print( 9,20,'付款  帐号:[19                 ]             付款  户名:[40]',#ACTNO,#CUSTNAME);
+	print(10,20,'收款人帐号:[32                              ]收款人名称:[60]',#CASHACTNO,#CASHNAME);
+	print(11,20,'提入行代号:[10        ]                      提入行名称:[60]',#CASHBRNO,#CASHBRNAME);
+	printacdtl_1();
+	print_sq();
+        print(24,20,'备注:');
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

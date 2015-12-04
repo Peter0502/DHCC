@@ -1,0 +1,212 @@
+/*****************************************************
+* 文 件 名:  sp3635.pc
+* 功能描述： 当日各支行业务量统计 (前台:3051.XML)
+* 作    者:  刘杨  (开封写) 
+* 完成日期： 2004/09/21
+* 修 改 人:  xyy
+* 修改记录： 改造成适应新系统的当日各支行业务量统计
+* 日    期:  2007-1-15 16:36
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "com_branch_c.h"
+#include "trace_log_c.h"
+EXEC SQL INCLUDE sqlca;
+int  sp3635()
+{
+    FILE *fp=NULL;
+    int   i = 0;
+    char  cBrno    [6];
+    char  cTel     [5];
+    char  cShbrno  [6];
+    int   count;
+    int   ret;
+    char  cCount   [5];
+    char  cShbrname[31];
+    char  cTelname [9];
+    char  cBhday   [9];
+    char filename  [256];
+    struct com_branch_c com_branch;
+    struct trace_log_c trace_log;
+    
+    count = 0;
+    ret = 0;
+    
+    memset(cBrno    , 0 , sizeof(cBrno));
+    memset(cTel     , 0 , sizeof(cTel));
+    memset(cTelname , 0 , sizeof(cTelname));
+    memset(cShbrno  , 0 , sizeof(cShbrno));
+    memset(cShbrname, 0 , sizeof(cShbrname));
+    memset(cCount   , 0 , sizeof(cCount));
+    memset(filename , 0 , sizeof(filename));
+    memset(cBhday   , 0 ,sizeof(cBhday));
+    memset(&trace_log,0 , sizeof(trace_log));
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    get_zd_data( "0860" , cBrno );
+    
+    vtcp_log("[%s][%d] sp3635程序开始拉",__FILE__,__LINE__);
+/***************
+    sprintf(cBhday,"%08d",g_pub_tx.tx_date);
+    vtcp_log("[%s][%d]cBhday===[%s]",__FILE__,__LINE__,cBhday);
+****************/
+	if( memcmp( cBrno, 0 ,sizeof( cBrno ) )==0 )
+	{
+		/***去掉了 stat='0' del by martin 070521**/
+	EXEC SQL DECLARE s1 CURSOR FOR
+	select tx_br_no,count(*) from trace_log where 1=1 group by tx_br_no order by tx_br_no;
+    EXEC SQL OPEN s1;
+    i = 0;
+    while(1){
+      memset(cShbrno,'\0',sizeof(cShbrno));
+      memset(cShbrname,'\0',sizeof(cShbrname));
+      count = 0;
+      EXEC SQL FETCH s1  INTO :cShbrno,:count;
+vtcp_log(">>>>>>>>cShbrno[%s]....sqlca.sqlcode[%d]",cShbrno,sqlca.sqlcode);
+      if(sqlca.sqlcode == 1403)
+      {
+          if(i == 0)
+          {
+              sprintf(acErrMsg," 未找到所要记录 ",sqlca.sqlcode );
+              strcpy( g_pub_tx.reply,"S047" );
+              set_zd_data(DC_GET_MSG,acErrMsg);
+              WRITEMSG
+              goto ErrExit;
+          }
+          break;
+      }
+	vtcp_log(">>>>>>>>cShbrno[%s] [%d]",cShbrno,sqlca.sqlcode);
+      EXEC SQL select br_name INTO :cShbrname from com_branch where br_no= :cShbrno;
+      if(sqlca.sqlcode != 0)
+      {
+          sprintf(acErrMsg," 未找到所要记录 ",sqlca.sqlcode );
+          strcpy( g_pub_tx.reply,"S047" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          goto ErrExit;
+      }
+      if(!i)
+      {
+            pub_base_AllDwnFilName( filename );
+            fp = fopen( filename,"w" );
+            if( fp==NULL )
+            {
+                sprintf(acErrMsg," open file [%s] error ",filename );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            /**显示列标题**/
+            fprintf( fp,"~笔数|机构号|机构名称|\n" );
+      }
+      i++;
+      sprintf(cCount,"%4d",count);
+      fprintf(fp,"%s|%s|%s|\n",cCount,cShbrno,cShbrname); 
+      vtcp_log("[%s][%d] i===[%d] ",__FILE__,__LINE__,i);
+    }
+  EXEC SQL close s1;
+  vtcp_log("[%s][%d]关闭游标成功!",__FILE__,__LINE__);
+  }
+  else
+  {
+	EXEC SQL DECLARE k1 CURSOR FOR
+	select tel,tx_br_no,count(*) from trace_log where 1=1 and tel!='0095' group by tel,tx_br_no order by tx_br_no;
+    EXEC SQL OPEN k1;
+    i = 0;
+    while(1){
+      memset(cShbrno,'\0',sizeof(cShbrno));
+      memset(cShbrname,'\0',sizeof(cShbrname));
+      count = 0;
+      EXEC SQL FETCH k1  INTO :cTel,:cShbrno,:count;
+vtcp_log(">>>>>>>>cTel[%s]....cShbrno[%s]....sqlca.sqlcode[%d]",cTel,cShbrno,sqlca.sqlcode);
+      if(sqlca.sqlcode == 1403)
+      {
+          if(i == 0)
+          {
+              sprintf(acErrMsg," 未找到所要记录 ",sqlca.sqlcode );
+              strcpy( g_pub_tx.reply,"S047" );
+              set_zd_data(DC_GET_MSG,acErrMsg);
+              WRITEMSG
+              goto ErrExit;
+          }
+          break;
+      }
+	vtcp_log(">>>>>>>>cShbrno[%s] [%d]",cShbrno,sqlca.sqlcode);
+      EXEC SQL select br_name INTO :cShbrname from com_branch where br_no= :cShbrno;
+      if(sqlca.sqlcode != 0)
+      {
+          sprintf(acErrMsg," 未找到所要机构名称记录 ",sqlca.sqlcode );
+          strcpy( g_pub_tx.reply,"S047" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          goto ErrExit;
+      }
+      EXEC SQL select name INTO :cTelname from com_tel where tel= :cTel;
+      if(sqlca.sqlcode != 0)
+      {
+          sprintf(acErrMsg," 未找到所要柜员名称记录 ",sqlca.sqlcode );
+          strcpy( g_pub_tx.reply,"S047" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          goto ErrExit;
+      }
+      if(!i)
+      {
+            pub_base_AllDwnFilName( filename );
+            fp = fopen( filename,"w" );
+            if( fp==NULL )
+            {
+                sprintf(acErrMsg," open file [%s] error ",filename );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            /**显示列标题**/
+            fprintf( fp,"~笔数|柜员号|柜员姓名|机构名称|\n" );
+      }
+      i++;
+      sprintf(cCount,"%4d",count);
+      if(  memcmp( cShbrno,cBrno,5 )== 0 )
+      	{
+      		fprintf(fp,"%s|%s|%s|%s|\n",cCount,cTel,cTelname,cShbrname); 
+          vtcp_log("[%s][%d] i===[%d] ",__FILE__,__LINE__,i);
+      	}
+    }
+  EXEC SQL close k1;
+  vtcp_log("[%s][%d]关闭游标成功!",__FILE__,__LINE__);
+  }
+  if( !i )
+	{
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1" );
+	}
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;
+}

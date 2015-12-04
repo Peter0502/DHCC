@@ -1,0 +1,113 @@
+/*****************************************************
+* 文 件 名:  sp3700.pc
+* 功能描述： 过渡操作员信息
+* 作    者:  xyy 
+* 完成日期： 2007-1-18 13:54
+* 修 改 人:  
+* 修改记录： 
+* 日    期: 
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+#include "com_tel_c.h"
+#include "bctl_c.h"
+#include "xdtl_main_c.h"
+EXEC SQL INCLUDE sqlca;
+
+extern char * pcGetWorkday();
+int  sp3700()
+{
+    int   i = 0;
+
+    struct tlrctl_c wd_tlrctl;
+    struct com_tel_c com_tel;
+        
+    memset(&com_tel    , 0 , sizeof(com_tel));
+    memset(&wd_tlrctl  , 0 , sizeof(wd_tlrctl));
+    
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    
+    g_reply_int = Tlrctl_Dec_Sel(g_pub_tx.reply,"1=1");
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查老系统操作员控制表错误[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while(1)
+    {
+      memset(&wd_tlrctl,0,sizeof(wd_tlrctl));
+      g_reply_int = Tlrctl_Fet_Sel(&wd_tlrctl,g_pub_tx.reply);
+      if(g_reply_int == 100)
+      {
+          if(i == 0)
+          {
+              sprintf(acErrMsg," 未找到所要记录 ",g_reply_int);
+              strcpy( g_pub_tx.reply,"S047" );
+              set_zd_data(DC_GET_MSG,acErrMsg);
+              WRITEMSG
+              goto ErrExit;
+          }
+          break;
+      }
+      if(g_reply_int)
+      {
+          sprintf(acErrMsg," Fet操作员控制表出错",g_reply_int );
+          strcpy( g_pub_tx.reply,"S047" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          goto ErrExit;
+      }
+      
+      memcpy(com_tel.br_no    ,wd_tlrctl.brno    ,sizeof(com_tel.br_no)-1);
+      memcpy(com_tel.tel      ,wd_tlrctl.tlrno   ,sizeof(com_tel.tel)-1);
+      memcpy(com_tel.pwd      ,"<1928:"          ,sizeof(com_tel.pwd)-1);
+      memcpy(com_tel.name     ,wd_tlrctl.name    ,sizeof(com_tel.name)-1);
+      com_tel.lvl[0]='4';
+      com_tel.csts[0]='0';
+      com_tel.pwd_date = apatoi(pcGetWorkday(),8);
+      memcpy(com_tel.beg_menu ,"    "            ,sizeof(com_tel.beg_menu)-1);
+      com_tel.chk_ind[0]='0';
+      memcpy(com_tel.tx_type  ,"1111111111"      ,sizeof(com_tel.tx_type)-1);
+      Com_tel_Debug(&com_tel);
+      g_reply_int = Com_tel_Ins(&com_tel,g_pub_tx.reply);
+      if(g_reply_int)
+      {
+      	  Com_tel_Debug(&com_tel);
+          sprintf(acErrMsg," Fet操作员控制表出错",g_reply_int );
+          strcpy( g_pub_tx.reply,"S047" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          goto ErrExit;
+      }
+      vtcp_log("[%s][%d]插入一条数据成功!!",__FILE__,__LINE__);
+
+    }
+    Tlrctl_Clo_Sel();
+    vtcp_log("[%s][%d] 成功关闭游标yeah!! ",__FILE__,__LINE__);
+
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;
+}

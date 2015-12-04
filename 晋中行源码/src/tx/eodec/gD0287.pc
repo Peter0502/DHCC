@@ -1,0 +1,169 @@
+/*******************************************************************
+* 文 件 名: gD0287.c
+* 功能描述：试结恢复数据
+*           年终试结程序后从 gl_mst_nj,gl_sub_nj恢复总帐数据
+*           新增给mis系统数据表  gl_sub_mis,gl_tsub_mis 20101229
+*           且恢复gl_tsub表数据
+********************************************************************/
+#define MYSQLERR if(sqlca.sqlcode) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+
+	struct com_sys_parm_c com_sys_parm_c;
+
+gD0287()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+
+	/****增加给MIS备份数据的相关表 20101229 begin****/
+	EXEC SQL delete from gl_sub_mis;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		sprintf(acErrMsg,"删除mis备份数据错误!! [%d]",sqlca.sqlcode);
+			WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL delete  from  gl_tsub_mis;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		sprintf(acErrMsg,"删除mis备份数据错误!! [%d]",sqlca.sqlcode);
+			WRITEMSG
+		goto ErrExit;
+	}
+	/****20101229 end****/
+	/****增加为MIS保留gl_mst_hst表 begin 20101230****/
+	EXEC SQL delete  from  gl_mst_hst_mis;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		sprintf(acErrMsg,"删除mis备份数据错误!! [%d]",sqlca.sqlcode);
+			WRITEMSG
+		goto ErrExit;
+	}
+	/****20101230 end****/
+
+	ret=rec_gl_sub();
+	MYRETERR
+	/****将此操作挪至此处 20101231 ****/
+	EXEC SQL delete from gl_mst_hst where "date"=(select lst_date from com_sys_parm);
+	MYSQLERR
+	/****将此操作挪至此处 20101231 ****/
+
+	ret=rec_gl_mst();
+	MYRETERR
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+rec_gl_sub()
+{
+	int ret=0; 
+
+	/****备份给mis的数据 20101229 begin****/
+	EXEC SQL insert into gl_sub_mis	select * from gl_sub;
+	MYSQLERR
+	
+	EXEC SQL insert into gl_tsub_mis	select * from gl_tsub;
+	MYSQLERR
+	/****20101229 end****/
+	/****备份给mis的数据gl_mst_hst表 20101230 begin****/
+	EXEC SQL insert into gl_mst_hst_mis	select * from gl_mst_hst;
+	MYSQLERR
+	/****20101230 end****/
+	/****在此加入恢复gl_tsub表数据， 20101229 begin****/
+	EXEC SQL drop table  gl_tsub;
+	MYSQLERR
+	EXEC SQL create table gl_tsub as select * from gl_tsub_nj;
+	MYSQLERR
+
+	/* 建立gl_tsub 的索引 */
+	/****晋中商行的gl_tsub表中的日期为: "date"，不是cyc_date   delete at 20121228
+	EXEC SQL create unique index gl_tsub_idx on gl_tsub( br_no,cur_no,acc_hrt,cyc_date,term_type) tablespace indx;
+	EXEC SQL create index gl_tsub_2 on gl_tsub( br_no,acc_hrt,cyc_date,term_type) tablespace indx;
+	modify at next ****/
+	EXEC SQL create unique index gl_tsub_idx on gl_tsub( br_no,cur_no,acc_hrt,"date",term_type) tablespace indx;
+	EXEC SQL create index gl_tsub_2 on gl_tsub( br_no,acc_hrt,"date",term_type) tablespace indx;
+	EXEC SQL create index gl_tsub_3 on gl_tsub( br_no,acc_hrt,term_type) tablespace indx;
+
+	EXEC SQL truncate table  gl_tsub;
+	MYSQLERR
+	
+	EXEC SQL insert into gl_tsub select * from gl_tsub_nj;
+	MYSQLERR
+	/****20101229 end****/
+	
+	EXEC SQL truncate table gl_sub;
+	MYSQLERR
+	EXEC SQL insert into gl_sub
+		select * from gl_sub_nj;
+	MYSQLERR
+	return 0;
+ErrExit:
+	return 1;
+}
+rec_gl_mst()
+{
+	int ret=0; 
+
+	EXEC SQL truncate table gl_mst;
+	MYSQLERR
+	EXEC SQL insert into gl_mst
+		select * from gl_mst_nj;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}

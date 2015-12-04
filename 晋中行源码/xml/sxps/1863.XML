@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1863       中心对账)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1863                        中心对账)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1863)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(中心对账)"/>
+	
+	<ITEM LINE="8" COL="15" TYPE="%-10s" FUNCTIONS="T(工作日期:)"/>
+	<ITEM LINE="8" COL="25" TYPE="%-8s" DEVICE="KEYBOARD" NAME="#Workdt" FUNCTIONS="T()V(NB)D()"/>
+	<ITEM LINE="8" COL="40" TYPE="%-10s" FUNCTIONS="T(工作场次:)"/>
+	<ITEM LINE="8" COL="50" NAME="#Workround" INPUT="TEXT" TYPE="%-2s" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(清算日期:)"/>
+	<ITEM LINE="10" COL="25" TYPE="%-8s" DEVICE="KEYBOARD" NAME="#Sttlmdt" FUNCTIONS="T()V(NB)D()"/>
+	<ITEM LINE="10" COL="40" TYPE="%-10s" FUNCTIONS="T(清算场次:)"/>
+	<ITEM LINE="10" COL="50" NAME="#Sttlmrnd" INPUT="TEXT" TYPE="%-2s" FUNCTIONS="T()V(NB)"/>
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		initfd();
+		commsend_001();
+		$FD16 = '2319';
+		$FD18 = 'pbp';
+		$FD28 = 'sxps';
+		$FD44 = #Workdt;
+		$FD52 =	#Workround;
+		$FD45 = #Sttlmdt;
+		$FD58 =	#Sttlmrnd;		
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81=#TXNAME;
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end	
+		runoutput();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();
+			print(5, 20, '工作日期： [8]	工作场次[2]',#Workdt,#Workround);
+			print(7, 20, '清算日期： [8]	清算场次[2]',#Sttlmdt,#Sttlmrnd);
+			print(9, 20, '对账结果： [60]',$FD13);
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>
+		"{       
+			PrintTxHead();
+			print(5, 20, '工作日期： [8]	工作场次[2]',#Workdt,#Workround);
+			print(7, 20, '清算日期： [8]	清算场次[2]',#Sttlmdt,#Sttlmrnd);
+			print(9, 20, '对账结果： [60]',$FD13);
+			PrintTxTail();
+		}" 
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

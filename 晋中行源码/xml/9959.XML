@@ -1,0 +1,113 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="供热模糊查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+	<ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9959                    瑞阳供热模糊查询)"/>
+	<ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6650)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+	<ITEM LINE="8"   COL="3" TYPE="%-10s"  FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="10"   COL="3" TYPE="%-10s"  FUNCTIONS="T(用户地址:)"/>
+  <ITEM LINE="8"   COL="13" NAME="#USER" INPUT="TEXT" TYPE="%-20s"  FUNCTIONS="T()"/>
+  <ITEM LINE="10"   COL="13" NAME="#ADDRESS" INPUT="TEXT" TYPE="%-60s"  FUNCTIONS="T()">
+   <ONLOSTFOCUS>
+  "{
+    	if(#USER==''and #ADDRESS==''){
+		showmsg('用户名和用户地址不能同时为空!');
+		 return(false);
+	  }
+	 
+	$FD16='6650';
+	$FD21='01';               //柜面发起标志
+	$FD60='AGENT';
+	$FD23='01';		//查询标志：查询页数
+	$FD25=#USER;		//用户名
+	$FD26=#ADDRESS;		//用户地址
+	$FD52='1';		//查询页数
+	
+	commsend_001();
+	callagnpt();	
+	if($FD12!='0000'){
+		showmsg($FD13);
+		return(false);
+	}
+	#PAGENUM=delspace($FD88);	//总页数	
+	  
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="12"   COL="3" TYPE="%-10s"  FUNCTIONS="T(总页数:)"/>
+  <ITEM LINE="12"   COL="13" NAME="#PAGENUM" INPUT="TEXT" TYPE="%-10s"  FUNCTIONS="T()"/>
+  
+  <ITEM LINE="12"   COL="30" TYPE="%-10s"  FUNCTIONS="T(查询页:)"/>
+  <ITEM LINE="12"   COL="40" NAME="#PAGECH"  TYPE="%-10s"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+  	<SELECT>
+		<OPTION VALUE="1" TITLE="第1页"/>
+		<OPTION VALUE="2" TITLE="第2页"/>
+		<OPTION VALUE="3" TITLE="第3页"/>
+		<OPTION VALUE="4" TITLE="第4页"/> 
+		<OPTION VALUE="5" TITLE="第5页"/>
+		<OPTION VALUE="6" TITLE="第6页"/>
+		<OPTION VALUE="7" TITLE="第7页"/>
+		<OPTION VALUE="8" TITLE="第8页"/>
+		<OPTION VALUE="9" TITLE="第9页"/>
+		<OPTION VALUE="10" TITLE="第10页"/>
+		
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		if(#PAGENUM &lt; #PAGECH)
+		{
+			showmsg('查询页不能大于总页数！');
+		 	return(false);
+	  	}
+		
+		dim @tota as string;
+		dim @selid as number;
+		$FD16='6650';
+		$FD21='01';               //柜面发起标志
+		$FD23='02';		//查询标志：查询明细
+		$FD60='AGENT';
+		$FD25=#USER;		//用户名
+		$FD26=#ADDRESS;		//用户地址
+		$FD52=#PAGECH;		//查询页数
+		
+		commsend_001();
+		@tota=callagnpt();	
+		if($FD12!='0000'){
+			showmsg($FD13);
+			return(false);
+		}	
+		@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		if(@tota==''){
+			showmsg('未找到记录!');
+			return(false);
+		}
+		autolist(@tota);
+		@selid=list_work();
+		
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  
+ <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>"{ 	
+		$FD12=='0000';
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		rerun();
+	}"
+	</ONCLICK>
+ </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="9913 柜员长短款登记簿查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS="T(9913                    柜员长短款登记簿查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9598)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="10"   COL="15" TYPE="%-10s"  FUNCTIONS="T(交易柜员:)"/>
+  <ITEM LINE="12"   COL="15" TYPE="%-10s"  FUNCTIONS="T(交易日期:)"/>
+  <ITEM LINE="10"   COL="25" NAME="#TEL" INPUT="TEXT" TYPE="%6d"  FUNCTIONS="T($TLRNO)">
+  <ONLOSTFOCUS>
+  "{
+    if(#TEL!=$TLRNO){
+		  if($KINBR!='88002'){
+			  //showmsg('非清算中心不允许查询他行操作员信息!');
+			 // return(false);
+		  }	
+	  }
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"   COL="25" NAME="#TXDATE" INPUT="TEXT" TYPE="%-8s"  FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="21" COL="65"  TYPE="%-6s" NAME ="#QUERY"    FUNCTIONS="T(查  询)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @sql as string;
+	dim @tota as string;
+	dim @line as string;
+	dim @file as file;
+	dim @filename as string;
+	dim @tot_zf_amt as number;
+	dim @tot_xx_amt as number;
+	dim @dbl1 as number;
+	dim @dbl2 as number;
+	dim @stmp as string;
+	if(delspace(#TEL)==''){
+		@sql='select br_no,occ_date,seqn,amt,brf,tel,trace_no from mo_rmny_smny where tx_date='+#TXDATE;
+	}else{
+    @sql='select br_no,occ_date,seqn,amt,brf,tel,trace_no from mo_rmny_smny where tx_date='+#TXDATE+' and tel='+#TEL;
+	}
+	$FD123=@sql;
+	$TXNO='9598';
+	commsend_001();
+	@tota=callserver();	
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}	
+	if(@tota==''){
+		showmsg('未找到记录!');
+		return(false);
+	}
+
+
+	list_init(17,78,5,1);
+	list_setcolcnt(7);
+	list_setcol(0,'交易机构 ',9);	
+	list_setcol(1,'发生日期 ',9);	
+	list_setcol(2,' 序  号 ',8);	
+	list_setcol(3,'金额  ',21);
+	list_setcol(4,'交易说明 ',9);
+	list_setcol(5,'操作员 ',7);
+	list_setcol(6,'流水号  ',8);
+
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME+'.dat',@tota); 
+	@filename = '../tmp/'+$KINBR+$TTYNAME+'.dat';
+	list_load(@filename);
+
+	list_work();
+	list_del();
+
+	rerun();
+  }"
+  </ONCLICK>
+  </ITEM>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

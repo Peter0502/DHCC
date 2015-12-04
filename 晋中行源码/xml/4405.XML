@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="4405 贷款借据维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+	initfd();
+	$FD21 ='01';
+	$FD25=#DKNAME;
+	$FD26=#HKNAME;
+	$FD32=#FKACTNO;
+	$FD34=#CD34;
+	$FD35=#DKTERM;
+	$FD36=#CD36;
+	$FD38=#HKACTNO;
+	$FD39=space(16);
+	$FD40=itoa(#DKAMT*100, '%016.0f');
+	$FD63=#JJNO;
+	$FD66=#OPTYPE;
+	$FD67=#THIRD;
+	$FD82=#FKNAME;
+	$FD84=itoa(#DKRATE*1000000, '%08.0f');
+    commsend_001();
+    $FD16 = '3105';
+    $MSGTYPE='03001';
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(4405                         贷款借据维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=3105)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<!--  <ITEM LINE="6"  COL="5" TYPE="%-10s" FUNCTIONS="T(操作标志:!)"/> -->
+  <ITEM LINE="7"  COL="5" TYPE="%-10s" FUNCTIONS="T(借 据 号:)"/>
+  <ITEM LINE="8"  COL="5" TYPE="%-10s" FUNCTIONS="T(贷款户名:)"/>
+
+  <ITEM LINE="10" COL="5" TYPE="%-10s" FUNCTIONS="T(贷款期限:)"/>
+  <ITEM LINE="10" COL="21" TYPE="%-2s" FUNCTIONS="T(月)"/>
+  <ITEM LINE="10" COL="45" TYPE="%-12s" FUNCTIONS="T(合同月利率:)"/>
+  <ITEM LINE="10" COL="71" TYPE="%-2s" FUNCTIONS="T(‰)"/>
+  <ITEM LINE="11" COL="5" TYPE="%-10s" FUNCTIONS="T(贷款金额:)"/>
+  <ITEM LINE="13"  COL="5"  TYPE="%-70s" FUNCTIONS="T(------------------------------------------------------------------)"/>
+
+  <ITEM LINE="15" COL="5" TYPE="%-10s" FUNCTIONS="T(还款帐号:)"/>
+  <ITEM LINE="16" COL="5" TYPE="%-10s" FUNCTIONS="T(帐户名称:)"/>
+
+  <!----
+  <ITEM LINE="18" COL="5" TYPE="%-10s" FUNCTIONS="T(第 三 人:!)"/>
+  ---->
+  <ITEM LINE="19" COL="5" TYPE="%-10s" FUNCTIONS="T(放款帐号:)"/>
+  <ITEM LINE="20" COL="5" TYPE="%-10s" FUNCTIONS="T(帐户名称:)"/>
+
+  <!--输入变量-->
+	<ITEM NAME="#OPTYPE" TYPE="%-1s" FUNCTIONS="T(1)"/>
+<!--
+  <ITEM NAME="#OPTYPE" LINE="6"  COL="15" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="录入"/>
+		<OPTION VALUE="1" TITLE="修改"/>
+	</SELECT>
+	
+  </ITEM>
+-->
+  <ITEM NAME="#JJNO" LINE="7"  COL="15" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="">
+	<ONLOSTFOCUS>"{
+		if(len(#JJNO)!=18){
+			showmsg('借据号必须是18位!');
+			return(false);
+		}
+		if(#OPTYPE=='1')
+		{
+			commsend_001();
+			$FD16='9940';
+			$FD63=#JJNO;
+			$FD66=#OPTYPE;
+			callserver();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+			}
+			if('0' == $FD71){
+				showmsg('E--:'+'此笔借据已录入');
+				return(false);
+			}
+			#DKNAME=delspace($FD25);
+			#FKACTNO=delspace($FD32);
+			#DKTERM=$FD35;
+			#HKACTNO=delspace($FD38);
+			#DKAMT=val($FD40,0.01);
+			#DKRATE=val($FD84,0.000001);
+			enable(#JJNO,false);
+			enable(#DKNAME, false);
+			enable(#DKTERM, false);
+			enable(#DKRATE, false);
+			enable(#DKAMT, false);
+			refresh();
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#DKNAME" LINE="8"  COL="15" TYPE="%-60s"  INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#DKTERM" LINE="10" COL="15" TYPE="%4d"    INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#DKRATE" LINE="10" COL="57" TYPE="%9.6f"  INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#DKAMT"  LINE="11" COL="15" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#XDKAMT" TYPE="%-21s"  FUNCTIONS="X(#DKAMT)"/>
+
+  <ITEM NAME="#HKACTNO" LINE="15"  COL="15" TYPE="%-19s" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$TXNO='9938';
+		$FD21='01';
+		$FD25=#DKNAME;
+		$FD38=#HKACTNO;
+		commsend_001();
+		callserver();
+	  	$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//if(delspace($FD26)!=delspace(#DKNAME)){
+			//showmsg('贷款人与还款人不一致!');
+		//	return(false);
+		//}
+		#HKNAME=$FD26;
+		#FKACTNO=$FD38;
+		//showmsg($FD91);
+		//showmsg('交易机构:'+$KINBR);
+		if(delspace($FD91)!=$KINBR)
+		{
+		   showmsg('非本机构账户不能作为贷款还/存款帐号');
+		   return(false);
+		}
+		#CD34=$FD34;
+		show(#FKACTNO,true);
+		show(#HKNAME,true);
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#HKNAME" LINE="16"  COL="15" TYPE="%-60s" INPUT="TEXT" ENABLE="FALSE"  FUNCTIONS=""/>
+  <!----
+  <ITEM NAME="#THIRD" LINE="18"  COL="15" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(N)">
+	<SELECT>
+		<OPTION VALUE="N" TITLE="否"/>
+		<OPTION VALUE="Y" TITLE="是"/>
+	</SELECT>
+  ---->
+  <ITEM NAME="#THIRD" TYPE="%-1s"  FUNCTIONS="T(N)">
+	<ONLOSTFOCUS>"{
+		if(#THIRD=='N'){
+			#FKACTNO=#HKACTNO;
+		}else{
+			#FKACTNO='';
+		}
+		show(#FKACTNO,true);
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FKACTNO" LINE="19"  COL="15" TYPE="%-19s" INPUT="TEXT" FUNCTIONS="">
+	<ONLOSTFOCUS>"{
+		initfd();
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$TXNO='9937';
+		$FD21='01';
+		$FD25=#DKNAME;
+		$FD32=#FKACTNO;
+		$FD67=#THIRD;
+		commsend_001();
+		callserver();
+	  	$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#FKNAME=delspace($FD82);
+		show(#FKNAME,true);
+		#CD36=$FD36;
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FKNAME" LINE="20"  COL="15" TYPE="%-60s" INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#CD34" TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#CD36" TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#OPTYPENAME" TYPE="%-4s" FUNCTIONS="S(#OPTYPE,#OPTYPE)"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="贷款审批">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+	if(#OPTYPE == '1')
+	{
+		print(8,21,'贷款审批[4]成功!',#OPTYPENAME);
+	}
+	else
+	{
+		print(8,11,'贷款审批[4]成功!',#OPTYPENAME);
+	}
+     }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:4405');
+        print( 5, 13,'交易:贷款借据维护');
+        print( 8, 20,'借据号码: [20]',#JJNO);
+        print( 9, 20,'贷款户名: [60]',#DKNAME);
+        print(10, 20,'贷款期限: [4]月                   合同利率: [8]',#DKTERM,ltrim(itoa(#DKRATE,'%9.6f')));
+        print(11, 20,'贷款金额: [21]',#XDKAMT);
+        print(12, 20,'还款账号: [19]      放款账号: [19]',#HKACTNO,#FKACTNO);
+        print_sq();
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+     }"
+    </PRINT>
+</RESPONSE>
+</TRANSACTION>

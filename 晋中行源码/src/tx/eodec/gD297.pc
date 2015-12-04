@@ -1,0 +1,655 @@
+/*******************************************************************************
+* 文 件 名: gD297.c                                                            *
+* 功能描述：计算客户存款的应付利息
+*                                                                              *
+* 注意:本交易计算活期账户和定期账户客户应付利息;
+*	活期从上次结息日开始计算;
+* 	定期重开户起息日(ic_date)开始计算,针对自动转存定期未到期部分，
+*	按最后一次约定转存日开始的挂牌利率计息;
+*	未自动转存的逾期部分按活期计息; 
+*       该交易支持小管家和周周赢等理财业务的利息计算;
+*       承兑保证金额计息利率取mo_bail_rate,未在mo_bai_rate登记的部分，不进行计息处理
+* 注： 此交易可支持多线程，也支持分布提交，当异常失败后，再次调起时在失败处继续向下执行.
+*      
+* 修改人:WYW    修改日期: 20150605
+*                                                                              *
+*******************************************************************************/
+#define MYRETERR if(ret) \
+{ \
+    sprintf(acErrMsg,"RET[%d]",ret); \
+    WRITEMSG \
+    goto ErrExit; \
+}
+#define EXTERN
+/** 计提周期, X(月) **/
+#include <stdio.h>  
+#include <math.h>  
+
+#include "public.h"
+#include "com_branch_c.h"
+#include "com_sys_parm_c.h"
+#include "com_parm_c.h"
+#include "mo_bail_rate_c.h"
+#include "cif_payable_intst_reg_c.h"
+static int iCnt=0;
+static char wherelist[1025];
+static struct cif_payable_intst_reg_c cif_intst_reg;
+static char   sMax_prdt_no[5];
+static char   sOld_prdt_no[4];    
+static int   lMax_ac_id=0;
+static int    lMax_ac_seqn=0;  /* 20150730 BY WYW */
+EXEC SQL INCLUDE SQLCA;
+
+gD297()
+{
+    int ret=0;    
+    struct com_sys_parm_c com_sys_parm;    
+    iCnt = 0;
+    lMax_ac_id=0;
+    memset(wherelist , 0 , sizeof(wherelist));
+    memset(&com_sys_parm , 0 , sizeof(com_sys_parm));
+    memset(sMax_prdt_no,0x00,sizeof(sMax_prdt_no));    
+    /** 打开事务 **/
+    ret=sql_begin(); 
+    if(ret != 0)
+       MYRETERR
+	nOpenBatchLog();
+    /** 初始化全局变量 **/
+    pub_base_sysinit();
+    ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm,"1=1");
+    g_pub_tx.tx_date = com_sys_parm.sys_date;
+    if(sql_execute("delete from cif_payable_tmp where end_date != %ld",com_sys_parm.sys_date))
+    {
+		vtcp_log("%s,%d,删除cif_payable_tmp失败!",__FILE__,__LINE__);
+		goto ErrExit;
+    }
+	/* 获取当天插入最大产品号和账户序号 */
+	if(sql_max_string("cif_payable_tmp","prdt_no",sMax_prdt_no,3,"%s end_date=%ld ",wherelist,g_pub_tx.tx_date ))
+    {
+		vtcp_log("%s,%d,查找最大产品失败!",__FILE__,__LINE__);
+		goto ErrExit;
+    }
+    pub_base_strpack(sMax_prdt_no);
+    if(strlen(sMax_prdt_no)>0)
+    {
+    	lMax_ac_id=sql_max_int("cif_payable_tmp","ac_id","%s end_date=%ld and prdt_no='%s'",wherelist,g_pub_tx.tx_date,sMax_prdt_no);
+    	vtcp_log("%s,%d,lMax_ac_id[%ld][%s]",__FILE__,__LINE__,lMax_ac_id,sMax_prdt_no);
+    	/* 20150730 BY WYW 添加一个序号 */	
+    	lMax_ac_seqn=sql_max_int("cif_payable_tmp","ac_seqn","%s end_date=%ld and prdt_no='%s' and ac_id=%ld",wherelist,g_pub_tx.tx_date,sMax_prdt_no,lMax_ac_id);
+    	vtcp_log("%s,%d,lMax_ac_id[%ld][%s][%d]",__FILE__,__LINE__,lMax_ac_id,sMax_prdt_no,lMax_ac_seqn);	
+    }else{
+    	strcpy(sMax_prdt_no,"000");
+    }
+    memset(wherelist,0x00,sizeof(wherelist));
+    get_fd_data("0950",wherelist); 
+    pub_base_DelSpace(wherelist,strlen(wherelist));
+    ret=igD0297_calculate_hq_intst();
+    if(ret)
+    {
+		vtcp_log("%s,%d,计算活期客户利息失败!",__FILE__,__LINE__);
+		goto ErrExit;
+    }
+
+    ret=igD0297_calculate_dq_intst();
+    if(ret)
+    {
+		vtcp_log("%s,%d,计算活期客户利息失败!",__FILE__,__LINE__);
+		goto ErrExit;
+    }
+
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	nCloseBatchLog();
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	nCloseBatchLog();
+	return 1;
+}
+/* 计算所有活期存款应付利息 */
+int igD0297_calculate_hq_intst()
+{  
+    /* 20150604 BY WYW */
+	EXEC SQL BEGIN DECLARE SECTION;    
+    	char ex_ac_no[33];
+    	long ex_ac_id;
+	EXEC SQL END DECLARE SECTION;
+	int    ret=0;
+	long   lCal_days=0.00;
+    long   lE_date=0;	
+	double dTot_bail_amt=0.00;	
+    double dd_rate  = 0.0;
+    double td_rate = 0.00;
+    double dMst_intst  = 0.00 ;/* 主档利息*/
+    double dSect_intst = 0.00 ;/* 分段利息*/
+    double sig_intst = 0.0;    
+    double dTot_mst_intst = 0.00 ;/*去税后利息*/
+    double dTot_mst_intst_tax = 0.00 ;/*带税利息*/    
+    struct mo_bail_rate_c	mo_bail_rate;
+    memset(sOld_prdt_no,0x00,sizeof(sOld_prdt_no));    
+    memset(&cif_intst_reg, 0x00 , sizeof(cif_intst_reg));
+    memset(&g_dd_parm, 0 , sizeof(g_dd_parm));    
+	iCnt=0;
+    /** 取流水号 **/
+    if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+    {
+        sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+        WRITEMSG
+        goto ErrExit;
+    }
+    set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+    strcpy( g_pub_tx.tx_code, "D297" );
+    strcpy(sOld_prdt_no,"***");
+    /** 根据定期产品取利率 **/
+    ret = pub_base_getllz("100","01",g_pub_tx.tx_date,&dd_rate);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"取利率错误![%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"W110");
+        return ret;
+    }
+    g_pub_tx.ac_id_type[0]='1'; /* 活期类型 */
+    /* 计算活期账户的应付利息,一般存款、保证金存款、一户通、周周盈 *
+    本函数处理所有计息的正常客户存款，若本行保证金存款dd_mst.intst_type都不为0，则可添加的intst_type != '0'的条件 
+    prdt_no和ac_id的条件是避免重复处理当日已处理数据 */
+    vtcp_log("%s,%d,lMax_ac_id[%ld][%s]",__FILE__,__LINE__,lMax_ac_id,sMax_prdt_no);    
+   /*  ret = Dd_mst_Dec_Sel( g_pub_tx.reply , " %s  prdt_no>='%s' and ac_id > %ld  and \
+     ac_sts ='1'  order by prdt_no,ac_id",wherelist,sMax_prdt_no,lMax_ac_id);
+     20150730 BY WYW 添加查询条件prdt_no>'%s' */
+    ret = Dd_mst_Dec_Sel( g_pub_tx.reply , " %s  ((prdt_no='%s' and ac_id*10000+ac_seqn>%ld) or prdt_no>'%s')   and \
+     ac_sts ='1'  order by prdt_no,ac_id",wherelist,sMax_prdt_no,lMax_ac_id*10000+lMax_ac_seqn,sMax_prdt_no);     
+    if(ret)
+    {
+        sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }
+    while(1)
+    {
+        lCal_days = 0;
+        sig_intst = 0.0;
+        dTot_mst_intst=0.00;
+        dTot_mst_intst_tax=0.00;
+        ex_ac_id=0;
+        memset(ex_ac_no,0x00,sizeof(ex_ac_no));
+        memset(&g_dd_mst , 0 , sizeof(g_dd_mst));
+        memset(&g_pub_intst,0x00,sizeof(g_pub_intst));
+        ret = Dd_mst_Fet_Sel( &g_dd_mst,g_pub_tx.reply);
+        if(ret==100)
+        	 break;
+       	else  if(ret)
+        {
+            sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+            WRITEMSG
+            goto ErrExit;
+        }
+        
+        vtcp_log("[%s][%d]ac_id==[%ld]\n",__FILE__,__LINE__,g_dd_mst.ac_id);                
+        /* 更换产品时重新查询 */
+		if(memcmp(g_dd_mst.prdt_no,sOld_prdt_no,3))
+		{
+			/** 取产品信息 **/
+			ret = Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no='%s'",g_dd_mst.prdt_no);
+			if(ret)
+			{
+			    sprintf(acErrMsg,"查找活期期帐户错误![%s]",g_dd_mst.prdt_no);
+			    WRITEMSG
+			    goto ErrExit;
+			} 
+			strcpy(sOld_prdt_no,g_dd_parm.prdt_no);
+			strcpy(g_pub_tx.cur_no,g_dd_parm.cur_no);
+	    }   
+        vtcp_log("[%s][%d] prdt_no[%s][title=[%s]rate_no[%s]",__FILE__,__LINE__,g_dd_parm.prdt_no,g_dd_parm.title,g_dd_parm.rate_no);
+
+        if(memcmp(g_dd_mst.prdt_no,"131",3)==0||memcmp(g_dd_mst.prdt_no,"132",3)==0||memcmp(g_dd_mst.prdt_no,"133",3)==0||memcmp(g_dd_mst.prdt_no,"134",3)==0\
+        			||memcmp(g_dd_mst.prdt_no,"135",3)==0||memcmp(g_dd_mst.prdt_no,"136",3)==0||memcmp(g_dd_mst.prdt_no,"137",3)==0) /* 注意长治只有131承兑保证金产品,如果其他地方不能确定哪些产品登记了mo_bail_rate,\
+        		则可以去掉if条件,对所有账户进行mo_bail_rate循环 */
+        {
+        	ex_ac_id=g_dd_mst.ac_id;
+			EXEC SQL select ac_no into :ex_ac_no from mdm_ac_rel where ac_id = :ex_ac_id and note_sts ='0';
+			pub_base_strpack(ex_ac_no);
+        	/* 承兑保证金类存款 */
+        	ret=Mo_bail_rate_Dec_Sel(g_pub_tx.reply,"bail_ac_no='%s' and  sts='1' and amt>0.00 ",ex_ac_no);
+        	if(ret)
+        	{
+        		vtcp_log("%s,%d,打开mo_bail_rate游标失败![%s]",__FILE__,__LINE__,ex_ac_no);
+        		goto ErrExit;
+        	}
+        	/* 循环完毕后，mo_bail_rate内的合计计息金额(amt)，若小于分户余额则剩余部分，默认为不计息；\
+        	若累计计息额度大于分户余额，则该保证金存在问题需排查 */
+        	while(1)
+        	{
+        		td_rate=0.00;
+        		dd_rate=0.00;
+        		sig_intst=0.00;
+        		memset(&mo_bail_rate,0x00,sizeof(mo_bail_rate));
+        		ret=Mo_bail_rate_Fet_Sel(&mo_bail_rate,g_pub_tx.reply);
+        		if(ret == 100)
+        		{
+        			break;
+				}else if(ret)
+        		{
+        			vtcp_log("%s,%d,打开mo_bail_rate游标失败![%s]",__FILE__,__LINE__,ex_ac_no);
+        			goto ErrExit;
+        		}
+        		dTot_bail_amt += mo_bail_rate.amt;
+        		/* 0.按实际天数 1.按每月30天 */
+        		if(mo_bail_rate.end_date < g_pub_tx.tx_date)
+        		{
+        			g_pub_tx.tx_amt1=g_dd_mst.bal;
+        			/** 根据定期产品取利率 **/
+        			ret = pub_base_getllz(g_dd_parm.rate_no,g_dd_parm.cur_no,g_pub_tx.tx_date,&dd_rate);
+        			if (ret != 0)
+        			{
+        			    sprintf(acErrMsg,"取利率错误![%d]",ret);
+        			    WRITEMSG
+        			    strcpy(g_pub_tx.reply,"W110");
+        			    return ret;
+        			}
+        			lE_date=mo_bail_rate.end_date;
+        			/* 先计算活期利息 */
+        			lCal_days=0;
+        			pub_base_CalDays(mo_bail_rate.end_date,g_pub_tx.tx_date,g_dd_parm.intst_term_type,&lCal_days);
+        			vtcp_log("%s,%d,保证金起始日期end_date[%ld]tx_date[%ld]lCaldays[%ld]amt[%lf]rate[%lf]",__FILE__,__LINE__,\
+        			mo_bail_rate.end_date,g_pub_tx.tx_date,lCal_days,mo_bail_rate.amt,dd_rate);
+ 					sig_intst = dd_rate * mo_bail_rate.amt * lCal_days / L360 / L100;
+ 					dTot_mst_intst += sig_intst;
+ 					dTot_mst_intst_tax += sig_intst;
+        		}else{
+        			lE_date=g_pub_tx.tx_date;
+        		}
+        		if(g_dd_parm.intst_term_type[0]=='0'||g_dd_parm.intst_term_type[0]=='1')
+        		{
+        			pub_base_CalDays(mo_bail_rate.beg_date,lE_date,g_dd_parm.intst_term_type,&lCal_days);
+        		}else{
+        			vtcp_log("%s,%d,活期账户的计息类型错误[%s]",__FILE__,__LINE__);
+        			strcpy(g_pub_tx.reply,"D103");
+        			goto ErrExit;
+        		}
+ 				sig_intst = mo_bail_rate.ic_rate * mo_bail_rate.amt * lCal_days / L360 / L100;
+        		vtcp_log("%s,%d,保证金起始日期end_date[%ld]tx_date[%ld]lCaldays[%ld]amt[%lf]rate[%lf]",__FILE__,__LINE__,\
+        			mo_bail_rate.beg_date,mo_bail_rate.end_date,lCal_days,mo_bail_rate.amt,mo_bail_rate.ic_rate); 				
+ 				dTot_mst_intst += sig_intst;
+ 				dTot_mst_intst_tax += sig_intst;
+        		vtcp_log("%s,%d,保证金起始日期intst[%lf]intst[%lf]",__FILE__,__LINE__,dTot_mst_intst,dTot_mst_intst_tax); 	 				
+        	}
+			Mo_bail_rate_Clo_Sel();
+        }else{
+        	/* 计算积数 */
+        	if( pub_base_CalAcm(g_dd_mst.lst_date,g_pub_tx.tx_date,
+            	g_dd_parm.intst_term_type,g_dd_parm.acm_calc_type,
+            g_dd_mst.bal,0.00,&g_dd_mst.intst_acm,
+            g_dd_mst.intst_type,g_dd_parm.intst_mon,g_dd_parm.intst_day) )
+        	{
+            	sprintf(acErrMsg,"计算利息积数错误!");
+            	WRITEMSG
+           	 goto ErrExit;
+        	}
+        	
+        	/* 除了承兑保证金外活期存款,按活期计息函数pub_base_CalIntst的计息规则 */
+        	/* 20150701 BY WYW 判断计息标志为0，则不进行计息处理*/
+        	if(g_dd_mst.intst_type[0] != '0')
+        	{
+        		ret=pub_base_CalIntst(&g_pub_intst);
+        		if(ret)
+        		{
+        			vtcp_log("%s,%d,计算活期利息错误[%s]",__FILE__,__LINE__);
+        			Dd_mst_Debug(&g_dd_mst);
+        			goto ErrExit;
+        		}
+        	}
+        	dTot_mst_intst=g_pub_intst.factval; /* 实际利息 */
+        	dTot_mst_intst_tax=g_pub_intst.dealval;
+        }
+		dTot_mst_intst=pub_base_PubDround_1(dTot_mst_intst);
+		dTot_mst_intst_tax=pub_base_PubDround_1(dTot_mst_intst_tax);
+		vtcp_log("%s,%d,活期应付利息为[%lf]",__FILE__,__LINE__,dTot_mst_intst);
+        memset(&cif_intst_reg,0x00,sizeof(cif_intst_reg));
+        cif_intst_reg.ac_id=g_dd_mst.ac_id;
+        cif_intst_reg.ac_seqn=g_dd_mst.ac_seqn;
+		cif_intst_reg.cif_no=g_dd_mst.cif_no;        
+        cif_intst_reg.beg_date=g_dd_mst.ic_date;
+        strcpy(cif_intst_reg.ac_no,ex_ac_no);
+        strcpy(cif_intst_reg.name,g_dd_mst.name);
+        cif_intst_reg.end_date=g_pub_tx.tx_date;
+        strcpy(cif_intst_reg.prdt_no,g_dd_mst.prdt_no);
+        strcpy(cif_intst_reg.opn_br_no,g_dd_mst.opn_br_no);
+	/* 20150701 BY WYW */
+	if(g_dd_mst.lst_date==g_pub_tx.tx_date)
+	{
+        	cif_intst_reg.bal=g_dd_mst.ys_bal;
+	}else{
+        	cif_intst_reg.bal=g_dd_mst.bal;
+	}
+
+        cif_intst_reg.intst=dTot_mst_intst;
+        cif_intst_reg.intst_tax=dTot_mst_intst_tax;      
+        vtcp_log("BBBBBBB[%ld][%ld]",cif_intst_reg.intst,cif_intst_reg.intst_tax);
+        strcpy(cif_intst_reg.opn_br_no,g_dd_mst.opn_br_no);
+        cif_intst_reg.rate=dd_rate;
+        cif_intst_reg.tx_date=g_pub_tx.tx_date;        
+        cif_intst_reg.trace_no=g_pub_tx.trace_no;
+        ret=Cif_payable_intst_reg_Ins(cif_intst_reg,g_pub_tx.reply);
+        if(ret)
+        {
+        	 Cif_payable_intst_reg_Debug(&cif_intst_reg);
+             sprintf(acErrMsg,"插入存款利息登记簿错误![%d]",ret);
+             WRITEMSG
+             goto ErrExit;
+        }
+        iCnt++;
+        /*每1000笔一提交处理*/
+        if(iCnt>0 && iCnt%1000==0)
+        {
+        		ret=Cif_payable_tmp_Ins(cif_intst_reg,g_pub_tx.reply);
+        		if(ret)
+        		{
+        			 Cif_payable_intst_reg_Debug(&cif_intst_reg);
+        		     sprintf(acErrMsg,"插入存款利息登记簿错误![%d]",ret);
+        		     WRITEMSG
+        		     goto ErrExit;
+        		}
+        	    sql_commit();
+   				sql_begin();
+        }
+    }
+    Dd_mst_Clo_Sel ();
+
+OkExit:
+	vtcp_log("%s,%d,活期计息处理完毕![%d]",__FILE__,__LINE__,iCnt);
+    /* 活期处理完毕后进行提交 */
+    sql_commit();
+    sql_begin();
+    return(0);
+ErrExit:
+	vtcp_log("%s,%d,活期计息处理失败![%s]",__FILE__,__LINE__,iCnt);	
+	return(-1);
+}
+/* 
+包含内容:计算定期应付利息,包括整整、零整、教育、定活、小管家、同业存放、通知存款，其他各类定期存款
+修改日期: 2015年06月05日
+*/
+int igD0297_calculate_dq_intst()
+{
+    int    ret = 0;
+    long   lCal_days = 0;
+    int    l_term = 0;
+    long   is_date = 0;
+    long   lE_date=0;
+	long   lLst_mtr_date=0;    
+    long   lTmp_mtr_date = 0;
+	long   lTmp_tx_date=0;
+	long   lTmp_ic_date=0;
+	long   lTmp_opn_date=0;
+	
+    double dTot_mst_intst = 0.00 ; 
+   double dTot_mst_intst_tax = 0.00 ;/*带税利息*/      
+    double dTmp_bal=0.00;
+	iCnt=0;
+    /** 取流水号 **/
+    if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+    {
+        sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+        WRITEMSG
+        goto ErrExit;
+    }
+    set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+    strcpy( g_pub_tx.tx_code, "D297" );
+    strcpy(sOld_prdt_no,"***");    
+    g_pub_tx.ac_id_type[0]='2'; /* 定期类型 */
+
+    /* 计算所有计息的正常客户定期存款*/
+    /*20150730 BY WYW 添加prdt_no>'%s'
+    ret = Td_mst_Dec_Sel( g_pub_tx.reply , " %s prdt_no>='%s' and ac_id>%ld and intst_type<>'0' and ac_sts ='1'  \
+    order by prdt_no,ac_id",wherelist,sMax_prdt_no,lMax_ac_id);
+    */
+    ret = Td_mst_Dec_Sel( g_pub_tx.reply , " %s ((prdt_no='%s' and ac_id*10000+ac_seqn>%ld) or prdt_no>'%s') and intst_type<>'0' and ac_sts ='1'  \
+    order by prdt_no,ac_id",wherelist,sMax_prdt_no,lMax_ac_id*10000+lMax_ac_seqn,sMax_prdt_no);
+    if(ret)
+    {
+        sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+        WRITEMSG
+		goto ErrExit;
+    }
+    while(1)
+    {
+    	dTot_mst_intst=0.00;
+    	dTot_mst_intst_tax=0.00;
+		lLst_mtr_date=0;    
+		lTmp_mtr_date = 0;
+		lTmp_tx_date=0;
+		lTmp_ic_date=0;
+		lTmp_opn_date=0;
+		dTmp_bal=0.00;
+		lE_date=0;
+        memset(&g_td_mst , 0 , sizeof(g_td_mst));
+        memset(&g_pub_intst,0x00,sizeof(g_pub_intst));
+        g_pub_intst.edu_ind[0]='Y';
+        g_pub_intst.mode=1;
+        ret = Td_mst_Fet_Sel( &g_td_mst,g_pub_tx.reply);
+        if(ret==100)
+        	 break;
+        else if(ret)
+        {
+            sprintf(acErrMsg,"查找定期帐户错误![%d]",ret);
+            WRITEMSG
+            goto ErrExit;
+        }
+        /* 更换产品时重新查询 */
+		if(memcmp(g_td_mst.prdt_no,sOld_prdt_no,3))
+		{
+			/** 取产品信息 **/
+			ret = Td_parm_Sel(g_pub_tx.reply,&g_td_parm,"prdt_no='%s'",g_td_mst.prdt_no);
+			if(ret)
+			{
+			    sprintf(acErrMsg,"查找活期期帐户错误![%s]",g_td_mst.prdt_no);
+			    WRITEMSG
+			    goto ErrExit;
+			} 
+			strcpy(sOld_prdt_no,g_td_parm.prdt_no);
+			strcpy(g_pub_tx.cur_no,g_td_parm.cur_no);
+	    }
+        /*** 调用计算利息积数的函数 **** 定额续取 定额续存 教育储蓄*/
+        if( g_td_parm.td_type[0] == '2' || g_td_parm.td_type[0] == '1' ||
+                g_td_parm.td_type[0] == '7' )
+        {
+                if( pub_base_CalAcm(g_td_mst.lst_date, g_pub_tx.tx_date>g_td_mst
+.mtr_date?g_td_mst.mtr_date:g_pub_tx.tx_date,
+                        g_td_parm.intst_term_type,g_td_parm.acm_calc_mode,
+                        g_td_mst.bal,-g_pub_tx.tx_amt1,&g_td_mst.intst_acm,
+                        g_td_mst.intst_type,g_td_parm.intst_mon,g_td_parm.intst_day) )
+                {
+                        sprintf(acErrMsg,"计算利息积数错误!");
+                        WRITEMSG
+                        goto ErrExit;
+                }
+        }
+        vtcp_log("[%s][%d]利率编号rate_no==[%s]\n",__FILE__,__LINE__,g_td_parm.rate_no);
+        /* 只有理财型通知存款和整存整取存款支持自动转存 */
+        if(g_td_mst.tfr_ind[0] == 'Y' && (g_td_parm.td_type[0] =='0'||g_td_parm.td_type[0] =='8')) /** 自动转存 **/
+        {
+         		vtcp_log("%s,%d,走入自动转存分支![%ld][%ld]",__FILE__,__LINE__,g_td_mst.ac_id,g_pub_tx.tx_date);            
+                /* 当到期日大于当前日期时*/
+                if (g_td_mst.mtr_date < g_pub_tx.tx_date) 
+				{
+						lTmp_mtr_date=g_td_mst.mtr_date;
+						lTmp_ic_date=g_td_mst.ic_date;
+						lTmp_tx_date=g_pub_tx.tx_date;
+						lTmp_opn_date=g_td_mst.opn_date;
+						dTmp_bal=g_td_mst.bal;
+						
+						lE_date=g_td_mst.mtr_date;
+						lLst_mtr_date=lE_date;
+						while(lE_date<g_pub_tx.tx_date)
+						{
+							if (g_td_parm.term_type[0] == 'D') 
+							{
+							    l_term = g_td_parm.term;
+							    pub_base_deadlineD(lE_date, l_term, &is_date);
+							} 
+							else if (g_td_parm.term_type[0] == 'Y') 
+							{
+							    l_term = g_td_parm.term * 12;
+							    pub_base_deadlineM(lE_date, l_term, &is_date);
+							} 
+							else if (g_td_parm.term_type[0] == 'M') 
+							{
+							    l_term = g_td_parm.term;
+							    pub_base_deadlineM(lE_date, l_term, &is_date);
+							}
+							lLst_mtr_date=lE_date;
+							lE_date=is_date;
+						}
+						/* 计算到期部分的利息 */
+         				/* 针对与不自动转存的与销户时的计息方式一致 */
+         				vtcp_log("%s,%d,获取最后一期到期日为[%ld][%ld][%ld]",__FILE__,__LINE__,lLst_mtr_date,lE_date,g_pub_tx.tx_date);
+         				g_pub_tx.tx_date=lLst_mtr_date;
+         				g_pub_tx.tx_amt1=g_td_mst.bal;
+         				ret=pub_base_CalIntst(&g_pub_intst);
+         				if(ret)
+         				{
+         					Td_mst_Debug(&g_td_mst);
+         					vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+         					goto ErrExit;
+         				}
+         				dTot_mst_intst += g_pub_intst.factval;
+         				dTot_mst_intst_tax += g_pub_intst.dealval;         				
+         				g_td_mst.ic_date=lLst_mtr_date;
+         				g_td_mst.opn_date=lLst_mtr_date;         				
+         				g_td_mst.mtr_date=lTmp_tx_date;
+         				g_pub_tx.tx_date=lTmp_tx_date;
+         				/* 计算未到期部分的利息，也按定期计算 */
+         				g_pub_tx.tx_amt1=g_td_mst.bal+g_pub_intst.factval;
+         				ret=pub_base_CalIntst(&g_pub_intst);
+         				if(ret)
+         				{
+         					Td_mst_Debug(&g_td_mst);
+         					vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+         					goto ErrExit;
+         				}
+         				dTot_mst_intst += g_pub_intst.factval;
+         				dTot_mst_intst_tax += g_pub_intst.dealval;
+         				g_td_mst.bal=dTmp_bal;
+         				g_td_mst.ic_date=lTmp_ic_date;
+         				g_td_mst.opn_date=lTmp_opn_date;         				
+         				g_td_mst.mtr_date=lTmp_mtr_date;
+				}
+                else 
+                {
+					/* 将今天置为账户到期日，是利息按定期利息计算 */
+					lTmp_mtr_date=g_td_mst.mtr_date;
+					g_td_mst.mtr_date=g_pub_tx.tx_date;
+					g_pub_tx.tx_amt1=g_td_mst.bal;
+         			/* 针对与不自动转存的与销户时的计息方式一致 */
+         			ret=pub_base_CalIntst(&g_pub_intst);
+         			if(ret)
+         			{
+         				Td_mst_Debug(&g_td_mst);
+         				vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+         				goto ErrExit;
+         			}
+         			g_td_mst.mtr_date=lTmp_mtr_date;
+         			dTot_mst_intst = g_pub_intst.factval;
+         			dTot_mst_intst_tax=g_pub_intst.dealval;
+                }
+        }
+        else/***不是自动转存的***/
+        {
+         	/* 针对与不自动转存的与销户时的计息方式一致 */
+         	vtcp_log("%s,%d,走入非自动转存分支![%ld],[%ld]mtr_date[%ld]",__FILE__,__LINE__,g_td_mst.ac_id,g_pub_tx.tx_date,g_td_mst.mtr_date);
+         	if(g_td_mst.mtr_date<g_pub_tx.tx_date)
+         	{       
+         		/* 判断若是正规通知存款需先登记mo_infrm,否则都按活期算息了 */
+         		if(g_td_parm.td_type[0]=='4')
+         		{
+         			g_pub_intst.mode=3; /* 不按销户计息算 */
+         		}
+				g_pub_tx.tx_amt1=g_td_mst.bal;         	
+         		ret=pub_base_CalIntst(&g_pub_intst);
+         		if(ret)
+         		{
+         			Td_mst_Debug(&g_td_mst);
+         			vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+         			goto ErrExit;
+         		}
+         	}else{
+				/* 将今天置为账户到期日，是利息按定期利息计算 */
+				lTmp_mtr_date=g_td_mst.mtr_date;
+				g_td_mst.mtr_date=g_pub_tx.tx_date;
+				g_pub_tx.tx_amt1=g_td_mst.bal;
+         		/* 针对与不自动转存的与销户时的计息方式一致 */
+         		ret=pub_base_CalIntst(&g_pub_intst);
+         		if(ret)
+         		{
+         			Td_mst_Debug(&g_td_mst);
+         			vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+         			goto ErrExit;
+         		}
+         		g_td_mst.mtr_date=lTmp_mtr_date;           		
+        	}
+         	dTot_mst_intst=g_pub_intst.factval;
+         	dTot_mst_intst_tax=g_pub_intst.dealval;
+        }
+        memset(&cif_intst_reg,0x00,sizeof(cif_intst_reg));
+        cif_intst_reg.ac_id=g_td_mst.ac_id;
+        cif_intst_reg.ac_seqn=g_td_mst.ac_seqn;
+        cif_intst_reg.cif_no=g_td_mst.cif_no;
+        strcpy(cif_intst_reg.name,g_td_mst.name);
+        cif_intst_reg.beg_date=g_td_mst.ic_date;
+        cif_intst_reg.end_date=g_pub_tx.tx_date;
+        cif_intst_reg.bal=g_td_mst.bal;
+        cif_intst_reg.tx_date=g_pub_tx.tx_date;
+        cif_intst_reg.trace_no=g_pub_tx.trace_no;
+        strcpy(cif_intst_reg.prdt_no,g_td_mst.prdt_no);
+        cif_intst_reg.tx_date=g_pub_tx.tx_date;
+        strcpy(cif_intst_reg.opn_br_no,g_td_mst.opn_br_no);
+        cif_intst_reg.intst=dTot_mst_intst;
+        cif_intst_reg.intst_tax=dTot_mst_intst_tax;
+        vtcp_log("AAAAAAA[%ld][%ld]",cif_intst_reg.intst,cif_intst_reg.intst_tax);
+        strcpy(cif_intst_reg.opn_br_no,g_td_mst.opn_br_no);
+		cif_intst_reg.rate=g_td_mst.rate;
+        vtcp_log("[%s][%d]intst_acm=[%lf]\n",__FILE__,__LINE__,cif_intst_reg.intst_acm);
+        ret=Cif_payable_intst_reg_Ins(cif_intst_reg,g_pub_tx.reply);
+        if(ret)
+        {
+             sprintf(acErrMsg,"插入计提登记簿错误![%d]",ret);
+             WRITEMSG
+             goto ErrExit;
+        }
+        iCnt++;        
+        if(iCnt >0 && iCnt%1000==0)
+        {
+        	ret=Cif_payable_tmp_Ins(cif_intst_reg,g_pub_tx.reply);
+        	if(ret)
+        	{
+        		 Cif_payable_intst_reg_Debug(&cif_intst_reg);
+        	     sprintf(acErrMsg,"插入存款利息登记簿错误![%d]",ret);
+        	     WRITEMSG
+        	     goto ErrExit;
+        	}
+        	sql_commit();
+        	sql_begin();
+        }
+    }
+    Td_mst_Clo_Sel ();
+
+OkExit:
+	vtcp_log("%s,%d,计算定期存款利息成功!",__FILE__,__LINE__);
+    sql_commit();
+    sql_begin();	
+	return 0;
+ErrExit:
+	vtcp_log("%s,%d,计算定期存款利息失败!",__FILE__,__LINE__);
+	return ret;
+}

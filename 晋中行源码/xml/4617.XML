@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01100000000000000000000000000000" TITLE="4617  本代他柜面冲正"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<USERFUN NAME="saveprint">
+"{      
+        //用于补打凭证
+       	dim @file as file;
+       	dim @swtraceno as string;
+       	dim @traceno as string;
+       	dim @line as string;
+  	dim @txamt as string;
+  	dim @otxname as string;
+  	dim @otxtype as string;
+  	dim @txtime  as string;
+  	dim @txfee as string;
+  	dim @feeamt as number;
+  	dim @oswtraceno as string;  //原平台流水号
+  	@feeamt=val(substr($FD88,1,8),0.01);
+       	
+       	//写文件，用于补打流水
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);  	
+       	@swtraceno = substr($FD52,6,6);
+       	@traceno = $FD4; 
+       	@otxtype = itoa(#OTXTYPE);
+       	@otxname = #OTXNAME;
+       	@txamt = ltrim(comma(itoa(#TXAMT,'%15.2f'),16));
+        @oswtraceno = itoa(#OYYTRACENO);
+	@file=openfile('../dat/YYHZ_'+$HDATE+'_'+$TLRNO+'_'+@swtraceno+'.dat','ab');
+	@line = '7617';
+	writeline(@file, @line);
+	@line = @swtraceno + '|' + @traceno + '|' + #CARDNO + '|' + @txamt + '|' + @txtime + '|' +  @oswtraceno+ '|'+  @otxtype + '|'+ @otxname + '|';
+	writeline(@file, @line);
+       	
+	closefile(@file);	
+				
+}"
+</USERFUN>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4617                 本代他柜面冲正)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7617)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   
+  <!-- 本代他卡折冲正输入项显示 -->
+  <ITEM LINE="7"   COL="15" TYPE="%-12s" FUNCTIONS="T(原交易种类:)"/>
+  <ITEM LINE="8"  COL="15"  TYPE="%-12s"  FUNCTIONS="T(原开  户行:)"/>
+  <ITEM LINE="9"   COL="15" TYPE="%-12s" FUNCTIONS="T(原卡折号码:)"/>
+  <ITEM LINE="10"  COL="15" TYPE="%-12s" FUNCTIONS="T(原操  作员:)"  />
+  <ITEM LINE="11"  COL="15" TYPE="%-12s" FUNCTIONS="T(原平台流水:)"/>
+  <ITEM LINE="12"  COL="15" TYPE="%-12s" FUNCTIONS="T(冲正  金额:)"/>
+  <ITEM LINE="13"  COL="15" NAME="#LAB1" INPUT="LABEL" VISABLE="FALSE" TYPE="%-14s" FUNCTIONS="T(原存款检索号:)"/>
+  <ITEM LINE="14"  COL="15" TYPE="%-12s" FUNCTIONS="T(冲正  原因:)"/>
+
+  <ITEM LINE="7" COL="27" NAME="#OTXTYPE" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="T(4)V(NB)">
+    <!--SELECT LINE="9" COL="27">
+	    <OPTION VALUE="0" TITLE="存款"/>
+	    <OPTION VALUE="1" TITLE="取款"/>
+	    <OPTION VALUE="2" TITLE="转账"/>
+	    <OPTION VALUE="3" TITLE="取款补账"/>
+    </SELECT-->
+    <SELECT LINE="9" COL="27">
+	    <OPTION VALUE="0" TITLE="有卡存款"/>
+	    <OPTION VALUE="1" TITLE="无卡存款"/>
+	    <OPTION VALUE="2" TITLE="有折存款"/>
+	    <OPTION VALUE="3" TITLE="无折存款"/>
+	    <OPTION VALUE="4" TITLE="卡取款"/>
+	    <OPTION VALUE="5" TITLE="折取款"/>
+	    <OPTION VALUE="6" TITLE="转账-卡转出"/>
+	    <OPTION VALUE="7" TITLE="转账-折转出"/>
+    </SELECT>
+  <ONLOSTFOCUS>
+  "{
+  	$FD22='08';
+  
+        if(#OTXTYPE == '0' or #OTXTYPE=='1' or #OTXTYPE=='2' or #OTXTYPE=='3' )
+        {
+           show(#LAB1,true);
+           enable(#OYY37,true);    
+        }
+        else
+        {
+          show(#LAB1,false);
+          enable(#OYY37,false); 
+        }
+   }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM NAME="#STEP1"  TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$TXNO='7605';
+	$FD22='08';
+	commsend_001();
+	@tota=callagn(); 
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	$TXNO=@txno_bak;
+	setsel(#BANKCODE,@tota,'o5t20o1v8o2');  
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>   
+
+  <ITEM LINE="8" COL="27" NAME="#BANKCODE" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="T(03090000)V(NB)">
+  <SELECT>
+	<OPTION VALUE="03090000" TITLE="兴业银行"/>
+	</SELECT>
+  </ITEM>
+  
+  
+  <ITEM LINE="9" COL="27" NAME="#CARDNO" TYPE="%-19s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <!--ITEM NAME="#OTXNAME"  TYPE="%-10s"   FUNCTIONS="j(#OTXTYPE=0,T{存款})j(#OTXTYPE=1,T{取款})j(#OTXTYPE=2,T{转账})j(#OTXTYPE=3,T{取款补账})"/-->
+  <!---ITEM NAME="#OTXNAME"  TYPE="%-10s"   FUNCTIONS="j(#OTXTYPE=0,T{有卡存款})j(#OTXTYPE=1,T{无卡存款})j(#OTXTYPE=2,T{有折存款})j(#OTXTYPE=3,T{无折存款})j(#OTXTYPE=4,T{卡取款})j(#OTXTYPE=5,T{折取款}j(#OTXTYPE=6,T{卡转出}j(#OTXTYPE=7,T{折转出})"/----->
+  <ITEM NAME="#OTXNAME"  TYPE="%-12s"   FUNCTIONS="S(#OTXTYPE,#OTXTYPE)"/>
+  <ITEM LINE="10" COL="27" NAME="#OTLRNO" TYPE="%-6s" INPUT="LABEL" FUNCTIONS="T($TLRNO)"/>
+  <ITEM LINE="11" COL="27" NAME="#OYYTRACENO" TYPE="%12d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="12" COL="27" NAME="#TXAMT" TYPE="%13.2f" DEVICE="KEYBOARD" FUNCTIONS="V(000000000100,999999999999)"/>
+  <ITEM LINE="13" COL="27" NAME="#OYY37"  ENABLE="FALSE"  TYPE="%12d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  <ITEM LINE="14" COL="27" NAME="#REASON" TYPE="%-30s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM NAME="#XTXAMT"  TYPE="%-16s" FUNCTIONS="X(#TXAMT)"/>
+  <ITEM NAME="#XXXX"    TYPE="%12d"  FUNCTIONS=""/>
+  
+  <ITEM LINE="21" COL="59" TYPE="%-6s" NAME="#SUBMIT" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+   	<ONCLICK>
+   	"{
+   	$FD22='08';
+	dim @tota as string;
+	initfd();
+
+	//增加授权
+   	$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+	$TXNO='7699';			
+	commsend_001();
+	//showmsg('授权开始!');          
+	callserver();
+        if($FD12!='0000')
+        {
+             showmsg(geterror());
+             showmsg('授权失败!');               
+             return(false); 
+        }   	 
+        //showmsg('授权完成!');  
+
+	initfd(); 
+        if(#OTXTYPE=='4' or #OTXTYPE=='5' )
+        {
+           $TXNO='7618';	//  取款
+        }
+        else if(#OTXTYPE=='6' or #OTXTYPE=='7')
+        {
+          $TXNO='761B';		//转账
+        }
+        else
+        {
+          $TXNO='7617';		//存款
+        }
+
+	if( #OTXTYPE=='0' or #OTXTYPE=='4' or #OTXTYPE=='6') 
+	{
+	   $FD67='0';  //有卡
+	}
+	if( #OTXTYPE=='2' or #OTXTYPE=='5' or #OTXTYPE=='7' )
+	{
+	   $FD67='1';  //有折
+	}
+	if( #OTXTYPE=='1')
+	{
+             $FD67='2';//无卡
+	}
+	if( #OTXTYPE=='3')
+	{
+             $FD67='3';//无卡
+	}
+										
+	$FD30=#CARDNO;
+	$FD39=itoa(#TXAMT*100,'%012.0f');
+	$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+	$FD92 = #OTLRNO;
+	$FD52 = #OYYTRACENO;
+	$FD58 = #OYY37;
+ 	$FD68 = #OTXTYPE;
+ 	$FD47=#BANKCODE;
+	$FD22='08';				  
+	
+	commsend_001();            
+	@tota=callagn(); 
+	#XXXX = $FD52;
+	//showmsg($FD52);
+	if($FD12!='0000')
+	{
+	  	showmsg(geterror());
+	        return(false);
+	}	
+	saveprint();
+	runoutput(@tota);	
+	rerun();
+	return(true);	 			 	
+		 	
+		  }"
+   	</ONCLICK>
+  </ITEM>
+  </VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="冲正交易"  CHECK="$FD12=0000">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+		print( 3,27,'冲正交易成功!');
+		print( 5,10,'帐      号:[19]',#CARDNO);
+		print( 6,10,'原交易种类:[12]',#OTXNAME);
+		print( 7,10,'冲正金额:[20]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+		print( 8,10,'原平台流水号:[12]',#OYYTRACENO);
+		print( 9,10,'原交易柜员:[6]',#OTLRNO);
+		if(#OTXTYPE=='0' or #OTXTYPE=='1')
+		{
+		 print( 10,10,'后台流水号:[6]',$FD4);
+		}
+		print( 11,10,'平台流水号:[12]',substr($FD52,6,6));
+		//print( 11,10,'平台流水号:[12]',#XXXX);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印普通凭证" CHECK="$FD12=0000">
+  NOTHING
+  </PACKAGE>
+  	<PRINT>
+  	"{
+
+		dim @txtime  as string;	
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		if($REPRINT=='true')
+		{
+			reprint_nx();
+		}
+		print( 3,30,'[5     ][20                 ]',$KINBR,$BRNAME);
+		print( 4,10,'银 银 合 作 本 代 他 冲 正 成 功!');
+		//print( 5,10,'原开户行名:[40]',#SBANKCODE);
+		print( 6,10,'帐    号:[19]',#CARDNO);
+		print( 7,10,'原交易种类:[12]',#OTXNAME);
+		print( 8,10,'冲正金额:[20]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+		print( 9,10,'原平台流水号:[12]',substr(#OYYTRACENO,6,6));
+		print(10,10,'原交易柜员:[6]',#OTLRNO);	 
+		print(11,10,'平台流水号:[12]',substr($FD52,6,6));	
+		if(#OTXTYPE=='0' or #OTXTYPE=='1' or #OTXTYPE=='3')
+		{
+		  print( 12,10,'后台流水号:[6]',$FD4);
+		}
+		print(13,10,'交易日期:[8]  [8]         柜员:[8]',$HDATE,@txtime,$FD7);
+  	}"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+<!--PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="请打印专用凭证" CHECK="$FD12=0000">
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+//	$KINDNO='00';
+//	dim @txtime  as string;
+//	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+//	if($REPRINT=='true')
+//	{
+//		reprint_nx();
+//	}
+//	print( 4, 25,'[5]',$KINBR);
+//	print( 4, 10,'[30]',$BRNAME);
+//	print( 4, 5,'操作员号:[8]',$FD7);
+//	print( 5, 15,'[6]',$FD4);
+//	print( 5, 26,'4617银银本代他冲正');
+//	print( 5, 10,'[8] [8]',$HDATE,@txtime);
+//	printacdtl_1();
+}"
+</PRINT--->
+</RESPONSE>
+</TRANSACTION>

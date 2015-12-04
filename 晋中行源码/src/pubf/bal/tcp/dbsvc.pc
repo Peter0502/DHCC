@@ -1,0 +1,97 @@
+/**********************************************************************/
+/****    Modified by SSH,2006.8.15                                 ****/
+/****    修改为ORACLE方式                                          ****/
+/**********************************************************************/
+#include "bal.h"
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL BEGIN DECLARE SECTION;
+EXEC SQL INCLUDE "sqlglobal.h";
+EXEC SQL END DECLARE SECTION;
+
+extern char *get_env_info(char *infoname);
+
+int bal_set_lockwaittime()
+{
+	/*** Oracle 不支持,有其他方式实现 ****/
+	return CSuccess;
+}
+
+int bal_open()
+{
+/****Modified by SSH,支持远程连接数据库****/
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[16];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	vtcp_log("[%s] [%d] It's here!\n",__FILE__,__LINE__);
+	memset(sql_username,0x00,sizeof(sql_username));
+	memset(sql_passwd,0x00,sizeof(sql_passwd));
+
+	/****改为新加密方式  20120604
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	****/
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	memcpy(sql_username,get_env_info("DB_USER"),sizeof(sql_username));
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	memcpy(sql_passwd,get_env_info("DB_PASSWD"),sizeof(sql_passwd));
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	if(getenv("DB_NAME")!=NULL){
+		strcpy(sql_dbname,getenv("DB_NAME"));
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+	}else{
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	}
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	if(sqlca.sqlcode)
+	{
+		printf("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		vtcp_log("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		return CFailure;
+	}
+	return (0);
+}
+int bal_close()
+{
+	EXEC SQL COMMIT WORK RELEASE;
+	if(sqlca.sqlcode)
+	{
+vtcp_log("zyc aaaaaaaaa[%s][%d][%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		return CFailure;
+	}
+	return (0);
+}
+int bal_begin_tx(T_BalInfo* balinfo)
+{
+	balinfo->tx_flag = 1;
+
+	return CSuccess;
+}
+
+int bal_commit_tx(T_BalInfo* balinfo)
+{
+	EXEC SQL COMMIT WORK;
+	if(sqlca.sqlcode)
+	{
+		balerrno = EBALTXCOMMIT;
+		return CFailure;
+	}
+
+	return CSuccess;
+		
+}
+
+int bal_abort_tx(T_BalInfo* balinfo)
+{
+	EXEC SQL ROLLBACK WORK;
+	if(sqlca.sqlcode)
+	{
+		balerrno = EBALTXABORT;
+		return CFailure;
+	}
+
+	return CSuccess;
+}

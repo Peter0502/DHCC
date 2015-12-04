@@ -1,0 +1,530 @@
+/******************************************************************************
+*交易名称：事后监督换日                                                       *
+*函数名称：sp3661()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*编写人：  	  YXJ                                                         *
+*编写日期：       2007/03/20                                                  *
+*修改日期：                                                                   *
+*功能描述: 系统换日,导数据并初始化                                            *
+*数据库表: com_sys_parm com_tel trace_log                                     *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#define MYSQLERR(y) if(sqlca.sqlcode && sqlca.sqlcode!=1403){ \
+	sprintf(acErrMsg,"sqlerror[%d][L%d]",sqlca.sqlcode,y); \
+	WRITEMSG \
+	strcpy( g_pub_tx.reply,"D103" ); \
+	return(sqlca.sqlcode); \
+	}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "trace_log_c.h"
+#include "dc_log_c.h"
+#include "com_tel_c.h"
+#include "sh_com_tel_c.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "sh_com_branch_c.h"
+EXEC SQL include sqlca;
+int chg_day(char []);
+exec sql begin declare section;
+long vtx_date;
+exec sql end declare section;
+extern char *get_env_info(char *infoname);
+int sp3661()
+{
+	char	opflag[2];
+	char cDay[9];
+	char newDay[9];
+	memset(cDay,0,sizeof(cDay));
+	memset(opflag,'\0',sizeof(opflag));
+	memset(newDay,0,sizeof(newDay));
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH04");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+  	pub_base_sysinit();
+  	get_zd_data("0440",cDay);  
+	get_zd_data("0200",opflag);
+	vtcp_log("cChangdy[%s]",cDay);
+	vtx_date=atol(cDay);
+	/******MODIFY BY YXJ 20070519*************
+	 *     由于数据量过大,所以分两步操作     *
+	 ****************************************/
+	if(opflag[0]=='0'){/**导入数据**/
+		vtcp_log(">>[%s][%d] 检查是否有未监督的数据 开始\n",__FILE__,__LINE__);
+		if(check_data()){ 
+			goto ErrExit;
+		}
+		vtcp_log(">>[%s][%d] 检查是否有未监督的数据 完毕\n",__FILE__,__LINE__);
+		vtcp_log(">>[%s][%d] 导入数据 开始\n",__FILE__,__LINE__);
+		if(load_data(cDay)){
+			goto ErrExit;
+		}
+		vtcp_log(">>[%s][%d] 导入数据 完毕\n",__FILE__,__LINE__);
+	}
+	else{
+		vtcp_log(">>[%s][%d] 初始化数据 开始\n",__FILE__,__LINE__);
+		if(init_data()){
+			goto ErrExit;
+		}
+		vtcp_log(">>[%s][%d] 初始化数据 完毕\n",__FILE__,__LINE__);
+		vtcp_log(">>[%s][%d] 更新日期  开始\n",__FILE__,__LINE__);
+		if(chg_day(cDay)){
+			goto ErrExit;
+		}
+		vtcp_log(">>[%s][%d] 更新日期  完毕\n",__FILE__,__LINE__);
+		vtcp_log(">>[%s][%d] 返回换日后系统日期 newDay[%s]\n",__FILE__,__LINE__,newDay);
+		if(re_new_date(&newDay)){
+			goto ErrExit;
+		}
+		set_zd_data("0450",newDay);
+	}
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	if(memcmp(g_pub_tx.reply,"0000",4)==0)
+		strcpy(g_pub_tx.reply,"0120");
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+int chg_day(char chg_day[])
+{
+	int ret=0;
+	ret=
+	sql_execute("update com_sys_parm set lst_date=sys_date,sys_date=to_char(to_date(%s,'YYYYMMDD')+1,'YYYYMMDD')",chg_day);
+        if(ret){
+       		vtcp_log("[%s][%d] 更新com_sys_parm表出错,换日失败",__FILE__,__LINE__);
+                sprintf( acErrMsg,"[%s][%d]更新com_sys_parm表出错,换日失败",__FILE__,__LINE__);
+                strcpy(g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return ret;
+        }
+	return 0;
+}
+int load_data(char chg_day[])
+{
+	int ret=0;
+	char cmd[100];
+	char tables[100];
+	memset(cmd,'\0',sizeof(cmd));
+	memset(tables,'\0',sizeof(tables));
+	/*删除所需导的表
+	EXEC SQL truncate table sh_com_tel;
+	EXEC SQL drop table sh_trace_log_bak;
+	EXEC SQL drop table sh_com_tel;
+	*/
+              	vtcp_log("[%s][%d]----------倒---",__FILE__,__LINE__);
+	exec sql truncate table trace_log;
+              	vtcp_log("[%s][%d]----------倒---",__FILE__,__LINE__);
+	exec sql truncate table sh_com_tel       ;
+              	vtcp_log("[%s][%d]----------倒---",__FILE__,__LINE__);
+	exec sql truncate table sh_com_branch    ;
+	exec sql truncate table dd_mst           ;
+	exec sql truncate table td_mst           ;
+	exec sql truncate table ln_mst           ;
+	exec sql truncate table in_mst           ;
+	exec sql truncate table mo_loss          ;
+	exec sql truncate table mo_hold          ;
+	exec sql truncate table cif_no_per       ;
+	exec sql truncate table cif_no_com       ;
+	exec sql truncate table sh_prdt_ac_id    ;
+	exec sql truncate table prdt_ac_id       ;
+	exec sql truncate table dd_parm          ;
+	exec sql truncate table td_parm          ;
+	exec sql truncate table ln_parm          ;
+	exec sql truncate table in_parm          ;
+	exec sql truncate table dc_log_bk        ;
+	exec sql truncate table trace_log_bk     ;
+	exec sql truncate table trace_parm       ;
+	exec sql truncate table dc_log           ;
+	exec sql delete from in_mst_hst     where tx_date>=:vtx_date  ;
+	exec sql commit;
+	exec sql delete from ln_mst_hst     where tx_date>=:vtx_date  ;
+	exec sql commit;
+	exec sql delete from dd_mst_hst  where tx_date>=:vtx_date  ;
+	exec sql commit;
+	exec sql delete from td_mst_hst where tx_date>=:vtx_date  ;
+	exec sql commit;
+/************modify by martin 20070712***/
+	exec sql truncate table sh_mdm_ac_rel;
+	exec sql truncate table sh_cif_basic_inf;
+	exec sql truncate table sh_cif_id_code_rel;
+
+	exec sql delete from mdm_ac_rel where beg_date>=:vtx_date  ;
+	exec sql commit;
+	exec sql delete from cif_id_code_rel where cif_no in(select cif_no from cif_basic_inf where crt_date=:vtx_date);
+	exec sql commit;
+	exec sql delete from cif_basic_inf  where crt_date>=:vtx_date  ;
+	exec sql commit;
+/*
+        sprintf(cmd, "/home/shjd/bin/loadshjd %s %s %s ",get_env_info("DB_USER"),get_env_info("DB_PASSWD"),chg_day);
+*/
+        sprintf(cmd, "/home/shjd/bin/loadshjd %s ",chg_day);
+        vtcp_log("[%s][%d]倒入命令[%s]",__FILE__,__LINE__,cmd);
+        ret=system(cmd);
+        if(ret!=0){
+              	vtcp_log("[%s][%d]倒入数据出错[%s]",__FILE__,__LINE__,cmd);
+              	sprintf( acErrMsg,"[%s][%d]倒入数据出错",__FILE__,__LINE__);
+              	strcpy(g_pub_tx.reply, "0120" );
+              	set_zd_data(DC_GET_MSG,acErrMsg);
+              	WRITEMSG
+		return 1;
+        }
+        return 0;
+}
+int init_data()
+{
+	/*更新操作员表*/
+	int ret=0,cnt=0;
+	char v_buf[17];
+	double lvl_bal;
+	double bal;
+	char cmd[100];
+	struct sh_com_tel_c wd_sh_com_tel;
+	exec sql begin declare section;
+	struct trace_log_c wd_trace_log;
+	exec sql end declare section;
+        struct com_tel_c wd_com_tel;
+        struct com_branch_c wd_com_branch;
+        struct sh_com_branch_c wd_sh_com_branch;
+        memset(&wd_com_tel,0x00,sizeof(wd_com_tel));
+        memset(&wd_com_branch,0x00,sizeof(wd_com_branch));
+	vtcp_log("-----------以下开始更新操作员表[%s][%d]",__FILE__,__LINE__);
+        ret=Sh_com_tel_Dec_Sel(g_pub_tx.reply,"1=1");
+        if(ret){
+                sprintf(acErrMsg,"[%s][%d]声明com_tel游标出错[%d]",__FILE__,__LINE__,ret);
+                strcpy( g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                return ret;
+        }
+        while(1){
+        	memset(&wd_sh_com_tel,0x00,sizeof(wd_sh_com_tel));
+                ret=Sh_com_tel_Fet_Sel(&wd_sh_com_tel,g_pub_tx.reply);
+                if(ret==100) break;
+                else if(ret){
+                        sprintf(acErrMsg,"[%s][%d]com_tel取数据错误[%d]",__FILE__,__LINE__,ret);
+                        strcpy( g_pub_tx.reply, "0120" );
+                        set_zd_data(DC_GET_MSG,acErrMsg);
+                        WRITEMSG
+                        return ret;
+                }
+                cnt=sql_count("com_tel","tel='%s' ",wd_sh_com_tel.tel);
+                if(cnt>0){/*根据sh_com_tel表记录更新com_tel记录*/
+			g_reply_int = Com_tel_Dec_Upd(g_pub_tx.reply,"tel='%s'",wd_sh_com_tel.tel);
+    			if(ret!=0){
+        			sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",ret);
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret; 
+    			}
+    			ret = Com_tel_Fet_Upd(&wd_com_tel,g_pub_tx.reply);
+    			if (ret != 0){
+        			sprintf(acErrMsg,"FETCH ERROR !! [%d]",ret);
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret;
+    			}
+			memcpy(wd_com_tel.br_no,wd_sh_com_tel.br_no,sizeof(wd_sh_com_tel.br_no)-1);
+			memcpy(wd_com_tel.name,wd_sh_com_tel.name,sizeof(wd_sh_com_tel.name)-1);
+			memcpy(wd_com_tel.pwd,wd_sh_com_tel.pwd,sizeof(wd_sh_com_tel.pwd)-1);
+			memcpy(wd_com_tel.lvl,wd_sh_com_tel.lvl,sizeof(wd_sh_com_tel.lvl)-1);
+			memcpy(wd_com_tel.csts,wd_sh_com_tel.csts,sizeof(wd_sh_com_tel.csts)-1);
+			wd_com_tel.pwd_date=wd_sh_com_tel.pwd_date;
+			memcpy(wd_com_tel.beg_menu,wd_sh_com_tel.beg_menu,sizeof(wd_sh_com_tel.beg_menu)-1);
+			memcpy(wd_com_tel.chk_ind,wd_sh_com_tel.chk_ind,sizeof(wd_sh_com_tel.chk_ind)-1);
+			memcpy(wd_com_tel.tx_type,wd_sh_com_tel.tx_type,sizeof(wd_sh_com_tel.tx_type)-1);
+    			ret = Com_tel_Upd_Upd(wd_com_tel,g_pub_tx.reply);
+    			if (ret != 0){
+        			sprintf(acErrMsg,"修改柜员信息表错误!!!");
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret;
+    			}
+    			Com_tel_Clo_Upd();
+		}
+                else{    /*插入新记录*/
+                        ret=Com_tel_Ins(wd_sh_com_tel,g_pub_tx.reply);
+                        if(ret){
+                                sprintf(acErrMsg,"[%s][%d]com_tel插入数据错误[%d]",__FILE__,__LINE__,ret);
+                                strcpy( g_pub_tx.reply, "0120" );
+                                set_zd_data(DC_GET_MSG,acErrMsg);
+                                WRITEMSG
+                                return ret;
+                        }
+                }
+        }
+        Com_tel_Clo_Sel();
+	vtcp_log("-----------更新新操作员表成功[%s][%d]",__FILE__,__LINE__);
+	vtcp_log("-----------更新机构表[%s][%d]-------------",__FILE__,__LINE__);
+        ret=Sh_com_branch_Dec_Sel(g_pub_tx.reply,"1=1");
+        if(ret){
+                sprintf(acErrMsg,"[%s][%d]声明com_tel游标出错[%d]",__FILE__,__LINE__,ret);
+                strcpy( g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                return ret;
+        }
+        while(1){
+		memset(&wd_sh_com_branch,'\0',sizeof(wd_sh_com_branch));
+                ret=Sh_com_branch_Fet_Sel(&wd_sh_com_branch,g_pub_tx.reply);
+                if(ret==100) break;
+                else if(ret){
+                        sprintf(acErrMsg,"[%s][%d]sh_com_branch取数据错误[%d]",__FILE__,__LINE__,ret);
+                        strcpy( g_pub_tx.reply, "0120" );
+                        set_zd_data(DC_GET_MSG,acErrMsg);
+                        WRITEMSG
+                        return ret;
+                }
+                cnt=sql_count("com_branch","br_no='%s' ",wd_sh_com_branch.br_no);
+                if(cnt>0){/*根据sh_com_branch表记录更新com_branch记录*/
+			memset(&wd_com_branch,'\0',sizeof(wd_com_branch));
+			g_reply_int = Com_branch_Dec_Upd(g_pub_tx.reply,"br_no='%s'",wd_sh_com_branch.br_no);
+    			if(ret!=0){
+        			sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",ret);
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret; 
+    			}
+    			ret = Com_branch_Fet_Upd(&wd_com_branch,g_pub_tx.reply);
+    			if (ret != 0){
+        			sprintf(acErrMsg,"FETCH ERROR !! [%d]",ret);
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret;
+    			}
+			memcpy(wd_com_branch.br_name,wd_sh_com_branch.br_name,sizeof(wd_com_branch.br_name)-1);
+			memcpy(wd_com_branch.ipaddr,wd_sh_com_branch.ipaddr,sizeof(wd_com_branch.ipaddr)-1);
+			memcpy(wd_com_branch.br_type,wd_sh_com_branch.br_type,sizeof(wd_com_branch.br_type)-1);
+			memcpy(wd_com_branch.up_br_no,wd_sh_com_branch.up_br_no,sizeof(wd_com_branch.up_br_no)-1);
+			memcpy(wd_com_branch.br_tele,wd_sh_com_branch.br_tele,sizeof(wd_com_branch.br_tele)-1);
+    			ret = Com_branch_Upd_Upd(wd_com_branch,g_pub_tx.reply);
+    			if (ret != 0){
+        			sprintf(acErrMsg,"修改机构信息表错误!!!");
+                        	set_zd_data(DC_GET_MSG,acErrMsg);
+        			WRITEMSG
+				return ret;
+    			}
+    			Com_branch_Clo_Upd();
+		}
+                else{    /*插入新记录*/
+                        ret=Com_branch_Ins(wd_sh_com_branch,g_pub_tx.reply);
+                        if(ret){
+                                sprintf(acErrMsg,"[%s][%d]com_branch插入数据错误[%d]",__FILE__,__LINE__,ret);
+                                strcpy( g_pub_tx.reply, "0120" );
+                                set_zd_data(DC_GET_MSG,acErrMsg);
+                                WRITEMSG
+                                return ret;
+                        }
+                }
+        }
+        Com_tel_Clo_Sel();
+	vtcp_log("-----------更新机构表成功[%s][%d]-------------",__FILE__,__LINE__);
+	/*把临时表 sh_trace_log_bk里的数据处理后 导入表trace_log里*/
+	ret=sql_execute("insert into trace_log select a.*,'0' from trace_log_bk a");
+	if(ret){
+		vtcp_log("[%s][%d]倒入表trace_log出错[%d]",__FILE__,__LINE__,ret);
+ 		sprintf( acErrMsg,"[%s][%d]倒入表trace_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "0120" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/*对dc_log进行处理*/
+	ret=sql_execute("insert into dc_log select a.*,'0' from dc_log_bk a");
+	if(ret){
+		vtcp_log("[%s][%d]倒入表dc_log出错[%d]",__FILE__,__LINE__,ret);
+ 		sprintf( acErrMsg,"[%s][%d]倒入表dc_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "0120" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/*以下对trace_log里的数据进行处理 检查shjd_code里不用监督的交易代码流水 stat置成3*/
+	vtcp_log("[%s][%d]以下对trace_log里的数据进行处理 检查shjd_code里不用监督的交易代码流水 stat置成3",__FILE__,__LINE__);
+	ret=sql_execute("update trace_log set stat='3' where tx_code in (select trancode from shjdcode where substr(text,1,1)='2') or tx_code not in(select trancode from shjdcode)");
+	if(ret){
+		vtcp_log("[%s][%d]更新表trace_log出错[%s]",__FILE__,__LINE__,cmd);
+ 		sprintf( acErrMsg,"[%s][%d]更新表trace_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "0120" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/******对trace_log里的数据进行处理,如果tx_br_no不在shjd_tlrvsbrn里,置stat='3'********/
+	vtcp_log("[%s][%d]对trace_log里的数据进行处理,如果tx_br_no不在shjd_tlrvsbrn里,置stat='3'",__FILE__,__LINE__);
+	ret=sql_execute("update trace_log set stat='3' where tx_br_no not in(select brno from shjd_tlrvsbrn)");
+	if(ret){
+		vtcp_log("[%s][%d]更新表trace_log出错[%s]",__FILE__,__LINE__,cmd);
+ 		sprintf( acErrMsg,"[%s][%d]更新表trace_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "SH00" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/******对trace_log里的数据进行处理,如果状态是撤销的那么stat='3'********/
+	vtcp_log("[%s][%d]对trace_log里的数据进行处理,如果tx_br_no不在shjd_tlrvsbrn里,置stat='3'",__FILE__,__LINE__);
+	ret=sql_execute("update trace_log set stat='3' where sts='1' ");
+	if(ret){
+		vtcp_log("[%s][%d]更新表trace_log出错[%s]",__FILE__,__LINE__,cmd);
+ 		sprintf( acErrMsg,"[%s][%d]更新表trace_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "SH00" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/******对trace_log里的数据进行处理,如果是网银发起的还贷还息，那么stat='3' 武大为 20150716********/
+	vtcp_log("[%s][%d]对trace_log里的数据进行处理,如果是网银发起的还贷还息,置stat='3'",__FILE__,__LINE__);
+	ret=sql_execute("update trace_log set stat='3' where tx_code in('3201','3202') and substr(tel,3,2)='99' ");
+	if(ret){
+		vtcp_log("[%s][%d]更新表trace_log出错[%s]",__FILE__,__LINE__,cmd);
+ 		sprintf( acErrMsg,"[%s][%d]更新表trace_log出错",__FILE__,__LINE__);
+ 		strcpy(g_pub_tx.reply, "SH00" );
+ 		set_zd_data(DC_GET_MSG,acErrMsg);
+ 		WRITEMSG
+		return ret;
+	}
+	/**根据流水号和trace_log中的状态修改dc_log中的状态*/
+       vtcp_log("[%s][%d]根据流水号和trace_log中的状态修改dc_log中的状态",__FILE__,__LINE__);
+	EXEC SQL DECLARE Trace_log_cur CURSOR FOR 
+		select distinct trace_no from trace_log where stat='3';
+	EXEC SQL OPEN Trace_log_cur;
+	if(sqlca.sqlcode){
+                sprintf(acErrMsg,"[%s][%d]声明trace_log游标出错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+                strcpy( g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                return sqlca.sqlcode;
+	}
+	while(1){
+		memset(&wd_trace_log,'\0',sizeof(wd_trace_log));
+		EXEC SQL FETCH Trace_log_cur INTO :wd_trace_log.trace_no;
+		if(sqlca.sqlcode){
+			break;
+		}
+		else if(sqlca.sqlcode){
+                        sprintf(acErrMsg,"[%s][%d]trace_log取数据错误[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+                        strcpy( g_pub_tx.reply, "0120" );
+                        set_zd_data(DC_GET_MSG,acErrMsg);
+                        WRITEMSG
+                        return sqlca.sqlcode;
+		}
+		EXEC SQL update dc_log set stat='3' where trace_no=:wd_trace_log.trace_no;
+		if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+			vtcp_log("[%s][%d]更新表dc_Log出错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+			sprintf( acErrMsg,"[%s][%d]更新表dc_log出错",__FILE__,__LINE__);
+			strcpy(g_pub_tx.reply, "SH00" );
+			set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			return sqlca.sqlcode;
+		}
+	}
+	EXEC SQL CLOSE Trace_log_cur;
+/*****************************
+        ret=Trace_log_Dec_Sel(g_pub_tx.reply,"stat='3'");
+        if(ret){
+                sprintf(acErrMsg,"[%s][%d]声明trace_log游标出错[%d]",__FILE__,__LINE__,ret);
+                strcpy( g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                return ret;
+        }
+        while(1){
+		memset(&wd_trace_log,'\0',sizeof(wd_trace_log));
+                ret=Trace_log_Fet_Sel(&wd_trace_log,g_pub_tx.reply);
+                if(ret==100) break;
+                else if(ret){
+                        sprintf(acErrMsg,"[%s][%d]trace_log取数据错误[%d]",__FILE__,__LINE__,ret);
+                        strcpy( g_pub_tx.reply, "0120" );
+                        set_zd_data(DC_GET_MSG,acErrMsg);
+                        WRITEMSG
+                        return ret;
+                }
+		ret=sql_execute("update dc_log set stat='3' where trace_no=%ld ",wd_trace_log.trace_no);
+		if(ret){
+			vtcp_log("[%s][%d]更新表dc_Log出错[%d]",__FILE__,__LINE__,ret);
+			sprintf( acErrMsg,"[%s][%d]更新表dc_log出错",__FILE__,__LINE__);
+			strcpy(g_pub_tx.reply, "SH00" );
+			set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			return ret;
+		}
+	}
+	Trace_log_Clo_Sel();
+*******************************/
+	/*增加当日一些分户明细表的内容*/
+	exec sql insert into  dd_mst_hst select * from sh_dd_mst_hst where tx_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  td_mst_hst select * from sh_td_mst_hst where tx_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  ln_mst_hst select * from sh_ln_mst_hst where tx_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  in_mst_hst select * from sh_in_mst_hst where tx_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  prdt_ac_id select * from sh_prdt_ac_id;
+	MYSQLERR(__LINE__)
+	exec sql insert into  mdm_ac_rel select * from sh_mdm_ac_rel where beg_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  cif_basic_inf select * from sh_cif_basic_inf where crt_date=:vtx_date;
+	MYSQLERR(__LINE__)
+	exec sql insert into  cif_id_code_rel select * from sh_cif_id_code_rel; 
+	MYSQLERR(__LINE__)
+	return 0;
+}
+int check_data()
+{
+	int cnt=0;
+	/************检查是否有尚未监督的数据************/
+	cnt=sql_count("trace_log","stat='0'");
+        if(cnt!=0){
+        	vtcp_log("[%s][%d] cnt=[%d]\n", __FILE__, __LINE__,cnt);
+                sprintf( acErrMsg,"[%s][%d]尚有未监督的数据",__FILE__,__LINE__);
+                strcpy(g_pub_tx.reply, "SH00" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return 1;
+	}
+	/*************检查是否有未签退的普通柜员************
+	cnt=sql_count("trace_log","br_no='99999' and substr(tx_type,3,1)='1' and csts='0'");
+	if(cnt){
+		vtcp_log("[%s][%d] cnt=[%d]",__FILE__,__LINE__,cnt);
+                sprintf( acErrMsg,"[%s][%d]尚有未签退的普通柜员",__FILE__,__LINE__);
+                strcpy(g_pub_tx.reply, "SH00" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+		return 1;
+	}
+	***************************************************/
+	return 0;
+}
+int re_new_date(char *new_date)
+{
+	int ret=0;
+	struct com_sys_parm_c wd_com_sys_parm;
+	memset(&wd_com_sys_parm,'\0',sizeof(wd_com_sys_parm));
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&wd_com_sys_parm,"1=1");
+	if(ret){
+        	vtcp_log("[%s][%d] 返回新系统日期错误ret=[%d]\n", __FILE__, __LINE__,ret);
+                sprintf( acErrMsg,"[%s][%d]查com_sys_parm表出错",__FILE__,__LINE__);
+                strcpy(g_pub_tx.reply, "0120" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+	}
+	sprintf(new_date,"%8d",wd_com_sys_parm.sys_date);
+	return ret;
+}

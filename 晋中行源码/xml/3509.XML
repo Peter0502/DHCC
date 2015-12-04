@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3509 账户与客户基本信息关联"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='2609';	
+  
+  $FD20=delspace(#N_ID_TYPE);     // 证件类型
+  $FD25=getitems('#N_NAME');      // 账户名称
+  $FD28=delspace(#N_CIF_NO);      // 客户号
+	$FD30=getitems('#ACTNO');       // 账号
+	$FD34=getitems('#ACTSEQN');     // 账户序号
+	$FD62=delspace(#N_ID_NO);       // 证件号码
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(3509                       账户与客户基本信息关联)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2609)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"  COL="7" TYPE="%-12s" FUNCTIONS="T(账 /卡  号:)"/>
+  
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="19" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		$TXNO='9741';
+		$FD30=#ACTNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#ACTNO',$FD30);
+		setitems('#ACTSEQN',$FD34);    	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="6"  COL="42" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>  
+  <ITEM NAME="#ACTSEQN" INPUT="TEXT" LINE="6"  COL="52" TYPE="%-4s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		dim @tota    as string;
+		@baktxno=$TXNO;
+		$MSGTYPE='03001';
+
+		//得到证件号码和证件类型   户名及客户号
+		$TXNO='6708';
+		$FD30=#ACTNO;
+		$FD34=#ACTSEQN;
+		$FD67='1';
+		commsend_001();	
+		@tota = callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		
+		#YID_TYPE=$FD69;
+		#NAME=$FD26;
+		#OLD_ID_NO=$FD63;
+		#CID_TYPE=$FD20;
+		#CIF_NAME=$FD25;
+		#Y_CIF_NO=$FD29;
+		#CIF_ID_NO=$FD62;
+		#CIF_TYPE=$FD68;
+		#N_CIF_NO=$FD29;
+		enable(#YID_TYPE,false);
+		enable(#CID_TYPE,false);
+ 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+   
+   <ITEM LINE="7"  COL="7" TYPE="%-12s" FUNCTIONS="T(原客 户 号:)"/>
+   <ITEM LINE="8"  COL="7" TYPE="%-12s" FUNCTIONS="T(原客户名称:)"/>
+   <ITEM LINE="9"  COL="7" TYPE="%-12s" FUNCTIONS="T(原证件类型:!)"/>
+   <ITEM LINE="10" COL="7" TYPE="%-12s" FUNCTIONS="T(原证件号码:)"/>
+   <ITEM LINE="11" COL="5"  TYPE="%-60s" FUNCTIONS=
+   "T(───────────客户基本信息────────────)"/>
+   <ITEM LINE="12"  COL="7" TYPE="%-12s" FUNCTIONS="T(新客户名称:)"/>
+   <ITEM LINE="13"  COL="7" TYPE="%-12s" FUNCTIONS="T(新证件类型:!)"/>
+   <ITEM LINE="14"  COL="7" TYPE="%-12s" FUNCTIONS="T(新证件号码:)"/>
+   <ITEM LINE="15" COL="5"  TYPE="%-60s" FUNCTIONS=
+   "T(─────────────────────────────)"/>
+   <ITEM LINE="16" COL="7" TYPE="%-12s" FUNCTIONS="T(新客 户 号:)"/>
+   <ITEM LINE="17" COL="7" TYPE="%-12s" FUNCTIONS="T(新客户名称:)"/>
+   <ITEM LINE="18" COL="7" TYPE="%-12s" FUNCTIONS="T(新证件类型:!)"/>
+   <ITEM LINE="19" COL="7" TYPE="%-12s" FUNCTIONS="T(新证件号码:)"/>
+
+   <ITEM NAME="#CIF_TYPE"   TYPE="%1s"    FUNCTIONS=""/>
+   <ITEM LINE="7"  COL="19" NAME="#Y_CIF_NO"  INPUT="LABEL"   TYPE="%8d"    FUNCTIONS=""/>
+   <ITEM LINE="8"  COL="19" NAME="#NAME"      INPUT="LABEL"   TYPE="%-60s"  FUNCTIONS=""/>
+   <ITEM LINE="9"  COL="19" NAME="#YID_TYPE"  INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="经营许可证"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="事业法人证书"/>
+		<OPTION VALUE="C" TITLE="工商核准号"/>
+		<OPTION VALUE="D" TITLE="其他证件"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+   </ITEM>
+   <ITEM NAME="#YSID_TYPE"   TYPE="%-20s"      FUNCTIONS="S(#YID_TYPE,#YID_TYPE)"/>
+   <ITEM LINE="10" COL="19" NAME="#OLD_ID_NO" INPUT="LABEL"   TYPE="%-20s"  FUNCTIONS=""/>
+   <!-- ───────────客户基本信息──────────── -->
+   <ITEM LINE="12" COL="19" NAME="#CIF_NAME"     INPUT="LABEL"   TYPE="%-60s"  FUNCTIONS=""/>
+   <ITEM LINE="13"  COL="19" NAME="#CID_TYPE"  INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="经营许可证"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="事业法人证书"/>
+		<OPTION VALUE="C" TITLE="工商核准号"/>
+		<OPTION VALUE="D" TITLE="其他证件"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+   </ITEM>
+   <ITEM LINE="14" COL="19" NAME="#CIF_ID_NO" INPUT="LABEL"   TYPE="%-20s"  FUNCTIONS=""/>
+   <!-- ─────────────────────── -->
+   <ITEM LINE="16" COL="19" NAME="#N_CIF_NO"  INPUT="TEXT"    TYPE="%8d"    FUNCTIONS="V(1000000,99999999)V(NB)">
+   <ONLOSTFOCUS>
+	"{
+	  dim @baktxno as string;
+		dim @tota    as string;
+		@baktxno=$TXNO;
+		$MSGTYPE='03001';
+
+		//得到证件号码和证件类型\户名
+		$TXNO='6708';
+		$FD28=#N_CIF_NO;
+		$FD67='2';
+		$FD68=#CIF_TYPE;
+		commsend_001();	
+		@tota = callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		
+		#N_ID_TYPE=$FD20;
+		#N_NAME=$FD25;
+		#N_ID_NO=$FD62;
+		enable(#N_ID_TYPE,false);
+	}"
+	</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="17" COL="19" NAME="#N_NAME"     INPUT="LABEL"   TYPE="%-60s"  FUNCTIONS=""/>
+   <ITEM LINE="18" COL="19" NAME="#N_ID_TYPE"   INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)V(NB)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="经营许可证"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="事业法人证书"/>
+		<OPTION VALUE="C" TITLE="工商核准号"/>
+		<OPTION VALUE="D" TITLE="其他证件"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+   </ITEM>
+   <ITEM NAME="#SID_TYPE"   TYPE="%-20s"      FUNCTIONS="S(#N_ID_TYPE,#N_ID_TYPE)"/>
+   <ITEM LINE="19" COL="19" NAME="#N_ID_NO" INPUT="LABEL"    TYPE="%-20s"  FUNCTIONS=""/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+
+    
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="账户与客户基本信息关联">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 25,'账户与客户基本信息关联成功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3509');
+		print( 5,13,'交易:账户与客户基本信息关联');
+
+		print( 7,20,'账      号:[20                  ]             账户  序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'原客 户 号:[8       ]               原  户  名:[60]',#Y_CIF_NO,#NAME);
+		print( 9,20,'新客 户 号:[8       ]               新  户  名:[60]',#N_CIF_NO,#N_NAME);
+		print(10,20,'原证件类型:[20                  ]             新证件类型:[20                  ]',#YSID_TYPE,#SID_TYPE);
+		print(11,20,'原证件号码:[20                  ]             新证件号码:[20]',#OLD_ID_NO,#N_ID_NO);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

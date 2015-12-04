@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="3206 财务扣划交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	// FD64 存放扣划科目         金额放在  FD39
+	// FD33 存放财务中心账户
+	// FD32 存放清算中心账户
+	
+	// 本交易扣划情况下 借支行            扣划科目(FD64)  FD39  -- A016
+	//                  借清算或财务      扣划科目(FD33) -FD42  -- a016
+	// 本交易转出情况下 借财务中心        扣划科目(FD64)  FD39  -- A016
+	//                  贷财务中心262账户 FD32            FD40  -- A017
+	//                  借财务中心262账户 FD33            FD42  -- a016
+	//                  贷清算中心262账户 FD30            FD43  -- a017
+	$FD91=#GET_BRNO;
+	$TXNO='3206';  // 注意这里
+	commsend_001();
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3206                        财务扣划交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=3206)"/>
+  <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <ITEM NAME="#TXCD"      TYPE="%4s"   FUNCTIONS="T(3206)"/>      <!---交易代码--->
+  <ITEM NAME="#TXNAME"    TYPE="%-10s" FUNCTIONS="T(财务划转交易)"/>  <!---交易名称--->
+
+	<ITEM LINE="14" COL="3"  TYPE="%-10s" FUNCTIONS="T(凭证种类:)"/> 
+	<ITEM LINE="14" COL="35" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+	<ITEM LINE="15" COL="3"  TYPE="%-10s" INPUT="LABEL" NAME="#SHOWAMTNAME" FUNCTIONS="T(扣划金额:)"/> 
+	<ITEM LINE="15" COL="35" TYPE="%-10s" FUNCTIONS="T(实际金额:)"/>
+	<ITEM LINE="16" COL="3"  TYPE="%-30s" NAME="#CZFS" INPUT="LABEL" FUNCTIONS="T(操作方式:)"/>
+	<ITEM LINE="17" COL="3"  TYPE="%-30s" NAME="#CCRDB" FUNCTIONS="T(借贷标志:)"/>
+
+  <!-- 资金管理信息录入 -->
+	<IMPORT>ZJGL_MST.IMP</IMPORT>
+	<ITEM NAME="#GET_BRNO" TYPE="%-5d">
+	<ONLOSTFOCUS>"{
+		#GET_BRNO=$FD91;
+		if(substr($FD81,2,1)=='1'){
+			#CCRDB='借贷标志：借';
+		} else if(substr($FD81,2,1)=='2'){
+			#CCRDB='借贷标志：贷';
+		} else {
+			#CCRDB='借贷标志：借';
+		}
+		show(#CCRDB,true);
+		if(substr($FD82,10,1)=='1'){
+			#PRTLABEL1='划转金额:';
+			enable(#RELAMT,true);
+		} else {
+			#PRTLABEL1='扣划金额:';
+			enable(#RELAMT,false);
+		}
+		show(#PRTLABEL1,true);
+		#SHOWAMTNAME=#PRTLABEL1;
+		show(#SHOWAMTNAME,true);
+	}"</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM NAME="#PZTYPE"  INPUT="SELECT" LINE="14" COL="13" TYPE="%-3s" DEVICE="KEYBOARD"  FUNCTIONS="T()">
+	<SELECT>
+		<OPTION VALUE="121"  TITLE="0.特种转帐传票"/>
+		<OPTION VALUE="122"  TITLE="0.转帐借方传票"/>
+		<OPTION VALUE="123"  TITLE="0.转帐贷方传票"/>
+	</SELECT>
+  </ITEM>
+
+	<ITEM NAME="#PZVOCNUM" INPUT="TEXT"  LINE="14" COL="45" TYPE="%-16s" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+
+<ITEM LINE="15" COL="13" NAME="#TXAMT"  TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="">  <!--扣划金额-->
+	<ONLOSTFOCUS>"{
+		// 本交易转出情况下 借财务中心        扣划科目(FD64)  FD39
+		//                  贷财务中心262账户 FD32            FD40=fd39
+		//                  借财务中心262账户 FD33=fd32       FD42
+		//                  贷清算中心262账户 FD30            FD43=fd42
+
+		dim @baktxno as string;
+		if($KINBR!='10001' ){
+			showmsg('本交易只有清算中心可以做');
+			return(false);
+		}
+		@baktxno=$TXNO;
+		//$FD32=substr($FD120,0,20);//得到财务中心的财务划转专用账号
+		//$FD33=$FD32;
+		@baktxno=$TXNO;
+		$TXNO='9406';
+		$FD91='10001';
+		$FD48='0009';
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		$FD30=substr($FD120,0,20);// 得到清算中心的财务划转专用账号
+		$FD120='';
+		showmsg('请算划转专用户:'+$FD31+'财务划转专用户:'+$FD30);
+		if(substr($FD82,10,1)=='1'){
+			// 输入的机构是清算中心,那么是资金转出,设计到财务529对应内部财务账户,
+			// 内部财务账户对应内部清算账户互转,在这里配置相关域
+			#CZFS='操作方式:资金转出到清算中心';
+			$FD39=getitems('#TXAMT');
+			$OPNBR=$KINBR;
+		} else {
+			// 本交易扣划情况下 借支行            扣划科目(FD64)       FD39  
+			//                  借清算或财务      扣划科目(FD33=fd64)  FD42=-FD39
+			#CZFS='操作方式:扣划到财务或清算中心';
+			$FD39=getitems('#TXAMT');
+			$FD33=$FD64;
+			$FD42=getitems('#TXAMT');
+			$FD40='';
+			$FD43='';
+
+			// 扣划实际上是一个科目之间的互相转转,在这里配置相关域
+			enable(#RELAMT,false);
+			#FD1201=$FD64;
+			#FD1204=$FD21;
+			#FD1205='2';
+			#FD1206=#PZTYPE;
+			#FD1207=#PZVOCNUM;
+			#FD1208=#TXAMT;
+			#FD120A='财务扣划处理';
+			$OPNBR=#GET_BRNO;//得到开户机构
+			enable(#RELAMT,false);
+			//准备划拨数据，由于划拨用到a017,在tx_sub_rel中会将30+--+1211
+			//所以这里设置fd30,fd43
+			#FD1211=$FD64;
+			#FD1214=$FD21;
+			#FD1215='2';
+			#FD1216=#PZTYPE;
+			#FD1217=#PZVOCNUM;
+			#FD1218=#TXAMT;
+			#FD121A='财务划拨处理';
+			$FD30=$FD64;
+			//showmsg($FD121);
+		}
+		show(#CZFS,true);
+		#FD1208=#TXAMT;
+		$FD120=getitems('#FD1201#FD1202#FD1203#FD1204#FD1205#FD1206#FD1207#FD1208#FD1209#FD120A');
+		$FD121=getitems('#FD1211#FD1212#FD1213#FD1214#FD1215#FD1216#FD1217#FD1218#FD1219#FD121A');
+	}"</ONLOSTFOCUS>
+</ITEM>
+<!--
+<ITEM NAME="#T">
+<ONLOSTFOCUS>
+"{
+		call('echo FD1201=['+#FD1201+']'+'>~/log/fd102.txt');
+		call('echo FD1202=['+#FD1202+']'+'>>~/log/fd102.txt');
+		call('echo FD1203=['+#FD1203+']'+'>>~/log/fd102.txt');
+		call('echo FD1204=['+#FD1204+']'+'>>~/log/fd102.txt');
+		call('echo FD1205=['+#FD1205+']'+'>>~/log/fd102.txt');
+		call('echo FD1206=['+#FD1206+']'+'>>~/log/fd102.txt');
+		call('echo FD1207=['+#FD1207+']'+'>>~/log/fd102.txt');
+		call('echo FD1208=['+#FD1208+']'+'>>~/log/fd102.txt');
+		call('echo FD1209=['+#FD1209+']'+'>>~/log/fd102.txt');
+		call('echo FD120A=['+#FD120A+']'+'>>~/log/fd102.txt');
+		call('echo $FD120=['+$FD120+']'+'>>~/log/fd102.txt');
+}"
+</ONLOSTFOCUS>
+</ITEM>
+-->
+<ITEM LINE="15" COL="45" NAME="#RELAMT" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="">  <!--实际金额-->
+	<ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		if(#TXAMT &lt; #RELAMT){
+	//		showmsg('扣划金额要大于实际交易金额');
+	//		return(false);
+		}
+		if(substr($FD82,10,1)=='1'){
+			// 输入的机构是清算中心,那么是资金转出,设计到财务529对应内部财务账户,
+			// 内部财务账户对应内部清算账户互转,在这里配置相关域
+			$FD39=getitems('#TXAMT');
+			$FD40=$FD39;
+			#FD1201=$FD64;
+			#FD1204=$FD21;
+			#FD1205='2';
+			#FD1206=#PZTYPE;
+			#FD1207=#PZVOCNUM;
+			#FD1208=#TXAMT;
+			#FD120A='财务扣划处理';
+			#FD1211=$FD32;
+			#FD1214=$FD21;
+			#FD1215='2';
+			#FD1216=#PZTYPE;  
+			#FD1217=#PZVOCNUM;
+			#FD1218=#TXAMT;
+			#FD121A='财务扣划处理';
+
+			$FD42=getitems('#RELAMT');
+			$FD43=$FD42;
+			$OPNBR=$KINBR;
+		} else {
+			// 本交易扣划情况下 借支行            扣划科目(FD64)       FD39  
+			//                  借清算或财务      扣划科目(FD33=fd64)  FD42=-FD39
+			// ==================================================================
+			// 本交易转出情况下 借财务中心        扣划科目(FD64)  FD39
+			//                  贷财务中心262账户 FD32            FD40=fd39
+			//                  借财务中心262账户 FD33=fd32       FD42
+			//                  贷清算中心262账户 FD30            FD43=fd42
+			// 扣划实际上是一个科目之间的互相转转,在这里配置相关域
+			$FD40='';
+			$FD43='';
+			$FD39=getitems('#TXAMT');
+			#CZFS='操作方式:扣划到财务或清算中心';
+			$FD33=$FD64;
+			$FD42=getitems('#TXAMT');
+			// 扣划实际上是一个科目之间的互相转转,在这里配置相关域
+			enable(#RELAMT,false);
+			#FD1201=$FD64;
+			#FD1204=$FD21;
+			#FD1205='2';
+			#FD1206=#PZTYPE;
+			#FD1207=#PZVOCNUM;
+			#FD1208=#TXAMT;
+			#FD120A='财务扣划处理';
+			enable(#RELAMT,false);
+			$OPNBR=#GET_BRNO;//得到开户机构
+			//所以这里设置fd30,fd43
+			#FD1211=$FD64;
+			#FD1214=$FD21;
+			#FD1215='2';
+			#FD1216=#PZTYPE;
+			#FD1217=#PZVOCNUM;
+			#FD1218=#TXAMT;
+			#FD121A='财务划拨处理';
+			$FD30=$FD64;
+			//showmsg($FD121);
+		}
+		$FD120=getitems('#FD1201#FD1202#FD1203#FD1204#FD1205#FD1206#FD1207#FD1208#FD1209#FD120A');
+		$FD121=getitems('#FD1211#FD1212#FD1213#FD1214#FD1215#FD1216#FD1217#FD1218#FD1219#FD121A');
+	}"</ONLOSTFOCUS>
+</ITEM>
+<!-- 定义120 域 --->
+<ITEM NAME="#FD1201" TYPE="%20s"/><!-- 1内部帐号   -->
+<ITEM NAME="#FD1202" TYPE="%60s"/><!-- 2户名       -->
+<ITEM NAME="#FD1203" TYPE="%16s"/><!-- 3余额       -->
+<ITEM NAME="#FD1204" TYPE="%2s" /><!--    4币种    -->  
+<ITEM NAME="#FD1205" TYPE="%1s" /><!--    5现转标志-->  
+<ITEM NAME="#FD1206" TYPE="%3s" /><!--    6凭证种类-->  
+<ITEM NAME="#FD1207" TYPE="%16s"/><!-- 7凭证号码   -->
+<ITEM NAME="#FD1208" TYPE="%17.2f"/><!-- 8发生额     -->
+<ITEM NAME="#FD1209" TYPE="%2s" /><!--    9用途    -->  
+<ITEM NAME="#FD120A" TYPE="%20s"/><!-- A汉字用途   -->
+<ITEM NAME="#FD120B" TYPE="%2s" /><!--  B余额方向  -->
+
+<!-- 定义 121 域 -->
+<ITEM NAME="#FD1211" TYPE="%20s"/>	<!--1内部帐号  -->
+<ITEM NAME="#FD1212" TYPE="%60s"/>	<!--2户名      -->
+<ITEM NAME="#FD1213" TYPE="%16s"/>	<!--3余额      -->
+<ITEM NAME="#FD1214" TYPE="%2s"/>	  <!--4币种      -->
+<ITEM NAME="#FD1215" TYPE="%1s"/>	  <!--5现转标志  -->
+<ITEM NAME="#FD1216" TYPE="%3s"/>	  <!--6凭证种类  -->
+<ITEM NAME="#FD1217" TYPE="%16s"/>	<!--7凭证号码  -->
+<ITEM NAME="#FD1218" TYPE="%17.2f"/>	<!--8发生额    -->
+<ITEM NAME="#FD1219" TYPE="%2s"/>	  <!--9用途      -->
+<ITEM NAME="#FD121A" TYPE="%20s"/>	<!--A汉字用途  -->
+<ITEM NAME="#FD121B" TYPE="%2s"/>	  <!--B余额方向  -->
+
+
+<ITEM NAME="#PRTLABEL1" TYPE="%-10s"/>	  <!--B余额方向  -->
+<!--输出变量--->
+<ITEM NAME="#NEXTPAGE"  LINE="21" COL="65" TYPE="%6s"   INPUT="SUBMIT"  FUNCTIONS="T(确定)"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示信息">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+print(03,30,'财务扣划----[30]',#CZFS);
+print(05,20,'科    目: [7                        ]',$FD64);
+print(06,20,'处理机构: [5                        ]',#GET_BRNO);
+print(07,20,'[10][21                       ]',#PRTLABEL1,comma(itoa(#TXAMT,'%16.2f'),21));
+print(08,20,'转出金额: [21                       ]',comma(itoa(#RELAMT,'%16.2f'),21));
+print(09,20,'流 水 号: [6                        ]',$FD4);
+print(09,20,'操 作 员: [4                        ]',$FD7);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="打印业务专用凭证" >
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+  $KINDNO='00';
+  dim @txtime  as string;
+  @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+// 	print( 5, 20,'机构名称:[30]',$BRNAME);  
+//	print( 5, 2,'代码:2101');
+//	print( 5, 13,'交易:建立客户ID');
+	   
+	print(03,30,'财务扣划----[30]',#CZFS);
+	print(05,20,'科    目: [7                        ]',$FD64);
+	print(06,20,'处理机构: [5                        ]',#GET_BRNO);
+	print(07,20,'[10][21                       ]',#PRTLABEL1,comma(itoa(#TXAMT,'%16.2f'),21));
+	print(08,20,'转出金额: [21                       ]',comma(itoa(#RELAMT,'%16.2f'),21));
+	print(09,20,'流 水 号: [6                        ]',$FD4);
+	print(09,20,'操 作 员: [4                        ]',$FD7);
+	printacdtl_1();
+	
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+	//showmsg('CK='+#ACT_LX_CK);
+	//showmsg(#ACT_LX);
+	$OPNBR=$KINBR;
+}"
+</LASTWORK>
+</TRANSACTION>

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4212    二级子账户单户计息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  initfd();
+  commsend_001();
+  $FD16=$TXNO;
+  $FD30=#ZH;
+  $FD77=#ZZHXH;
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(4212                     二级子账户单户计息)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2217)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(4212)"/>
+  <ITEM NAME="#TXNAME"  TYPE="%-16s" FUNCTIONS="T(二级子账户单户计息)"/>
+
+  <ITEM LINE="7"  COL="10" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="8"  COL="10" TYPE="%-10s" FUNCTIONS="T(账户名称:)"/>
+  <ITEM LINE="10" COL="10" TYPE="%-10s" FUNCTIONS="T(子户序号:)"/>
+  <ITEM LINE="11" COL="10" TYPE="%-10s" FUNCTIONS="T(子户名称:)"/>
+  <ITEM LINE="12" COL="10" TYPE="%-10s" FUNCTIONS="T(子户余额:)"/>
+  <ITEM LINE="12" COL="45" TYPE="%-10s" FUNCTIONS="T(利    息:)"/>
+  <ITEM LINE="13" COL="10" TYPE="%-10s" FUNCTIONS="T(金额合计:)"/>
+  <ITEM LINE="7"  COL="20" NAME="#ZH" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	initfd();
+   	commsend_001();
+   	$FD16='9706';
+   	$FD30=#ZH;
+   	callserver();
+   	if($FD12!='0000')
+   	{
+   		showmsg(geterror());
+   		return(false);
+   	}
+   	if($FD2!=$KINBR)
+   	{
+   		showmsg('非本机构账号');
+   		return(false);
+   	}
+   	#ZHMC=$FD25;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8"  COL="20" NAME="#ZHMC" TYPE="%-50s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM LINE="10"  COL="20" NAME="#ZZHXH" TYPE="%-6s" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @tota as string;
+	dim @tmp as string;
+	initfd();
+	commsend_001();
+	$FD16='9677';
+	$FD101=#ZH;
+	$FD44=#ZZHXH;
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if($FD70=='*')
+	{
+		showmsg('该子账户已经销户');
+		return(false);
+	}
+	setitems('#ZZHYE',$FD40);
+	setitems('#ZZHLX',$FD41);
+	#ZZHMC=$FD25;
+	#RATE=$FD85;
+	#OPN_DATE=$FD47;
+	#SUB_AC_NO=$FD31;
+	commsend_001();
+	$FD16='9598';
+	$FD123='select sum(round(intst_acm*rate/360/100,2)) from Sub_com_sect_acm where sts='+chr(39)+'0'+chr(39)+' and sub_ac_no='+chr(39)+rtrim(#SUB_AC_NO)+chr(39);
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	@tmp=strfld(@tota,'|',0);
+	#ZZHLX=#ZZHLX+val(@tmp);
+	#ZZHHJ=#ZZHYE+#ZZHLX;
+
+	refresh();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11"  COL="20" NAME="#ZZHMC" TYPE="%-50s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM LINE="12"  COL="20" NAME="#ZZHYE" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="" ENABLE="FALSE"/>
+  <ITEM LINE="12"  COL="55" NAME="#ZZHLX" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="" ENABLE="FALSE"/>
+  <ITEM LINE="13"  COL="20" NAME="#ZZHHJ" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="" ENABLE="FALSE"/>
+  <ITEM NAME="#SUB_AC_NO" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#OPN_DATE" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#RATE" TYPE="%-9s" FUNCTIONS=""/>
+
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+  <RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="交易成功">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 8,22,'交 易 成 功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证"  >
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print( 5,10,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 4212');
+		print( 5,2,'交易名称:二级子账户单户计息');
+		print( 7, 30,'二级子账户计息凭条');
+
+		print( 9,10,'主 账 号:[20]       户    名:[50]',#ZH,#ZHMC);
+		print(11,10,'子账户账号:[19]      户    名:[20]',#SUB_AC_NO,#ZZHMC);
+		print(12,10,'本    金:[20]       利    息:[20]',itoa(#ZZHYE,'%16.2f'),itoa(#ZZHLX,'%16.2f'));
+		print(13,10,'合    计:[20]',itoa(#ZZHHJ,'%16.2f'));
+		print(18,10,'交易日期:[8]  柜员:[6]  流水号:[6]  备注:',$HDATE,$FD7,$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24"  DESC="二级账利息清单">
+   NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 5,10,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:4212');
+	print( 5,13,'交易:二级子账户单户计息');
+
+	print( 7,30,'\L0二级子账户利息清单\L1');
+	print( 9,10,'子账户账号:[19]      户    名:[20]',#SUB_AC_NO,#ZZHMC);
+	print(10,10,'开  户  日:[8]                 支 取 日:[8]',#OPN_DATE,$HDATE);
+	print(11,10,'利      率:[8]%                利    息:￥[16]',comma(val(#RATE,0.000001),8),ltrim(comma(itoa(#ZZHLX,'%17.2f'))));
+	print(12,10,'金额  合计:￥[19] ',ltrim(comma(itoa(#ZZHHJ,'%17.2f'))));
+	print(14,55,'\H0核对无误，请签字:\H1 ____________');
+	print(15,10,'交易日期:[8]  柜员:[6]  流水号:[6]  备注:',$HDATE,$FD7,$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<LASTWORK>
+	"{
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J002';
+		$FD30=#SUB_AC_NO;              //账  号
+		$FD5=$HDATE;                   //交易日期
+		$FD39=getitems('#ZZHLX');      //交易金额
+		$FD41=$KINBR;                  //银行代码
+		$FD81='计息存款';              //摘要
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+	}"
+</LASTWORK>
+</TRANSACTION>

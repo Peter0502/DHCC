@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="2317 客户识别ID状态维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	
+	initfd();
+	commsend_001();
+	$FD28=#CIFNO;
+	$FD70=#WHZT;
+	$FD81=#BRF;
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+	//showmsg('核心返回成功！');
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(2317                        客户识别ID状态维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1301)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   <ITEM LINE="6" COL="10" NAME="#LCIFNO" TYPE="%-10s" FUNCTIONS="T(客户号:)" />
+   <ITEM LINE="7" COL="10" TYPE="%-10s" FUNCTIONS="T(客户类型:)" />
+   <ITEM LINE="8" COL="10" TYPE="%-10s" FUNCTIONS="T(客户姓名:)" />
+   <ITEM LINE="9" COL="10" TYPE="%-10s" FUNCTIONS="T(维护状态:)" />
+   <ITEM LINE="10" COL="10" TYPE="%-10s" FUNCTIONS="T(备    注:)" />
+   <ITEM LINE="6" COL="20" NAME="#CIFNO"  TYPE="%8d"   INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+	  dim @tota as string;
+	  initfd();	
+	  commsend_001();
+	 	$FD16='9755';
+		$FD28=#CIFNO;
+		@tota=callserver();	
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#CIFTYPE=delspace($FD72);
+		enable(#CIFTYPE,false);
+		#NAME=delspace($FD26);
+		enable(#NAME,false);
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="20" NAME="#CIFTYPE" TYPE="%1s"  INPUT="SELECT" FUNCTIONS="V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="1.个人"/>
+			<OPTION VALUE="2" TITLE="2.公司"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#NAME" LINE="8" COL="20" TYPE="%-58s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="9" COL="20" NAME="#WHZT" TYPE="%1s"  INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="1.正常"/>
+			<OPTION VALUE="2" TITLE="2.注销"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#BRF" LINE="10" COL="20" TYPE="%-30s" INPUT="TEXT" FUNCTIONS="T()" >
+		<ONLOSTFOCUS>
+	"{
+		initfd();
+		commsend_001();
+		$FD16='3369';
+		callserver();
+		if($FD12 !='0000')
+		{
+		showmsg(geterror());
+		return(false);
+		}
+		//showmsg('授权成功！');
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM LINE="21" COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="客户识别ID状态维护成功">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		print( 5, 25,'客户识别ID状态维护成功');
+		print( 7, 25,'客户号:[24]',#CIFNO);
+		if(#WHZT=='1')
+		{
+		print( 8, 25,'维护状态:[24]','正常');
+		}
+		if(#WHZT=='2')
+		{
+		print( 8, 25,'维护状态:[24]','注销');
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="客户识别ID状态维护成功">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @cif as string;
+		dim @rowcnt as number;
+		dim @i as number;
+		dim @j as number;
+		dim @acno as string;
+                dim @txtime  as string;
+                @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		@rowcnt=atoi(#ROWCNT);
+		@i=9;
+		@cif=itoa(#CIFNO,'%d');
+		$KINDNO = '00';
+		print( 5,12,'机构名称:[30]',$BRNAME); 
+		print( 5, 5,'交易代码:[4]','2317'); 
+		print( 5,5,'交易名称:客户识别ID状态维护'); 
+		print( 7,20,'客 户 号:[8]',#CIFNO);
+		print( 8,20,'客户名称:[60]',#NAME);
+		if(#WHZT=='1')
+		{
+		print( 9,20,'维护状态:[60]','正常');
+		}
+		if(#WHZT=='2')
+		{
+		print( 9,20,'维护状态:[60]','注销');
+		}
+		print(10,20,'备注:[30]',#BRF);
+                print_sq();
+		print(18,12,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(18,5,'柜员:[4]',$FD7);
+		print(18,10,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

@@ -1,0 +1,46 @@
+/**********************************************************************
+*交易名称：记录银联卡流水信息	                                      *
+*                                                                     *
+*功能描述: 根据银联流水文件记录交易明细             *
+*数据库表:                                                         *
+***********************************************************************/
+
+#include  <stdio.h>
+#include  <stdlib.h>
+#include  <math.h>
+#include  "public.h"
+
+extern char *get_env_info(char *infoname);
+
+ftpgetcups()
+{
+
+	char sCmd[100];
+	memset(sCmd,0x00,sizeof(sCmd));
+	/****改为新加密形式  20121105
+	strcpy(sCmd,"ftpcupsdzfile.sh");
+	****/
+	vtcp_log("[%s][%d] sCmd==[%s]",__FILE__,__LINE__,sCmd);
+	sprintf(sCmd,"ftpcupsdzfile.sh  %s %s %s %s",get_env_info("SW_FTP_USER"),get_env_info("SW_FTP_PWD"),get_env_info("DB_USER"),get_env_info("DB_PASSWD"));
+	printf("命令:[%s]\n",sCmd);
+	vtcp_log("[%s][%d] sCmd==[%s]",__FILE__,__LINE__,sCmd);
+	if(system(sCmd))
+	{
+		vtcp_log("[%s][%d] sCmd==[%s]",__FILE__,__LINE__,sCmd);
+		printf("命令:[%s]\n",sCmd);
+		printf("[%s][%d]shell执行失败\n",__FILE__,__LINE__);
+        goto ErrExit;
+	}
+	
+
+GoodExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sql_commit();   /*--提交事务--*/
+	vtcp_log("\n ■ 流水登记成功!\n");
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	vtcp_log("\n ■ 流水登记失败!\n");
+	sql_rollback(); /*--事务回滚--*/
+	return 1;
+}

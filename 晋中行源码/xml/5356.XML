@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5356  包状态查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	// commsend_001();
+  $FD2=$OPNBR;
+ 	$FD3=$KINBR;
+ 	$FD5=$HDATE;
+ 	$FD7=$TLRNO;
+ 	$FD10=$TTYNAME;
+ 	$FD16='5896';
+ 	$FD79=#PASSWD; 
+        	
+
+	$FD46=getitems('#WTDATE');     // 委托日期		
+	$FD67=getitems('#BZT');        // 包状态
+	//$FD68=getitems('#FWCHOOSE');   // 范围选择
+
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(5356                           包状态查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5896)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	dim @selid as number;
+	dim @ldxml as string;
+	dim @filename as string;
+	dim @tota as string;
+	dim @packid as string;
+	dim @pay_qsno as string;
+	dim @pack_date as string;
+	
+	if(#DOLIST !='')
+	{
+			@selid=list_work();
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+			@selid=list_getselid();
+                        if(@selid &lt; 0)
+                        {
+                                list_del();
+                                rerun();
+                                return(true);
+                        }
+
+			initfd();
+			commsend_001();
+			@pack_date = rtrim(list_gettext(@selid,1));
+			@packid = rtrim(list_gettext(@selid,2));
+			@pay_qsno = rtrim(list_gettext(@selid,3));
+			open('LVPACKINFO.XML','#PACKID='+@packid+';#PACK_DATE='+#WTDATE+';#PAY_QSNO='+@pay_qsno+';#LW_IND='+#BZT+';#PACK_DATE='+@pack_date+';');
+			
+			
+			return(true);
+	}
+	list_del();
+	#DOLIST='';
+}"
+</ONLOSTFOCUS>
+</ITEM>	
+<ITEM NAME="#DOLIST1" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+  
+  <!--输入变量-->
+   <ITEM LINE="9" COL="30" TYPE="%-10s" FUNCTIONS="T(数据来源:)"/>
+  <ITEM LINE="11"  COL="30" TYPE="%-10s" INPUT="LABEL" NAME="#LB0"  FUNCTIONS="T(交易机构:)"/>
+  <ITEM LINE="13"  COL="30" TYPE="%-10s" FUNCTIONS="T(委托日期:)"/>
+  <ITEM LINE="15"  COL="30" TYPE="%-10s" FUNCTIONS="T(组包序号:)"/>
+ 
+  <!--<ITEM NEME="#FWXZ" INPUT="LABEL" LINE="13" COL="30" TYPE="%-10s"  VISABLE="FALSE" FUNCTIONS="T(范围选择:)"/>-->
+    <ITEM NAME="#BZT" 	INPUT="SELECT" 	LINE="9" COL="40	" TYPE="%-1s" 	FUNCTIONS="T(1)">
+  <SELECT>
+  		<OPTION VALUE="1" TITLE="0.往包"/>
+  		<OPTION VALUE="2" TITLE="1.来包"/> 		
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+  	if(#BZT=='2')
+  	{
+  		show(#LB0, false);
+  		show(#BR_NO,false);
+  	}
+  	else if(#BZT=='1')
+  	{
+  		show(#LB0, true);
+  		show(#BR_NO,true);
+  	}
+  	
+   }"
+   </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BR_NO" LINE="11" COL="40"  DEVICE="KEYBOARD" TYPE="%-5s"  FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#WTDATE" LINE="13" COL="40"  DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="T($HDATE)D()V(NB)"/>
+  <ITEM NAME="#PACKID" LINE="15" COL="40"  DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS=""/>
+
+  
+  <!--<ITEM NAME="#FWCHOOSE" LINE="13" COL="40" TYPE="%1s"  DEVICE="KEYBOARD" INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="T(0)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="0.所有"/>
+      <OPTION VALUE="1" TITLE="1.清算中心"/>
+    </SELECT>
+  </ITEM>
+  
+  
+  
+<ITEM NAME="#KINBR"   TYPE="%-7s"  FUNCTIONS="T($KINBR)"/> 
+  <ITEM NAME="#CHOOSE"  TYPE="%-1s"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+    "{
+    	if(#KINBR=='0608808')
+    	{
+      //show(#FWXZ,true);
+    	show(#FWCHOOSE,true);
+    	}
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>-->
+  
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @tota as string;
+	dim @offset as number;
+	dim @cnt as number;
+	dim @packlen as number;
+	dim @flag as string;
+	dim @id as number;
+	list_init(17,78,5,1);
+	list_setcolcnt(6);
+	list_setcol(0,'交易行',9);
+	list_setcol(1,'顺序号',8);
+	list_setcol(2,'交   易   金   额',20);
+	list_setcol(3,'开户行( 付 )',14);
+	list_setcol(4,'开户行( 收 )',14);
+	list_setcol(5,'状    态',8);
+	initfd();
+
+	commsend_001();
+	  $FD2=$OPNBR;
+ 	$FD3=$KINBR;
+ 	$FD5=$HDATE;
+ 	$FD7=$TLRNO;
+ 	$FD91 = #BR_NO;
+ 	$FD10=$TTYNAME;
+ 	$FD16='5896';
+ 	$FD79=#PASSWD;
+	$FD44 = #PACKID; 
+	$FD46=getitems('#WTDATE');     // 委托日期		
+	$FD67=getitems('#BZT');        // 包状态
+	//$FD68=getitems('#FWCHOOSE');   // 范围选择
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if(substr(@tota,36,1)=='E')
+	{
+		showmsg(substr(@tota,36,5) +'  '+substr(@tota,44,40))
+		list_del();
+		return(true);
+	}
+
+	if(autolist(@tota))
+	{
+//		list_work();
+	}
+
+	#DOLIST='1';
+	}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+</TRANSACTION>
+
+  
+  
+  

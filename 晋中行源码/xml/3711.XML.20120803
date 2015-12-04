@@ -1,0 +1,847 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3711 IC卡补换卡"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		//与神码通讯 Begin by hxc
+		dim @filename as string;
+		dim @update as string;
+		//dim @number as numner;
+		@filename='../tmp/'+$FD7+$FD10+'.fds';
+		if(substr(#OACTNO,0,6)=='621780' and len(#OACTNO)==19)
+		{
+			dim @icdata as string;
+			savefds(@filename);
+			initfd();
+			commsend_001();
+			$FD16='7110';//IC补换卡
+			$FD30=#OACTNO;
+			$FD31=#NACTNO;
+			$FD80=#NEW_PASSWORD;
+			$FD67=#INSTEAD_REASON;
+			if(#INSTEAD_REASON=='2')
+			{
+				$FD60=#LOST_NO;						//挂失编号
+			}
+			if(#INSTEAD_REASON=='0')
+			{
+				$FD39=itoa(val(#AVAIL_BAL,100),'%016.2f');  // 原卡电子现金余额
+			}
+			//showmsg('$FD39='+$FD39);
+			//showmsg('#INSTEAD_REASON = ['+#INSTEAD_REASON+']');
+			$FD75=#MSR2BAK;
+			$FD76=#MSR3BAK;
+			@icdata = initiccard();
+			if(strfld(@icdata,'|',0)!='9000')
+				{
+					showmsg('函数Initiccard返回值有误!');
+					return(false);
+				}
+			#IC_ATC = strfld(@icdata,'|',2);
+			#IC_AC = strfld(@icdata,'|',3);
+			#CARD_SEQ_ID=strfld(@icdata,'|',4);
+			$FD65=#IC_ATC;//应用交易计数器
+			$FD61=#IC_AC;//应用密文
+			$FD23=#CARD_SEQ_ID;//IC卡序列号
+			//showmsg('应用计数器#IC_ATC='+#IC_ATC);
+			//showmsg('应用密文#IC_AC='+#IC_AC);
+			//showmsg('IC卡序列号#CARD_SEQ_ID='+#CARD_SEQ_ID);
+			if (isTxContinue() == false)
+			{
+				return(false);
+			}
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//showmsg('IC补换卡发往神码正确处理结束,将要写脚本');
+			//@update=updateiccard('04DA9F790a0000000850006F94ABF1,04DC010C42703C9F61123635333132323139383630373135343431349F62010057136217800109002658D30122200004400284000F5F200848414E204348414F9F1F00260D27E7');
+			#CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+			//showmsg('脚本为'+$FD108);
+			@update=updateiccard($FD108);
+			//@update='9000'; 
+			
+			if(((@update !='9000') and(#INSTEAD_REASON=='2' or #INSTEAD_REASON=='1')) or (#INSTEAD_REASON=='0' and @update !='9000|9000' ))
+			{
+				showmsg('卡数据更新失败@update='+@update);
+				initfd();
+				commsend_001();
+				$FD16='7777';
+				$FD12=#RESP_CODE;
+				$FD30=#OACTNO;
+				$FD43=#CARD_TRACENO;
+				//showmsg('$FD43='+$FD43);
+				callagn();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return (false);
+				}
+				//#RESP_CODE=$FD12;
+				return(false);
+			}
+			//$FD12='0000';
+			//#RESP_CODE=$FD12;
+			#COST_FEE = val($FD41);
+			#TRAN_FEE = val($FD40);
+			#COST_FEE1 = val($FD41,0.01);
+			#TRAN_FEE1 = val($FD40,0.01);
+			loadfds(@filename);
+			initfd();
+			//add by luolz 20091101 增加开卡收手续费模块 begin
+			//暂时YEAR_FEE,COST_FEE,TRAN_FEE 赋初值
+			//#COST_FEE = 800;
+			//#TRAN_FEE = 0;
+			//#COST_FEE1 = 8.00;
+			//#TRAN_FEE1 = 0.00;
+			$FD31=#NACTNO;
+			$FD40 = itoa(#COST_FEE,'%16.0f');
+			$FD41 = itoa(#TRAN_FEE,'%16.0f');
+			call_9986_card();
+			setitems('#FEETLRNO#FEE_PWD#FEEFLAG',$FD9);  //得到收费标志
+			//showmsg('#FEEFLAG = ['+#FEEFLAG+']');
+			if(#FEEFLAG != '3' and #FEEFLAG != '' and substr(#OACTNO,0,6)=='621780' ) //费用为0时,#FEEFLAG为空
+			{
+				#FEEFLAG1 = '0';
+			}
+			else
+			{
+				#FEEFLAG1 = '1';
+			}
+		}
+		//add by luolz 20091101 增加开卡收手续费模块 end
+		//与神码通讯 End by hxc
+		//return(false);//test test test test test
+		//showmsg('开始2410！');
+		initfd();
+		commsend_001();
+		$TXNO='2410';
+		$FD16='2410';
+		$FD14='00000000';
+		$FD30=#OACTNO;
+		$FD31=#NACTNO;
+		$FD59=#NVOCNUM;
+		$FD67=#TXTP;
+		//#PASSWD=#NEW_PASSWORD;
+		$FD114=space(1)+#PASS+space(6)+#PASSWD+#CERT+getitems('#CERTNO')+space(1)+#ZJLX+space(2);
+		//$FD114=space(1)+'N'+space(6)+getitems('#PASSWD')+getitems('#CERT')+getitems('#CERTNO')+space(1)+#ZJLX+space(2);
+		}"
+</COMMSEND>
+<COMMRECV>
+	"{
+		commrecv_001();
+		$PBLINE='05';
+		$KINDNO='02';
+		//showmsg('$FD12='+$FD12);
+		//showmsg('#OACTNO='+#OACTNO);
+		if(($FD12!='0000') and ($FD12!='Z003') and (substr(#OACTNO,0,6)=='621223' or substr(#OACTNO,0,6)=='621780'))//卡交易核心处理失败往数码发送取消交易
+		{
+			#RESP_CODE=$FD12;
+			showmsg(geterror());
+			initfd();
+			commsend_001();
+			$FD16='7777';
+			$FD12=#RESP_CODE;
+			$FD30=#OACTNO;
+			$FD43=#CARD_TRACENO;
+			//showmsg('$FD43='+$FD43);
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			showmsg('IC卡补换卡失败!!...');
+			rerun();
+		}
+		//showmsg('haha成功!');
+	}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+	#PIC='';
+	#PIC1='';
+}"
+</FIRSTWORK>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+		"T(3711                            IC卡补换卡)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(──────────────────────────────�)"/>
+	<ITEM LINE="7"  COL="09"   TYPE="%-12s"   FUNCTIONS="T(更换方式:!)"/>
+	<ITEM LINE="9"  COL="09"   TYPE="%-12s"   FUNCTIONS="T(原账卡号:)"/>
+	<ITEM LINE="9"  COL="45"   TYPE="%-12s"   FUNCTIONS="T(原凭证号:)"/>
+	<ITEM LINE="10" COL="09"   TYPE="%-12s"   FUNCTIONS="T(户    名:)"/>
+	<ITEM LINE="11" COL="09"   TYPE="%-12s"   FUNCTIONS="T(更换原因:)"  NAME="#GHYY" VISABLE="FALSE"  INPUT="LABEL"/>
+	<ITEM LINE="11" COL="45"   TYPE="%-12s"   FUNCTIONS="T(挂失编号:)"  NAME="#GSBH" VISABLE="FALSE"  INPUT="LABEL"/>
+	<ITEM LINE="12" COL="09"   TYPE="%-12s"   FUNCTIONS="T(密码支取:!)"/>
+	<ITEM LINE="12" COL="45"   TYPE="%-12s"   FUNCTIONS="T(支取密码:)"  NAME="#ZQMM" VISABLE="FALSE"  INPUT="LABEL"/>
+	<ITEM LINE="13" COL="09"   TYPE="%-12s"   FUNCTIONS="T(证件支取:!)"/>
+	<ITEM LINE="14" COL="09"   TYPE="%-10s"   FUNCTIONS="T(照    片:)"/>
+	<ITEM LINE="14" COL="45"   TYPE="%-10s"   FUNCTIONS="T(印    件:)"/>
+	<ITEM LINE="15" COL="09"   TYPE="%-12s"   FUNCTIONS="T(证件类型:!)" NAME="#LZJLX" VISABLE="FALSE" INPUT="LABEL"/>
+	<ITEM LINE="15" COL="45"   TYPE="%-12s"   FUNCTIONS="T(证件号码:)"  NAME="#ZJHM"  VISABLE="FALSE" INPUT="LABEL"/>
+	<ITEM LINE="16" COL="08"   TYPE="%-18s"   FUNCTIONS="T(【新介质信息栏】)"/>
+	<ITEM LINE="17" COL="09"   TYPE="%-60s"   FUNCTIONS="T(------------------------------------------------------------------)"/>
+	<ITEM LINE="19" COL="09"   TYPE="%-12s"   FUNCTIONS="T(新账卡号:)"/>
+	<ITEM LINE="19" COL="45"   TYPE="%-12s"   FUNCTIONS="T(新凭证号:)"/>
+	<ITEM LINE="20" COL="09"   TYPE="%-12s"   FUNCTIONS="T(新 密 码:)"  NAME="#NEW_MM" VISABLE="FALSE" INPUT="LABEL"/>
+	<ITEM NAME="#MSR2BAK"      TYPE="%-37s"   FUNCTIONS=""/>
+	<ITEM NAME="#MSR3BAK"      TYPE="%-104s"  FUNCTIONS=""/>
+	<ITEM NAME="#ACTNO"        TYPE="%-104s"  FUNCTIONS=""/>
+	<ITEM NAME="#TEMPCERTNO"   TYPE="%-20s"   FUNCTIONS=""/>
+	<ITEM NAME="#CARD_TRACENO" TYPE="%-16s"   FUNCTIONS=""/>
+	<ITEM NAME="#RESP_CODE"    TYPE="%-4s"    FUNCTIONS=""/>
+	<ITEM NAME="#IC_ATC"       TYPE="%-4s"    FUNCTIONS=""/>   <!--应用交易计数器 ，有卡必须上送-->
+	<ITEM NAME="#IC_AC"        TYPE="%-16s"   FUNCTIONS=""/>   <!--应用密文-->
+	<ITEM NAME="#CARD_SEQ_ID"  TYPE="%-3s"    FUNCTIONS=""/>   <!--IC卡序列号-->
+	<ITEM NAME="#COST_FEE"     TYPE="%17.2f"  FUNCTIONS=""/>   <!----工本费---->
+	<ITEM NAME="#TRAN_FEE"     TYPE="%17.2f"  FUNCTIONS=""/>   <!----交易手续费---->
+	<ITEM NAME="#COST_FEE1"    TYPE="%17.2f"  FUNCTIONS=""/>   <!----工本费---->
+	<ITEM NAME="#TRAN_FEE1"    TYPE="%17.2f"  FUNCTIONS=""/>   <!----交易手续费---->
+	<ITEM NAME="#FEETLRNO"     TYPE="%4s"     FUNCTIONS=""/>   <!---授权柜员号--->
+	<ITEM NAME="#FEE_PWD"      TYPE="%6s"     FUNCTIONS=""/>   <!---授权柜员口令--->
+	<ITEM NAME="#FEEFLAG"      TYPE="%1s"     FUNCTIONS=""/>   <!---收费标志--->
+	<ITEM NAME="#FEEFLAG1"     TYPE="%1s"     FUNCTIONS=""/>   <!---收费标志--->
+	<ITEM NAME="#TXNAME"       TYPE="%-20s"   FUNCTIONS="T(更换卡)"/>  <!---交易名称--->
+	<ITEM NAME="#TXNO"         TYPE="%-4s"    FUNCTIONS="T($TXNO=2410)"/>
+	<ITEM NAME="#TXCD"              TYPE="%4s"    FUNCTIONS="T(3711)"/>  
+	<ITEM NAME="#FLAG"         TYPE="%-1s"    FUNCTIONS=""/>
+	<ITEM NAME="#TXTP" LINE="7"  COL="19	" TYPE="%-1s" INPUT="SELECT"	FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="正常更换"/>
+		<OPTION VALUE="2" TITLE="书挂更换"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+		"{
+		if(#TXTP=='1')
+		{
+		enable(#OACTNO1,true);
+		enable(#OACTNO2,false);
+		show(#OACTNO1,true);
+		show(#OACTNO2,false);
+		}
+		if(#TXTP=='2')
+		{
+		enable(#OACTNO1,false);
+		enable(#OACTNO2,true);
+		show(#OACTNO1,false);
+		show(#OACTNO2,true);
+		}
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#STXTP"  TYPE="%-14s" FUNCTIONS="S(#TXTP,#TXTP)"/>
+	<ITEM NAME="#OACTNO1" LINE="9" COL="19" TYPE="%-19s" INPUT="TEXT" DEVICE="ICC"  FUNCTIONS="V(NB)M($MSR2,1)"/>
+	<ITEM NAME="#OACTNO2" LINE="9" COL="19" TYPE="%-19s" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+	<ITEM NAME="#OACTNO" TYPE="%-19s" FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+		"{
+		if(#TXTP=='1')
+		{
+		#OACTNO=#OACTNO1;
+		}
+		if(#TXTP=='2')
+		{
+		#OACTNO=#OACTNO2;
+		}
+			initfd();
+			commsend_001();
+			$FD16='9710';
+			#OACTNO=delspace(#OACTNO);
+			$FD30=#OACTNO;
+			$FD67=#TXTP;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//showmsg('到这204行');
+			//showmsg('#OACTNO='+#OACTNO);
+			if(substr(#OACTNO,0,6) == '621780')
+			{
+				show(#NACTNO,true);
+				enable(#NACTNO,true);
+				if(#TXTP=='1')
+				{
+					show(#ZQMM,true);
+					show(#PASSWD,true);
+					#INSTEAD_REASON='0';//损坏补换卡
+					show(#GHYY,true);
+					enable(#INSTEAD_REASON,true);
+					show(#INSTEAD_REASON,true);
+				}
+				else if(#TXTP=='2' or #TXTP=='3')
+				{
+					#INSTEAD_REASON='2';
+					show(#GHYY,true);
+					enable(#INSTEAD_REASON,false);
+					#INSTEAD_REASON='2';
+					show(#INSTEAD_REASON,true);
+				}
+				//showmsg('到这219行#TXTP='+#TXTP);
+				//showmsg('#INSTEAD_REASON='+#INSTEAD_REASON);
+			}
+				#TEMPCERTNO=delspace($FD37);
+				#PASS=substr($FD114,1,1);
+				#CERT=substr($FD114,14,1);
+				#MEDKIND=substr($FD116,0,4);    //介质种类
+				#OVOCNUM=substr($FD116,135,16);//原凭证
+				//showmsg('OVOCNUM='+#OVOCNUM);
+				//showmsg('#PASS='+#PASS);
+				//showmsg('#CERT='+#CERT);
+				//showmsg('#MEDKIND='+#MEDKIND);
+				//showmsg('#OVOCNUM='+#OVOCNUM);
+				//if(#PASS=='Y'){
+				//IC卡补换卡不验证密码-wangwk-20101217
+				//show(#ZQMM,true);
+				//show(#PASSWD,true);
+				//}
+				if(#CERT=='Y')
+				{
+					show(#LZJLX,true);
+					show(#ZJHM,true);
+					show(#CERTNO,true);
+					show(#ZJLX,true);
+					#ZJLX=substr($FD114,36,1);
+				}
+				else
+				{
+					show(#LZJLX,false);
+					show(#ZJHM,false);
+					show(#CERTNO,false);
+					show(#ZJLX,false);
+				}
+				show(#OVOCNUM,true);
+				//show(#PASS,true);
+				show(#CERT,true);
+				#NAME=$FD25;
+
+				if(#TXTP=='3')
+				{
+					//#PASS='N';
+					//modified by liuyong 20100512 start
+					//show(#ZQMM,true);
+					//更换介质不验证密码-wangwk-20101217
+					//show(#PASSWD,false);
+					//enable(#PASSWD,false);
+					//show(#SGPASSWD,true);
+					//enable(#SGPASSWD,true);
+					//modified by liuyong 20100512 end
+				}
+				//add by luolz 增加是卡时，不打印旧凭证条件  begin
+				//showmsg('#TXTP='+#TXTP);
+				//showmsg('substr(#OACTNO,0,6)='+substr(#OACTNO,0,6));
+				if(#TXTP == '1' and substr(#OACTNO,0,6)!='621780')
+				{
+					#FLAG = '1';
+				}
+				else
+				{
+					#FLAG = '0';
+				}
+				//showmsg('到这287行#FLAG='+#FLAG);
+				//add by luolz 增加是卡时，不打印旧凭证条件  end
+				//#INSTEAD_REASON='0';
+				//showmsg('#INSTEAD_REASON='+#INSTEAD_REASON);
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#MEDKIND" TYPE="%-4s"     FUNCTIONS=""/><!---介质种类--->
+	<!--added by liuyong 2009-9-15 显示图片信息 start-->
+	<ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+	<ITEM NAME="#PIC" LINE="14" COL="19" LINES="160" COLS="120"  TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+	<ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+			#LYACNO=#OACTNO;
+			call_96641();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#PIC1" LINE="14" COL="55" LINES="220" COLS="160"  TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+	<ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+			#LYACNO=#OACTNO;
+			call_96642();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<!--added by liuyong 2009-9-15 显示图片信息 end-->
+	<ITEM LINE="9"  COL="55" TYPE="%-16s" NAME="#OVOCNUM"	       INPUT="LABEL" 	 FUNCTIONS=""/>
+	<ITEM LINE="10" COL="19" TYPE="%-50s" NAME="#NAME" 	         INPUT="LABEL" 	 FUNCTIONS="T($FD25)"/>
+	<ITEM LINE="11" COL="19" TYPE="%-1s"  NAME="#INSTEAD_REASON" INPUT="SELECT"  FUNCTIONS="" ENABLE="FALSE" VISABLE="FALSE">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="更换介质"/>
+			<OPTION VALUE="1" TITLE="损坏补换介质"/>
+			<OPTION VALUE="2" TITLE="挂失补发新介质"/>
+		</SELECT>
+	</ITEM>
+	<ITEM  TYPE="%-1s"  NAME="#TEMP"  FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+				dim @tagvalue as string;
+				dim @card_no as string;
+			//正常更换不输入新密码
+			if(#INSTEAD_REASON =='0')
+			{
+					@tagvalue= ictagvalue('9f79');
+				if(strfld(@tagvalue,'|',0)!='9000')
+				{
+					showmsg('函数ictagvalue的返回值有误!');
+					return(false);
+				}
+				@tagvalue= strfld(@tagvalue,'|',1);
+				#AVAIL_BAL=val(@tagvalue,0.01);
+			}
+			if(#TXTP == '1' and #INSTEAD_REASON == '2')
+			{
+				showmsg('更换方式和更换原因不匹配，请重新选择！');
+				return (false);
+			}
+			else if( (#TXTP != '1' and #INSTEAD_REASON != '2') )
+			{
+				showmsg('此种更换方式更换原因必须为挂失补发新卡，请重新选择！');
+				return (false);
+			}
+			//正常更换需要新密码
+			if(#TXTP == '1' and #INSTEAD_REASON != '0')
+			{
+				show(#NEW_MM,true);
+				show(#NEW_PASSWORD,true);
+				enable(#NEW_PASSWORD,true);
+			}
+			if(#INSTEAD_REASON=='2' and substr(#OACTNO,0,6) == '621780')
+			{
+				show(#GSBH,true);
+				enable(#LOST_NO,true);
+				show(#LOST_NO,true);
+			}
+			else if(#INSTEAD_REASON=='0' or #INSTEAD_REASON=='1')
+			{
+				show(#GSBH,false);
+				show(#LOST_NO,false);
+				enable(#LOST_NO,false);
+			}
+			//showmsg('到357行!');
+			//任何情况换证时，本来为密码支取的，输入密码。不是密码支取的，不输入密码 20110907 begin by jk
+			//del by zxw2011-11-21 17:01:38
+			if(substr(#OACTNO,0,6) != '621780')
+			{
+				if( #PASS == 'Y')
+				{
+					show(#PASS,true);
+					enable(#PASS,false);
+					show(#ZQMM,true);
+					show(#PASSWD,true);
+					enable(#PASSWD,true);
+				}
+				else
+				{
+					show(#PASS,true);
+					enable(#PASS,false);
+					show(#ZQMM,false);
+					show(#PASSWD,false);
+					enable(#PASSWD,false);
+				}
+				show(#NEW_MM,false);
+				show(#NEW_PASSWORD,false);
+			}
+			//end 20110907 by jk
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="11"  COL="55" TYPE="%-16s" NAME="#LOST_NO"	INPUT="TEXT" 	  FUNCTIONS="V(NB)"  VISABLE="FALSE" ENABLE="FALSE"/>
+	<ITEM LINE="12"  COL="19" TYPE="%-1s"  NAME="#PASS" 	  INPUT="SELECT"  FUNCTIONS="T(Y)" ENABLE="FALSE">
+		<SELECT>
+			<OPTION VALUE="Y" TITLE="是"/>
+			<OPTION VALUE="N" TITLE="否"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+			"{
+				if(#PASS == 'Y')
+				{
+					show(#PASSWD,true);
+					show(#ZQMM,true);
+				}
+				else
+				{
+					show(#PASSWD,false);
+					show(#ZQMM,false);
+				}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<!--书挂兼密挂时重设密码 added by liuyong 201005 start-->
+	<!--是挂失方式去掉-wangwk-20101217
+	<ITEM NAME="#SGPASSWD" INPUT="TEXT" LINE="12" COL="55" TYPE="%6d" DEVICE="PINPAD" FUNCTIONS="I()i()V(NB)" VISABLE="FALSE">
+	<ONLOSTFOCUS>
+	"{
+			#PASSWD=#SGPASSWD;
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<!--added by liuyong 20100512 end-->
+	<!--按行里要求去掉密码密码验证 -->
+	<ITEM LINE="12" COL="55" TYPE="%6s" NAME="#PASSWD" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="i()T()V(NB)" VISABLE="FALSE">
+		<ONLOSTFOCUS>
+		 "{
+		 if(len(delspace(#PASSWD)) &lt; 6)
+				{
+					showmsg('密码长度必须为六位!');
+					return(false);
+				}
+			initfd(); 
+			commsend_001();
+			$FD16='7007'; 
+			$FD30=rtrim(#OACTNO);
+			$FD79=#PASSWD;
+			$FD68='4';
+		<!--	
+			if (isTxContinue() == false )
+		{
+			return(false);
+		}-->
+		callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			<!--
+				initfd();
+				commsend_001();
+				$FD16='7007';
+				$FD30=#OACTNO;
+				$FD79=#PASSWD;
+				$FD68='4';
+				showmsg('1111111111111过这儿了！');
+				callagn();
+				showmsg('22222222222222222过这儿了！');
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return (false);
+				}
+			-->
+			  //showmsg('333333333333333333过这儿了！');
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM TYPE="%17.2f" NAME="#AVAIL_BAL"   FUNCTIONS=""/>
+	<ITEM LINE="13" COL="19" TYPE="%-1s" NAME="#CERT" INPUT="SELECT" FUNCTIONS="T(0)" ENABLE="FALSE">
+		<SELECT>
+			<OPTION VALUE="Y" TITLE="是"/>
+			<OPTION VALUE="N" TITLE="否"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="15" COL="19" TYPE="%-1s" NAME="#ZJLX" INPUT="SELECT" FUNCTIONS="" ENABLE="FALSE" VISABLE="FALSE">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="身份证"/>
+			<OPTION VALUE="2" TITLE="户口薄"/>
+			<OPTION VALUE="3" TITLE="护照  "/>
+			<OPTION VALUE="4" TITLE="军官证"/>
+			<OPTION VALUE="5" TITLE="回乡证"/>
+			<OPTION VALUE="6" TITLE="士兵证"/>
+			<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+			<OPTION VALUE="E" TITLE="临时身份证"/>
+			<OPTION VALUE="F" TITLE="外国人居留证"/>
+			<OPTION VALUE="G" TITLE="警官证"/>
+			<OPTION VALUE="H" TITLE="其他证件"/>
+			<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="15" COL="50" TYPE="%-20s" NAME="#CERTNO"  INPUT="TEXT"  FUNCTIONS="V(NB)" VISABLE="FALSE">
+		<ONLOSTFOCUS>
+		"{
+			if(#TEMPCERTNO != #CERTNO)
+				{
+					showmsg('证件号不符请重新输入!');
+					return (false);
+				}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  TYPE="%-1s" NAME="#TEMP"    FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			showmsg('请插入新卡，开始对新卡相关校验处理：');
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="19" COL="19" TYPE="%-19s" NAME="#NACTNO" INPUT="TEXT"  DEVICE="ICC"  FUNCTIONS="V(NB)M($MSR2,1)">
+		<ONLOSTFOCUS>
+		"{
+			//showmsg('#INSTEAD_REASON = ['+#INSTEAD_REASON+']');
+			//showmsg('开始对新卡相关校验处理：')
+			if(substr(#NACTNO,0,6)!='621780')
+			{
+				showmsg('介质不是IC卡');
+				return(false);
+			}
+			//showmsg('到476行!');
+			if(substr(#OACTNO,0,6)=='621780' and substr(#NACTNO,0,6)=='621780')
+			{
+				//#IC_ATC = ictagvalue('9f36');
+				//showmsg('应用交易计数器#IC_ATC='+#IC_ATC);
+				//showmsg('$ms2'+$MSR2);
+				//showmsg('$ms3'+$MSR3);
+				if(rtrim(#NACTNO) == rtrim(#OACTNO))
+				{
+					showmsg('新卡号与原卡号不能相同');
+					return(false);
+				}
+				show(#NEW_MM,true);
+				show(#NEW_PASSWORD,true);
+				enable(#NEW_PASSWORD,true);
+				#MSR2BAK=$MSR2;
+				#MSR3BAK=$MSR3;
+				//update by sunlicheng 20110613 start 回显新凭证号
+				#NVOCNUM=substr(#NACTNO,6,12);
+				//#NVOCNUM='0000'+substr(#NACTNO,6,17);
+				//update by sunlicheng 20110613 end
+				if(len(delspace($MSR2)) &lt; 37)
+				{
+					showmsg('刷卡错误,请重试!');
+					return(false);
+				}
+				if(len(rtrim(#NACTNO))!=19)
+				{
+					showmsg('卡号长度不正确，请重新输入!');
+					return(false);
+				}
+			}
+			else if(substr(#OACTNO,0,6)=='621780' and substr(#NACTNO,0,6)!='621780')
+			{
+				showmsg('介质不是储蓄卡');
+				return(false);
+			}
+			else
+			{
+				show(#NEW_MM,true);
+				show(#NEW_PASSWORD,true);
+				enable(#NEW_PASSWORD,true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="19" COL="55" TYPE="%16d"  NAME="#NVOCNUM" INPUT="TEXT"  FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+		"{
+				initfd();
+				commsend_001();
+				$FD30=#OACTNO;
+				//showmsg(#OACTNO);
+				$FD31=#NACTNO;
+				//showmsg('N'+#NACTNO);
+				$FD59=#NVOCNUM;
+				//showmsg('NV'+#NVOCNUM);
+				$FD16='9972';
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				//showmsg('在543行等等我!');
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="20" COL="19" TYPE="%6s" NAME="#NEW_PASSWORD" INPUT="TEXT"    DEVICE="PINPAD" FUNCTIONS="I()i()V(NB)" VISABLE="FALSE">
+		<ONLOSTFOCUS>
+			"{
+			if(len(delspace(#NEW_PASSWORD)) &lt; 6)
+				{
+					showmsg('密码长度必须为六位!');
+					return(false);
+				}
+				//新密码直接更改
+				#PASS='Y';
+				#PASSWD=#NEW_PASSWORD;
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#AVBAL"  TYPE="%17.2f" FUNCTIONS="J(#UAVBAL)"/><!---存单余额--->
+	<ITEM NAME="#UAVBAL" TYPE="%-40s"  FUNCTIONS="U(#AVBAL)"/> <!---存单大写余额--->
+	<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="IC卡补换卡成功">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+			$KINDNO='00';
+			print( 5, 25,'更 换 介 质 成 功 !');
+			print(10, 22,'新帐卡号:[24]',$FD31);
+			print(11, 22,'新凭证号:[16]',#NVOCNUM);
+			print(12, 22,'介质代号:[4 ]',#MEDKIND);
+		}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+		"{
+			$KINDNO='00';
+			dim @txtime  as string;
+			@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+			print( 5,20,'机构名称:[30]',$BRNAME);
+			print( 5, 2,'代码:3711');
+			print( 5,13,'交易:更换凭证');
+			if(#INSTEAD_REASON=='0')
+			{
+			print( 7,20,'更换  方式:[14]         户     名:[50]','到期补换卡',#NAME);
+			}
+			if(#INSTEAD_REASON=='1')
+			{
+			print( 7,20,'更换  方式:[14]         户     名:[50]','损坏补换卡',#NAME);
+			}
+			if(#INSTEAD_REASON=='2')
+			{
+			print( 7,20,'更换  方式:[14]         户     名:[50]','挂失补换卡',#NAME);
+			}
+			print( 8,20,'原帐/卡号:[20      ]    新帐/卡号:[20]',#OACTNO,$FD31);
+			print( 9,20,'原凭证 号:[16  ]        新凭证 号:[16]',#OVOCNUM,#NVOCNUM);
+			print_sq();
+			print(24,20,'备注:');
+			print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+			print(24, 5,'柜员:[4]',$FD7);
+			print(24, 5,'流水号:[6]',$FD4);
+		}"
+	</PRINT>
+</RESPONSE>
+<!--add by luolz 20091101 更换卡收取手续费打印凭证-->
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(手续费)" LINESPACE="24" CHECK="#FEEFLAG1=0">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO='00';
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 3711');
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0更换卡交易\L1');
+		print( 9,20,'原卡号:[19]    新卡号:[19]',#OACTNO,#NACTNO);
+		//print(10,20,'帐户余额:[21]',#TXAMT);
+		//add by luolz 20091026 begin
+		switch( #FEEFLAG ) {
+			case '1' :
+				print(11,20,'缴费方式:现金');
+				break;
+			case '2' :
+				print(11,20,'缴费方式:转账');
+				break;
+			default :
+				print(11,20,'缴费方式:不收');
+				break;
+		}
+		if( delspace(itoa(#COST_FEE1,'%16.2f')) != '0.00' )
+		{
+			print(12,20,'银行卡工本费:[21]',delspace(itoa(#COST_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa(#TRAN_FEE1,'%16.2f')) != '0.00' )
+		{
+			print(13,20,'银行卡手续费:[21]',delspace(itoa(#TRAN_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa((#COST_FEE1+#TRAN_FEE1),'%16.2f')) != '0.00' )
+		{
+			print(14,20,'收费总额:[21]',delspace(itoa((#COST_FEE1+#TRAN_FEE1),'%16.2f')));
+		}
+
+		//add by luolz 20091026 end
+		printacdtl_1();
+		//print_sq();
+		//print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		//print(21,80,'客户签名:_____________________');
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[4]',$FD7);
+		print(24, 5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="27" DESC="请打印旧凭证" CHECK="#FLAG=1" >
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+		"{
+			print(5, 20,'\Z0已更换\Z1');
+			print(10, 6,'流 水 号:【[6  ]】    新凭证号:【[16]】 ',$FD4 ,#NVOCNUM);
+		}"
+	</PRINT>
+</RESPONSE>
+<IMPORT>IC_XK_DJQD.IMP</IMPORT>
+<IMPORT>CXHZ.IMP</IMPORT><!---换折--->
+<IMPORT>CXHD.IMP</IMPORT><!---换单--->
+<!--
+<LASTWORK>
+	"{
+	dim @tota as string;
+	dim @file as file;
+	dim @line as string;
+	dim @tctd_br_no as string;
+	if(substr(#NACTNO,0,6)!='621223')
+	{
+		if(msgbox('新凭证是否有需要刷磁?'+chr(10)+'------------------','提  示','yes|no')==0)
+		{
+			if(writemsr(delspace(substr($FD31,0,19)),''))
+			{
+				showmsg('写磁成功!');
+			}
+			else
+			{
+			showmsg('写磁失败!');
+			}
+		}
+		//打印通存通兑行号
+		$FD123='select tctd_br_no,br_no from tctd_ktzh where tctd_acno='+chr(39)+
+		delspace($FD31)+chr(39)+' and (tc_kt_flag=1 or td_kt_flag=1 or cx_kt_flag=1)';
+		commsend_001();
+		$FD16='9598';
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			showfooter();
+			return(false);
+		}
+		if(@tota=='')
+		{
+			return(true);
+		}
+		savefiletxt('../tmp/'+$KINBR+$TTYNAME,@tota);
+		@file=openfile('../tmp/'+$KINBR+$TTYNAME,'r');
+		if(@file &lt; 0)
+		{
+			showmsg('取附件失败!');
+			return(false);
+		}
+		@line=readline(@file);
+		if(@line=='')
+		{
+			return(true);
+		}
+		@tctd_br_no=strfld(@line,'|',0);
+		link('34101.XML',substr(getitems('$FD31'),0,19)+@tctd_br_no);
+		}
+	}"
+</LASTWORK>
+-->
+</TRANSACTION>
+

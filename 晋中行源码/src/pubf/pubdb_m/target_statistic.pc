@@ -1,0 +1,326 @@
+#include "find_debug.h" 
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+#include "target_statistic_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL INCLUDE target_statistic.h;
+char    str[3000];
+char    mystery[17];
+
+/*******************************************************************
+	查询函数部分
+*******************************************************************/
+Target_statistic_1_Sel( reply , target_statistic_c , fmtstr , va_alist )
+char    *reply;
+struct  target_statistic_c *target_statistic_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Target_statistic_1_Dec_Sel( reply , "%s" , wherelist );
+	if (ret)
+	{
+		WRITEMSG
+		return ret;
+	}
+	ret = Target_statistic_1_Fet_Sel( target_statistic_c , reply );
+	if (ret)
+	{
+		WRITEMSG
+		return ret;
+	}
+
+	Target_statistic_1_Clo_Sel();
+
+	return 0;
+}
+
+/*******************************************************************
+	删除函数部分
+*******************************************************************/
+/*************************
+Target_statistic_1_Del( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," DELETE FROM target_statistic WHERE %s ",wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE target_statistic_del FROM :comm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	EXEC SQL EXECUTE target_statistic_del ;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+*************************/
+
+
+Target_statistic_1_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+EXEC    SQL BEGIN   DECLARE SECTION;
+	char    comm[1000];
+EXEC    SQL END     DECLARE SECTION;
+
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT * FROM target_statistic WHERE %s ",wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE target_statistic_sel FROM :comm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE sel_target_statistic CURSOR FOR target_statistic_sel;
+
+	EXEC SQL OPEN sel_target_statistic;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"OPEN target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+Target_statistic_1_Fet_Sel ( struct target_statistic_c *target_statistic_c , char * reply )
+{
+EXEC    SQL     BEGIN   DECLARE SECTION;
+	struct  target_statistic    target_statistic;
+EXEC    SQL     END     DECLARE SECTION;
+
+	int   ret;
+
+	EXEC SQL FETCH sel_target_statistic INTO :target_statistic;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+	{
+		sprintf(acErrMsg,"Fet target_statistic erro!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode == 100 )
+	{
+		/*sprintf(acErrMsg,"Fet target_statistic erro!!! %d",sqlca.sqlcode);
+		WRITEMSG*/
+		strcpy (reply,"D104");
+		return sqlca.sqlcode;
+	}
+
+	MEMCPY_DEBUG( target_statistic_c,&target_statistic,sizeof(struct target_statistic_c) );
+	return 0;
+}
+
+Target_statistic_1_Clo_Sel ()
+{
+	EXEC SQL CLOSE sel_target_statistic;
+	EXEC SQL FREE sel_target_statistic;
+}
+
+/*******************************************************************
+       修改函数部分
+*******************************************************************/
+Target_statistic_1_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+EXEC    SQL BEGIN   DECLARE SECTION;
+	char    comm[1000];
+EXEC    SQL END     DECLARE SECTION;
+
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT * FROM target_statistic WHERE %s FOR UPDATE", wherelist);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE target_statistic_upd FROM :comm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"prepare target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL DECLARE upd_target_statistic CURSOR FOR target_statistic_upd;
+
+	EXEC SQL OPEN upd_target_statistic;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"open target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+Target_statistic_1_Fet_Upd( struct target_statistic_c *target_statistic_c , char * reply )
+{
+EXEC    SQL BEGIN   DECLARE SECTION;
+	struct    target_statistic    target_statistic ;
+EXEC    SQL END     DECLARE SECTION;
+
+	int   ret;
+
+	EXEC SQL FETCH upd_target_statistic INTO :target_statistic;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=100 )
+	{
+		sprintf(acErrMsg,"FETCH upd target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode == 100 )
+	{
+		sprintf(acErrMsg,"FETCH target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return sqlca.sqlcode;
+	}
+	MEMCPY_DEBUG( target_statistic_c , &target_statistic ,sizeof( struct target_statistic_c ) );
+
+	return 0;
+}
+
+Target_statistic_1_Upd_Upd( struct target_statistic_c target_statistic_c , char * reply  )
+{
+EXEC    SQL BEGIN   DECLARE SECTION;
+	struct    target_statistic    target_statistic ;
+EXEC    SQL END     DECLARE SECTION;
+
+	int ret;
+
+	MEMCPY_DEBUG( &target_statistic , &target_statistic_c ,sizeof( struct target_statistic_c ) );
+
+	EXEC SQL UPDATE target_statistic SET *=(:target_statistic) WHERE CURRENT OF upd_target_statistic;
+	if ( sqlca.sqlcode && sqlca.sqlcode != -239 )
+	{
+		sprintf(acErrMsg,"UPDATE target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode == -239 )
+	{
+		sprintf(acErrMsg,"UPDATE target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D106" );
+		return sqlca.sqlcode;
+	}
+	pub_reg_rec_file(" upd target_statistic"); 
+
+	return 0;
+}
+
+
+Target_statistic_1_Del_Upd( char * reply  )
+{
+
+	EXEC SQL DELETE FROM target_statistic WHERE CURRENT OF upd_target_statistic;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"DELETE target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+Target_statistic_1_Clo_Upd( )
+{
+	EXEC SQL CLOSE upd_target_statistic;
+	EXEC SQL FREE  upd_target_statistic;
+
+	return 0;
+}
+
+/*******************************************************************
+	增加函数部分
+*******************************************************************/
+Target_statistic_1_Ins( struct target_statistic_c target_statistic_c , char * reply )
+{
+EXEC    SQL BEGIN   DECLARE SECTION;
+	struct    target_statistic    target_statistic ;
+EXEC    SQL END     DECLARE SECTION;
+
+	int ret;
+	MEMCPY_DEBUG( &target_statistic , &target_statistic_c ,sizeof( struct target_statistic_c ) );
+
+	EXEC SQL INSERT INTO target_statistic VALUES (:target_statistic);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -239 )
+	{
+		sprintf(acErrMsg,"INSERT target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode == -239 )
+	{
+		sprintf(acErrMsg,"INSERT target_statistic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return sqlca.sqlcode;
+	}
+	pub_reg_rec_file(" ins target_statistic"); 
+
+	return 0;
+}

@@ -1,0 +1,444 @@
+/*************************************************************
+* 文 件 名: rpt071.pc
+* 功能描述：保证金结息划转回单
+*
+* 作    者: CHENGBO 
+* 完成日期: 2013年3月13日
+*
+* 注：格式文件为:bzjlxhz.tbl
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+insert into com_eod_exec values('1436','Z071','rpt071','保证金利息划转清单','1111111111','5','3','21','21','2','Y','Y','N','2','Y');
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "prdt_ac_id_c.h"
+#include "trace_log_bk_c.h"
+#include "dc_log_bk_c.h"
+#include "dd_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "bzj_js_ac_rel_c.h"
+
+EXEC SQL INCLUDE trace_log_c.h;
+EXEC SQL INCLUDE sqlca.h;
+
+static struct com_sys_parm_c sComSysParm;
+
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		struct trace_log_c sTraceLogBk;
+	EXEC    SQL END     DECLARE SECTION;
+
+struct   trace_log_bk_c s_trace_log_bk; 
+struct   mdm_ac_rel_c	s_mdm_ac_rel;
+struct   dd_mst_c	s_dd_mst;
+struct   dc_log_bk_c	s_dc_log_bk;
+char     acc_hrt_dr[6];
+int get_bzjlxhz(int bli,int bll,char str[100]);
+rpt071()
+{
+	int line, opncnt;
+	int hy_line;
+	char vpfm[21];
+	char fname[30];
+	char pre_br_no[6];
+	FILE *fp; 
+	short flag_count;
+
+
+	
+	memset( pre_br_no, 0x00, sizeof( pre_br_no ) );
+
+    g_reply_int = sql_begin(); /*打开事务*/
+    if( g_reply_int != 0 )
+    {
+        sprintf( acErrMsg, "BEGIN WORK error!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+TRACE;
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+    
+	strcpy( fname, "BRbzjlxhz" );
+	strcpy( fname, "RPT071");
+	g_reply_int = pub_rpt_rmfile_all( fname );
+	if ( g_reply_int != 0)
+	{
+		sprintf(acErrMsg,"删除保证金利息扣款回单错误!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	memset( &sComSysParm, 0x00, sizeof( struct com_sys_parm_c ) );
+	g_reply_int = Com_sys_parm_Sel( g_pub_tx.reply , &sComSysParm , "sys_date=%ld" , g_pub_tx.tx_date );
+	if( g_reply_int ) 
+	{ 
+		sprintf(acErrMsg, "SELECT com_sys_parm error![%d]", g_reply_int ); 
+		WRITEMSG 
+		goto ErrExit; 
+	}
+
+	strcpy(vpfm, "bzjlxhz");
+	strcpy(vpfm, "RPT071");
+
+TRACE;
+	sqlca.sqlcode=0;
+	EXEC SQL declare sel_trace_log_bk1 cursor for   
+		select opn_br_no, ac_no, amt,trace_no,tx_date,note_no  
+		from trace_log   
+		where tx_code = 'G037' and add_ind='0' order by trace_no,trace_cnt; 
+	if (sqlca.sqlcode)
+	{ 
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( g_pub_tx.reply , "D101" ); 
+		goto ErrExit;
+	}
+
+	EXEC SQL OPEN sel_trace_log_bk1; 
+	if (sqlca.sqlcode) 
+	{ 
+		sprintf(acErrMsg,"OPEN sel_trace_log_bk1 error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( g_pub_tx.reply , "D102" ); 
+		goto ErrExit;
+	}
+	flag_count=0; /*JYW***/
+
+TRACE;
+	while(1) 
+	{
+		EXEC SQL FETCH sel_trace_log_bk1 INTO :sTraceLogBk.opn_br_no,
+			:sTraceLogBk.ac_no, :sTraceLogBk.amt, :sTraceLogBk.trace_no,
+			:sTraceLogBk.tx_date, :sTraceLogBk.note_no;
+		if ( sqlca.sqlcode == 1403 )
+		{
+TRACE;
+			g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "CC", &opncnt, get_bzjlxhz );
+TRACE;
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM CC error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			
+			vtcp_log("111111111111111111111");
+			if(flag_count)fclose( fp );
+			vtcp_log("3333333333333333333333");
+			break;
+		}
+		else if ( sqlca.sqlcode )
+		{
+			sprintf( acErrMsg,"FETCH trace_log_bk CUR error![%d]", g_reply_int );
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+
+TRACE;
+		/*机构号变,下一个文件*/
+		if( strcmp( sTraceLogBk.opn_br_no, pre_br_no ) )
+		{
+			/*不是第一个机构,打上个机构的结尾*/
+			if( strlen( pre_br_no ) )
+			{
+				g_reply_int = pub_rpt_read_pfm_qd( fp,&line,vpfm,"0001","CC",&opncnt,get_bzjlxhz);
+				if( g_reply_int )
+				{
+					sprintf( acErrMsg,"RPT READ PFM CC error![%d]", g_reply_int );
+					WRITEMSG
+					goto ErrExit;
+				}
+				fclose( fp );
+			}
+
+			g_reply_int = pub_rpt_openfile( &fp, sTraceLogBk.opn_br_no , fname );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT OPEN FILE [%s]error![%d]", fname, g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			else flag_count=1; /*JYW 表示已经处理过文件*/
+
+			hy_line = 0;    /*换页计数器*/
+
+			strcpy( pre_br_no, sTraceLogBk.opn_br_no );
+		}
+TRACE;
+
+		g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "BB", &opncnt, get_bzjlxhz );
+		if( g_reply_int )
+		{
+			sprintf( acErrMsg,"RPT READ PFM BB error![%d]", g_reply_int );
+			WRITEMSG
+			goto ErrExit;
+		}
+TRACE;
+		hy_line++;    /*换页计数器*/
+			
+		if( hy_line == 1 )
+		{
+			fprintf(fp,"\f");
+			fprintf(fp,"\n");
+
+			hy_line = 0;
+		}
+	}
+	
+vtcp_log("22222222222222222222222");
+TRACE;
+	EXEC SQL CLOSE sel_trace_log_bk1;
+/**JYW	EXEC SQL FREE sel_trace_log_bk1; **/
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成保证金利息划款回单成功![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成保证金利息划款回单失败![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int get_bzjlxhz( bli,bll,str )
+int bli,bll;
+char str[100];
+{
+	char vstr[101]; 
+	char fmt[10]; 
+	char tmp_amt[50];
+	struct com_branch_c sComBranch;
+	struct mdm_ac_rel_c sMdmAcRel;
+	struct mdm_ac_rel_c sMdm_ac_rel;
+	struct prdt_ac_id_c sPrdtAcId;
+	struct bzj_js_ac_rel_c sBzj_js_ac_rel;
+	struct dd_mst_c sDdMst;
+	struct td_mst_c sTdMst;
+	struct ln_mst_c sLnMst;
+	
+	memset(tmp_amt,0x00,sizeof(tmp_amt));
+	memset(vstr,0x00,sizeof(vstr));
+	switch( bli ) 
+	{ 
+		case 'C': 
+			memset( &sComBranch, 0x00, sizeof( struct com_branch_c ) );
+			g_reply_int = Com_branch_Sel( g_pub_tx.reply, &sComBranch, "br_no='%s'", sTraceLogBk.opn_br_no );
+			if( g_reply_int ) 
+			{ 
+				sprintf(acErrMsg, "SELECT com_branch error![%d]", g_reply_int ); 
+				WRITEMSG 
+			}
+			pub_base_strpack( sComBranch.br_name );
+			sprintf(vstr, "%s（%s）", sComBranch.br_name, sComBranch.br_no );
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'E': 
+			sprintf(vstr, "%s", sTraceLogBk.ac_no );
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'F':
+			pub_base_strpack( sTraceLogBk.ac_no );
+			memset(&sMdmAcRel,0x00,sizeof(struct mdm_ac_rel_c));
+			g_reply_int = Mdm_ac_rel_Sel( g_pub_tx.reply, &sMdmAcRel, 
+				"ac_no='%s'", sTraceLogBk.ac_no );
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "保证金帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			memset(&sBzj_js_ac_rel,0x00,sizeof(struct bzj_js_ac_rel_c));
+			g_reply_int = Bzj_js_ac_rel_Sel(g_pub_tx.reply,&sBzj_js_ac_rel," bzj_ac_id = %ld ",sMdmAcRel.ac_id);
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "保证金帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+		        memset(&sMdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+			g_reply_int = Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_id = %ld",sBzj_js_ac_rel.js_ac_id);
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "结算帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			sprintf(vstr, "%s", sMdm_ac_rel.ac_no );
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'M': 
+			pub_base_strpack( sTraceLogBk.ac_no );
+			g_reply_int = Mdm_ac_rel_Sel( g_pub_tx.reply, &sMdmAcRel, 
+				"ac_no='%s'", sTraceLogBk.ac_no );
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "保证金帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			g_reply_int = Prdt_ac_id_Sel( g_pub_tx.reply, &sPrdtAcId, 
+				"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			if( sPrdtAcId.ac_id_type[0] == '1' )
+			{
+				memset( &sDdMst, 0x00, sizeof( struct dd_mst_c ) );
+				g_reply_int = Dd_mst_Sel( g_pub_tx.reply, &sDdMst, 
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sDdMst.name );
+			}
+			if( sPrdtAcId.ac_id_type[0] == '2' )
+			{
+				memset( &sTdMst, 0x00, sizeof( struct td_mst_c ) );
+				g_reply_int = Td_mst_Sel( g_pub_tx.reply, &sTdMst,  
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sTdMst.name );
+			}
+			if( sPrdtAcId.ac_id_type[0] == '3' )
+			{
+				memset( &sLnMst, 0x00, sizeof( struct ln_mst_c ) );
+				g_reply_int = Ln_mst_Sel( g_pub_tx.reply, &sLnMst,  
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sLnMst.name );
+			}
+
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'N': 
+			pub_base_strpack( sTraceLogBk.ac_no );
+			memset(&sMdmAcRel,0x00,sizeof(struct mdm_ac_rel_c));
+			g_reply_int = Mdm_ac_rel_Sel( g_pub_tx.reply, &sMdmAcRel, 
+				"ac_no='%s'", sTraceLogBk.ac_no );
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "保证金帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			memset(&sBzj_js_ac_rel,0x00,sizeof(struct bzj_js_ac_rel_c));
+			g_reply_int = Bzj_js_ac_rel_Sel(g_pub_tx.reply,&sBzj_js_ac_rel," bzj_ac_id = %ld and sts='1' ",sMdmAcRel.ac_id);
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "保证金帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			memset(&sPrdtAcId,0x00,sizeof(struct prdt_ac_id_c));
+			g_reply_int = Prdt_ac_id_Sel( g_pub_tx.reply, &sPrdtAcId, 
+				"ac_id=%ld and ac_seqn=%d ", sBzj_js_ac_rel.js_ac_id, sBzj_js_ac_rel.js_ac_seqn );
+			if( g_reply_int )
+			{ 
+				sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+				WRITEMSG 
+			}
+			if( sPrdtAcId.ac_id_type[0] == '1' )
+			{
+				memset( &sDdMst, 0x00, sizeof( struct dd_mst_c ) );
+				g_reply_int = Dd_mst_Sel( g_pub_tx.reply, &sDdMst, 
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sDdMst.name );
+			}
+			if( sPrdtAcId.ac_id_type[0] == '2' )
+			{
+				memset( &sTdMst, 0x00, sizeof( struct td_mst_c ) );
+				g_reply_int = Td_mst_Sel( g_pub_tx.reply, &sTdMst,  
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sTdMst.name );
+			}
+			if( sPrdtAcId.ac_id_type[0] == '3' )
+			{
+				memset( &sLnMst, 0x00, sizeof( struct ln_mst_c ) );
+				g_reply_int = Ln_mst_Sel( g_pub_tx.reply, &sLnMst,  
+					"ac_id=%ld and ac_seqn=%d ", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				strcpy( vstr, sLnMst.name );
+			}
+
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'J': 
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, pub_rpt_pcask(sTraceLogBk.amt ) );
+			break; 
+		case 'K': 
+			sprintf( vstr, "%16.2lf", sTraceLogBk.amt );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'X': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date/10000 ); 
+			break; 
+		case 'W': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date/100%100 ); 
+			break; 
+		case 'V': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date%100 ); 
+			break; 
+		default : 
+			memset( str,' ',bll ); 
+			break; 
+	}
+	
+	return 0; 
+}

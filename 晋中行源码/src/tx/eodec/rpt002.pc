@@ -1,0 +1,790 @@
+/*************************************************************
+* 文 件 名: rpt002.c
+* 功能描述：日报
+*
+* 作    者: rob
+* 完成日期: 2003年4月13日
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#include "com_branch_c.h"
+
+
+int line=0;
+struct com_branch_c rggjgm;
+struct gl_mst_c rzz,ozz,hzz;
+struct com_item_c rkm,okm;
+char vjgbm[10];
+char vzqqx[2];
+long vgsrq;
+long vxtrq;
+char vrkcs[21];
+char jgtj[100];
+char sentence[1024];
+int page_lines[100];
+
+char idno1[20];
+char idno2[20];
+char ui_brno1[2];
+
+FILE *fp;
+int cpzs=0;
+int vsjly=0;
+int prtzero=0;  /*余额、发生额为零打否 1打 0不*/
+
+int bbt;
+
+
+int page=0;	
+int get_ratio_rjb( int bli,int bll, char str[100], int rpt_code );
+
+rpt002()
+{
+	int ret = 0;
+	struct com_sys_parm_c com_sys_parm_c;
+
+    char brno[6];
+	char fullname[100];
+	int rmmode=0,opncnt=0;
+	int vd=0,vm=0,vy=0;
+	int i=0,k,h,n;
+	char tmpstr[10];
+	long xmrq,ymrq,jmrq,bnmrq,nmrq;
+	int gqbz=0;
+
+	memset(&com_sys_parm_c, 0x0, sizeof(struct com_sys_parm_c));
+
+    ret=sql_begin(); /*打开事务*/
+    if(ret != 0)
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+
+    /* 取前一天日期 */
+    ret = Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"取系统参数表错误!! [%d]",ret);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vsjly=0;
+    g_pub_tx.tx_date = com_sys_parm_c.lst_date;
+	vxtrq=com_sys_parm_c.sys_date;
+	vgsrq=com_sys_parm_c.lst_date;
+
+	sprintf(acErrMsg,"输入日期[%d] 归属日期[%d]\n",vxtrq,vgsrq);
+	WRITEMSG
+
+	ymrq=vgsrq/100*100+31; 
+	nmrq=vgsrq/10000*10000+1231; 
+	vd=vgsrq%100; 
+	vm=vgsrq%10000/100; 
+	vy=vgsrq/10000; 
+	if( vm<7 ) 
+		bnmrq=vgsrq/10000*10000+630; 
+	else 
+		bnmrq=vgsrq/10000*10000+1230; 
+	jmrq=vy*10000+((vm-1)/3+1)*3*100+31; 
+	if( vd<=10 ) vd=10; 
+	else if( vd<=20 ) vd=20; 
+	else vd=31; 
+	xmrq=vy*10000+vm*100+vd; 
+	sprintf(acErrMsg,"xm[%d] ym[%d] jm[%d] bn[%d] n[%d]\n", 
+		xmrq,ymrq,jmrq,bnmrq,nmrq); 
+    WRITEMSG
+
+
+	strcpy( vrkcs,"r02" ); 
+	sprintf(acErrMsg, "标志[%s] 来源[%d]\n\n",vrkcs,vsjly ); 
+	WRITEMSG
+	vd=vxtrq%100; 
+	vm=vxtrq%10000/100; 
+	vy=vxtrq/10000;
+
+	strcpy( idno1,"bbrjb" );
+	strcpy( idno2,"BRrbb" );
+	strcpy( ui_brno1,"1" );
+	rmmode=1;
+	
+	pub_rpt_rmfile( "",idno2,0 );
+
+	sprintf( ui_brno1+1,"%1d",rmmode+gqbz*2 );
+
+	sprintf( acErrMsg,"\tpfm[%s] rec[%s]\n",idno1,ui_brno1);
+	WRITEMSG
+
+	/**是否打印零金额行**/
+	if( pub_rpt_readstr_pfm_qd(idno1,0002,"ZE",&opncnt,sentence,get_ratio_rjb) )
+	{ 
+		sprintf(acErrMsg,"读取是否打印零金额行错误!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	sprintf(acErrMsg,"sentence=[%s]",sentence);
+	WRITEMSG
+	
+	if( sentence[0]=='1' || sentence[1]=='1' ) prtzero=1;
+
+	/**每页行数**/
+	if( pub_rpt_readstr_pfm_qd(idno1,0002,"PG",&opncnt,sentence,get_ratio_rjb) ) 
+		strcpy( sentence,"" );
+	
+	sprintf(acErrMsg,"sentence=[%s]",sentence);
+	WRITEMSG
+
+	/* 每页的行数默认96行 */
+	for( k=1;k<20;k++ )
+	{
+		page_lines[k]=96;
+	}
+	
+	/* 将定义行数赋值 */
+	for( n=0,h=1,k=0;k<strlen(sentence)+1;k++ )
+	{
+		if( sentence[k]>='0' && sentence[k]<='9' )
+		{
+			tmpstr[n]=sentence[k];
+			n++;
+		}
+		else if( n>0 )
+		{
+			tmpstr[n]='\0';
+			n=0;
+			page_lines[h]=atol(tmpstr);
+			h++;
+		}
+	}
+	
+	for( k=1;k<10;k++ )
+	{
+		sprintf(acErrMsg, "%d-%d ",k,page_lines[k]);
+		WRITEMSG
+	}
+	sprintf(acErrMsg,"\n");
+	WRITEMSG
+
+	/**读取SQL语句
+	********/
+	memset( sentence,0,sizeof(sentence) );
+	if( pub_rpt_readstr_pfm_qd(idno1,0002,ui_brno1,&opncnt,sentence,
+						get_ratio_rjb) ) 
+		goto ErrExit;
+
+	sprintf(acErrMsg,"SENTENCE[%s],br_no=[%s]",sentence,brno);
+	WRITEMSG
+        
+	if( Make_rjb( brno ) )
+		goto ErrExit;
+
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成科目日结单成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成科目日结单失败!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+
+int Make_rjb( char brno[10] )
+{
+	
+	int first=0;
+	int flag = 0;
+	double tmpdbl;
+	int ret;
+	char new_cur_no[3],old_cur_no[3];
+
+	ret = bbrjb_Dec_Sel(sentence, g_pub_tx.reply);
+	if (ret != 0)
+	{
+	    sprintf(acErrMsg,"DECLARE FOR SELECT ERROR [%d]",ret);
+	    WRITEMSG
+	    goto ErrExit;
+	}
+
+	memset( &ozz,0x00,sizeof(struct gl_mst_c) );
+	memset( &hzz,0x00,sizeof(struct gl_mst_c) );
+	memset(old_cur_no,0x00,sizeof(old_cur_no));
+	memset(new_cur_no,0x00,sizeof(new_cur_no));
+	strcpy(hzz.acc_hrt,"0");
+	while(1)
+	{
+		memset(&rzz,0x00,sizeof(struct gl_mst_c));
+		ret = bbrjb_Fet_Sel(&rzz,&rkm,g_pub_tx.reply);
+		if (ret != 0 && ret != 100)
+		{
+		    sprintf(acErrMsg,"FETCH ERROR !! [%d]",ret);
+		    WRITEMSG
+		    return ret;
+		}
+		else if (ret == 100)
+		{
+			sprintf(acErrMsg,"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+			WRITEMSG
+		     break;
+		}
+		
+		strcpy(new_cur_no,rzz.cur_no);
+		if (flag == 0)
+		{
+			
+			strcpy(old_cur_no,new_cur_no);
+		}
+
+		/**昨日、本日发生额余额都为零则不写入表内**/
+		if( prtzero==0 )
+		{
+		if( strlen(rzz.acc_hrt)>1 && rzz.ldd_bal==0.00 && rzz.lcd_bal==0.00
+			&& rzz.rdd_amt==0.0 && rzz.rcd_amt==0.0 
+			&& rzz.dr_bal==0.0 && rzz.cr_bal==0.0 ) continue;
+		}
+
+		/***表外科目收入付出***/
+		if( rzz.acc_hrt[0]>='6' )
+		{
+			tmpdbl=rzz.rcd_amt;
+			rzz.rcd_amt=rzz.rdd_amt;
+			rzz.rdd_amt=tmpdbl;
+		}
+
+		/******备抵科目是反向************
+		if( rzz.acc_hrt[0]=='1' ) 
+		{
+			rzz.ldd_bal=rzz.ldd_bal-rzz.lcd_bal;
+			rzz.dr_bal=rzz.dr_bal-rzz.cr_bal;
+			rzz.lcd_bal=0.00;
+			rzz.cr_bal=0.00;
+		}
+		******************/
+
+		if( strcmp(rzz.br_no,ozz.br_no) )
+		{
+			if( first==0 )
+			{
+				memcpy( &ozz,&rzz,sizeof(struct gl_mst_c) );
+				memcpy( &okm,&rkm,sizeof(struct com_item_c) );
+			}
+
+			if( first!=0 )
+			{
+				strcpy( vjgbm,ozz.br_no );
+				if( ozz.acc_hrt[1]=='5' )
+					if( write_kmhj() ) return 1;
+				
+				if( write_dail() ) return 1;
+				if( write_jz() ) return 1;
+				/****
+				if( write_hy() ) return 1;
+				*******/
+			}
+			page=1;
+			strcpy( vjgbm,rzz.br_no );
+			line=0;
+			memset( &hzz,0x0,sizeof(struct gl_mst_c) );
+			strcpy( hzz.acc_hrt,"0" );
+			if( rzz.acc_hrt[0]<='5' )
+			{
+				if( write_head() ) return 1;
+			}
+			else
+			{
+				if( write_head67(2) ) return 1;
+			}
+			first=1;
+		}
+		else if( rzz.acc_hrt[0]!='5' && ozz.acc_hrt[0]=='5' )
+		{
+
+			write_kmhj(1);
+			if( write_dail() ) return 1;
+			if( line>page_lines[page]-8 )
+			{
+				if( write_jz() ) return 1;
+				if( write_hy() ) return 1;
+				page++;
+				line=0;
+				if( write_head67(2) ) return 1;
+			}
+			else 
+			{
+				if( write_head67(1) ) return 1;
+			}
+			strcpy( vjgbm,rzz.br_no );
+		}
+
+		
+		if (strncmp(new_cur_no,old_cur_no,2) != 0)
+		{
+			strcpy(old_cur_no,new_cur_no);
+			strcpy( vjgbm,rzz.br_no );
+			if( write_dail() ) return 1;
+			if( write_jz() ) return 1;
+			if( write_hy() ) return 1;
+
+			page++;
+			line=0;
+			if( rzz.acc_hrt[0]<='5' )
+			{
+				if( write_head() ) return 1;
+			}
+			else
+			{
+				if( write_head67(2) ) return 1;
+			}
+		}
+		
+		if( line>page_lines[page]-4 )
+		{
+			strcpy( vjgbm,rzz.br_no );
+			if( write_dail() ) return 1;
+			if( write_jz() ) return 1;
+			if( write_hy() ) return 1;
+
+			page++;
+			line=0;
+			if( rzz.acc_hrt[0]<='5' )
+			{
+				if( write_head() ) return 1;
+			}
+			else
+			{
+				if( write_head67(2) ) return 1;
+			}
+		}
+		
+		
+		flag = flag + 1;
+		strcpy( vjgbm,rzz.br_no );
+		if( write_body() ) return 1;
+
+		memcpy( &ozz,&rzz,sizeof(struct gl_mst_c) );
+		memcpy( &okm,&rkm,sizeof(struct com_item_c) );
+		if( strlen(rzz.acc_hrt)==1 )
+		{
+		hzz.ldd_bal+=rzz.ldd_bal;
+		hzz.lcd_bal+=rzz.lcd_bal;
+		hzz.rdd_amt+=rzz.rdd_amt;
+		hzz.rcd_amt+=rzz.rcd_amt;
+		hzz.dr_bal+=rzz.dr_bal;
+		hzz.cr_bal+=rzz.cr_bal;
+		}
+	}
+
+	if( first==1 )
+	{
+		if( write_kmhj(2) ) return 1;
+		if( write_dail() ) return 1;
+		if( write_jz() ) return 1;
+	}
+	bbrjb_Clo_Sel();
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int write_head()
+{
+	char vrec[3];
+
+	strcpy( vrec,"HH" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	strcpy( vrec,"AA" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+
+	bbt=0;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_head67( int mode )
+{
+	char vrec[3];
+
+	if( mode==2 )
+	{
+	strcpy( vrec,"HH" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	strcpy( vrec,"DD" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	}
+	else
+	{
+	strcpy( vrec,"DD" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	}
+	bbt=0;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_dail()
+{
+	char vrec[3];
+
+	if( ozz.acc_hrt[0]<='5' )
+	{
+	strcpy( vrec,"CC" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	}
+	else
+	{
+	strcpy( vrec,"FF" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	}
+	bbt=1;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_jz()
+{
+	char vrec[3];
+
+	strcpy( vrec,"GG" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	bbt=1;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_hy()
+{
+	char vrec[3];
+
+	strcpy( vrec,"HY" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	bbt=1;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_kmhj( int mode )
+{
+	char vrec[3];
+	struct gl_mst_c tmpzz;
+
+	if( ozz.acc_hrt[0]<='5' )
+	{
+	strcpy( vrec,"II" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	strcpy( vrec,"BB" );
+	memcpy( &tmpzz,&rzz,sizeof(struct gl_mst_c) );
+	memcpy( &rzz,&hzz,sizeof(struct gl_mst_c) );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	memcpy( &rzz,&tmpzz,sizeof(struct gl_mst_c) );
+	}
+	bbt=1;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int write_body( int mode )
+{
+	char vrec[3];
+	int lll=0;
+
+	/*printf("acchrt[%s]\n",rzz.acchrt); */
+
+	if( strlen(rzz.acc_hrt)==1 )
+	{
+		if( bbt )
+			lll=1;
+	}
+
+	if( lll )
+	{
+		if( rzz.acc_hrt[0]<='5' )
+			strcpy( vrec,"II" );
+		else
+			strcpy( vrec,"JJ" );
+		if( Make_yeb_sub(vrec) ) goto ErrExit;
+	}
+
+	if( rzz.acc_hrt[0]<='5' )
+		strcpy( vrec,"BB" );
+	else
+		strcpy( vrec,"EE" );
+	if( Make_yeb_sub(vrec) ) goto ErrExit;
+	bbt=1;
+
+	return 0;
+ErrExit:
+ 	sprintf(acErrMsg,"ERROR" );WRITEMSG
+	return 1;
+}
+int Make_yeb_sub( char vrec[3] )
+{
+	char vpfm[21];
+	int rpt_code;
+	int opncnt=0;
+	
+	strcpy( vpfm,idno1 );
+
+
+	pub_rpt_openfile( &fp,vjgbm,idno2 );
+
+	rpt_code=0002;
+
+
+	if( vrec[0]=='H' && vrec[1]=='Y' )
+		fprintf( fp,"\n\f\n" );
+	else
+	{
+		if( pub_rpt_read_pfm_qd(fp,&line,vpfm,rpt_code,vrec,&opncnt,
+				get_ratio_rjb) ) 
+			goto ErrExit;
+	}
+
+	fclose(fp);
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int get_ratio_rjb( bli,bll,str ,rpt_code)
+ int bli,bll,rpt_code;
+ char str[100];
+{
+	char vhm[101];
+	char vstr[101];
+	char fmt[20];
+	int i=0;
+	int ret;
+	double vje=0.0,vje1=0.0;
+
+	memset( str,0,sizeof(str) );
+
+	switch( bli )
+	{
+		case 'S':
+			memset( str,' ',bll );
+			sprintf( fmt,"%%-%ds",bll );
+			sprintf( str,fmt,jgtj );
+			break;
+		case 'T':
+			ret = Com_branch_Sel(g_pub_tx.reply,&rggjgm,"br_no='%s'",
+					vjgbm);
+ 			if (ret != 0 && ret != 100)
+			{
+				sprintf(acErrMsg,"SELECT COM_BRANCH ERROR !! [%d]",ret);
+				WRITEMSG
+				sprintf(acErrMsg,"br_no=[%s]",vjgbm);
+				WRITEMSG
+				goto ErrExit;
+			}
+			else if (ret == 100)
+			{
+				strcpy(rggjgm.br_name,"");
+			}
+
+			memset( str,' ',bll );
+			ldchar( rggjgm.br_name,strlen(rggjgm.br_name),rggjgm.br_name );
+			i=strlen(rggjgm.br_name);
+			strncpy( str,rggjgm.br_name,i );
+			if( strncmp(vjgbm,"00000",5) )
+			{
+			strncpy( str+i,"(",1 );
+			i++;
+			strncpy( str+i,vjgbm,5 );
+			i=i+5;
+			strncpy( str+i,")",1 );
+			}
+			break;
+		case 'X':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,vgsrq/10000 );
+			break;
+		case 'W':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,vgsrq%10000/100 );
+			break;
+		case 'V':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,vgsrq%100 );
+			break;
+		case 'Z':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,vgsrq );
+			break;
+		case 'U':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,page );
+			break;
+
+		case 'A':
+			if( strlen(rzz.acc_hrt)>=3 )
+			{
+				sprintf( fmt,"%%-%ds",bll );
+				ldchar( rzz.acc_hrt,strlen(rzz.acc_hrt),rzz.acc_hrt );
+				sprintf( str,fmt,rzz.acc_hrt );
+			}
+			else
+			{
+				memset( str,' ',bll );
+			}
+			break;
+		case 'B':
+			if( strlen(rzz.acc_hrt)>=3 )
+			{
+				sprintf( fmt,"%%-%ds",bll );
+				pub_base_strpack( rkm.acc_name );
+				sprintf( str,fmt,rkm.acc_name );
+			}
+			else
+			{
+				sprintf( fmt,"%%-%ds",bll );
+				switch( rzz.acc_hrt[0] )
+				{
+					case '0':
+						sprintf( str,fmt,"    合  计" );
+						break;
+					case '1':
+						sprintf( str,fmt,"一、资产类合计" );
+						break;
+					case '2':
+						sprintf( str,fmt,"二、负债类合计" );
+						break;
+					case '3':
+						sprintf( str,fmt,"三、所有者权益类合计" );
+						break;
+					case '4':
+						sprintf( str,fmt,"四、资产负债共同类合计" );
+						break;
+					case '5':
+						sprintf( str,fmt,"五、损益类合计" );
+						break;
+					case '6':
+						sprintf( str,fmt,"表外科目合计" );
+						break;
+					case '7':
+						sprintf( str,fmt,"备忘科目合计" );
+						break;
+					default :
+						memset( str,' ',bll );
+						break;
+				}
+			}
+			break;
+		case 'C':
+			if( rzz.ldd_bal==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.ldd_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'D':
+			if( rzz.lcd_bal==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.lcd_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'E':
+			if( rzz.rdd_amt==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.rdd_amt );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'F':
+			if( rzz.rcd_amt==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.rcd_amt );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'G':
+			if( rzz.dr_bal==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.dr_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'H':
+			if( rzz.cr_bal==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",rzz.cr_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+
+		default :
+			memset( str,' ',bll );
+			break;
+	}
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}

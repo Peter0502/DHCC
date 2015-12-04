@@ -1,0 +1,84 @@
+#include "bal.h"
+EXEC SQL INCLUDE SQLCA;
+int 	bal_begin_tx(T_BalInfo*);
+int 	bal_commit_tx(T_BalInfo*);
+int 	bal_abort_tx(T_BalInfo*);
+
+int bal_begin_tx(T_BalInfo* balinfo)
+{
+	if( balinfo->autotran )
+	{
+		if (sqlca.sqlcode){
+			userlog("sqlca.code [%d]\n",sqlca.sqlcode);
+			balerrno = EBALTXBEGIN;
+			return CFailure;
+		}
+		balinfo->tx_flag = 1;
+	}
+	else
+	{
+		balinfo->tx_flag = 0;
+	}
+	return CSuccess;
+}
+
+int bal_commit_tx(T_BalInfo* balinfo)
+{
+	/****Modified by SSH,2006.8.22,数据库由TUXEDO来提交****/
+	/****Modified by SSH,2006.8.23,还是由程序来控制吧****/
+	if( balinfo->autotran && balinfo->tx_flag )
+	{
+		EXEC SQL commit work;
+		if (sqlca.sqlcode){
+			balerrno = EBALTXCOMMIT;
+			return CFailure;
+		}
+	}
+	return CSuccess;
+		
+}
+
+int bal_abort_tx(T_BalInfo* balinfo)
+{
+	/****Modified by SSH,2006.8.22,数据库由TUXEDO来回滚****/
+	/****Modified by SSH,2006.8.23,还是由程序来控制吧****/
+	if( balinfo->autotran && balinfo->tx_flag )
+	{
+		EXEC SQL rollback work;
+		if (sqlca.sqlcode){
+			balerrno = EBALTXABORT;
+			return CFailure;
+		}
+	}
+	return CSuccess;
+}
+/*   write in rbscomm
+int bal_open_database()
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[16];
+EXEC	SQL	END		DECLARE	SECTION;
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	if(getenv("DB_NAME")!=NULL){
+		strcpy(sql_dbname,getenv("DB_NAME"));
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+		
+	}else{
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	}
+	if(sqlca.sqlcode)
+	{
+		return -1;
+	}
+	return (0);
+}
+
+int bal_close_database()
+{
+		userlog("Has disconnect from  [%s]",dbname);
+		return CSuccess;
+}
+*/

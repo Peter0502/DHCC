@@ -1,0 +1,290 @@
+/*************************************************************
+* 文 件 名: pubf_eod_check_dc.ec
+* 功能描述：工具:查上级科目和下级科目的平衡，总的借贷平衡
+*
+* 作    者: power
+* 完成日期: 20040620
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_branch_c.h"
+EXEC SQL include "gl_mst_c.h";
+EXEC SQL include "com_item_c.h";
+EXEC SQL include "ass_gl_c.h";
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#define  DEAL	if( sqlca.sqlcode && sqlca.sqlcode!=1403) { sprintf(acErrMsg,"数据库操作错误![%d]",sqlca.sqlcode);	WRITEMSG return -1; }
+
+check_dc()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	short		flag=0;
+	short		flag1=0;
+	double  gl_mst_d_amt=0.00;			/*** 总帐中总借 ***/
+	double  gl_mst_c_amt=0.00;			/*** 总帐中总贷 ***/
+	double  sum_dd_bal=0.00;
+	double  sum_td_bal=0.00;
+	double  sum_ln_bal=0.00;
+	double  sum_in_bal=0.00;
+	char	acc_hrt[6];
+	struct	gl_mst_c	sGl_mst;
+	struct	com_item_c	sCom_item;
+	struct	ass_gl_c	sAss_gl;
+	int		T_num=0;
+	char sql_br_no[6];
+EXEC SQL END DECLARE SECTION;
+
+	/*** 总帐总借总贷检查 ***/
+	EXEC SQL select sum(dr_bal),sum(cr_bal) into :gl_mst_d_amt,:gl_mst_c_amt
+	from gl_mst a,com_item b where substr(a.acc_hrt,1,1)<'6' and  a.acc_hrt=b.acc_hrt
+		and b.acc_lvl='1' ;
+	DEAL
+
+	if( pub_base_CompDblVal(gl_mst_d_amt,gl_mst_c_amt)!=0 )
+	{
+		sprintf(acErrMsg,"总帐中总借总贷不相等![%lf][%lf]",gl_mst_d_amt,gl_mst_c_amt);
+		WRITEMSG
+		goto ErrExit;
+	}
+	sprintf(acErrMsg,"总帐中总借总贷![%lf][%lf]",gl_mst_d_amt,gl_mst_c_amt);
+	WRITEMSG
+
+	vtcp_log("总借总贷检查完成[%d]",__LINE__);
+
+	EXEC SQL DECLARE br_cur CURSOR for select br_no from com_branch where wrk_sts!='*' and br_type!='0';
+	DEAL
+	/*
+	EXEC SQL DECLARE gl_cur CURSOR FOR SELECT rowid,gl_mst.* \
+	FROM gl_mst WHERE cur_no IN ( select cur_no from com_cur_no_code \
+	where use_ind='Y' ) order by br_no,cur_no,acc_hrt union \
+	*/
+	EXEC SQL DECLARE gl_cur CURSOR FOR SELECT rowid,gl_sub.* \
+	FROM gl_sub WHERE cur_no IN ( select cur_no from com_cur_no_code \
+	where use_ind='Y' )  and br_no=:sql_br_no order by br_no,cur_no,acc_hrt; 
+	DEAL
+	
+	EXEC SQL open br_cur;
+	DEAL
+	while(1){
+		memset(sql_br_no,'\0',sizeof(sql_br_no));
+		EXEC SQL FETCH br_cur INTO :sql_br_no;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+	EXEC SQL OPEN gl_cur;
+	DEAL
+
+	vtcp_log("开始检查【%s】行科目间关系\n",sql_br_no);
+
+	while(1)
+	{
+		memset(&sGl_mst,0x00,sizeof(struct gl_mst_c));
+		memset(&sCom_item,0x00,sizeof(struct com_item_c));
+		EXEC SQL FETCH gl_cur INTO :sGl_mst;
+		if( sqlca.sqlcode==1403 ) break;
+		DEAL
+
+		EXEC SQL SELECT rowid,com_item.* INTO :sCom_item
+		FROM com_item WHERE acc_hrt=:sGl_mst.acc_hrt;
+		DEAL
+
+		/*** 检查月季年发生额平衡检查 ***
+		if( sGl_mst.dc_ind[0]=='1' && sCom_item.sub_acc_yn[0]=='N' )
+		{
+			if( pub_base_CompDblVal(sGl_mst.cr_bal,0.00)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中借方科目,贷方余额不等于零!");
+				WRITEMSG
+				sprintf(acErrMsg,"cr_bal=[%lf]",sGl_mst.cr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.tddr_bal+sGl_mst.tddr_amt-sGl_mst.tdcr_amt,sGl_mst.dr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中借方科目,旬初借余额加本旬借发生额减贷发生额不等于当前借余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"tddr_bal=[%lf],tddr_amt=[%lf],tdcr_amt=[%lf],dr_bal=[%lf]",sGl_mst.tddr_bal,sGl_mst.tddr_amt,sGl_mst.tdcr_amt,sGl_mst.dr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.mdr_bal+sGl_mst.mdr_amt-sGl_mst.mcr_amt,sGl_mst.dr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中借方科目,月初借余额加本月借发生额减贷发生额不等于当前借余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"mdr_bal=[%lf],mdr_amt=[%lf],mcr_amt=[%lf],dr_bal=[%lf]",sGl_mst.mdr_bal,sGl_mst.mdr_amt,sGl_mst.mcr_amt,sGl_mst.dr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.qdr_bal+sGl_mst.qdr_amt-sGl_mst.qcr_amt,sGl_mst.dr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中借方科目,季初借余额加本季借发生额减贷发生额不等于当前借余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"qdr_bal=[%lf],qdr_amt=[%lf],qcr_amt=[%lf],dr_bal=[%lf]",sGl_mst.qdr_bal,sGl_mst.qdr_amt,sGl_mst.qcr_amt,sGl_mst.dr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.ydr_bal+sGl_mst.ydr_amt-sGl_mst.ycr_amt,sGl_mst.dr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中借方科目,年初借余额加本年借发生额减贷发生额不等于当前借余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"ydr_bal=[%lf],ydr_amt=[%lf],ycr_amt=[%lf],dr_bal=[%lf]",sGl_mst.ydr_bal,sGl_mst.ydr_amt,sGl_mst.ycr_amt,sGl_mst.dr_bal);
+				WRITEMSG
+				return -1;
+			}
+		}
+		else if( sGl_mst.dc_ind[0]=='2' && sCom_item.sub_acc_yn[0]=='N')
+		{
+			if( pub_base_CompDblVal(sGl_mst.dr_bal,0.00)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中贷方科目,借方余额不等于零!");
+				WRITEMSG
+				sprintf(acErrMsg,"dr_bal=[%lf]",sGl_mst.dr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.tdcr_bal-sGl_mst.tddr_amt+sGl_mst.tdcr_amt,sGl_mst.cr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中贷方科目,旬初贷余额加本旬贷发生额减借发生额不等于当前贷余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"tdcr_bal=[%lf],tddr_amt=[%lf],tdcr_amt=[%lf],cr_bal=[%lf]",sGl_mst.tdcr_bal,sGl_mst.tddr_amt,sGl_mst.tdcr_amt,sGl_mst.cr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.mcr_bal-sGl_mst.mdr_amt+sGl_mst.mcr_amt,sGl_mst.cr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中贷方科目,月初贷余额加本月贷发生额减借发生额不等于当前贷余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"mcr_bal=[%lf],mdr_amt=[%lf],mcr_amt=[%lf],cr_bal=[%lf]",sGl_mst.mcr_bal,sGl_mst.mdr_amt,sGl_mst.mcr_amt,sGl_mst.cr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.qcr_bal-sGl_mst.qdr_amt+sGl_mst.qcr_amt,sGl_mst.cr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中贷方科目,季初贷余额加本季贷发生额减借发生额不等于当前贷余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"qcr_bal=[%lf],qdr_amt=[%lf],qcr_amt=[%lf],cr_bal=[%lf]",sGl_mst.qcr_bal,sGl_mst.qdr_amt,sGl_mst.qcr_amt,sGl_mst.cr_bal);
+				WRITEMSG
+				return -1;
+			}
+			if( pub_base_CompDblVal(sGl_mst.ycr_bal-sGl_mst.ydr_amt+sGl_mst.ycr_amt,sGl_mst.cr_bal)!=0 )
+			{
+				sprintf(acErrMsg,"总帐中贷方科目,年初贷余额加本年贷发生额减借发生额不等于当前贷余额!");
+				WRITEMSG
+				sprintf(acErrMsg,"ycr_bal=[%lf],ydr_amt=[%lf],ycr_amt=[%lf],cr_bal=[%lf]",sGl_mst.ycr_bal,sGl_mst.ydr_amt,sGl_mst.ycr_amt,sGl_mst.cr_bal);
+				WRITEMSG
+				return -1;
+			}
+		}
+		*****************************/
+
+		/*** 有子科目，非轧差科目 ***/
+		if( sCom_item.sub_acc_yn[0]=='Y' && sCom_item.roll_ind[0]=='N' )
+		{
+			EXEC SQL SELECT sum(dr_bal),sum(cr_bal) 
+			INTO :gl_mst_d_amt :flag,:gl_mst_c_amt :flag1 FROM gl_sub 
+			WHERE br_no=:sGl_mst.br_no AND cur_no=:sGl_mst.cur_no 
+			AND acc_hrt in (select acc_hrt from com_item 
+			where up_acc_hrt=:sGl_mst.acc_hrt and acc_lvl!='1' );
+			DEAL
+
+			if( flag ) gl_mst_d_amt=0.00;
+			if( flag1 ) gl_mst_c_amt=0.00;
+			if( pub_base_CompDblVal(sGl_mst.dr_bal,gl_mst_d_amt)!=0
+				|| pub_base_CompDblVal(sGl_mst.cr_bal,gl_mst_c_amt)!=0 )
+			{
+				sprintf(acErrMsg,"[%d]总帐中汇总科目不等于子科目合计!",__LINE__);
+				WRITEMSG
+				sprintf(acErrMsg,"acc_hrt=[%s],dr_bal=[%lf],d_amt=[%lf],cr_bal=[%lf],c_amt=[%lf]",sGl_mst.acc_hrt,sGl_mst.dr_bal,gl_mst_d_amt,sGl_mst.cr_bal,gl_mst_c_amt);
+				WRITEMSG
+				goto ErrExit;
+			}
+			vtcp_log("汇总科目于子科目检查完成[%s][%d]",sGl_mst.acc_hrt,__LINE__);
+		}
+
+		/*** 有子科目，轧差科目 ***/
+		if( sCom_item.sub_acc_yn[0]=='Y' && sCom_item.roll_ind[0]=='Y')
+		{
+			if( sCom_item.dc_ind[0]=='1' )
+			{
+				EXEC SQL SELECT sum(dr_bal-cr_bal)
+				INTO :gl_mst_d_amt :flag FROM gl_sub 
+				WHERE br_no=:sGl_mst.br_no AND cur_no=:sGl_mst.cur_no 
+				AND acc_hrt in (select acc_hrt from com_item 
+				where up_acc_hrt=:sGl_mst.acc_hrt and acc_lvl!='1' );
+				DEAL
+				if( flag ) gl_mst_d_amt=0.00;
+				gl_mst_c_amt=0.00;
+			}
+			else if( sCom_item.dc_ind[0]=='2' )
+			{
+				EXEC SQL SELECT sum(cr_bal-dr_bal)
+				INTO :gl_mst_c_amt :flag FROM gl_sub 
+				WHERE br_no=:sGl_mst.br_no AND cur_no=:sGl_mst.cur_no 
+				AND acc_hrt in (select acc_hrt from com_item 
+				where up_acc_hrt=:sGl_mst.acc_hrt and acc_lvl!='1' );
+				DEAL
+				if( flag ) gl_mst_c_amt=0.00;
+				gl_mst_d_amt=0.00;
+			}
+			else
+			{
+				EXEC SQL SELECT sum(dr_bal-cr_bal)
+				INTO :gl_mst_d_amt :flag FROM gl_sub
+				WHERE br_no=:sGl_mst.br_no AND cur_no=:sGl_mst.cur_no
+				AND acc_hrt in (select acc_hrt from com_item
+				where up_acc_hrt=:sGl_mst.acc_hrt and acc_lvl!='1' );
+				DEAL
+				if( flag ) gl_mst_d_amt=0.00;
+				if( pub_base_CompDblVal(gl_mst_d_amt,0.00)>0 )
+					gl_mst_c_amt=0.00;
+				else if( pub_base_CompDblVal(gl_mst_d_amt,0.00)<0 )
+				{
+				    gl_mst_c_amt=-gl_mst_d_amt;
+				    gl_mst_d_amt=0.00;
+				}
+			 	else
+			 	{
+				   	gl_mst_c_amt=0.00;
+					gl_mst_d_amt=0.00;
+			 	}
+			}
+
+			if( pub_base_CompDblVal(sGl_mst.dr_bal,gl_mst_d_amt)!=0
+				|| pub_base_CompDblVal(sGl_mst.cr_bal,gl_mst_c_amt)!=0 )
+			{
+				sprintf(acErrMsg,"[%d][%s]行总帐中汇总科目不等于子科目合计!",__LINE__,sGl_mst.br_no);
+				WRITEMSG
+				sprintf(acErrMsg,"acc_hrt=[%s],dr_bal=[%lf],d_amt=[%lf],cr_bal=[%lf],c_amt=[%lf]",sGl_mst.acc_hrt,sGl_mst.dr_bal,gl_mst_d_amt,sGl_mst.cr_bal,gl_mst_c_amt);
+				WRITEMSG
+				goto ErrExit;
+			}
+			vtcp_log("汇总科目于子科目检查完成[%s][%d]",sGl_mst.acc_hrt,__LINE__);
+		}
+	}
+	EXEC SQL CLOSE gl_cur;
+}
+	EXEC SQL CLOSE br_cur;
+OkExit:
+    sql_commit();   /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+    sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 0;
+ErrExit:
+    sql_rollback(); /*--事务回滚--*/
+    sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 1;
+}

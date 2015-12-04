@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111110000000000000000000000" TITLE="5521 银行端缴款业务确认查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  //FD62 存放纳税人编码
+  //FD61 存放征收机关代码
+  //因为本行申报，所以付款人开户行根据付款人帐户查
+  //付款人帐号只要本行有效就可以使用fd30
+  //FD25 存放缴款单位名称 仅仅60位
+  //FD20 申报状态
+  //FD37 外部申报电子序号
+  //FD39 交易金额
+  //FD72 缴款类型
+  setitems('#TAXPAYCODE',$FD62);
+  setitems('#TAXORGCODE',$FD61);
+  setitems('#PAYACCT',$FD30);
+  setitems('#HANDORGNAME',$FD25);
+  setitems('#LEVYSTATE',$FD20);
+  setitems('#OUTERLEVYNO',$FD37);
+  setitems('#TRAAMT',$FD39);
+  setitems('#PAYTYPE',$FD72);
+  commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(5521                    银行端缴款业务确认查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#INIT" TYPE="%1s">  
+  <ONLOSTFOCUS>
+  "{
+    if(#INIT=='')
+    {
+    list_init(10,78,7,1);
+    list_setcolcnt(20);
+    
+    list_setcol(0,'TIPS流水',9);
+    list_setcol(1,'委托日期',9);
+    list_setcol(2,'原申报日期',12);
+    list_setcol(3,'申报序号',9 );
+    list_setcol(4,'处理结果',9 );
+    list_setcol(5,'国库代码',11);
+    list_setcol(6,'收款行行号',14);
+    list_setcol(7,'收款人账号',34);
+    list_setcol(8,'收款人名称',60);
+    list_setcol(9,'付款开户行行号',14);
+    list_setcol(10,'缴款单位名称',34);
+    list_setcol(11,'交易金额',19);
+    list_setcol(12,'税票号码', 19);
+    list_setcol(13,'开票日期', 9);
+    list_setcol(14,'纳税人编码',21);
+    list_setcol(15,'纳税人名称',60);
+    list_setcol(16,'预算种类',9);
+    list_setcol(17,'税种条数',9);
+    list_setcol(18,'付款人帐号',20);
+    list_setcol(19,'征收机关代码',18);
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5541)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="5" COL="5" TYPE="%-14s" FUNCTIONS="T(征收机关代码:)"/>
+
+  <ITEM NAME="#TAXORGCODE" INPUT="TEXT" LINE="5" COL="19" TYPE="%-12s" FUNCTIONS="V(NB)">
+    <HELP>纳税人所属的征收机关编码</HELP>
+  <ONLOSTFOCUS>
+  "{
+    // TODO在这里callserver判断征收机关代码是否存在
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+	<ITEM NAME="#TXAMT" TYPE="%17.2f"/>
+  <ITEM LINE="5" COL="43" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+	<ITEM NAME="#CFXNO" TYPE="%4d" FUNCTIONS="T(1008)"/>
+	<ITEM NAME="#FINDSTAT" TYPE="%1d" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TX_DATE" INPUT="TEXT" LINE="5" COL="53" TYPE="%8d" FUNCTIONS="V(NB)D()T($HDATE)">
+    <HELP>查询信息发送日期</HELP>
+  <ONLOSTFOCUS>
+  "{
+    dim @cfxno as string;
+    dim @stat as string;
+    dim @baktxno as string;
+    dim @cnt as number;
+    dim @msg as string;
+    dim @id as string;
+    dim @filename as string;
+    dim @ctxamt as string;
+    $FD61=getitems('#TAXORGCODE');
+    $FD44=getitems('#TX_DATE');
+    $FD36=getitems('#CFXNO');
+    $FD98=getitems('#FINDSTAT');
+    $FD91=getitems('$KINBR');//可能会有问题
+    $FD93='1';
+    @baktxno=$TXNO;
+    $TXNO='9426';
+    commsend_001();
+    //@msg=callserver();  chengbo  20090619  HS
+    @msg=calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+    }
+    
+    @filename='../tmp/'+$KINBR+$TTYNAME;
+    savefiletxt(@filename,@msg);
+    list_load('../tmp/'+$KINBR+$TTYNAME);
+    //showmsg(@filename);
+    @cnt=list_getrowcnt();
+    if(@cnt!=0){
+      list_show();
+      @id =list_getselid();
+    // showmsg(itoa(@id));
+    //  #TRANO=list_gettext(@id,0);
+    //  @ctxamt=list_gettext(@id,10);
+    //  showmsg('txamt==='+@ctxamt);
+    //  #TXAMT=val(@ctxamt);
+    //  #INIT='1';
+    //  msgbox('#TX_DATE='+#TX_DATE+';#TRANO='+#TRANO+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+@ctxamt+';');
+    //  open('5521_1.XML','#TX_DATE='+#TX_DATE+';#TRANO='+#TRANO+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+@ctxamt+';');
+    }
+    
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PAYACCT"  TYPE="%-24s"/>
+  <ITEM NAME="#ADDSM"  TYPE="%-8s">
+  <ONLOSTFOCUS>
+  "{
+    dim @cnt as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @id as number;
+    dim @ctxamt as string;
+    dim @opflag as number;
+    dim @baktxno as string;
+    dim @filename as string;
+    dim @weituo_date    as string;
+    dim @date as number;
+    dim @acctno as string;
+    dim @taxorgcode as string;
+    dim @payopbkcode as string;
+    @id=0;
+    @cnt=list_getrowcnt();
+    @opflag=0;
+    
+    if(@cnt!=0){
+      @msg='请选择要添加税目明细的税种';
+      showmsg(@msg,2);
+      list_work();
+      @id =list_getselid();
+      
+      @acctno=list_gettext(@id,18);
+      //showmsg(@acctno);
+      @taxorgcode=list_gettext(@id,19);
+      //showmsg(@taxorgcode);
+      @payopbkcode=list_gettext(@id,9);
+      //showmsg(@acctno);
+      
+      //showmsg('id==='+itoa(@id));
+      #TRANO=list_gettext(@id,0);
+      @ctxamt=list_gettext(@id,11);
+      // showmsg('txamt==='+@ctxamt);
+      #TXAMT=val(@ctxamt);
+      @weituo_date=list_gettext(@id,1);
+      //showmsg('weituo_date==='+@weituo_date);
+      #INIT='1';
+      //msgbox('#TX_DATE='+#TX_DATE+';#TRANO='+#TRANO+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+@ctxamt+';';#TAXORGCODE='+@taxorgcode+';);
+      open('5521_1.XML','#ENTRUSTDATE='+@weituo_date+';#TRANO='+#TRANO+';#TAXORGCODE='+#TAXORGCODE+';#TXAMT='+@ctxamt+';#PAYACCT='+@acctno+';#PAYOPBKCODE='+@payopbkcode+';');
+      return(false);
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!-- 流水号 -->
+  <ITEM NAME="#TRANO"  TYPE="%8d"/> 
+<!--
+	
+	<ITEM LINE="19" COL="5" TYPE="%-10s" FUNCTIONS="T(回执应答:)"/>
+	<ITEM NAME="#CANSER" LINE="19"   COL="15" TYPE="%16s" INPUT="TEXT" FUNCTIONS=""/>
+	
+	<ITEM NAME="#ANSER" LINE="19"   COL="15" TYPE="%5s" INPUT="SELECT" FUNCTIONS="T(90000)">
+	<SELECT>                                                         
+		<OPTION VALUE="24001 账号不存在      "     TITLE="24001.账号不存在      "/>
+		<OPTION VALUE="24001 账号不存在      "     TITLE="24001.账号不存在      "/>
+		<OPTION VALUE="24002 账号、户名不符  "     TITLE="24002.账号、户名不符  "/>
+		<OPTION VALUE="24003 账户余额不足支付"     TITLE="24003.账户余额不足支付"/>
+		<OPTION VALUE="24009 账户未签约      "     TITLE="24009.账户未签约      "/>
+		<OPTION VALUE="24010 账户密码错      "     TITLE="24010.账户密码错      "/>
+		<OPTION VALUE="24011 账户状态错      "     TITLE="24011.账户状态错      "/>
+		<OPTION VALUE="24020 业务已撤消      "     TITLE="24020.业务已撤消      "/>
+		<OPTION VALUE="99090 其它错误        "     TITLE="99090.其它错误        "/>
+		<OPTION VALUE="90000 成功            "     TITLE="90000 成功            "/>
+	</SELECT>
+	</ITEM>
+	
+  <ITEM NAME="#SUBMIT" LINE="21"   COL="65"  TYPE="%-8s" FUNCTIONS="T(确定)" INPUT="BUTTON">
+  	<ONCLICK>
+  		"{
+        commsend_001();
+	      $FD16='5541';
+	      setitems('#TAXPAYCODE',$FD62);
+        setitems('#TAXORGCODE',$FD61);
+        setitems('#PAYACCT',$FD30);
+        setitems('#HANDORGNAME',$FD25);
+        setitems('#LEVYSTATE',$FD20);
+        setitems('#OUTERLEVYNO',$FD37);
+        setitems('#TRAAMT',$FD39);
+        setitems('#PAYTYPE',$FD72);
+	      calltips();
+	      if($FD12!='0000'){
+	        showmsg(geterror());
+	        return(false);
+	      }
+	
+	     runoutput();
+	     rerun();
+ }"
+</ONCLICK>
+</ITEM>
+-->
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银行端缴款业务交易申请单">
+NOTHING
+</PACKAGE>
+  <PRINT>
+  "{
+		print(8,0,'                       账 /卡号:  [24                       ]                           ',@ac_no);
+		
+  }"
+  </PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

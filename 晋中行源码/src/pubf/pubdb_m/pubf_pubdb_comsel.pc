@@ -1,0 +1,110 @@
+#include <stdio.h> 
+#include <stdlib.h>
+#include <sqlcpr.h>
+
+#define MAX_SELECT_ITEMS	128
+#define FETCH_SIZE		  5  /* Fetch in 5-row chunks. */
+#define MAX_CHARS		  2000
+#define MAX_NAME_SIZE	   64  /* Maximum size of a select-list item name. */
+EXEC SQL INCLUDE SQLCA; 
+EXEC SQL INCLUDE SQLDA; 
+SQLDA   *selda; 
+int array_size = FETCH_SIZE;  /* needs to be a host var for FOR */
+
+/* Data buffer. */
+char c_data[MAX_SELECT_ITEMS][FETCH_SIZE][MAX_CHARS];
+short s_collen[MAX_SELECT_ITEMS];
+/****清除short型变量的最高位****/
+short sRevShort(short s){
+	short s2;
+	char *p;
+	s2=s;
+	p=(char *)&s2;
+	*p=*p &0x00;
+	return(s2);	
+}
+static char *nrtrim(char *s,int len){
+	while(len>0){
+		if(s[len-1]==' '){
+			s[len-1]='\0';
+			len--;
+		}else{
+			break;
+		}
+	}		
+	return(s);
+}
+void print_rows(FILE *fp,int n)
+{
+	int row, sli;
+	for (row = 0; row < n; row++)
+	{
+		for (sli = 0; sli < selda->N; sli++)
+		{
+			int   nLength;
+			if(s_collen[sli]==0){
+				fprintf(fp,"%s|",nrtrim(c_data[sli][row],s_collen[sli]));
+			}else{
+				fprintf(fp,"%.*s|",s_collen[sli],nrtrim(c_data[sli][row],s_collen[sli]));
+			}
+		}
+		fprintf(fp,"\n");
+	}
+}
+
+int pubf_pubdb_comsel(FILE *fp,char *stmt) 
+{ 
+	int row_count;
+	int sli;	 /* select-list item */
+	memset((char *)s_collen,'\0',sizeof(s_collen));
+	selda = (SQLDA *)sqlald(MAX_SELECT_ITEMS, MAX_NAME_SIZE, 0);
+
+	vtcp_log("%s,%d,Gethere,进入通用表查询函数\n",__FILE__,__LINE__);
+	EXEC SQL PREPARE S FROM :stmt;
+	EXEC SQL DECLARE C CURSOR FOR S;
+	EXEC SQL OPEN C;
+	EXEC SQL DESCRIBE SELECT LIST FOR S INTO selda;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403){
+		vtcp_log("%s,%d,SQLERR[%d] \n",__FILE__,__LINE__,sqlca.sqlcode);
+			free(selda);
+			return(-1);
+	}
+	selda->N = selda->F;   /* Assumed not negative. */
+	for (sli = 0; sli < selda->N; sli++)
+	{
+		short sT;
+		/* Set addresses of heads of the arrays in the V element. */
+		selda->V[sli] = c_data[sli][0];
+		/* Convert everything to varchar on output. */
+		/* Set the maximum lengths. */
+		sT=sRevShort(selda->T[sli]);	
+		if(sT==2){
+			/****NUMBER型****/
+			if(selda->L[sli]%256==0){
+				s_collen[sli]=selda->L[sli]/256;
+			}else{
+				s_collen[sli]=selda->L[sli]/256+selda->L[sli]%256+1;
+			}
+		}else{
+			s_collen[sli]=selda->L[sli];
+		}
+		selda->T[sli] = 5;
+		selda->L[sli] = MAX_CHARS;
+	}
+
+	for (row_count = 0; ;)
+	{
+		/* Do the fetch. The loop breaks on NOT FOUND. */
+		EXEC SQL FOR :array_size FETCH C USING DESCRIPTOR selda;
+
+		print_rows(fp,sqlca.sqlerrd[2] - row_count);
+		row_count = sqlca.sqlerrd[2];
+		if (sqlca.sqlcode == 1403)
+			break;
+	}
+
+	EXEC SQL CLOSE C;
+	vtcp_log("\n%d rows retrieved\n", sqlca.sqlerrd[2]);
+	free(selda);
+	return(0);
+}

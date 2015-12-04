@@ -1,0 +1,36 @@
+drop index td_mst_1;
+drop  table td_mst;
+create table td_mst(
+	ac_id number(9),
+	ac_seqn number(6),
+	opn_br_no varchar2(5),
+	prdt_no varchar2(3),
+	bal number(16,2),
+	acbo_bal number(16,2),
+	ys_bal number(16,2),
+	hst_bal number(16,2),
+	rate number(8,5),
+	flt_ratio number(8,5),
+	intst_acm number(19,2),
+	intst_type varchar2(1),
+	opn_date number(9),
+	ic_date number(9),
+	mtr_date number(9),
+	lst_date number(9),
+	td_amt number(16,2),
+	ttl_cnt number(6),
+	tx_cnt number(6),
+	hst_cnt number(9),
+	odtt_ind varchar2(1),
+	ac_sts varchar2(1),
+	hold_sts varchar2(1),
+	hold_amt number(16,2),
+	ctl_amt number(16,2),
+	tfr_ind varchar2(1),
+	cif_no number(9),
+	name varchar2(50),
+	cal_code varchar2(10),
+	book_line number(6),
+	mac varchar2(16) 
+)tablespace users;
+create	 unique index td_mst_1 on td_mst( ac_id,ac_seqn)tablespace indx;

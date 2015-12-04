@@ -1,0 +1,407 @@
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1816 统一支付退汇录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-42s" FUNCTIONS="T( 1816                    统一支付退汇录入)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1220)"/>
+	<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(统一支付退汇业务录入)"/>
+	<ITEM TYPE="%-30s" NAME="#POTOCOL" FUNCTIONS="T()"/>
+	<ITEM TYPE="%-8s" NAME="#Issuedate" FUNCTIONS="T()"/>
+	<ITEM LINE="5" COL="3"  TYPE="%-10s" FUNCTIONS="T(操作类型:)"/>
+	<ITEM LINE="5" COL="13" TYPE="%-1s" NAME="#Oper" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+  	<SELECT>
+     		<OPTION VALUE="0" TITLE="录入"/>
+     		<OPTION VALUE="1" TITLE="修改"/>
+     		<OPTION VALUE="2" TITLE="删除"/>
+    	</SELECT>
+    		<ONLOSTFOCUS>
+    		"{
+    			if (#Oper != '0')
+    			{
+    				#BizFlag = '00';
+    				enable(#BizFlag,false);
+    			}
+    			else
+    			{
+    				enable(#BizFlag,true);
+    			}
+    			enable(#BizFlag,false);
+    			refresh();
+    			
+    		}"	
+    		</ONLOSTFOCUS>
+  	</ITEM>
+	<ITEM LINE="6" COL="3"  TYPE="%-10s" FUNCTIONS="T(业务标志:)"/>
+  	<ITEM LINE="6" COL="13" TYPE="%-2s" NAME="#BizFlag" INPUT="SELECT"  FUNCTIONS="T(00)V(NB)">
+	<SELECT>
+		<OPTION VALUE="00" TITLE="普通"/>
+		<OPTION VALUE="02" TITLE="定期"/>
+	</SELECT>
+	</ITEM>
+	<ITEM LINE="7" COL="3" TYPE="%-12s" FUNCTIONS="T(原交易序号:)"/>
+	<ITEM LINE="7" COL="15" NAME="#TxNo" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+	<ITEM NAME="#OLDLAUNCHBANKNAME" TYPE="%-60s" FUNCTIONS="T()"/>
+	<ITEM NAME="#oldbusitype" TYPE="%-60s" FUNCTIONS="T()"/>
+	<ITEM NAME="#Ctind" TYPE="%-1s" FUNCTIONS="T()"/>
+	<ITEM NAME="#oldbusikind" TYPE="%-60s" FUNCTIONS="T()"/>
+	<ITEM NAME="#remit" TYPE="%-10s" FUNCTIONS="T()"/>
+	<ITEM NAME="#TxType" TYPE="%-2s" FUNCTIONS="T()"/>
+	<ITEM NAME="#NOTEKIND" TYPE="%-10s" FUNCTIONS="T()"/>
+	<ITEM NAME="#IssueDate" TYPE="%-8s" FUNCTIONS="T()"/>
+	<ITEM NAME="#HangBrno" TYPE="%-16s" FUNCTIONS="T()"/>
+	<ITEM NAME="#HangAcno" TYPE="%-16s" FUNCTIONS="T()"/>
+	<ITEM NAME="#HangAcnm" TYPE="%-60s" FUNCTIONS="T()"/>
+	<ITEM NAME="#Ognlmsgid" TYPE="%-16s" FUNCTIONS="T()"/>
+	<ITEM LINE="7" COL="35" TYPE="%-12s" FUNCTIONS="T(原交易日期:)"/>
+	<ITEM LINE="7" COL="46" NAME="#TxDate" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)V(NB)">
+		<ONLOSTFOCUS>
+		"{	
+			//银川，当天不能退汇；
+		
+			initfd();
+			dim @fNumb as number;
+	                commsend_001();
+			$FD16='1112';
+			$FD18='pbp';
+			$FD44=#TxNo;
+			$FD61=#TxDate;
+			$FD64=#BizFlag;
+			$FD35=#Oper;
+			
+			callagnpbp();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+
+			#OLDPAYEENAME=$FD26;
+			#OLDLAUNCHBANK=$FD59;
+			#OLDLAUNCHBANKNAME=$FD74;
+			#NOTEKIND=atoi($FD50);
+			//showmsg($FD50);
+			#NOTENO=$FD60;
+			#NoteDesc=$FD75;
+			
+			#IssueDate=$FD45;
+			#Ctind=$FD23;
+			#TxType=$FD65;
+
+			#OLDPAYERNAME=$FD25;
+			#MONEYKIND = itoa($FD48,'%d');
+			#CASHTP=$FD49;
+
+			@fNumb = val($FD39, 1);
+			#AMT =@fNumb;
+			#OLDPAYERACCOUNT=$FD30;
+			#OLDPAYEEACCOUNT=$FD31;
+			#oldbusitype=$FD81;
+			#oldbusikind=$FD82;
+			#remit=$FD28;
+			#Remark=$FD113;
+			#Ognlmsgid=$FD43;
+			
+			//获取退汇协议号:原工作日期/原系统参考号
+			#POTOCOL=delspace($FD45)+'/'+delspace($FD43);
+			//原交易签发日期
+			#Issuedate=$FD46;
+			#HangAcno=$FD101;//挂账入账账号
+			#HangAcnm=$FD102;//挂账入账账户名称
+			#HangBrno=$FD105;//挂账机构
+			
+			enable(#OLDPAYEENAME,false);
+			enable(#OLDPAYERNAME,false);
+			enable(#OLDPAYERACCOUNT,false);		
+			enable(#MONEYKIND,false);
+		//	enable(#PayerAcct,false);
+			enable(#OLDLAUNCHBANK,false);
+			enable(#OLDLAUNCHBANKNAME,false);
+			enable(#OLDBUSTYPE,false);
+			enable(#OLDBUSKIND,false);
+			enable(#OLDPAYEEACCOUNT,false);
+			enable(#AMT,false);
+			enable(#CASHTP,false);
+			enable(#NoteDesc,false);
+			enable(#NOTENO,false);	
+			if (#Oper != '0')
+			{
+				enable(#Remark,false);
+			}
+			
+			setsel(#OLDBUSTYPE,#oldbusitype,'v4o1t32o1');
+			#OLDBUSTYPE=substr(#oldbusitype,0,4);
+			setsel(#OLDBUSKIND,#oldbusikind,'v5o1t32o1');
+			#OLDBUSKIND=substr(#oldbusikind,0,5);
+			showall();
+			refresh();
+			
+			if ($FD28 == 'sxps')
+			{
+				showblock('block_hvps',false,false);
+				showblock('block_beps',false,false);
+				showblock('block_sxps',true,true);
+				refresh();
+			}
+			else if ($FD28 == 'beps')
+			{
+				showblock('block_beps',true,true);
+			}
+			else if ($FD28 == 'hvps')
+			{
+				showblock('block_hvps,true,true');
+			}
+			else 
+			{
+				showblock('block_sxps',true,true);
+			}
+		//	if (#Oper == '2')
+		//	{
+		//		#retrncheck = '0';
+		//	}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	
+	<BLOCK NAME="block_show"    LINE="9" VISABLE="TRUE">
+		<ITEM LINE="0"  COL="3"   TYPE="%-13s"  FUNCTIONS="T(原业务  类型:)" />
+		<ITEM LINE="0"  COL="16"  NAME="#OLDBUSTYPE" TYPE="%-12s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+		</SELECT>
+		</ITEM>
+		<ITEM LINE="1" COL=" 3"  TYPE="%-13s" FUNCTIONS="T(原业务  种类:)"/>
+		<ITEM LINE="1" COL="16"  NAME="#OLDBUSKIND" TYPE="%-12s" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+		</SELECT>
+		</ITEM>
+		<ITEM LINE="2" COL="3" TYPE="%-13s" FUNCTIONS="T(原发起行行号:)"/>
+		<ITEM LINE="2" COL="16" NAME="#OLDLAUNCHBANK" TYPE="%-20s" INPUT="TEXT"  FUNCTIONS=""/>
+		<ITEM LINE="3" COL="3" TYPE="%-13s" FUNCTIONS="T(原付款人账号:)"/>
+		<ITEM LINE="3" COL="16" NAME="#OLDPAYERACCOUNT" TYPE="%-24s" INPUT="TEXT"  FUNCTIONS=""/>
+		<ITEM LINE="4" COL="3" TYPE="%-13s" FUNCTIONS="T(原付款人名称:)"/>
+		<ITEM LINE="4" COL="16" NAME="#OLDPAYERNAME" TYPE="%-60s" INPUT="TEXT"  FUNCTIONS=""/>
+		<ITEM LINE="5" COL="3" TYPE="%-13s" FUNCTIONS="T(货 币  类 型:)"/>
+		<ITEM LINE="5" COL="16" NAME="#MONEYKIND" TYPE="%-20s" INPUT="TEXT"  FUNCTIONS="">
+			<SELECT>
+				<OPTION VALUE="CNY" TITLE="人民币"/>
+				<OPTION VALUE="USD" TITLE="美元"/>
+				<OPTION VALUE="HKD" TITLE="港元"/>
+				<OPTION VALUE="EUR" TITLE="欧元"/>
+				<OPTION VALUE="GBP" TITLE="澳元"/>
+				<OPTION VALUE="JPY" TITLE="日元"/>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="5" COL="36" TYPE="%-13s" FUNCTIONS="T(钞 汇 类 型:)"/>
+		<ITEM LINE="5" COL="49" NAME="#CASHTP" TYPE="%-1s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="丙钞"/>
+				<OPTION VALUE="2" TITLE="甲汇"/>
+				<OPTION VALUE="3" TITLE="乙钞"/>
+				<OPTION VALUE="4" TITLE="乙汇"/>
+				<OPTION VALUE="6" TITLE="丙汇"/>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="6" COL="3" TYPE="%-13s" FUNCTIONS="T(原收款  账号:)"/>
+		<ITEM LINE="6" COL="16" NAME="#OLDPAYEEACCOUNT" TYPE="%-24s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS=""/>
+		<ITEM LINE="7" COL="3" TYPE="%-13s" FUNCTIONS="T(原收款人名称:)"/>
+		<ITEM LINE="7" COL="16" NAME="#OLDPAYEENAME" TYPE="%-60s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS=""/>
+		<ITEM LINE="6" COL="36" TYPE="%-11s" FUNCTIONS="T(金    额:)"/>
+		<ITEM LINE="6" COL="47" NAME="#AMT" TYPE="%-17.2f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS=""/>
+		<ITEM LINE="8" COL="3" TYPE="%-13s" FUNCTIONS="T(票 据  种 类:)"/>
+		<ITEM LINE="8" COL="16" NAME="#NoteDesc" TYPE="%-20s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS=""/>
+		<ITEM LINE="8" COL="36" TYPE="%-11s" FUNCTIONS="T(凭 证 号:)"/>
+		<ITEM LINE="8" COL="47" NAME="#NOTENO" TYPE="%-20s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS=""/>
+	</BLOCK>
+	
+	<ITEM LINE="18" COL="3" TYPE="%-10s" FUNCTIONS="T(退汇原因:)">
+		<ONLOSTFOCUS>
+		"{
+			dim @tota as string;
+			initfd();
+	                commsend_001();
+			$FD16='1111';
+			$FD18='pbp';
+			$FD28='sxps';
+			@tota=callagnpbp();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			setsel(#REASON,@tota,'v2o1t60o1');
+			refresh();
+		}"	
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="18" COL="13" NAME="#REASON" TYPE="%-2s" INPUT="SELECT" FUNCTIONS="T()V(NB)">
+			<SELECT>
+			</SELECT>
+	</ITEM>
+	<ITEM LINE="19" COL="3" TYPE="%-6s" FUNCTIONS="T(附言:)"/>
+	<ITEM LINE="19" COL="9" NAME="#Remark" TYPE="%-60s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="">
+	<ONLOSTFOCUS>
+			"{
+				initfd();
+				commsend_001();
+				
+				$FD16 = '1202';
+				$FD18 = 'app';
+				$FD25 = '';
+				$FD26 = '';
+				$FD103 = #Ps;
+				$FD112 = '';    //无地址信息输入空
+				$FD116 = '';
+				callagnpbp();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  NAME="#OK" LINE="21"  COL="59"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @AMT as number;
+		dim @stramt as string;
+		initfd();
+		commsend_001();
+
+		$FD16 = '1220';
+		$FD18 = 'pbp';
+		$FD28 = 'sxps';
+		$FD35 = #Oper;
+		$FD44=#TxNo;
+		$FD61=#TxDate;
+		
+		if (#Oper != '0')
+		{
+			$FD38=#TxNo;
+			$FD78=#TxDate;
+		}
+		$FD101=#HangAcno;
+		$FD102=#HangAcnm;
+		$FD105=#HangBrno;
+		
+		$FD64=#BizFlag;                //业务标志，区别普通和定期业务，放入备注memo中
+		$FD30=#OLDPAYEEACCOUNT;
+		$FD25=#OLDPAYEENAME;
+		$FD59=#OLDLAUNCHBANK;
+		$FD74=#OLDLAUNCHBANKNAME;
+		$FD41=#Ognlmsgid;
+		$FD103=#REASON;
+		//	#PayeeAddr=$FD116;
+		//	#Ctind=$FD23;
+		$FD50=#NOTEKIND;
+		$FD60=#NOTENO;
+		
+		$FD45=#IssueDate;
+		
+		$FD31=#OLDPAYERACCOUNT;
+		$FD26=#OLDPAYERNAME;
+		$FD65=#TxType;
+		$FD48=#MONEYKIND;
+		$FD49=#CASHTP;
+		//	#Priority=$FD36;
+		@AMT=#AMT * 100;
+		@stramt=itoa(@AMT, '%d');
+		$FD39=@stramt;
+		$FD81=#OLDBUSTYPE;
+		$FD82=#OLDBUSKIND;
+		$FD103=#REASON;
+		$FD113=#Remark;
+		
+		$FD46=#Issuedate;
+		$FD27=#POTOCOL;
+		
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81='同城清算贷记录入';
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end
+		runoutput();
+		showall();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();
+		
+		print( 4,10,'原付款人账号:[20]',#OLDPAYERACCOUNT);
+   		print( 4,40,'原付款人姓名:[60]',#OLDPAYERNAME);
+   		print( 6,10,'原收款人账号:[20]',#OLDPAYEEACCOUNT);
+   		print( 6,40,'原收款人姓名:[60]',#OLDPAYEENAME);
+   		print( 8,10,'交易金额:[20]',ltrim(itoa(#AMT,'%.2f')));
+		print(10,10,'交易序号:[10]',$FD38);
+		print(10,40,'交易日期:[8]',$FD78);
+			
+		PrintTxTail();
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:1220');
+		print( 5,13,'交易名称:统一支付退汇录入');
+
+		print( 7,20,'委托  日期:[8]                        交易序号:[8]',$HDATE,$FD38);
+		
+		print(11,10,'原付款人账号:[20]',#OLDPAYERACCOUNT);
+   		print(12,40,'原付款人姓名:[60]',#OLDPAYERNAME);
+   		print(13,10,'交易    金额:[20]',ltrim(itoa(#AMT,'%.2f')));
+   		print(14,10,'原收款人账号:[20]',#OLDPAYEEACCOUNT);
+   		print(15,40,'原收款人姓名:[60]',#OLDPAYEENAME);
+   		
+
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24, 5,'核心流水:[8]',$FD4);
+		
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

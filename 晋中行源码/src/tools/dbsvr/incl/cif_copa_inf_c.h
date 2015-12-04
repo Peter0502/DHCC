@@ -1,0 +1,31 @@
+#ifndef __cif_copa_inf_CH__
+#define __cif_copa_inf_CH__
+struct cif_copa_inf_c{
+        char      rowid[20];
+        long      cif_no;
+        char      ag_cr_no[19];
+        char      check_no[21];
+        char      br_no[9];
+        char      tel[7];
+        long      beg_date;
+        long      end_date;
+        char      reg_ad_area_no[11];
+        char      reg_ad_area[51];
+        char      or_ag_type[2];
+        char      or_ag_mst_type[3];
+        char      data_ex_date[9];
+        char      eco_ind_type[7];
+        char      eco_type[3];
+        char      sc_bs[51];
+        char      cop_sts[2];
+        char      con_en_name[51];
+        char      ent_tel[21];
+        char      up_br_name[51];
+        char      up_reg_type[2];
+        char      up_reg_no[21];
+        char      up_ag_zz_no[19];
+        char      up_ag_cr_no[19];
+        long      tx_date;
+        long      up_date;
+};
+#endif 

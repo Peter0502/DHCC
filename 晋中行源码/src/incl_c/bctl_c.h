@@ -1,0 +1,40 @@
+#ifndef __bctl_CH__
+#define __bctl_CH__
+struct bctl_c{
+	char      rowid[20];
+	char      brno[6];
+	char      brname[31];
+	char      brinit[4];
+	char      opwsno[3];
+	char      towncd[4];
+	char      statcd[3];
+	char      accncd[4];
+	char      region[8];
+	char      ficode[2];
+	char      finame[36];
+	char      cpflg[2];
+	char      brtel[13];
+	char      brfax[13];
+	char      bradrs1[31];
+	char      bradrs2[31];
+	char      bradrs3[31];
+	char      boff[2];
+	char      brclsn[2];
+	char      micr[8];
+	char      bkno1[3];
+	char      acflg[2];
+	char      acafc[2];
+	char      rcltm[7];
+	char      afcbv[101];
+	char      intfg[101];
+	long      wscnt;
+	long      wsallow;
+	long      wsinuse;
+	char      mrwsid[3];
+	char      dcltm[7];
+	char      brcable[13];
+	char      brtelex[13];
+	char      txsdate[9];
+	char      txedate[9];
+};
+#endif 

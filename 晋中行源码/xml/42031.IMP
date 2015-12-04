@@ -1,0 +1,265 @@
+<!-----显示帐号信息的变量组合----------> 
+
+  <ITEM LINE="4"  COL="-12"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"  COL="-12"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="6"  COL="-12"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="7"  COL="-12"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  
+  <ITEM LINE="9"  COL="-12"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="10" COL="-12"  TYPE="%-10s" FUNCTIONS="T(凭 证 号:)"/>
+  <ITEM LINE="10" COL="31"   TYPE="%-10s" FUNCTIONS="T(新凭证号:)"/>
+  <ITEM LINE="11" COL="-12"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="12" COL="-12"  TYPE="%-10s" FUNCTIONS="T(摘    要:!)"/>
+  <ITEM LINE="12" COL="31"   TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+ 
+
+<ITEM NAME="#AAA" TYPE="%-19s" FUNCTIONS="">
+   <ONLOSTFOCUS>
+   "{
+	dim @s as string;
+	dim @tota as string;
+	dim @list1 as string;
+	dim @list2 as string;
+	dim @i as number;
+	initfd();
+	$FD102=#ACTNO;
+	commsend_001();
+	@tota=callserver();
+	if($FD12!='0000'){
+		//showmsg('帐号输入错误!');
+		showmsg(geterror());
+		return(false);
+	}
+	setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#VOCNUM_IMP#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+	while(substr(@tota, @i, 4)=='102L'){
+		 @i = @i + 31;
+	}
+	 @list1=substr(@tota, 0 , @i+1);
+	 @list2=substr(@tota, @i, len(@tota)-@i);
+	 setsel(#VOCDSCPT,@list1,'o5t20o1v3o2');
+	// setsel(#VOCTYPE,@list2,'o5t20o1v3o2');
+	 #VOCTYPE='007';
+	 //#CASHFLAG='1';
+	 //showmsg(#CASHFLAG);
+	 showblock('ACTINFO',true,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+<ITEM LINE="4" COL="0" NAME="#CUSTNAME"   TYPE="%-60s"  FUNCTIONS=""/>
+<ITEM LINE="5" COL="0" NAME="#CURCD"  TYPE="%-2s" INPUT="LABEL" FUNCTIONS="">
+    <SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  </ITEM>
+<ITEM NAME="#AVBAL" TYPE="%17.2f"  FUNCTIONS="J(#XAVBAL)"/>
+<ITEM LINE="6" COL="0" NAME="#XAVBAL"   TYPE="%-16s"  INPUT="LABEL" ENABLE="FALSE" FUNCTIONS="X(#AVBAL)"/>
+<ITEM LINE="7" COL="0" NAME="#PRODNAME" TYPE="%-30s"  FUNCTIONS=""/>
+
+<ITEM LINE="9" COL="0" NAME="#VOCTYPE"  TYPE="%-3s"   INPUT="SELECT"  ENABLE="FALSE" FUNCTIONS="">
+    <SELECT>
+		<OPTION VALUE="007" TITLE="单位定期证实书"/>
+		<OPTION VALUE="008" TITLE="单位定期存单  "/>
+		<OPTION VALUE="013" TITLE="储蓄定期存单  "/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="10" COL="0" NAME="#VOCNUM"        TYPE="%16s" INPUT="LABEL"  FUNCTIONS=""/>
+  
+  <ITEM LINE="10" COL="40" NAME="#NEWVOCNUM"    TYPE="%16d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+    "{
+    dim @s as string;
+    dim @tota as string;
+    initfd();
+    commsend_001();
+    $FD16='9782';
+    $FD116='0'+#VOCTYPE+space(131,' ')+#NEWVOCNUM;
+    @tota=callserver();
+    if($FD12!='0000'){
+    showmsg(geterror());
+    return(false);
+    }
+    }"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="11" COL="0"  NAME="#CASHFLAG"  TYPE="%-1s" INPUT="SELECT" ENABLE="TRUE" FUNCTIONS="T(2)V(NB)">
+    <SELECT>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+  </ITEM>
+<!--
+   <ONLOSTFOCUS>
+   "{
+		if(#VOCTYPE!='001' and #VOCTYPE!='299'){
+			if(#CASHFLAG=='1'){
+				showmsg('该凭证类型不能选择现金取款!');
+				return(false);
+			}
+		}
+//		if(#VOCTYPE=='001' and #CASHFLAG!='1'){
+	//		showmsg('现金支票必须选择现金取款!');
+	//	return(false);
+//		}
+	}"
+   </ONLOSTFOCUS>
+  </ITEM>
+  -->
+  <ITEM LINE="12"  COL="0" NAME="#VOCDSCPT" TYPE="%-3s" INPUT="SELECT" ENABLE="TRUE" DEVICE="KEYBOARD" FUNCTIONS=""/><!---改为3位长度--->
+  <ITEM NAME="#SVOCDSCPT"  TYPE="%-20s"     FUNCTIONS="S(#VOCDSCPT,#VOCDSCPT)">
+  <ONLOSTFOCUS>
+  "{
+	if(#VOCDSCPT != '031')
+	{
+		#FVOCDSCPT = #SVOCDSCPT;
+		enable(#FVOCDSCPT,false);
+	}
+	else
+	{
+		#FVOCDSCPT = '';
+		show(#FVOCDSCPT,true);
+		enable(#FVOCDSCPT,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="3"  NAME="#FVOCDSCPT" TYPE="%-20s" INPUT="TEXT"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	if(#VOCDSCPT != '031')
+	{
+		#DESC10 = #SVOCDSCPT;
+	}
+	else
+	{
+		#DESC10 = #FVOCDSCPT;
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="12"  COL="40" NAME="#TXAMT" TYPE="%17.2f" INPUT="TEXT"   FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+  <ITEM NAME="#XTXAMT" TYPE="%-21s" FUNCTIONS="X(#TXAMT)"/>
+  <ITEM NAME="#UTXAMT" TYPE="%-40s" FUNCTIONS="U(#TXAMT)"/><!---大写金额--->
+
+
+<!-- 
+#ACTNO24           24         	账号
+#ACTSEQ            4	         账户序号
+#VOCTYPE           3	         凭证种类
+#VOCNUM            16         	凭证号
+#FETCHFLAG         1	         是否任意支取
+#PASSWDFLAG        1	         是否凭密
+#QUE_PWD           6	         查询密码
+#DRAW_PWD          6	          支取密码
+#CERTFLAG          1	         是否凭证件支取
+#CERTNO           20  	       证件号码
+#STAMPFLAG         1	          是否凭印鉴支取
+#PASSWDFLAG        1	        是否支付密码器
+#PASSWD            16         	支付密码
+#PRINTDATE          8	         出票日期
+#TXAMT15             16         	金额
+#CERTTYPE            1	       证件类型
+#CUSTNAME          50         	户名
+#AVBAL             16         	余额
+#CURCD             2	         币种
+#CASHFLAG          1	         现转标志
+#DSCPT             3	         摘要选项
+#ACTTYPE           1	         帐户类型
+#ACTSEQ_2          4	         账户序号2
+#ACCOUNTFLAG       1	         打折标志
+#INTEREST1        16  	       应付利息
+#INTEREST2        16  	       利息税
+#INTEREST3        16  	       保值利息
+#PAYAMOUNT        16  	       应付总额
+#NEWVOCNUM          16         	新凭证号
+#SPEFLAG          20  	       特殊标志
+#PRODNAME          30         	产品名称
+#ACTNO24           24         	账号
+#EDUCREDIT   				1	         教育证明
+#DESC10            20         	摘要 
+--> 
+ <!-- 后台输入项数据   --> 
+  <ITEM NAME="#VOCNUM_IMP" TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#PRINTDATE" TYPE="%-8s"  FUNCTIONS="T(        )"/>
+  <ITEM NAME="#PWDFLAG2"  TYPE="%1s"   FUNCTIONS="T(N)"/> 
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS="T(#ACTNO)"/>
+  <ITEM NAME="#ACTSEQ"    TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#FETCHFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG"   TYPE="%1s" FUNCTIONS=""/>
+<!--  <ITEM NAME="#VOCNUM"    TYPE="%-16s" FUNCTIONS=""/>-->
+  <ITEM NAME="#QUE_PWD"   TYPE="%6s" FUNCTIONS=""/>
+  <ITEM NAME="#DRAW_PWD"  TYPE="%6s" FUNCTIONS=""/>
+  <ITEM NAME="#CERTFLAG"  TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO"    TYPE="%20s" FUNCTIONS=""/>
+  <ITEM NAME="#STAMPFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#PWD16"     TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#CERTTYPE"  TYPE="%-1s" FUNCTIONS=""/>   
+  <ITEM NAME="#ACTTYPE"   TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"  TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#ACCOUNTFLAG" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST1"   TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST2"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#INTEREST3"   TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#PAYAMOUNT"   TYPE="%-16s" FUNCTIONS=""/>  
+  <!--<ITEM NAME="#NEWVOCNUM"   TYPE="%-16d" FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+  <ITEM NAME="#SPEFLAG"     TYPE="%-20s" FUNCTIONS=""/>    
+  <ITEM NAME="#ACTNO_24"    TYPE="%-24s" FUNCTIONS=""/> 
+  <ITEM NAME="#EDUCREDIT"   TYPE="%1s" FUNCTIONS=""/>   
+	<ITEM NAME="#DESC10"    TYPE="%-20s" FUNCTIONS=""/>
+	<ITEM NAME="#DSCPT"     TYPE="%-3s" FUNCTIONS="T(#VOCDSCPT)"/>

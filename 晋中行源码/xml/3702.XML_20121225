@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3702   电子现金余额查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE UPLOOP="TRUE">
+		<ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+		"T(3702                             电子现金余额查询)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=3702)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(3702)"/>      <!---交易代码--->
+		<ITEM NAME="#L_ZT" LINE="7"  COL="17"  TYPE="%-10s"  FUNCTIONS="T(状    态: )"/>
+		<ITEM LINE="7" COL="27" TYPE="%-1s"  NAME="#ZT" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="正常状态"/>
+				<OPTION VALUE="1" TITLE="销卡或换卡状态"/>
+			</SELECT>
+		<ONLOSTFOCUS>"{
+		   if(#ZT=='1')
+		   {
+		   enable(#ACTNO1,false);
+		   enable(#ACTNO2,true);
+		   show(#ACTNO1,false);
+		   show(#ACTNO2,true);
+		   show(#L_AC_BAL,false);
+		   show(#L_PASSWORD,false);
+		   show(#PASSWORD,false);
+		   refresh();
+		   }
+		   if(#ZT=='0')
+		   {
+		   enable(#ACTNO1,true);
+		   enable(#ACTNO2,false);
+		   show(#ACTNO1,true);
+		   show(#ACTNO2,false);
+		   show(#L_PASSWORD,true);
+		   show(#PASSWORD,true);
+		   show(#L_AC_BAL,true);
+		   refresh();
+		  }
+		   refresh();
+		 }"
+		</ONLOSTFOCUS>
+		</ITEM>
+		<!--输出变量--->
+		<ITEM LINE="9"  COL="17"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />		
+		<!--ITEM LINE="9"  COL="17"  TYPE="%-11s" FUNCTIONS="T(检查标志:)" DEVICE="MSR"  m($MSR2,1,19)/-->
+
+		<ITEM LINE="11"  COL="17" NAME="#L_PASSWORD"  TYPE="%-10s" FUNCTIONS="T(密    码:)" VISABLE="FALSE" />
+		
+		<ITEM LINE="13"  COL="17"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+		
+		<ITEM LINE="15"  COL="17"  TYPE="%-10s" FUNCTIONS="T(账户余额:)" />
+		<ITEM LINE="17"  COL="17"  TYPE="%-10s" FUNCTIONS="T(芯片余额:)" NAME="#L_AC_BAL" VISABLE="FALSE"/>
+		<ITEM NAME="#ACTNO1"   INPUT="TEXT" DEVICE="ICC" LINE="9"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+			<ONLOSTFOCUS>
+			"{
+				#CARD_NO=#ACTNO1;
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#ACTNO2"   INPUT="TEXT" LINE="9" COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)">
+			<ONLOSTFOCUS>
+			"{
+				#CARD_NO=#ACTNO2;
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+			  <ONLOSTFOCUS>
+					  "{
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}                       
+						if(substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621780');
+							return(false);
+						}
+						 if(len(rtrim($MSR2))!=37 and #ZT=='0')
+						{
+						   showmsg('刷卡错误,请重试!');
+						   return(false);
+						}								
+						dim @baktxno as string;
+						initfd();
+						@baktxno=$TXNO;
+						$TXNO='9959';
+						$FD102=#CARD_NO;
+						commsend_001();
+						callserver();
+						$TXNO=@baktxno;
+						//showmsg('$FD12='+$FD12);
+						if(#zt=='0')
+						 {
+						  if($FD12!='0000')
+						    {
+						    if(($FD12=='P245') or  ($FD12=='M022') or ($FD12=='P107') or ($FD12=='P171'))
+						    {
+								showmsg(geterror()+'请重新选择状态！');
+								return(false);
+								}
+								else
+								{
+								showmsg(geterror());
+								return(false);
+								}
+								}    
+						 } 
+						
+						if(#zt=='1')
+						{  
+							if(($FD12!='P245') and ($FD12!='M022') and ($FD12!='P107') and ($FD12!='P171'))
+						 {
+								showmsg('该卡非销户或换证状态，状态选择错误！');
+								return(false); 
+						 } 
+						 	if($FD12=='P245' or $FD12=='M022')
+						 {
+						    if($FD12=='P245')
+						    {
+						 		//showmsg('该卡已销户，不用输入密码！');
+								goitem(#TEMP); 
+								}
+								if($FD12=='M022' or ($FD12=='P107') or ($FD12=='P171'))
+						    {
+						 		//showmsg('该卡已换证，不用输入密码！');
+								goitem(#TEMP); 
+								}
+						 } 
+						}  
+					 }"
+		</ONLOSTFOCUS>
+				</ITEM>
+		
+		<ITEM  LINE="11"  COL="27"  DEVICE="PINPAD" VISABLE="FALSE"  NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				      if(len(delspace(#PASSWORD))!=6)
+				      {
+								showmsg('密码长度必须为六位!');
+								return (false);
+				      }
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							//$FD75=$MSR2;
+							//$FD76=$MSR3;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+							
+					//showmsg('密码校验成功！');
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+		
+		<!--输出-->
+		<ITEM NAME="#TEMP" TYPE="%-1s"  FUNCTIONS=""/>
+		<ITEM NAME="#TRACK2" TYPE="%-37s"  FUNCTIONS=""/>
+		<ITEM NAME="#TRACK3" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM NAME="#ACTSEQ" TYPE="%-4s" FUNCTIONS="V(NB)T(0001)"/>	
+		<ITEM LINE="13"  COL="27" NAME="#CARD_NAME" INPUT="LABEL" TYPE="%-30s" FUNCTIONS=""/>
+		<ITEM LINE="15"  COL="27" NAME="#AVAILABLE_BAL" INPUT="LABEL" TYPE="%-17s" FUNCTIONS=""/>	
+		<ITEM LINE="17"  COL="27" NAME="#AC_BAL" INPUT="LABEL" TYPE="%-17.2f" FUNCTIONS=""/>			
+		<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+			<ONCLICK>
+					"{
+							dim @tagvalue as string;
+							initfd();
+							commsend_001();
+							$FD16='7769';
+							$FD30=#CARD_NO;
+							if(#ZT=='0')
+							{
+							$FD79=#PASSWORD;
+							}
+							$FD75=$MSR2;
+							$FD76=$MSR3;
+							callagn();
+							if($FD12 != '0000')
+							{		
+								showmsg(geterror());
+								return(false);
+							}
+							
+							#AVAILABLE_BAL=delspace(itoa(val($FD40,0.01),'%17.2f'));
+							initfd();
+							commsend_001();
+							$FD16='9959';
+							$FD67='1';
+							$FD102=#CARD_NO;
+							callserver();
+							
+							if($FD12 != '0000')
+							{		
+								showmsg(geterror());
+								return(false);
+							}
+							#CARD_NAME=substr($FD102,125,35);//户名
+							//showmsg('#CARD_NAME='+#CARD_NAME);
+							show(#CARD_NAME,true);
+							if(#ZT=='0')
+							{
+							@tagvalue= ictagvalue('9f79');
+							if(strfld(@tagvalue,'|',0)!='9000')
+							{
+							showmsg('函数ictagvalue的返回值有误!');
+							return(false);
+							}
+							//showmsg(strfld(@tagvalue,'|',0));
+							@tagvalue= strfld(@tagvalue,'|',1);
+							//showmsg('电子现金余额#AC_BAL='+delspace(val(@tagvalue,0.01)));
+							enable(#AC_BAL,false);
+							#AC_BAL=val(@tagvalue,0.01);
+							showhelp(5,38,16,20,'帐户信息','户名:'+delspace(#CARD_NAME)+' 账户余额:'+#AVAILABLE_BAL+' 芯片余额:'+#AC_BAL);
+							}	
+							if(#ZT=='1')
+							{	
+							showhelp(5,38,16,20,'帐户信息','户名:'+delspace(#CARD_NAME)+' 账户余额:'+#AVAILABLE_BAL);
+							}
+							#PASSWORD='';
+					}"
+			</ONCLICK>
+		</ITEM>
+		
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="卡查询余额">
+NOTHING
+</PACKAGE>
+
+</RESPONSE>
+
+
+<OUTPUT>
+</OUTPUT>
+
+</TRANSACTION>

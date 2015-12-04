@@ -1,0 +1,37 @@
+drop index in_parm_1;
+drop  table in_parm;
+create table in_parm(
+	prdt_no varchar2(3),
+	acc_hrt varchar2(5),
+	cur_no varchar2(2),
+	prdt_mo varchar2(40),
+	amt_dc varchar2(1),
+	star_date number(9),
+	stop_date number(9),
+	min_amt number(16,2),
+	max_amt number(16,2),
+	min_term number(6),
+	max_term number(6),
+	term_type varchar2(1),
+	rate_no varchar2(3),
+	fine_rate_no varchar2(3),
+	min_flot_rate number(7,3),
+	max_flot_rate number(7,3),
+	cal_day_type varchar2(1),
+	intst_ind varchar2(1),
+	intst_knd varchar2(2),
+	acm_type varchar2(2),
+	intst_mon number(9),
+	intst_date number(9),
+	od_ind varchar2(1),
+	od_amt number(16,2),
+	dc_code varchar2(4),
+	shar_ind varchar2(4),
+	shar_term number(6),
+	shar_term_type varchar2(1),
+	over_date_type varchar2(1),
+	invst_type varchar2(1),
+	pre_term varchar2(1),
+	spe_ind varchar2(10) 
+)tablespace users;
+create	 unique index in_parm_1 on in_parm( prdt_no)tablespace indx;

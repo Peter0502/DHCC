@@ -1,0 +1,69 @@
+/******************************************************************************
+*交易名称：机构监督状态变更                                                   *
+*函数名称：sp3668()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：      2007-1-15 10:29                                              *
+*修 改 人：   YXJ                                                             *
+*修改日期：   2007-03-21                                                      *
+*数据库表:    tlrctl                                                          *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "trace_log_c.h" 
+EXEC SQL INCLUDE sqlca;
+int sp3668()
+{
+	int ret=0;
+	struct trace_log_c wd_trace_log;
+	char cTemp[6];
+	char cBrno[6];/**注意这里以后要修改xyy**/
+	memset(&wd_trace_log,0x00,sizeof(wd_trace_log));
+	memset(cBrno,0,sizeof(cBrno));
+	memset(cTemp,0,sizeof(cTemp));
+  	pub_base_sysinit();
+  	get_fd_data("0910",cTemp);
+  	vtcp_log("[%s][%d]cTemp==[%s]",__FILE__,__LINE__,cTemp);
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+  	pub_base_strpack_all(cTemp);
+  	memcpy(cBrno,cTemp,sizeof(cBrno)-1);
+  	vtcp_log("[%s][%d]cBrno==[%s]",__FILE__,__LINE__,cBrno);
+	pub_base_strpack(cBrno);
+	vtcp_log("[%s][%d]cBrno==[%s]",__FILE__,__LINE__,cBrno);
+	if(strlen(cBrno)==0) strcpy(cBrno,"%%");
+	ret=sql_execute("update trace_log  set stat='1' where tx_br_no like '%s' and stat='0'",cBrno);
+	if(ret){
+		sprintf(acErrMsg,"[%s][%d]更新trace_log记录错[%d]", __FILE__,__LINE__,ret);
+      		strcpy( g_pub_tx.reply, "0120" );
+      		set_zd_data(DC_GET_MSG,acErrMsg);
+      		WRITEMSG
+      		goto ErrExit;
+	}
+  	vtcp_log("[%s][%d]顺利关闭游标!cBrno==[%s]",__FILE__,__LINE__,cBrno);
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+

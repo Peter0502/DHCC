@@ -1,0 +1,240 @@
+/***************************************************************************************
+*交易名称: 交易代码维护
+*文件名称: sp3671.pc
+*
+*
+*功能描述: 7011.XML 
+*改造者  : lyz
+*改造日期: 20070111
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "shjdcode_c.h"
+struct shjdcode_c shjdcode;
+int sp3671()
+{
+	int ret=0;
+	char flag[2];
+	char tx_no[5];
+	char sub_tx_no[5];
+	char tx_name[21];
+	char tx_flag[4];
+	char tmp[5];
+
+	memset(flag,0x00,sizeof(flag));
+	memset(tx_no,'\0',sizeof(tx_no));
+	memset(tmp,'\0',sizeof(tmp));
+	memset(sub_tx_no,0x00,sizeof(sub_tx_no));
+	memset(tx_name,0x00,sizeof(tx_name));
+	memset(tx_flag,0x00,sizeof(tx_flag));
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+  vtcp_log("[%s][%d]交易代码维护开始了",__FILE__,__LINE__);
+	pub_base_sysinit();
+
+	get_fd_data("0230",tx_flag);
+	get_fd_data("0670",flag);
+	get_fd_data("0370",tx_name);
+	get_fd_data("0340",tmp);
+	sprintf(tx_no,"%04d",atoi(tmp));
+
+	pub_base_strpack(tx_no);
+	pub_base_strpack(tx_name);
+  vtcp_log("[%s][%d] tmp=====[%s]",__FILE__,__LINE__,tmp);
+  vtcp_log("[%s][%d] flag=====[%s]",__FILE__,__LINE__,flag);
+  vtcp_log("[%s][%d] tx_no====[%s]",__FILE__,__LINE__,tx_no);
+  vtcp_log("[%s][%d] sub_tx_no====[%s]",__FILE__,__LINE__,sub_tx_no);
+  vtcp_log("[%s][%d] tx_name==[%s]",__FILE__,__LINE__,tx_name);
+  vtcp_log("[%s][%d] tx_flag==[%s]",__FILE__,__LINE__,tx_flag);
+	
+	switch(flag[0])
+	{
+		case '1':/*增加*/
+			ret=add_recd(tx_no,tx_name);
+			if(ret) goto ErrExit;
+			break;
+		case '2': /*修改*/
+			ret=update_recd(tx_no,tx_name);
+			if(ret) goto ErrExit;
+			break;
+		case '3':/*删除*/
+			ret=del_recd(tx_no);
+			if(ret) goto ErrExit;
+			break;
+		case '4':/*刷新*/
+			ret=refresh_recd();
+			if(ret) goto ErrExit;
+			break;
+		default:
+			sprintf(acErrMsg,"不存在的操作符.");
+			WRITEMSG 
+			break;
+	}
+  vtcp_log("[%s][%d]操作员监督网点维护进行到了这里over",__FILE__,__LINE__);
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+
+}
+int add_recd(char *tx_no,char *tx_name)
+{
+	int ret=0;
+  vtcp_log("[%s][%d]这里进入add的分支了",__FILE__,__LINE__);
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+
+	memcpy(shjdcode.trancode,tx_no,sizeof(shjdcode.trancode)-1);
+	memcpy(shjdcode.tranname,tx_name,sizeof(shjdcode.tranname)-1);
+	/*
+	memcpy(shjdcode.txcode,tx_flag,sizeof(shjdcode.txcode)-1);
+	*/
+
+	ret=Shjdcode_Ins(shjdcode,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]插入记录出错.[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+int update_recd(char *tx_no,char *tx_name)
+{
+	int ret=0;
+  vtcp_log("[%s][%d]这里进入update的分支了",__FILE__,__LINE__);
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+
+	ret=Shjdcode_Dec_Upd(g_pub_tx.reply," trancode='%s'",tx_no);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]声明出错.[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+	ret=Shjdcode_Fet_Upd(&shjdcode,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]FETCH出错.[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+	memcpy(shjdcode.tranname,tx_name,sizeof(shjdcode.tranname)-1);
+/*	memcpy(shjdcode.txcode,tx_flag,sizeof(shjdcode.txcode)-1);*/
+
+	ret=Shjdcode_Upd_Upd(shjdcode,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]UPDATE出错.[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+	Shjdcode_Clo_Upd();
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+int del_recd(char *tx_no)
+{
+	int ret=0;
+  vtcp_log("[%s][%d]这里进入del的分支了",__FILE__,__LINE__);
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+  vtcp_log("[%s][%d] tx_no====[%s]",__FILE__,__LINE__,tx_no);
+	ret=sql_execute(" delete from shjdcode where trancode='%s'",tx_no);
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]DELETE出错.[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}
+int refresh_recd()
+{
+	int ret=0;
+	FILE *fp;
+	char filename[100];
+	int cnt=0;
+	vtcp_log("[%s][%d]这里进入refresh的分支了",__FILE__,__LINE__);
+	memset(filename,0x00,sizeof(filename));
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+
+	ret=Shjdcode_Dec_Sel(g_pub_tx.reply," 1=1 order by trancode");
+	if(ret)
+	{
+		sprintf(acErrMsg,"[%s][%d]声明游标出错[%d] ",__FILE__,__LINE__,ret);
+		WRITEMSG
+		goto ErrExit; 
+	}
+	while(1)
+	{
+		memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+		ret=Shjdcode_Fet_Sel(&shjdcode,g_pub_tx.reply);
+		if(ret == 100 )
+		{
+			if(!cnt)
+			{
+			    sprintf(acErrMsg,"[%s][%d]数据库中无此记录[%d] ",__FILE__,__LINE__,ret);
+			    WRITEMSG
+			    goto ErrExit;
+			}
+			break;     
+		}
+		if(ret)
+		{
+			  sprintf(acErrMsg,"[%s][%d]FET游标出错.[%d] ",__FILE__,__LINE__,ret);
+			  WRITEMSG
+			  goto ErrExit;
+		}	    
+		if(!cnt)
+		{
+			pub_base_AllDwnFilName(filename);
+			fp=fopen(filename,"w");
+			if(!fp)
+			{
+				sprintf(acErrMsg," open file [%s] error ",filename );
+				WRITEMSG
+				strcpy( g_pub_tx.reply,"S047" );
+			  vtcp_log("[%s][%d]filename===[%s]",__FILE__,__LINE__,filename);
+				goto ErrExit;
+			}
+		}
+		cnt++;
+		fprintf(fp,"%s|%s|\n",shjdcode.trancode,shjdcode.tranname);	
+	}
+	Shjdcode_Clo_Sel();
+      vtcp_log("[%s][%d]cnt------===[%d]",__FILE__,__LINE__,cnt);
+	if(!cnt)
+	{
+		strcpy(g_pub_tx.reply,"S049");
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1");
+	}
+OkExit:
+	return 0;	
+ErrExit:
+	return 1;	
+}

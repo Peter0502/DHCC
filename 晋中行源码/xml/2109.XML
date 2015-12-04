@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2109 其他金融机构产品信息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD21=#BZTYPE;
+	$FD28=#CUSTNO;
+	$FD30=#ACTNO;
+	$FD39=itoa(#CKBAL*100,'%016.0f');
+	$FD40=itoa(#YHBAL*100,'%016.0f');
+	$FD66=#CPTYPE;
+	$FD67=#JGTYPE;
+	$FD91=#BRNO;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	#ORDERNO=$FD35;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(2109                        其他金融机构产品信息)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1109)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="7"  COL="20" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="9"  COL="20" TYPE="%-10s" FUNCTIONS="T(机构类型:)"/>
+  <ITEM LINE="10" COL="20" TYPE="%-10s" FUNCTIONS="T(机构编码:)"/>
+  <ITEM LINE="12" COL="20" TYPE="%-10s" FUNCTIONS="T(产品类型:)"/>
+  <ITEM LINE="13" COL="20" TYPE="%-10s" FUNCTIONS="T(产品币种:)"/>
+  <ITEM LINE="14" COL="20" TYPE="%-10s" FUNCTIONS="T(卡/帐 号:)"/>
+  <ITEM LINE="16" COL="20" TYPE="%-10s" FUNCTIONS="T(存贷余额:)"/>
+  <ITEM LINE="17" COL="20" TYPE="%-10s" FUNCTIONS="T(月还余额:)"/>
+  <ITEM NAME="#SHOW" LINE="7" COL="45" TYPE="%-10s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(信息序号:)"/>
+  <ITEM NAME="#CUSTNO" 		INPUT="TEXT"   LINE="7" COL="30" TYPE="%-8s"  FUNCTIONS="T()V(NB)">
+<ONLOSTFOCUS>
+  "{
+   dim @txno_bak as string;
+   @txno_bak=$TXNO;
+   $TXNO='9942';
+   $FD28=#CUSTNO;
+   commsend_001();
+   $TXNO=@txno_bak;
+   callserver();
+   #KHTYPE=$FD66;
+   if($FD12 != '0000')
+   {
+        showmsg(geterror());
+        return(false);
+   }
+   if(#KHTYPE == '1')
+   {
+        showmsg('不能输入个人客户号');
+        return(false);
+   }
+   else if(#KHTYPE != '3')
+   {
+	showmsg('客户号不是机构客户号!');
+        return(false);
+   }
+  }"
+</ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#KHTYPE" TYPE="%-1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#JGTYPE" 		INPUT="SELECT" LINE="9" COL="30" TYPE="%-1s" FUNCTIONS="T(1)">
+  	<SELECT>
+		<OPTION VALUE="1"  TITLE="1.基金会"/>
+		<OPTION VALUE="2"  TITLE="1.商业银行"/>
+		<OPTION VALUE="3"  TITLE="1.证券公司"/>
+		<OPTION VALUE="4"  TITLE="1.其他机构"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#S_JGTYPE" TYPE="%-20s" FUNCTIONS="S(#JGTYPE,#JGTYPE)"/>
+  <ITEM NAME="#BRNO" 	INPUT="TEXT" 	LINE="10" COL="30" TYPE="%-5s"  FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#CPTYPE" 	INPUT="SELECT" 	LINE="12" COL="30" TYPE="%-1s"  FUNCTIONS="T(1)">
+    	<SELECT>
+		<OPTION VALUE="1"  TITLE="1.活期存款"/>
+		<OPTION VALUE="2"  TITLE="1.定期存款"/>
+		<OPTION VALUE="3"  TITLE="1.贷款"/>
+		<OPTION VALUE="4"  TITLE="1.信用卡"/>
+		<OPTION VALUE="5"  TITLE="1.股票"/>
+		<OPTION VALUE="6"  TITLE="1.基金"/>
+		<OPTION VALUE="7"  TITLE="1.其他产品"/> 	
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#S_CPTYPE" TYPE="%-20s" FUNCTIONS="S(#CPTYPE,#CPTYPE)"/>
+  <ITEM NAME="#BZTYPE" 	INPUT="SELECT" LINE="13" COL="30" TYPE="%-2s"  FUNCTIONS="T(01)">
+      	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+		<OPTION VALUE="12" TITLE="0.英镑"/>
+		<OPTION VALUE="13" TITLE="0.港元"/>
+		<OPTION VALUE="14" TITLE="0.美元"/>
+		<OPTION VALUE="15" TITLE="0.瑞士法郎"/>
+		<OPTION VALUE="27" TITLE="0.日元"/>
+		<OPTION VALUE="28" TITLE="0.加元"/>
+		<OPTION VALUE="29" TITLE="0.澳元"/>
+		<OPTION VALUE="38" TITLE="0.欧元"/>	
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#S_BZTYPE" TYPE="%-10s" FUNCTIONS="S(#BZTYPE,#BZTYPE)"/>
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" LINE="14" COL="30" TYPE="%-24s"  FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#CKBAL" 	INPUT="TEXT" LINE="16" COL="30" TYPE="%16.2f"   FUNCTIONS="T()"/>
+  <ITEM NAME="#YHBAL" 	INPUT="TEXT" LINE="17" COL="30" TYPE="%16.2f"   FUNCTIONS="T()"/>
+  <ITEM NAME="#ORDERNO" VISABLE="FALSE"	INPUT="TEXT" LINE="7" COL="55" TYPE="%-4s"  FUNCTIONS=""/>
+
+  <!--输出变量--->
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <!--
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">-->
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    	<ONCLICK>
+    	"{
+    		dim @tota as string;
+    		dim @ch as string;
+		commsend_001();
+		$FD21=#BZTYPE;
+		$FD28=#CUSTNO;
+		$FD30=#ACTNO;
+		$FD39=itoa(#CKBAL*100,'%016.0f');
+		$FD40=itoa(#YHBAL*100,'%016.0f');
+		$FD66=#CPTYPE;
+		$FD67=#JGTYPE;
+		$FD91=#BRNO;
+    		@tota=callserver();
+    		#ORDERNO=$FD35;
+       		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+			}
+		else{
+			showall();
+			show(#SHOW,true);
+			//showmsg(#ORDERNO);
+			show(#ORDERNO,true);
+			runoutput();
+    			
+					}
+    		}"
+		</ONCLICK>    		
+  </ITEM>
+
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE  DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,30,        '录入成功！')
+		print(9,10,'客户号:[8]',#CUSTNO);
+		print(10,10,'机构类型:[20]',#S_JGTYPE);
+		print(11,10,'机构编码:[5]',#BRNO);
+		print(12,10,'产品类型:[20]',#S_CPTYPE);
+		print(13,10,'币    种:[10]',#S_BZTYPE);
+		print(14,10,'卡/帐号 :[24]',#ACTNO);
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+	  $KINDNO='00';
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	  print( 5, 20,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'代码:2109');
+	  print( 5, 13,'交易:其他金融机构产品信息');
+	  print( 8, 20,'客 户 号:[8]',#CUSTNO);
+	  print( 9, 20,'机构类型:[20]',#S_JGTYPE);
+	  print(10, 20,'机构编码:[8]',#BRNO);
+	  print(12, 20,'产品类型:[20]',#S_CPTYPE);
+	  print(13, 20,'币    种:[10]',#S_BZTYPE);
+	  print(14, 20,'卡/ 帐号:[24]',#ACTNO);
+	  
+	  print( 24,20,'备注:');
+	  print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	  print( 24,5,'柜员:[4]',$FD7);
+	  print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+
+
+

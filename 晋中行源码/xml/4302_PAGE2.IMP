@@ -1,0 +1,298 @@
+<!-----转帐交易： 显示帐号信息的变量组合----------> 
+  <PAGE NAME="PAGE2">
+  
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(对方账号: )" NAME="#LDFNO"  VISABLE="TRUE"/>
+  <ITEM LINE="7"  COL="35" TYPE="%-10s" FUNCTIONS="T(账户序号: )" NAME="#LACSEQ" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM NAME="#LACTNO"  LINE="9"  COL="4"   TYPE="%-36s" VISABLE="TRUE" FUNCTIONS="T(【转帐对方帐户信息】)"/>
+  <ITEM NAME="#LACTNO"  LINE="10" COL="5"   TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+  
+  <ITEM NAME="#ZFKZNO"   TYPE="%-19s" FUNCTIONS=""/>
+  <ITEM NAME="#DFNO" INPUT="TEXT" LINE="7"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	dim @tota    as string;
+    	dim @tmp      as string;
+	    dim @tmp_head as string;
+	    dim @sel_buf  as string;
+	    dim @voc_imp  as string;
+	    dim @cnt      as number;
+	    dim @totcnt   as number;
+	    // add by chenchao 2011-7-31 17:12:09 
+	    if(#ZFKZNO!='' and #ZFKZNO!=#DFNO)
+	    {
+		    showmsg('贷款支付的委托账号不能修改');
+		    return(false);
+	    }
+      if (#DFNO==#ACTNO)
+	    {
+		     showmsg('帐号与对方帐号不应为同一帐号!');
+		     return(false);
+	    }
+	if(#DFNO=='41600' or substr(#DFNO,0,3)=='407'){
+		showmsg('不可记此科目!');
+		return(false);
+	}
+	//showmsg(#DFNO);
+	if(substr(#DFNO,0,3)=='408'){
+		if($KINBR!='10001'){
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+	}
+
+    	@baktxno=$TXNO;
+    	initfd();
+    	$MSGTYPE='03001';
+    	$TXNO='9730';
+    	$FD101=getitems('#DFNO')+space(122,' ')+getitems('#CASHFLAG');
+    	commsend_001();
+    	@tota=callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	#DFNO=delspace(substr($FD101,0,24));  //将新帐号赋给#DFNO
+    //	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#FS_AMT#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME',$FD101);
+    	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME',$FD101);
+	//showmsg(#101ACTNO);
+//	showmsg('hahah==='+#FS_AMT);
+    	#ACT_LX_CK    = substr($FD101,156,1);
+	//showmsg('CK='+#ACT_LX_CK);
+	//showmsg('CURCD1='+#101CURCD);
+    	if(#ACT_LX_CK=='1')  //储蓄户
+    	{
+			@voc_imp = #101VOCTYPE;
+    	    show(#S_VOCTYPE,false);
+    	    show(#S_DSCPT,false);
+    	    show(#101VOCTYPE,false);
+    	    show(#ZY_TP,false);
+    	    #101VOCTYPE = @voc_imp;
+			#101DSCTYPE=#DSCPTID;
+			#101DSCPT=substr(#DSCPTS,0,10);
+    	}else if(#ACT_LX_CK=='2'){ //对公户
+    	
+    	    @cnt=0;
+	        @totcnt=0;
+	        @tmp='';
+	        @tmp_head='';
+	        while(@totcnt &lt; len(@tota))
+	        {
+		           @tmp=substr(@tota,@totcnt,20);
+		           @tmp_head=substr(@tmp,0,4);
+		          if(@tmp_head=='1014' or rtrim(@tmp_head)=='')
+		          {
+			            break;
+		          }
+		          @totcnt=@totcnt+31;
+	       }	
+	       
+          @sel_buf=substr(@tota,0,@totcnt);
+	        setsel(#ZY_TP,@sel_buf,'o5t20o1v3o2');
+	
+	        @sel_buf=substr(@tota,@totcnt,len(@tota)-@totcnt);
+	        setsel(#101VOCTYPE,@sel_buf,'o5t20o1v3o2');
+	        
+	        #ZY_TP=substr(#101DSCTYPE,0,3);
+    	    show(#S_VOCTYPE,true);
+    	    show(#S_DSCPT,true);
+    	    show(#101VOCTYPE,true);
+    	    show(#ZY_TP,true);
+    	}else{
+    	   showmsg('帐户类型错误!');
+    	   return(false);
+    	}
+	
+	//showmsg('LX='+#ACT_LX_CK);
+	//增加一个内部帐帐户的标志,另也作为科目的标志
+	if(substr(#DFNO,0,1)=='9' or len(delspace(#DFNO)) &lt;= 7)
+	{
+		#ACT_LX_CK = '3';
+	}//当为408科目时,#ACT_LX_CK值为2,但没有返回打印文件,凭证打印不出,因此也将此情况下的#ACT_LX_CK值设为3
+	else if(len(delspace(#DFNO))&lt;=7 and #ACT_LX_CK == '2') 
+	{
+		#ACT_LX_CK = '3';
+	}
+	//showmsg('LX='+#ACT_LX_CK);
+		
+//	showmsg('#101AVBAL'+itoa(#101AVBAL,'%17.2f'));
+
+//	showmsg('TXAMT==='+itoa(#TXAMT,'%17.2f'));	
+//	showmsg('here');
+    	showblock('TRANINFO',true,true);	
+//	showmsg('here2');
+    	show(#101CNAME,true);
+		  show(#101AVBAL,true);
+    	show(#101CURCD,true);
+	//showmsg('CURCD2='+#101CURCD);
+		show(#101PNAME,true);
+		#101TXAMT = #TXAMT;
+		show(#101TXAMT,true);
+			
+	//	if(atoi(#101ACSEQ)>0)
+	//	{
+		//	show(#101ACSEQ,true);
+	//		show(#LACSEQ,true);
+	//		return(true);
+	//	}
+	//	else
+	//	{
+	//		show(#101ACSEQ,false);
+	//		show(#LACSEQ,false);
+	//	}
+	
+	//若为贷款还款户,且有未还的本金或利息,提示柜员 20070621
+	if($FD71 == '1')
+	{
+		showhelp(5,60,7,10,'提示', '该户为贷款还款户,且有未还的本金或利息!');
+		return(true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="7" COL="55" TYPE="%4d" NAME="#101ACSEQ"  VISABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+<!-- <ONLOSTFOCUS>"{
+      dim @bak as string;
+    	@bak=$TXNO;
+    	$TXNO='9846';
+    	commsend_001();
+    	$FD101=getitems('#DFNO')+getitems('#101ACSEQ');
+    	callserver();
+    	$TXNO=@bak;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+		#DFNO=delspace(substr($FD101,0,24)); //将新帐号赋给#DFNO
+    	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME',$FD101);
+	//showmsg('CURCD3='+#101CURCD);
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+-->  
+
+ <!-- 后台输入项数据   --> 
+   
+  <ITEM NAME="#101ACTNO"   TYPE="%-24s" FUNCTIONS=""/>
+  <!-- #101ACSEQ -->
+  <ITEM NAME="#101AMT"    TYPE="%17.2f" FUNCTIONS="T(#101TXAMT)"/>
+ <!-- <ITEM NAME="#101VOCTYPE"    TYPE="%-3s" FUNCTIONS=""/>-->
+  <ITEM NAME="#101VOCNUM"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#101DSCPT" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#101CARDFLAG"   TYPE="%-1s" FUNCTIONS=""/>  
+  <!-- #101CNAME  -->
+  <!-- #101AVBAL   --> 
+  <!-- #101CURCD    -->    
+   <ITEM NAME="#101CASHFLAG"     TYPE="%-1s" FUNCTIONS="T(2)"/> 
+  <ITEM NAME="#101DSCTYPE" TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#101ACTYPE" TYPE="%-1s" FUNCTIONS=""/>  
+  <ITEM NAME="#101ACSEQ2"  TYPE="%-4s" FUNCTIONS=""/>  
+  <!-- #101PNAME  -->      
+  <ITEM NAME="#FS_AMT"	   TYPE="%-21s" FUNCTIONS=""/> <!--解决负数问题-->
+
+  <BLOCK NAME="TRANINFO" LINE="8" COL="5" VISABLE="FALSE">
+  
+  <ITEM LINE="4"   COL="0"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"   COL="0"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="6"   COL="0"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="7"   COL="0"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="9"   COL="0"  TYPE="%-14s" FUNCTIONS="T(转帐金额:)"/>
+  <ITEM LINE="11"  COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"  INPUT="LABEL" VISABLE="FALSE" NAME="#S_VOCTYPE"/>
+  <ITEM LINE="12"  COL="0"  TYPE="%-10s" FUNCTIONS="T(摘要选项:!)"  INPUT="LABEL" VISABLE="FALSE" NAME="#S_DSCPT"/>
+  
+ 
+
+  
+
+  <!---------------------------------------------------->
+  <ITEM LINE="4"  COL="10" NAME="#101CNAME" TYPE="%-60s" FUNCTIONS=""/>
+  
+  <ITEM NAME="#101CURCD" LINE="5"  COL="10" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="6"   COL="10" INPUT="TEXT" ENABLE="FALSE" NAME="#101AVBAL" TYPE="%17.2f" FUNCTIONS=""/>
+ <!-- 
+  <ITEM NAME="#101AVBAL" TYPE="%17.2f" FUNCTIONS="J(#X_101AVBAL)"/>
+  <ITEM LINE="6"   COL="10"  NAME="#X_101AVBAL" TYPE="%21s" FUNCTONS="X(#101AVBAL)">
+  <ONLOSTFOCUS>
+  "{
+	//showmsg(#X_101AVBAL);
+   }"
+   </ONLOSTFOCUS>
+   </ITEM>
+ -->
+  <ITEM LINE="7"   COL="10" NAME="#101PNAME"  TYPE="%-30s" FUNCTIONS=""/>
+  
+  <ITEM LINE="9"   COL="10" NAME="#101TXAMT" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS=""  ENABLE="FALSE" />
+  
+  <ITEM LINE="11"  COL="10" INPUT="SELECT" VISABLE="FALSE" NAME="#101VOCTYPE" TYPE="%-3s" FUNCTIONS=""/>
+  
+  <ITEM LINE="12"  COL="10" INPUT="SELECT" VISABLE="FALSE" NAME="#ZY_TP" TYPE="%-3s" FUNCTIONS=""/><!---改用3位长度--->
+  <ITEM NAME="#SZY_TP"      TYPE="%-20s"   FUNCTIONS="S(#ZY_TP,#ZY_TP)">
+   <ONLOSTFOCUS>
+  "{
+	//showmsg('CURCD4='+#101CURCD);
+  	enable(#CZY_TP, true);
+
+	if(#ZY_TP != '031'){
+		#CZY_TP = #SZY_TP;
+		enable(#CZY_TP, false);
+	}
+	else
+	{
+		#CZY_TP = '';
+		enable(#CZY_TP,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="13" INPUT="TEXT" NAME="#CZY_TP" TYPE="%-20s" FUNCTIONS=""/>
+    
+  
+  <ITEM NAME="#GO"         TYPE="%1s"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+   #101DSCPT=substr(#CZY_TP,0,10);
+    if(#ACT_LX_CK=='1'){  //储蓄户
+			#101DSCPT=substr(#DSCPTS,0,10);
+	}
+	goitem(#SUBMIT_2);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK>
+
+  
+  <ITEM LINE="21" COL="46"  TYPE="%-6s" FUNCTIONS="T(上一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+    loadpage('DEFAULT');
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" NAME="#SUBMIT_2"/>
+  </PAGE>
+    
+<!-- 定义 FD101 转帐交易结构  Added by martin 2006-8-9  -->
+<!-- 
+#101ACTNO           24         	账号
+#101ACSEQ            4	         账户序号
+
+#101AMT             16           金额
+#101VOCTYPE          3           凭证种类
+
+#101VOCNUM           16	         凭证号
+#101DSCPT            10	         摘要
+#101CARDFLAG         1	         有折无折
+#101CNAME            50	         户名
+#101AVBAL            16	         余额
+#101CURCD             2	         币种
+#101CASHFLAG          1  	       转现标志
+#101DSCTYPE          3	          摘要选项
+#101ACTYPE            1	        帐户类型
+#101ACSEQ2            4         	帐户序号2
+#101PNAME            30	         产品名称
+--> 
+ 

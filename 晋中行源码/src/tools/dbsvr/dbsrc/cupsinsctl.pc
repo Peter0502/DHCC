@@ -1,0 +1,261 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cupsinsctl_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cupsinsctl_con ( struct cupsinsctl_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cupsinsctl_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->brtype);
+	zip_tail(ps->lstinsday);
+	zip_tail(ps->name1);
+	zip_tail(ps->name2);
+	zip_tail(ps->name3);
+	zip_tail(ps->tabname);
+}
+int Cupsinsctl_Debug(struct cupsinsctl_c *ps){
+	vtcp_log("cupsinsctl_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cupsinsctl_c.trseq=[%ld]\n",ps->trseq);
+	vtcp_log("cupsinsctl_c.brtype=[%s]\n",ps->brtype);
+	vtcp_log("cupsinsctl_c.lstinsday=[%s]\n",ps->lstinsday);
+	vtcp_log("cupsinsctl_c.name1=[%s]\n",ps->name1);
+	vtcp_log("cupsinsctl_c.name2=[%s]\n",ps->name2);
+	vtcp_log("cupsinsctl_c.name3=[%s]\n",ps->name3);
+	vtcp_log("cupsinsctl_c.tabname=[%s]\n",ps->tabname);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cupsinsctl_Sel(reply,cupsinsctl_c,fmtstr,va_alist)
+char    *reply;
+struct  cupsinsctl_c *cupsinsctl_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cupsinsctl_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cupsinsctl_Fet_Sel( cupsinsctl_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cupsinsctl_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cupsinsctl_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cupsinsctl.* FROM cupsinsctl WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cupsinsctl_sel FROM :comm;
+	EXEC SQL DECLARE sel_cupsinsctl CURSOR FOR cupsinsctl_sel;
+
+	EXEC SQL OPEN sel_cupsinsctl;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cupsinsctl_Fet_Sel ( struct cupsinsctl_c *cupsinsctl_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cupsinsctl INTO :cupsinsctl_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cupsinsctl error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cupsinsctl finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cupsinsctl_c);
+
+	return 0;
+}
+
+int Cupsinsctl_Clo_Sel (){
+	EXEC SQL CLOSE sel_cupsinsctl;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cupsinsctl_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cupsinsctl.* FROM cupsinsctl WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cupsinsctl_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cupsinsctl CURSOR FOR cupsinsctl_upd;
+
+	EXEC SQL OPEN upd_cupsinsctl;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cupsinsctl_Fet_Upd( struct cupsinsctl_c *cupsinsctl_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cupsinsctl INTO :cupsinsctl_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cupsinsctl finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cupsinsctl_c);
+
+	return 0;
+}
+
+int Cupsinsctl_Upd_Upd( struct cupsinsctl_c cupsinsctl_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cupsinsctl SET trseq=:cupsinsctl_c.trseq,
+			brtype=:cupsinsctl_c.brtype,
+			lstinsday=:cupsinsctl_c.lstinsday,
+			name1=:cupsinsctl_c.name1,
+			name2=:cupsinsctl_c.name2,
+			name3=:cupsinsctl_c.name3,
+			tabname=:cupsinsctl_c.tabname
+	WHERE rowid=:cupsinsctl_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cupsinsctl_Del_Upd(struct cupsinsctl_c cupsinsctl_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cupsinsctl WHERE rowid=:cupsinsctl_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cupsinsctl_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cupsinsctl;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cupsinsctl_Ins( struct cupsinsctl_c cupsinsctl_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cupsinsctl VALUES (:cupsinsctl_c.trseq,
+			:cupsinsctl_c.brtype,
+			:cupsinsctl_c.lstinsday,
+			:cupsinsctl_c.name1,
+			:cupsinsctl_c.name2,
+			:cupsinsctl_c.name3,
+			:cupsinsctl_c.tabname);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cupsinsctl error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

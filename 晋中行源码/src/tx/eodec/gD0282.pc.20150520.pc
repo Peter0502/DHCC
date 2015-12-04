@@ -1,0 +1,1236 @@
+/*************************************************************
+* 文 件 名: gD0282.c
+* 功能描述：入机构余额总帐 从dc_log_bk汇总到gl_bal
+*
+*************************************************************/
+/***  DWDJDPH 1--单网点借贷平衡，多事物 0--全行借贷平衡，单事物***/
+#define MYSQLERR if(sqlca.sqlcode&&sqlca.sqlcode!=1403) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d][%s][%d]",sqlca.sqlcode,__FILE__,__LINE__); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_bal_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "ln_mst_c.h"
+#include "dd_mst_bk_c.h"
+#include "td_mst_bk_c.h"
+#include "in_mst_bk_c.h"
+#include "dd_parm_c.h"
+#include "td_parm_c.h"
+#include "ln_parm_c.h"
+#include "in_parm_c.h"
+#include "note_mst_c.h"
+#include "cash_mst_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_bal_c.h"
+/**JYW#include "com_branch_c.h"**/
+
+EXEC SQL BEGIN DECLARE SECTION;
+	static struct	gl_bal_c		gl_bal;
+	static double d_amt,c_amt;
+EXEC SQL  END  DECLARE SECTION;
+	static struct com_sys_parm_c com_sys_parm_c;
+
+gD0282( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+	/*20080202初始化*/
+	memset(dbname,0,sizeof(dbname));
+	memset(kzxjg,0,sizeof(kzxjg));
+	memset(date,0,sizeof(date));
+	memset(jgh,0,sizeof(jgh));
+	memset(&gl_bal,0,sizeof(struct gl_bal_c));
+	memset(&com_sys_parm_c,0,sizeof(struct com_sys_parm_c));
+	/*20080202初始化*/  
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &com_sys_parm_c );
+	MYRETERR
+
+	g_pub_tx.tx_date=com_sys_parm_c.lst_date;
+
+	EXEC SQL update dc_log_bk set cur_no='01' where cur_no is null;
+	MYSQLERR
+
+	ret=do_qs();
+	if( ret ) goto ErrExit;
+
+	ret=do_cash();
+	if( ret ) goto ErrExit;
+
+	ret=do_dd();
+	if( ret ) goto ErrExit;
+
+	ret=do_td();
+	if( ret ) goto ErrExit;
+
+	ret=do_ln();
+	if( ret ) goto ErrExit;
+
+	ret=do_in();
+	if( ret ) goto ErrExit;
+
+	ret=do_note();
+	if( ret ) goto ErrExit;
+
+	ret=sum_dc();
+	if( ret ) goto ErrExit;
+	
+	ret=chk_phgx();
+	if( ret ) goto ErrExit;
+
+	ret=do_up_br_no();
+	if( ret ) goto ErrExit;
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+/*----------------------------------------------------------*/
+/***汇总分户***/
+do_note()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct note_mst_c vr;
+	struct gl_bal_c vgl_bal;
+	int z1;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	  /*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct note_mst_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_note cursor for
+		select br_no,sum(cnt) 
+		from note_mst
+		where sts in('0','1','2')
+		group by br_no
+		order by br_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_note ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_note into :vr.br_no,:vr.cnt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/*if( z1 ) vr.cnt=0;*/
+		if( vr.cnt==0 ) continue;
+
+		vtcp_log("brno[%s]cnt[%d]",
+			vr.br_no, vr.cnt  );
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,vr.br_no );
+			strcpy( vgl_bal.cur_no,"01" );
+			vgl_bal.cr_bal=vr.cnt;
+			vgl_bal.ac_cnt=1;
+		ret=sub_do_acc_and_up( vgl_bal,"70200",10 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_note;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+do_cash()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct cash_mst_c vr;
+	struct gl_bal_c vgl_bal;
+	int z1;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	/*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct cash_mst_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_cash cursor for
+		select br_no,cur_no,sum(bal) 
+		from cash_mst
+		where 1=1
+		group by br_no,cur_no
+		order by 1,2;
+	MYSQLERR
+
+	EXEC SQL open cur_cash ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_cash into :vr.br_no,:vr.cur_no,:vr.bal;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**if( z1 ) vr.bal=0.00;**/
+		if( vr.bal>-0.005 && vr.bal<0.005 ) continue;
+
+		vtcp_log("brno[%s]amt[%.2lf]",
+			vr.br_no, vr.bal  );
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,vr.br_no );
+			strcpy( vgl_bal.cur_no,vr.cur_no );
+			vgl_bal.cr_bal=vr.bal;
+			vgl_bal.ac_cnt=1;
+		ret=sub_do_acc_and_up( vgl_bal,"10101",10 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_cash;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+do_dd()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct dd_mst_bk_c vr;
+	struct dd_parm_c vparm;
+	struct gl_bal_c vgl_bal;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	/*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct dd_mst_bk_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+	memset(&vparm,0x00,sizeof(struct dd_parm_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_dd cursor for
+		select rowid,dd_mst_bk.* from dd_mst_bk
+		where 1=1
+		order by opn_br_no,prdt_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_dd ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_dd into :vr;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		vtcp_log("brno[%s]prdtno[%s]amt[%.2lf]cnt[%d]",
+			vr.opn_br_no, vr.prdt_no, vr.bal, vr.cnt );
+
+		EXEC SQL select rowid,dd_parm.* into :vparm from dd_parm 
+			where prdt_no=:vr.prdt_no;
+		MYSQLERR
+		
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,vr.opn_br_no );
+			strcpy( vgl_bal.cur_no,vparm.cur_no );
+			vgl_bal.cr_bal=vr.bal;
+			vgl_bal.ac_cnt=vr.cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,0 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_dd;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+do_td()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct td_mst_bk_c vr;
+	struct td_parm_c vparm;
+	struct gl_bal_c vgl_bal;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	/*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct td_mst_bk_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+	memset(&vparm,0x00,sizeof(struct td_parm_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_td cursor for
+		select rowid,td_mst_bk.* from td_mst_bk
+		where 1=1
+		order by opn_br_no,prdt_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_td ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_td into :vr;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		vtcp_log("brno[%s]prdtno[%s]amt[%.2lf]cnt[%d]",
+			vr.opn_br_no, vr.prdt_no, vr.bal, vr.cnt );
+
+		EXEC SQL select rowid,td_parm.* into :vparm from td_parm 
+			where prdt_no=:vr.prdt_no;
+		MYSQLERR
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,vr.opn_br_no );
+			strcpy( vgl_bal.cur_no,vparm.cur_no );
+			vgl_bal.cr_bal=vr.bal;
+			vgl_bal.ac_cnt=vr.cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,0 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_td;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+do_ln()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct ln_mst_c vr;
+	struct ln_parm_c vparm;
+	struct gl_bal_c vgl_bal;
+	long cnt;
+	int z1,z2,z3,z4,z5,z6;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	/*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct ln_mst_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+	memset(&vparm,0x00,sizeof(struct ln_parm_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_ln cursor for
+		select opn_br_no,prdt_no,
+			ac_sts,sum(bal),sum(in_lo_intst),sum(out_lo_intst),
+			sum(cmpd_lo_intst),sum(gage_amt),count(*)
+		from ln_mst
+		where 1=1
+		group by opn_br_no,prdt_no,ac_sts
+		order by opn_br_no,prdt_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_ln ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_ln 
+			into :vr.opn_br_no,:vr.prdt_no,:vr.ac_sts,
+			:vr.bal,:vr.in_lo_intst,:vr.out_lo_intst,
+			:vr.cmpd_lo_intst,:vr.gage_amt,:cnt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**
+		if( z1 ) vr.bal=0.00;
+		if( z2 ) vr.in_lo_intst=0.00;
+		if( z3 ) vr.out_lo_intst=0.00;
+		if( z4 ) vr.cmpd_lo_intst=0.00;
+		if( z5 ) vr.gage_amt=0.00;
+		if( z6 ) cnt=0;
+		**/
+
+		vtcp_log("brno[%s]prdtno[%s]amt[%.2lf]cnt[%d]",
+			vr.opn_br_no, vr.prdt_no, vr.bal, cnt );
+
+		EXEC SQL select rowid,ln_parm.* into :vparm from ln_parm 
+			where prdt_no=:vr.prdt_no;
+		MYSQLERR
+
+		if( vr.ac_sts[0]=='1' )
+			;
+		else if( vr.ac_sts[0]=='2' )
+			strcpy( vparm.dc_code,vparm.over_dc_code );
+		else if( vr.ac_sts[0]=='3' )
+			strcpy( vparm.dc_code,vparm.sla_dc_code );
+		else if( vr.ac_sts[0]=='4' )
+			strcpy( vparm.dc_code,vparm.bad_dc_code );
+		else
+		{
+			if( vr.bal>0.005 || vr.in_lo_intst>0.005 ||
+				vr.in_lo_intst>0.005 || vr.cmpd_lo_intst>0.005 )
+			{
+				vtcp_log("WARNING");
+			}
+			continue;
+		}
+
+		memset( &vgl_bal,0,sizeof(vgl_bal) );
+		strcpy( vgl_bal.br_no,vr.opn_br_no );
+		strcpy( vgl_bal.cur_no,vparm.cur_no );
+			vgl_bal.cr_bal=vr.bal;
+			vgl_bal.ac_cnt=cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,0 );
+		MYRETERR
+			vgl_bal.cr_bal=vr.in_lo_intst;
+			vgl_bal.ac_cnt=cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,1 );
+		MYRETERR
+			vgl_bal.cr_bal=vr.out_lo_intst;
+			vgl_bal.ac_cnt=cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,2 );
+		MYRETERR
+			vgl_bal.cr_bal=vr.cmpd_lo_intst;
+			vgl_bal.ac_cnt=cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,3 );
+		MYRETERR
+	}
+	EXEC SQL close cur_ln;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+do_in()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	struct in_mst_bk_c vr;
+	struct in_parm_c vparm;
+	struct gl_bal_c vgl_bal;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	/*20080202 初始化变量 */
+	memset(&vr,0x00,sizeof(struct in_mst_bk_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+	memset(&vparm,0x00,sizeof(struct in_parm_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_in cursor for
+		select rowid,in_mst_bk.* from in_mst_bk
+		where bal!=0
+		order by opn_br_no,prdt_no ;
+	MYSQLERR
+
+	EXEC SQL open cur_in ;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_in into :vr;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		vtcp_log("brno[%s]prdtno[%s]amt[%.2lf]cnt[%d]",
+			vr.opn_br_no, vr.prdt_no, vr.bal, vr.cnt );
+
+		EXEC SQL select rowid,in_parm.* into :vparm from in_parm 
+			where prdt_no=:vr.prdt_no;
+		MYSQLERR
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,vr.opn_br_no );
+			strcpy( vgl_bal.cur_no,vparm.cur_no );
+			vgl_bal.cr_bal=vr.bal;
+			vgl_bal.ac_cnt=vr.cnt;
+		ret=sub_do_acc_and_up( vgl_bal,vparm.dc_code,0 );
+		MYRETERR
+
+	}
+	EXEC SQL close cur_in;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+int sum_dc()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_bal_c vgl_bal;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+	/*20080202 初始化变量 */
+	memset(&d_k,0x00,sizeof(struct dc_log_bk_c));
+	memset(&vgl_bal,0x00,sizeof(struct gl_bal_c));
+ 	/*20080202 初始化变量 */
+	EXEC SQL declare cur_1_dc cursor for
+		select tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		and (
+			acc_hrt in ( select acc_hrt from com_item where acc_knd!='3' )
+			or acc_hrt='70500'
+			)
+		and acc_hrt!='70200'
+		group by tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		union
+		select tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		and acc_hrt='70200'
+		group by tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open cur_1_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		EXEC SQL fetch cur_1_dc 
+			into :d_k.tx_opn_br_no,:d_k.cur_no,:d_k.acc_hrt,
+			:d_k.dc_ind,:d_k.ct_ind,:d_k.amt,:d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**
+		if( z1 ) d_k.amt=0.00;
+		if( z2 ) d_k.trace_no=0;
+		**/
+
+			memset( &vgl_bal,0,sizeof(vgl_bal) );
+			strcpy( vgl_bal.br_no,d_k.tx_opn_br_no );
+			strcpy( vgl_bal.cur_no,d_k.cur_no );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_bal.rdd_cnt=d_k.trace_no;
+				vgl_bal.rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_bal.cdd_cnt=d_k.trace_no;
+					vgl_bal.cdd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_bal.rcd_cnt=d_k.trace_no;
+				vgl_bal.rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_bal.ccd_cnt=d_k.trace_no;
+					vgl_bal.ccd_amt=d_k.amt;
+				}
+			}
+vtcp_log("DCDC[%s-%s][%.2lf][%.2lf]",vgl_bal.br_no,d_k.acc_hrt,vgl_bal.rdd_amt,vgl_bal.rcd_amt);
+		ret=sub_do_acc_and_up( vgl_bal,d_k.acc_hrt,10 );
+		MYRETERR
+	}
+	EXEC SQL close cur_1_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/**增加科目记录及其上级**/
+sub_do_acc_and_up( p_gl_bal,dc_code,mode )
+ struct gl_bal_c p_gl_bal;
+ char *dc_code;
+ int mode;
+{
+ 	struct gl_bal_c gl_bal;
+	struct dc_acc_rel_c vdc_acc_rel;
+	struct com_item_c vcom_item;
+	int ret=0;
+	char data_code[5];
+	/*20080202 初始化变量 */
+	memset(&gl_bal,0x00,sizeof(struct gl_bal_c));
+	memset(&vdc_acc_rel,0x00,sizeof(struct dc_acc_rel_c));
+	memset(&vcom_item,0x00,sizeof(struct com_item_c));
+ 	/*20080202 初始化变量 */
+	memset(data_code,0x00,sizeof(data_code));
+	memcpy( &gl_bal,&p_gl_bal,sizeof(gl_bal) );
+
+	if( mode==10)
+	{
+		strcpy( vdc_acc_rel.acc_hrt,dc_code );
+	}
+	else
+	{
+
+	if( mode==1 )
+		strcpy( data_code,"0155" );
+	else if( mode==2 )
+		strcpy( data_code,"0156" );
+	else if( mode==3 )
+		strcpy( data_code,"0157" );
+	else
+		strcpy( data_code,"0152" );
+
+	ret=Dc_acc_rel_Sel( g_pub_tx.reply,&vdc_acc_rel,
+		"dc_code='%s' and data_code='%s'",
+		dc_code,data_code );
+	if( ret )
+	vtcp_log("dc_code='%s' and data_code='%s'",
+		dc_code,data_code );
+	MYRETERR
+
+	}
+
+	pub_base_strpack( vdc_acc_rel.acc_hrt );
+
+	while(1)
+	{
+		ret=Com_item_Sel( g_pub_tx.reply,&vcom_item,
+			"acc_hrt='%s'",vdc_acc_rel.acc_hrt );
+		MYRETERR
+
+		vtcp_log("acchrt[%s]",vdc_acc_rel.acc_hrt );
+
+		strcpy( gl_bal.acc_hrt,vdc_acc_rel.acc_hrt );
+		strcpy( gl_bal.dc_ind,vcom_item.dc_ind );
+		strcpy( gl_bal.up_acc_hrt,vcom_item.up_acc_hrt );
+
+		if( vcom_item.dc_ind[0]=='2' )
+			;
+		else if( vcom_item.dc_ind[0]=='1' )
+		{
+			gl_bal.dr_bal=p_gl_bal.cr_bal;
+			gl_bal.cr_bal=0.00;
+		}
+		else
+		{
+			if( p_gl_bal.cr_bal>0.005 )
+			{
+				gl_bal.dr_bal=p_gl_bal.cr_bal;
+				gl_bal.cr_bal=0.00;
+			}
+			else if( p_gl_bal.cr_bal<-0.005 )
+			{
+				gl_bal.dr_bal=0.00;
+				gl_bal.cr_bal=-p_gl_bal.cr_bal;
+			}
+		}
+
+vtcp_log("==[%s]=[%.2lf][%.2lf]",gl_bal.acc_hrt,gl_bal.rdd_amt,gl_bal.rcd_amt);
+		ret=sub_add_do( gl_bal );
+		MYRETERR
+
+		strcpy( vdc_acc_rel.acc_hrt,vcom_item.up_acc_hrt );
+
+		if( vcom_item.acc_lvl[0]=='1' ) break;
+		if( !strcmp(vcom_item.up_acc_hrt,vcom_item.acc_hrt) ) break;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+/***期初数处理***/
+do_qs()
+{
+	struct gl_bal_c gl_bal_tmp;
+	struct gl_bal_c gl_bal_o;
+	struct com_branch_c com_branch;
+	int ret;
+	/*20080202 初始化变量 */
+	memset(&gl_bal_tmp,0x00,sizeof(struct gl_bal_c));
+	memset(&com_branch,0x00,sizeof(struct com_branch_c));
+ 	/*20080202 初始化变量 */
+	memset( &gl_bal_o,0,sizeof(gl_bal_o) );
+
+    ret=Gl_bal_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYSQLERR
+
+	while(1)
+	{
+     	ret = Gl_bal_Fet_Upd(&gl_bal_tmp,g_pub_tx.reply);
+		if( ret==100 ) break;
+		MYSQLERR
+
+		/**处理期初数**/
+		sub_begin_do( &gl_bal_tmp );
+
+       	ret = Gl_bal_Upd_Upd(gl_bal_tmp, g_pub_tx.reply);
+		MYSQLERR
+
+		memcpy( &gl_bal_o,&gl_bal_tmp,sizeof(gl_bal_tmp) );
+	}
+    Gl_bal_Clo_Upd();
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+sub_begin_do( struct gl_bal_c *p_gl_bal_c )
+{
+	struct gl_bal_c gl_bal_c;
+	int ret;
+	memset(&gl_bal_c,0x00,sizeof(struct gl_bal_c));/*20080202*/
+	memcpy( &gl_bal_c,p_gl_bal_c,sizeof(gl_bal_c) );
+
+        gl_bal_c.date = com_sys_parm_c.lst_date; 
+        gl_bal_c.ldd_bal = gl_bal_c.dr_bal;
+        gl_bal_c.lcd_bal = gl_bal_c.cr_bal;
+        gl_bal_c.lac_cnt = gl_bal_c.ac_cnt;
+		gl_bal_c.rdd_cnt=0;
+		gl_bal_c.rcd_cnt=0;
+		gl_bal_c.rdd_amt=0.00;
+		gl_bal_c.rcd_amt=0.00;
+		gl_bal_c.cdd_cnt=0;
+		gl_bal_c.ccd_cnt=0;
+		gl_bal_c.cdd_amt=0.00;
+		gl_bal_c.ccd_amt=0.00;
+
+        ret = pub_base_day_xun(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 旬初 */
+            gl_bal_c.tddr_bal = gl_bal_c.dr_bal;    /* 旬初借方余额 */
+            gl_bal_c.tdcr_bal = gl_bal_c.cr_bal;    /* 旬初贷方余额 */
+        	gl_bal_c.tdac_cnt = gl_bal_c.ac_cnt;
+        	gl_bal_c.tdac_cnt=0;
+            gl_bal_c.tddr_cnt = 0;
+            gl_bal_c.tdcr_cnt = 0;
+            gl_bal_c.tddr_amt = 0.00;
+            gl_bal_c.tdcr_amt = 0.00;
+
+        }
+
+        ret = pub_base_day_month(com_sys_parm_c.lst_date);
+vtcp_log("pub_base_day_month [%d]- [%d]",ret,com_sys_parm_c.lst_date );
+        if (ret == 1)
+        {
+            /* 月初 */
+            gl_bal_c.mdr_bal = gl_bal_c.dr_bal;
+            gl_bal_c.mcr_bal = gl_bal_c.cr_bal;
+        	gl_bal_c.mac_cnt = gl_bal_c.ac_cnt;
+            gl_bal_c.mdr_cnt = 0;
+            gl_bal_c.mcr_cnt = 0;
+            gl_bal_c.mdr_amt = 0.00;
+            gl_bal_c.mcr_amt = 0.00;
+
+        }
+        
+        ret = pub_base_day_quarter(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 季初 */
+            gl_bal_c.qdr_bal = gl_bal_c.dr_bal;
+            gl_bal_c.qcr_bal = gl_bal_c.cr_bal;
+        	gl_bal_c.qac_cnt = gl_bal_c.ac_cnt;
+            gl_bal_c.qdr_cnt = 0;
+            gl_bal_c.qcr_cnt = 0;
+            gl_bal_c.qdr_amt = 0.00;
+            gl_bal_c.qcr_amt = 0.00;
+
+        }
+
+        ret = pub_base_day_year(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 年初 */
+            gl_bal_c.ydr_bal = gl_bal_c.dr_bal;
+            gl_bal_c.ycr_bal = gl_bal_c.cr_bal;
+        	gl_bal_c.yac_cnt = gl_bal_c.ac_cnt;
+            gl_bal_c.ydr_cnt = 0;
+            gl_bal_c.ycr_cnt = 0;
+            gl_bal_c.ydr_amt = 0.00;
+            gl_bal_c.ycr_amt = 0.00;
+        }
+
+		gl_bal_c.dr_bal=0.00;
+		gl_bal_c.cr_bal=0.00;
+        gl_bal_c.ac_cnt=0;
+
+	memcpy( p_gl_bal_c , &gl_bal_c ,sizeof(gl_bal_c) );
+}
+sub_add_do( a_gl_bal )
+ struct gl_bal_c a_gl_bal;
+{
+	struct gl_bal_c gl_bal_c;
+	int ret=0;
+	memset(&gl_bal_c,0x00,sizeof(struct gl_bal_c));/*20080202*/
+	ret=Gl_bal_Dec_Upd( g_pub_tx.reply,
+		"br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		a_gl_bal.br_no,a_gl_bal.cur_no,a_gl_bal.acc_hrt );
+	MYRETERR
+vtcp_log("br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		a_gl_bal.br_no,a_gl_bal.cur_no,a_gl_bal.acc_hrt );
+
+	ret=Gl_bal_Fet_Upd( &gl_bal_c , g_pub_tx.reply );
+	if( ret==100 )
+	{
+		memset( &gl_bal_c,0,sizeof(gl_bal_c) );
+		strcpy( gl_bal_c.br_no,a_gl_bal.br_no );
+		strcpy( gl_bal_c.cur_no,a_gl_bal.cur_no );
+		strcpy( gl_bal_c.acc_hrt,a_gl_bal.acc_hrt );
+		strcpy( gl_bal_c.dc_ind,a_gl_bal.dc_ind );
+		strcpy( gl_bal_c.up_acc_hrt,a_gl_bal.up_acc_hrt );
+vtcp_log("INS [%s][%s][%s]",gl_bal_c.br_no,gl_bal_c.cur_no,gl_bal_c.acc_hrt );
+		gl_bal_c.date=g_pub_tx.tx_date;
+
+		sub_add( &gl_bal_c,a_gl_bal );
+
+		ret=Gl_bal_Ins( gl_bal_c,g_pub_tx.reply );
+		MYSQLERR
+	}
+	else
+	{
+		MYRETERR
+/*vtcp_log("UPD [%s][%s][%s]-[%.2lf]",gl_bal_c.br_no,gl_bal_c.cur_no,gl_bal_c.acc_hrt,gl_bal_c.rdd_amt );
+*/
+		sub_add( &gl_bal_c,a_gl_bal );
+/*vtcp_log("UPD [%s][%s][%s]-[%.2lf]",gl_bal_c.br_no,gl_bal_c.cur_no,gl_bal_c.acc_hrt,gl_bal_c.mdr_amt );
+*/
+		ret=Gl_bal_Upd_Upd( gl_bal_c,g_pub_tx.reply  );
+		MYRETERR
+	}
+
+	Gl_bal_Clo_Upd();
+
+    return 0;
+ErrExit:
+	return 1;
+}
+sub_add( p_gl_bal_c,glbal )
+ struct gl_bal_c *p_gl_bal_c;
+ struct gl_bal_c glbal;
+{
+	struct gl_bal_c gl_bal_c;
+	int ret;
+	memset(&gl_bal_c,0x00,sizeof(struct gl_bal_c));/*20080202*/
+	memcpy( &gl_bal_c,p_gl_bal_c,sizeof(gl_bal_c) );
+
+		gl_bal_c.dr_bal+=glbal.dr_bal;
+		gl_bal_c.cr_bal+=glbal.cr_bal;
+        gl_bal_c.ac_cnt+=glbal.ac_cnt;
+
+		gl_bal_c.rdd_cnt+=glbal.rdd_cnt;
+		gl_bal_c.rcd_cnt+=glbal.rcd_cnt;
+		gl_bal_c.rdd_amt+=glbal.rdd_amt;
+		gl_bal_c.rcd_amt+=glbal.rcd_amt;
+
+		gl_bal_c.cdd_cnt+=glbal.cdd_cnt;
+		gl_bal_c.ccd_cnt+=glbal.ccd_cnt;
+		gl_bal_c.cdd_amt+=glbal.cdd_amt;
+		gl_bal_c.ccd_amt+=glbal.ccd_amt;
+
+            gl_bal_c.tddr_cnt+=glbal.rdd_cnt;
+            gl_bal_c.tdcr_cnt+=glbal.rcd_cnt;
+            gl_bal_c.tddr_amt+=glbal.rdd_amt;
+            gl_bal_c.tdcr_amt+=glbal.rcd_amt;
+
+            gl_bal_c.mdr_cnt+=glbal.rdd_cnt;
+            gl_bal_c.mcr_cnt+=glbal.rcd_cnt;
+            gl_bal_c.mdr_amt+=glbal.rdd_amt;
+            gl_bal_c.mcr_amt+=glbal.rcd_amt;
+
+            gl_bal_c.qdr_cnt+=glbal.rdd_cnt;
+            gl_bal_c.qcr_cnt+=glbal.rcd_cnt;
+            gl_bal_c.qdr_amt+=glbal.rdd_amt;
+            gl_bal_c.qcr_amt+=glbal.rcd_amt;
+
+            gl_bal_c.ydr_cnt+=glbal.rdd_cnt;
+            gl_bal_c.ycr_cnt+=glbal.rcd_cnt;
+            gl_bal_c.ydr_amt+=glbal.rdd_amt;
+            gl_bal_c.ycr_amt+=glbal.rcd_amt;
+
+	memcpy( p_gl_bal_c , &gl_bal_c ,sizeof(gl_bal_c) );
+}
+
+int do_up_br_no()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_bal_c r;
+		struct gl_bal_c v;
+		long date;
+	EXEC SQL END DECLARE SECTION;
+		int ret;
+	/*20080202 初始化变量 */
+	memset(&r,0x00,sizeof(struct gl_bal_c));
+	memset(&v,0x00,sizeof(struct gl_bal_c));
+ 	/*20080202 初始化变量 */
+	date=g_pub_tx.tx_date;
+
+	EXEC SQL delete from gl_bal_sum ;
+	MYSQLERR
+
+	EXEC SQL declare cur_upsub cursor for 
+		select up_br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt,
+		sum(dr_bal),sum(cr_bal),sum(ac_cnt),
+		sum(ldd_bal),sum(lcd_bal),sum(lac_cnt),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),
+		sum(tddr_bal),sum(tdcr_bal),sum(tdac_cnt),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(mdr_bal),sum(mcr_bal),sum(mac_cnt),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(qdr_bal),sum(qcr_bal),sum(qac_cnt),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(ydr_bal),sum(ycr_bal),sum(yac_cnt),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt)
+	from gl_bal a,com_branch b
+	where a.br_no=b.br_no
+	group by up_br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt
+	order by 1,2,3,4,5,6 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_upsub
+	into 
+		:r.br_no,:r.cur_no,:r.acc_hrt,:r.date,:r.dc_ind,:r.up_acc_hrt,
+		:r.dr_bal,:r.cr_bal,:r.ac_cnt,
+		:r.ldd_bal,:r.lcd_bal,:r.lac_cnt,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.cdd_cnt,:r.ccd_cnt,:r.cdd_amt,:r.ccd_amt,
+		:r.tddr_bal,:r.tdcr_bal,:r.tdac_cnt,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.mdr_bal,:r.mcr_bal,:r.mac_cnt,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.qdr_bal,:r.qcr_bal,:r.qac_cnt,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.ydr_bal,:r.ycr_bal,:r.yac_cnt,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt;
+
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+		EXEC SQL declare cur_sum1 cursor for
+			select rowid,gl_bal_sum.* 
+			from gl_bal_sum
+			where br_no=:r.br_no and cur_no=:r.cur_no and acc_hrt=:r.acc_hrt for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum1;
+		MYSQLERR
+
+		EXEC SQL fetch cur_sum1
+			into :v ;
+		if( sqlca.sqlcode==1403 )
+		{
+		  /****
+			EXEC SQL insert into gl_bal_sum values(:r);
+			*****/
+			ret=Gl_bal_sum_Ins(r,g_pub_tx.reply);
+			MYRETERR
+		}
+		else
+		{
+			MYSQLERR
+			sub_add_all( &r,v ) ;
+			Gl_bal_sum_Debug(&r);
+				
+			/*
+			EXEC SQL update gl_bal_sum set *=(:r)
+				where current of cur_sum1;
+			*/
+			Gl_bal_sum_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum1;
+	}
+	EXEC SQL close cur_upsub;
+
+	EXEC SQL declare cur_upsub2 cursor for 
+		select br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt,
+		sum(dr_bal),sum(cr_bal),sum(ac_cnt),
+		sum(ldd_bal),sum(lcd_bal),sum(lac_cnt),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),
+		sum(tddr_bal),sum(tdcr_bal),sum(tdac_cnt),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(mdr_bal),sum(mcr_bal),sum(mac_cnt),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(qdr_bal),sum(qcr_bal),sum(qac_cnt),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(ydr_bal),sum(ycr_bal),sum(yac_cnt),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt)
+	from gl_bal
+	where br_no in(select up_br_no from com_branch )
+	group by br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt
+	order by 1,2,3,4,5,6 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub2;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_upsub2
+	into 
+		:r.br_no,:r.cur_no,:r.acc_hrt,:r.date,:r.dc_ind,:r.up_acc_hrt,
+		:r.dr_bal,:r.cr_bal,:r.ac_cnt,
+		:r.ldd_bal,:r.lcd_bal,:r.lac_cnt,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.cdd_cnt,:r.ccd_cnt,:r.cdd_amt,:r.ccd_amt,
+		:r.tddr_bal,:r.tdcr_bal,:r.tdac_cnt,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.mdr_bal,:r.mcr_bal,:r.mac_cnt,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.qdr_bal,:r.qcr_bal,:r.qac_cnt,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.ydr_bal,:r.ycr_bal,:r.yac_cnt,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		EXEC SQL declare cur_sum2 cursor for
+			select rowid,gl_bal_sum.* 
+			from gl_bal_sum
+			where br_no=:r.br_no and cur_no=:r.cur_no and acc_hrt=:r.acc_hrt
+			for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum2;
+		MYSQLERR
+
+		EXEC SQL fetch cur_sum2
+			into :v ;
+		if( sqlca.sqlcode==1403 )
+		{
+			EXEC SQL insert into gl_bal_sum values(:r);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			sub_add_all( &r,v ) ;
+
+			/**
+			EXEC SQL update gl_bal_sum set *=(:r)
+				where current of cur_sum2;
+			**/
+			Gl_bal_sum_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum2;
+	}
+	EXEC SQL close cur_upsub2;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+#if  0  /* 20140715 BY WYW */
+sub_add_all( p_gl_bal_c,glbal )
+ struct gl_bal_c *p_gl_bal_c;
+ struct gl_bal_c glbal;
+{
+	struct gl_bal_c gl_bal_c;
+	int ret;
+	memset(&gl_bal_c,0x00,sizeof(struct gl_bal_c));/*20080202*/
+	memcpy( &gl_bal_c,p_gl_bal_c,sizeof(gl_bal_c) );
+
+	gl_bal_c.dr_bal+=glbal.dr_bal;
+	gl_bal_c.cr_bal+=glbal.cr_bal;
+        gl_bal_c.ac_cnt+=glbal.ac_cnt;
+
+	gl_bal_c.ldd_bal+=glbal.ldd_bal;
+	gl_bal_c.lcd_bal+=glbal.lcd_bal;
+        gl_bal_c.lac_cnt+=glbal.lac_cnt;
+
+		gl_bal_c.rdd_cnt+=glbal.rdd_cnt;
+		gl_bal_c.rcd_cnt+=glbal.rcd_cnt;
+		gl_bal_c.rdd_amt+=glbal.rdd_amt;
+		gl_bal_c.rcd_amt+=glbal.rcd_amt;
+
+		gl_bal_c.cdd_cnt+=glbal.cdd_cnt;
+		gl_bal_c.ccd_cnt+=glbal.ccd_cnt;
+		gl_bal_c.cdd_amt+=glbal.cdd_amt;
+		gl_bal_c.ccd_amt+=glbal.ccd_amt;
+
+		gl_bal_c.tddr_bal+=glbal.tddr_bal;
+		gl_bal_c.tdcr_bal+=glbal.tdcr_bal;
+        gl_bal_c.tdac_cnt+=glbal.tdac_cnt;
+
+            gl_bal_c.tddr_cnt+=glbal.tddr_cnt;
+            gl_bal_c.tdcr_cnt+=glbal.tdcr_cnt;
+            gl_bal_c.tddr_amt+=glbal.tddr_amt;
+            gl_bal_c.tdcr_amt+=glbal.tdcr_amt;
+
+		gl_bal_c.mdr_bal+=glbal.mdr_bal;
+		gl_bal_c.mcr_bal+=glbal.mcr_bal;
+        gl_bal_c.mac_cnt+=glbal.mac_cnt;
+
+            gl_bal_c.mdr_cnt+=glbal.mdr_cnt;
+            gl_bal_c.mcr_cnt+=glbal.mcr_cnt;
+            gl_bal_c.mdr_amt+=glbal.mdr_amt;
+            gl_bal_c.mcr_amt+=glbal.mcr_amt;
+
+		gl_bal_c.qdr_bal+=glbal.qdr_bal;
+		gl_bal_c.qcr_bal+=glbal.qcr_bal;
+        gl_bal_c.qac_cnt+=glbal.qac_cnt;
+
+            gl_bal_c.qdr_cnt+=glbal.qdr_cnt;
+            gl_bal_c.qcr_cnt+=glbal.qcr_cnt;
+            gl_bal_c.qdr_amt+=glbal.qdr_amt;
+            gl_bal_c.qcr_amt+=glbal.qcr_amt;
+
+		gl_bal_c.ydr_bal+=glbal.ydr_bal;
+		gl_bal_c.ycr_bal+=glbal.ycr_bal;
+        gl_bal_c.yac_cnt+=glbal.yac_cnt;
+
+            gl_bal_c.ydr_cnt+=glbal.ydr_cnt;
+            gl_bal_c.ycr_cnt+=glbal.ycr_cnt;
+            gl_bal_c.ydr_amt+=glbal.ydr_amt;
+            gl_bal_c.ycr_amt+=glbal.ycr_amt;
+
+	memcpy( p_gl_bal_c , &gl_bal_c ,sizeof(gl_bal_c) );
+}
+#endif 
+sub_add_all( p_gl_bal_c,glbal )
+ struct gl_bal_c *p_gl_bal_c;
+ struct gl_bal_c glbal;
+{
+	struct gl_bal_c gl_bal_c;
+	int ret;
+	
+	memcpy( &gl_bal_c,&glbal,sizeof(gl_bal_c) );
+
+	gl_bal_c.dr_bal+=p_gl_bal_c->dr_bal;
+	gl_bal_c.cr_bal+=p_gl_bal_c->cr_bal;
+        gl_bal_c.ac_cnt+=p_gl_bal_c->ac_cnt;
+
+	gl_bal_c.ldd_bal+=p_gl_bal_c->ldd_bal;
+	gl_bal_c.lcd_bal+=p_gl_bal_c->lcd_bal;
+        gl_bal_c.lac_cnt+=p_gl_bal_c->lac_cnt;
+
+	gl_bal_c.rdd_cnt+=p_gl_bal_c->rdd_cnt;
+	gl_bal_c.rcd_cnt+=p_gl_bal_c->rcd_cnt;
+	gl_bal_c.rdd_amt+=p_gl_bal_c->rdd_amt;
+	gl_bal_c.rcd_amt+=p_gl_bal_c->rcd_amt;
+
+	gl_bal_c.cdd_cnt+=p_gl_bal_c->cdd_cnt;
+	gl_bal_c.ccd_cnt+=p_gl_bal_c->ccd_cnt;
+	gl_bal_c.cdd_amt+=p_gl_bal_c->cdd_amt;
+	gl_bal_c.ccd_amt+=p_gl_bal_c->ccd_amt;
+
+	gl_bal_c.tddr_bal+=p_gl_bal_c->tddr_bal;
+	gl_bal_c.tdcr_bal+=p_gl_bal_c->tdcr_bal;
+        gl_bal_c.tdac_cnt+=p_gl_bal_c->tdac_cnt;
+
+            gl_bal_c.tddr_cnt+=p_gl_bal_c->tddr_cnt;
+            gl_bal_c.tdcr_cnt+=p_gl_bal_c->tdcr_cnt;
+            gl_bal_c.tddr_amt+=p_gl_bal_c->tddr_amt;
+            gl_bal_c.tdcr_amt+=p_gl_bal_c->tdcr_amt;
+
+		gl_bal_c.mdr_bal+=p_gl_bal_c->mdr_bal;
+		gl_bal_c.mcr_bal+=p_gl_bal_c->mcr_bal;
+        gl_bal_c.mac_cnt+=p_gl_bal_c->mac_cnt;
+
+            gl_bal_c.mdr_cnt+=p_gl_bal_c->mdr_cnt;
+            gl_bal_c.mcr_cnt+=p_gl_bal_c->mcr_cnt;
+            gl_bal_c.mdr_amt+=p_gl_bal_c->mdr_amt;
+            gl_bal_c.mcr_amt+=p_gl_bal_c->mcr_amt;
+
+		gl_bal_c.qdr_bal+=p_gl_bal_c->qdr_bal;
+		gl_bal_c.qcr_bal+=p_gl_bal_c->qcr_bal;
+        gl_bal_c.qac_cnt+=p_gl_bal_c->qac_cnt;
+
+            gl_bal_c.qdr_cnt+=p_gl_bal_c->qdr_cnt;
+            gl_bal_c.qcr_cnt+=p_gl_bal_c->qcr_cnt;
+            gl_bal_c.qdr_amt+=p_gl_bal_c->qdr_amt;
+            gl_bal_c.qcr_amt+=p_gl_bal_c->qcr_amt;
+
+	gl_bal_c.ydr_bal+=p_gl_bal_c->ydr_bal;
+	gl_bal_c.ycr_bal+=p_gl_bal_c->ycr_bal;
+        gl_bal_c.yac_cnt+=p_gl_bal_c->yac_cnt;
+
+        gl_bal_c.ydr_cnt+=p_gl_bal_c->ydr_cnt;
+        gl_bal_c.ycr_cnt+=p_gl_bal_c->ycr_cnt;
+        gl_bal_c.ydr_amt+=p_gl_bal_c->ydr_amt;
+        gl_bal_c.ycr_amt+=p_gl_bal_c->ycr_amt;
+	memcpy( p_gl_bal_c , &gl_bal_c ,sizeof(gl_bal_c) );
+	strcpy(p_gl_bal_c->rowid,glbal.rowid);
+}
+int chk_phgx()
+{
+	int ret=0;
+	struct gl_bal_c r;
+	int eri=0;
+	memset(&r,0x00,sizeof(struct gl_bal_c));/*20080202*/
+	vtcp_log("CHK BAL BALANCE");
+
+	ret=Gl_bal_Dec_Sel( g_pub_tx.reply,
+		"mdr_bal-mcr_bal+mdr_amt-mcr_amt-(dr_bal-cr_bal)!=0 order by 1,2,3" );
+	if( ret ) goto ErrExit;
+
+	eri=0;
+	while(1)
+	{
+		ret=Gl_bal_Fet_Sel( &r,g_pub_tx.reply );
+		if( ret==100 ) break;
+		if( ret ) goto ErrExit;
+
+		vtcp_log("CHK[%s-%s][%.2lf][%.2lf][%.2lf][%.2lf]",r.br_no,r.acc_hrt,
+			r.mdr_bal-r.mcr_bal,r.mdr_amt,r.mcr_amt,r.dr_bal-r.cr_bal);
+		
+		eri++;
+	}
+	Gl_bal_Clo_Sel();
+
+/*** test
+	if ( eri )
+	{
+		vtcp_log("不平");
+		goto ErrExit;
+	}
+	****/
+
+	return 0;
+ErrExit:
+	return 1;
+}

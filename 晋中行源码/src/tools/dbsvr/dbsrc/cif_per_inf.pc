@@ -1,0 +1,311 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_per_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_per_inf_con ( struct cif_per_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_per_inf_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->name);
+	zip_tail(ps->sex);
+	zip_tail(ps->marriage);
+	zip_tail(ps->edu);
+	zip_tail(ps->religion);
+	zip_tail(ps->nationality);
+	zip_tail(ps->country);
+	zip_tail(ps->folk);
+	zip_tail(ps->language);
+	zip_tail(ps->clerk_no);
+	zip_tail(ps->health);
+	zip_tail(ps->technical_post);
+	zip_tail(ps->headship);
+	zip_tail(ps->birth_adr);
+}
+int Cif_per_inf_Debug(struct cif_per_inf_c *ps){
+	vtcp_log("cif_per_inf_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_per_inf_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_per_inf_c.name=[%s]\n",ps->name);
+	vtcp_log("cif_per_inf_c.g_bir=[%ld]\n",ps->g_bir);
+	vtcp_log("cif_per_inf_c.n_bir=[%ld]\n",ps->n_bir);
+	vtcp_log("cif_per_inf_c.sex=[%s]\n",ps->sex);
+	vtcp_log("cif_per_inf_c.marriage=[%s]\n",ps->marriage);
+	vtcp_log("cif_per_inf_c.mar_date=[%ld]\n",ps->mar_date);
+	vtcp_log("cif_per_inf_c.edu=[%s]\n",ps->edu);
+	vtcp_log("cif_per_inf_c.religion=[%s]\n",ps->religion);
+	vtcp_log("cif_per_inf_c.nationality=[%s]\n",ps->nationality);
+	vtcp_log("cif_per_inf_c.country=[%s]\n",ps->country);
+	vtcp_log("cif_per_inf_c.folk=[%s]\n",ps->folk);
+	vtcp_log("cif_per_inf_c.language=[%s]\n",ps->language);
+	vtcp_log("cif_per_inf_c.clerk_no=[%s]\n",ps->clerk_no);
+	vtcp_log("cif_per_inf_c.health=[%s]\n",ps->health);
+	vtcp_log("cif_per_inf_c.technical_post=[%s]\n",ps->technical_post);
+	vtcp_log("cif_per_inf_c.headship=[%s]\n",ps->headship);
+	vtcp_log("cif_per_inf_c.birth_adr=[%s]\n",ps->birth_adr);
+	vtcp_log("cif_per_inf_c.mon_income=[%f]\n",ps->mon_income);
+	vtcp_log("cif_per_inf_c.h_mon_income=[%f]\n",ps->h_mon_income);
+	vtcp_log("cif_per_inf_c.home_cnt=[%ld]\n",ps->home_cnt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_per_inf_Sel(reply,cif_per_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_per_inf_c *cif_per_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_per_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_per_inf_Fet_Sel( cif_per_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_per_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_per_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_per_inf.* FROM cif_per_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_per_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_per_inf CURSOR FOR cif_per_inf_sel;
+
+	EXEC SQL OPEN sel_cif_per_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_per_inf_Fet_Sel ( struct cif_per_inf_c *cif_per_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_per_inf INTO :cif_per_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_per_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_per_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_per_inf_c);
+
+	return 0;
+}
+
+int Cif_per_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_per_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_per_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_per_inf.* FROM cif_per_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_per_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_per_inf CURSOR FOR cif_per_inf_upd;
+
+	EXEC SQL OPEN upd_cif_per_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_per_inf_Fet_Upd( struct cif_per_inf_c *cif_per_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_per_inf INTO :cif_per_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_per_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_per_inf_c);
+
+	return 0;
+}
+
+int Cif_per_inf_Upd_Upd( struct cif_per_inf_c cif_per_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_per_inf SET cif_no=:cif_per_inf_c.cif_no,
+			name=:cif_per_inf_c.name,
+			g_bir=:cif_per_inf_c.g_bir,
+			n_bir=:cif_per_inf_c.n_bir,
+			sex=:cif_per_inf_c.sex,
+			marriage=:cif_per_inf_c.marriage,
+			mar_date=:cif_per_inf_c.mar_date,
+			edu=:cif_per_inf_c.edu,
+			religion=:cif_per_inf_c.religion,
+			nationality=:cif_per_inf_c.nationality,
+			country=:cif_per_inf_c.country,
+			folk=:cif_per_inf_c.folk,
+			language=:cif_per_inf_c.language,
+			clerk_no=:cif_per_inf_c.clerk_no,
+			health=:cif_per_inf_c.health,
+			technical_post=:cif_per_inf_c.technical_post,
+			headship=:cif_per_inf_c.headship,
+			birth_adr=:cif_per_inf_c.birth_adr,
+			mon_income=:cif_per_inf_c.mon_income,
+			h_mon_income=:cif_per_inf_c.h_mon_income,
+			home_cnt=:cif_per_inf_c.home_cnt
+	WHERE rowid=:cif_per_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_per_inf_Del_Upd(struct cif_per_inf_c cif_per_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_per_inf WHERE rowid=:cif_per_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_per_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_per_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_per_inf_Ins( struct cif_per_inf_c cif_per_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_per_inf VALUES (:cif_per_inf_c.cif_no,
+			:cif_per_inf_c.name,
+			:cif_per_inf_c.g_bir,
+			:cif_per_inf_c.n_bir,
+			:cif_per_inf_c.sex,
+			:cif_per_inf_c.marriage,
+			:cif_per_inf_c.mar_date,
+			:cif_per_inf_c.edu,
+			:cif_per_inf_c.religion,
+			:cif_per_inf_c.nationality,
+			:cif_per_inf_c.country,
+			:cif_per_inf_c.folk,
+			:cif_per_inf_c.language,
+			:cif_per_inf_c.clerk_no,
+			:cif_per_inf_c.health,
+			:cif_per_inf_c.technical_post,
+			:cif_per_inf_c.headship,
+			:cif_per_inf_c.birth_adr,
+			:cif_per_inf_c.mon_income,
+			:cif_per_inf_c.h_mon_income,
+			:cif_per_inf_c.home_cnt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_per_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

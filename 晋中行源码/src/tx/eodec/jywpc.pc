@@ -1,0 +1,609 @@
+/*************************************************************
+* 文 件 名: rpt078.c
+* 功能描述：存款状况日报
+**************************************************************/
+#define MYRETERR if(ret){\
+	sprintf(acErrMsg,"REt[%d]",ret);\
+	WRITEMSG\
+	goto ErrExit;\
+	}
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sqlca.sqlcode[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	goto ErrExit;\
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+
+EXEC SQL include sqlca.h;
+#include "com_branch_c.h"
+#include "gl_prdt_dyn_c.h"
+
+
+int line=0;
+char vjgbm[11];
+char vpfm[21],txtname[41];
+struct com_branch_c rggjgm;
+EXEC SQL BEGIN DECLARE SECTION;
+  double g_bal;
+  char g_term_type[11];
+  int g_term;
+  long rq1,rq2;
+  struct gl_prdt_dyn_c cp;
+  char pp[200];
+EXEC SQL END DECLARE SECTION;
+char up_br[10];
+
+int page=0;	
+int get_ratio_rjb( int bli,int bll, char str[100], int rpt_code );
+
+rpt078()
+{
+	int ret = 0;
+	struct com_sys_parm_c com_sys_parm_c;
+
+    ret=sql_begin(); /*打开事务*/
+	MYRETERR
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+
+    /* 取前一天日期 */
+    ret = Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+    g_pub_tx.tx_date = com_sys_parm_c.lst_date;
+
+	rq1=g_pub_tx.tx_date/100*100+1;
+	rq2=g_pub_tx.tx_date/100*100+31;
+
+	strcpy( vjgbm,"61000" );
+
+	strcpy( vpfm,"grckzkrb" );
+	strcpy( txtname,"BRgrckzkrb" );
+	
+	pub_rpt_rmfile( "",txtname,0 );
+
+	if( Make_b_zh() )
+		goto ErrExit;
+
+	if( Make_b_glh() )
+		goto ErrExit;
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成sdsbgb成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成sdsbgb失败!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int Make_b_zh()
+{
+	int first=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	short z1,z2,z3,z4;
+	struct gl_prdt_dyn_c cp;
+	struct com_branch_c jg;
+	EXEC SQL END DECLARE SECTION;
+
+
+		strcpy( vjgbm,"61000" );
+
+		if( Make_yeb_sub("AA") ) goto ErrExit;
+
+		strcpy( up_br,vjgbm );
+		/**存款余额合计**/
+		strcpy( pp,"'101','102','201','202','204','205','206','207','208','20C','209','20A','20B','211','212','213','221','222','223','231','232','233','241','242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("BB") ) goto ErrExit;
+		/**活期余额合计**/
+		strcpy( pp,"'101','102'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("CC") ) goto ErrExit;
+		/**活期**/
+		strcpy( pp,"'101','102'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("DD") ) goto ErrExit;
+		/**定期合计**/
+		strcpy( pp,"'201','202','204','205','206','207','208','20C','209','20A','20B','211','212','213','221','222','223','231','232','233','241','242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("EE") ) goto ErrExit;
+		/**通知存款**/
+		strcpy( pp,"'242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("FF") ) goto ErrExit;
+		/**定活**/
+		strcpy( pp,"'241'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("GG") ) goto ErrExit;
+		/**整整**/
+		strcpy( pp,"'201','202','204','205','206','207','208','20C'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("HH") ) goto ErrExit;
+
+		strcpy( pp,"'201'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("II") ) goto ErrExit;
+
+		strcpy( pp,"'202'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("JJ") ) goto ErrExit;
+
+		strcpy( pp,"'204','20C'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("KK") ) goto ErrExit;
+
+		strcpy( pp,"'205'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("LL") ) goto ErrExit;
+
+		strcpy( pp,"'206'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("MM") ) goto ErrExit;
+
+		strcpy( pp,"'207'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("NN") ) goto ErrExit;
+
+		strcpy( pp,"'208'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("OO") ) goto ErrExit;
+		/**爱心**/
+		strcpy( pp,"'2A4','2A5','2A6','2A7'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("PP") ) goto ErrExit;
+
+		strcpy( pp,"'2A4'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("QQ") ) goto ErrExit;
+
+		strcpy( pp,"'2A5'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("RR") ) goto ErrExit;
+
+		strcpy( pp,"'2A6'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("SS") ) goto ErrExit;
+
+		strcpy( pp,"'2A7'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("TT") ) goto ErrExit;
+		/**零整**/
+		strcpy( pp,"'209','20A','20B'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("UU") ) goto ErrExit;
+
+		strcpy( pp,"'209'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("VV") ) goto ErrExit;
+
+		strcpy( pp,"'20A'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("WW") ) goto ErrExit;
+
+		strcpy( pp,"'20B'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("XX") ) goto ErrExit;
+		/**教育**/
+		strcpy( pp,"'211','212','213'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("YY") ) goto ErrExit;
+
+		strcpy( pp,"'211'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ZZ") ) goto ErrExit;
+
+		strcpy( pp,"'212'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("aa") ) goto ErrExit;
+
+		strcpy( pp,"'213'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("bb") ) goto ErrExit;
+		/**整零**/
+		strcpy( pp,"'221','222','223'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("cc") ) goto ErrExit;
+
+		strcpy( pp,"'221'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("dd") ) goto ErrExit;
+
+		strcpy( pp,"'222'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ee") ) goto ErrExit;
+
+		strcpy( pp,"'223'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ff") ) goto ErrExit;
+		/**存本取息**/
+		strcpy( pp,"'231','232','233'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("gg") ) goto ErrExit;
+
+		strcpy( pp,"'231'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("hh") ) goto ErrExit;
+
+		strcpy( pp,"'232'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ii") ) goto ErrExit;
+
+		strcpy( pp,"'233'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("jj") ) goto ErrExit;
+
+		if( Make_yeb_sub("kk") ) goto ErrExit;
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+int Make_b_glh()
+{
+	int first=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	short z1,z2,z3,z4;
+	struct gl_prdt_dyn_c cp;
+	struct com_branch_c jg;
+	EXEC SQL END DECLARE SECTION;
+
+
+	EXEC SQL declare cur_jg cursor for
+		select * from com_branch
+		where br_type='7'
+		order by br_no;
+	MYSQLERR
+
+	EXEC SQL open cur_jg;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_jg into :jg;
+		if( sqlca.sqlcode==100 ) break;
+		MYSQLERR
+
+		strcpy( vjgbm,jg.br_no );
+
+		if( Make_yeb_sub("AA") ) goto ErrExit;
+
+		strcpy( up_br,jg.br_no );
+		/**存款余额合计**/
+		strcpy( pp,"'101','102','201','202','204','205','206','207','208','20C','209','20A','20B','211','212','213','221','222','223','231','232','233','241','242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("BB") ) goto ErrExit;
+		/**活期余额合计**/
+		strcpy( pp,"'101','102'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("CC") ) goto ErrExit;
+		/**活期**/
+		strcpy( pp,"'101','102'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("DD") ) goto ErrExit;
+		/**定期合计**/
+		strcpy( pp,"'201','202','204','205','206','207','208','20C','209','20A','20B','211','212','213','221','222','223','231','232','233','241','242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("EE") ) goto ErrExit;
+		/**通知存款**/
+		strcpy( pp,"'242','243','244'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("FF") ) goto ErrExit;
+		/**定活**/
+		strcpy( pp,"'241'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("GG") ) goto ErrExit;
+		/**整整**/
+		strcpy( pp,"'201','202','204','205','206','207','208','20C'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("HH") ) goto ErrExit;
+
+		strcpy( pp,"'201'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("II") ) goto ErrExit;
+
+		strcpy( pp,"'202'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("JJ") ) goto ErrExit;
+
+		strcpy( pp,"'204','20C'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("KK") ) goto ErrExit;
+
+		strcpy( pp,"'205'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("LL") ) goto ErrExit;
+
+		strcpy( pp,"'206'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("MM") ) goto ErrExit;
+
+		strcpy( pp,"'207'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("NN") ) goto ErrExit;
+
+		strcpy( pp,"'208'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("OO") ) goto ErrExit;
+		/**爱心**/
+		strcpy( pp,"'2A4','2A5','2A6','2A7'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("PP") ) goto ErrExit;
+
+		strcpy( pp,"'2A4'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("QQ") ) goto ErrExit;
+
+		strcpy( pp,"'2A5'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("RR") ) goto ErrExit;
+
+		strcpy( pp,"'2A6'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("SS") ) goto ErrExit;
+
+		strcpy( pp,"'2A7'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("TT") ) goto ErrExit;
+		/**零整**/
+		strcpy( pp,"'209','20A','20B'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("UU") ) goto ErrExit;
+
+		strcpy( pp,"'209'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("VV") ) goto ErrExit;
+
+		strcpy( pp,"'20A'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("WW") ) goto ErrExit;
+
+		strcpy( pp,"'20B'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("XX") ) goto ErrExit;
+		/**教育**/
+		strcpy( pp,"'211','212','213'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("YY") ) goto ErrExit;
+
+		strcpy( pp,"'211'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ZZ") ) goto ErrExit;
+
+		strcpy( pp,"'212'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("aa") ) goto ErrExit;
+
+		strcpy( pp,"'213'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("bb") ) goto ErrExit;
+		/**整零**/
+		strcpy( pp,"'221','222','223'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("cc") ) goto ErrExit;
+
+		strcpy( pp,"'221'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("dd") ) goto ErrExit;
+
+		strcpy( pp,"'222'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ee") ) goto ErrExit;
+
+		strcpy( pp,"'223'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ff") ) goto ErrExit;
+		/**存本取息**/
+		strcpy( pp,"'231','232','233'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("gg") ) goto ErrExit;
+
+		strcpy( pp,"'231'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("hh") ) goto ErrExit;
+
+		strcpy( pp,"'232'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("ii") ) goto ErrExit;
+
+		strcpy( pp,"'233'" );
+		if( sum_amt() ) goto ErrExit;
+		if( Make_yeb_sub("jj") ) goto ErrExit;
+
+		if( Make_yeb_sub("kk") ) goto ErrExit;
+	}
+	EXEC SQL close cur_jg;
+
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int sum_amt()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	short z1,z2,z3,z4;
+	char sentence[600];
+	EXEC SQL END DECLARE SECTION;
+	double tmpdb;
+
+	if( !strcmp(vjgbm,"61000") )
+	{
+	sprintf( sentence,
+	"select sum(cr_bal),sum(lcd_bal),sum(rdd_amt),sum(rcd_amt) from gl_prdt_dyn where prdt_no in( %s) ",
+	pp ) ;
+	}
+	else
+	{
+	sprintf( sentence,
+	"select sum(cr_bal),sum(lcd_bal),sum(rdd_amt),sum(rcd_amt) from gl_prdt_dyn where br_no in( select br_no from com_branch where up_br_no='%s' ) and prdt_no in( %s) ",
+	up_br,pp ) ;
+	}
+	MYSQLERR
+
+vtcp_log(sentence );
+	sqlca.sqlcode=0;
+	EXEC SQL prepare dp_id from :sentence;
+	MYSQLERR
+
+	EXEC SQL declare cur_1 cursor for dp_id;
+	MYSQLERR
+
+	EXEC SQL open cur_1;
+	MYSQLERR
+
+	EXEC SQL fetch cur_1
+		into :cp.cr_bal:z1,:cp.lcd_bal:z2,:cp.rdd_amt:z3,:cp.rcd_amt:z4
+		;
+	if( sqlca.sqlcode==100 )
+	{
+	 cp.cr_bal=0.00;
+	 cp.lcd_bal=0.00;
+	 cp.rdd_amt=0.00;
+	 cp.rcd_amt=0.00;
+	}
+	else { MYSQLERR }
+
+	if( z1 ) cp.cr_bal=0.00;
+	if( z2 ) cp.lcd_bal=0.00;
+	if( z3 ) cp.rdd_amt=0.00;
+	if( z4 ) cp.rcd_amt=0.00;
+
+	cp.lcd_bal=cp.cr_bal-cp.rcd_amt+cp.rdd_amt;
+	if( cp.lcd_bal<0.005 ) cp.lcd_bal=0.00;
+
+vtcp_log("    [%.2lf][%.2lf][%.2lf][%.2lf]",cp.cr_bal,cp.lcd_bal,cp.rdd_amt,cp.rcd_amt );
+	strcpy( pp,"" ); 
+
+	tmpdb=pub_base_PubDround_1(cp.cr_bal/1000000.00)*100.00;
+	cp.cr_bal=tmpdb;
+	tmpdb=pub_base_PubDround_1(cp.lcd_bal/1000000.00)*100.00;
+	cp.lcd_bal=tmpdb;
+	tmpdb=pub_base_PubDround_1(cp.rdd_amt/1000000.00)*100.00;
+	cp.rdd_amt=tmpdb;
+	tmpdb=pub_base_PubDround_1(cp.rcd_amt/1000000.00)*100.00;
+	cp.rcd_amt=tmpdb;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+int Make_yeb_sub( char vrec[3] )
+{
+	int rpt_code;
+	int opncnt=0;
+	FILE *fp;
+	
+
+	pub_rpt_openfile( &fp,vjgbm,txtname );
+
+	rpt_code=0002;
+
+
+	if( vrec[0]=='H' && vrec[1]=='Y' )
+		fprintf( fp,"\n\f\n" );
+	else
+	{
+		if( pub_rpt_read_pfm_qd(fp,&line,vpfm,rpt_code,vrec,&opncnt,
+				get_ratio_rjb) ) 
+			goto ErrExit;
+	}
+
+	fclose(fp);
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int get_ratio_rjb( bli,bll,str ,rpt_code)
+ int bli,bll,rpt_code;
+ char str[100];
+{
+	char vhm[101];
+	char vstr[101];
+	char fmt[20];
+	int i=0;
+	int ret;
+	double vje=0.0,vje1=0.0;
+	char br_name[51];
+
+	memset( str,0,sizeof(str) );
+
+	switch( bli )
+	{
+		case 'J': /* 机构名称 */
+			ret = pub_base_getbrname( vjgbm, br_name );
+			if( ret ) strcpy( br_name," " );
+			pub_base_strpack( br_name ); 
+			sprintf( vstr , "%s( %5s )" , br_name , vjgbm); 
+			sprintf(fmt, "%%-%ds", bll);
+			sprintf(str, fmt, vstr);
+			break;
+		case 'Z':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,g_pub_tx.tx_date );
+			break;
+
+		case 'B':
+				sprintf( vstr,"%.2lf",cp.lcd_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				vhm[strlen(vhm)-3]=0;
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			break;
+		case 'C':
+				sprintf( vstr,"%.2lf",cp.rdd_amt );
+				pub_rpt_flttomon( vstr,vhm );
+				vhm[strlen(vhm)-3]=0;
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			break;
+		case 'D':
+			{
+				sprintf( vstr,"%.2lf",cp.rcd_amt );
+				pub_rpt_flttomon( vstr,vhm );
+				vhm[strlen(vhm)-3]=0;
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'E':
+			{
+				sprintf( vstr,"%.2lf",cp.cr_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				vhm[strlen(vhm)-3]=0;
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+
+		default :
+			memset( str,' ',bll );
+			break;
+	}
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}

@@ -1,0 +1,43 @@
+#ifndef __mo_ppe_hst_CH__
+#define __mo_ppe_hst_CH__
+struct mo_ppe_hst_c{
+	char      rowid[20];
+	char      ppeno[20];
+	char      ppename[81];
+	char      opdate[9];
+	char      type[2];
+	char      spemodel[21];
+	double    quant;
+	double    oriamt;
+	char      chgactno[20];
+	double    chgamt;
+	double    depramtyear;
+	char      depractno[20];
+	double    depramtttl;
+	double    remamt;
+	char      deprstat[2];
+	char      stat[2];
+	char      moden[2];
+	double    remainratio;
+	char      period[2];
+	double    term;
+	double    usedterm;
+	double    usedquant;
+	double    ttlquant;
+	long      ttlcnt;
+	double    deprradio;
+	char      placebrno[8];
+	char      addr[201];
+	char      ppestat[21];
+	char      brf[201];
+	char      dealtype[2];
+	char      chkrst[2];
+	double    chkchgamt;
+	char      txdate[9];
+	char      txtime[9];
+	double    tranceno;
+	double    trancecnt;
+	char      txbrno[8];
+	char      tel[7];
+};
+#endif 

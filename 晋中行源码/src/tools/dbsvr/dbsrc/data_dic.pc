@@ -1,0 +1,255 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"data_dic_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int data_dic_con ( struct data_dic_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct data_dic_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->data_code);
+	zip_tail(ps->data_type);
+	zip_tail(ps->data_name);
+}
+int Data_dic_Debug(struct data_dic_c *ps){
+	vtcp_log("data_dic_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("data_dic_c.data_code=[%s]\n",ps->data_code);
+	vtcp_log("data_dic_c.data_type=[%s]\n",ps->data_type);
+	vtcp_log("data_dic_c.data_leng=[%ld]\n",ps->data_leng);
+	vtcp_log("data_dic_c.data_dec=[%ld]\n",ps->data_dec);
+	vtcp_log("data_dic_c.data_name=[%s]\n",ps->data_name);
+	vtcp_log("data_dic_c.bit_seq=[%ld]\n",ps->bit_seq);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Data_dic_Sel(reply,data_dic_c,fmtstr,va_alist)
+char    *reply;
+struct  data_dic_c *data_dic_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Data_dic_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Data_dic_Fet_Sel( data_dic_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Data_dic_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Data_dic_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,data_dic.* FROM data_dic WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE data_dic_sel FROM :comm;
+	EXEC SQL DECLARE sel_data_dic CURSOR FOR data_dic_sel;
+
+	EXEC SQL OPEN sel_data_dic;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dic_Fet_Sel ( struct data_dic_c *data_dic_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_data_dic INTO :data_dic_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch data_dic error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch data_dic finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(data_dic_c);
+
+	return 0;
+}
+
+int Data_dic_Clo_Sel (){
+	EXEC SQL CLOSE sel_data_dic;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Data_dic_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,data_dic.* FROM data_dic WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE data_dic_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_data_dic CURSOR FOR data_dic_upd;
+
+	EXEC SQL OPEN upd_data_dic;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dic_Fet_Upd( struct data_dic_c *data_dic_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_data_dic INTO :data_dic_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH data_dic finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(data_dic_c);
+
+	return 0;
+}
+
+int Data_dic_Upd_Upd( struct data_dic_c data_dic_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE data_dic SET data_code=:data_dic_c.data_code,
+			data_type=:data_dic_c.data_type,
+			data_leng=:data_dic_c.data_leng,
+			data_dec=:data_dic_c.data_dec,
+			data_name=:data_dic_c.data_name,
+			bit_seq=:data_dic_c.bit_seq
+	WHERE rowid=:data_dic_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Data_dic_Del_Upd(struct data_dic_c data_dic_c , char * reply  ){
+
+	EXEC SQL DELETE FROM data_dic WHERE rowid=:data_dic_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Data_dic_Clo_Upd( ){
+	EXEC SQL CLOSE upd_data_dic;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Data_dic_Ins( struct data_dic_c data_dic_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO data_dic VALUES (:data_dic_c.data_code,
+			:data_dic_c.data_type,
+			:data_dic_c.data_leng,
+			:data_dic_c.data_dec,
+			:data_dic_c.data_name,
+			:data_dic_c.bit_seq);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT data_dic error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

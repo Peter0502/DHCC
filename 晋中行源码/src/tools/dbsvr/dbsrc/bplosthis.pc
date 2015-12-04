@@ -1,0 +1,308 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"bplosthis_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int bplosthis_con ( struct bplosthis_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct bplosthis_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->pono);
+	zip_tail(ps->lostbrno);
+	zip_tail(ps->unlostbrno);
+	zip_tail(ps->inflag);
+	zip_tail(ps->bptype);
+	zip_tail(ps->paybrno);
+	zip_tail(ps->paybrname);
+	zip_tail(ps->cashbrno);
+	zip_tail(ps->cashbrname);
+	zip_tail(ps->feeflag);
+	zip_tail(ps->stat);
+	zip_tail(ps->losttlrno);
+	zip_tail(ps->unlosttlrno);
+	zip_tail(ps->filler);
+}
+int Bplosthis_Debug(struct bplosthis_c *ps){
+	vtcp_log("bplosthis_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("bplosthis_c.lostday=[%ld]\n",ps->lostday);
+	vtcp_log("bplosthis_c.pono=[%s]\n",ps->pono);
+	vtcp_log("bplosthis_c.lostcnt=[%ld]\n",ps->lostcnt);
+	vtcp_log("bplosthis_c.signday=[%ld]\n",ps->signday);
+	vtcp_log("bplosthis_c.unlostday=[%ld]\n",ps->unlostday);
+	vtcp_log("bplosthis_c.lostbrno=[%s]\n",ps->lostbrno);
+	vtcp_log("bplosthis_c.unlostbrno=[%s]\n",ps->unlostbrno);
+	vtcp_log("bplosthis_c.inflag=[%s]\n",ps->inflag);
+	vtcp_log("bplosthis_c.bptype=[%s]\n",ps->bptype);
+	vtcp_log("bplosthis_c.paybrno=[%s]\n",ps->paybrno);
+	vtcp_log("bplosthis_c.paybrname=[%s]\n",ps->paybrname);
+	vtcp_log("bplosthis_c.cashbrno=[%s]\n",ps->cashbrno);
+	vtcp_log("bplosthis_c.cashbrname=[%s]\n",ps->cashbrname);
+	vtcp_log("bplosthis_c.avbal=[%f]\n",ps->avbal);
+	vtcp_log("bplosthis_c.feeflag=[%s]\n",ps->feeflag);
+	vtcp_log("bplosthis_c.feeamt=[%f]\n",ps->feeamt);
+	vtcp_log("bplosthis_c.stat=[%s]\n",ps->stat);
+	vtcp_log("bplosthis_c.losttlrno=[%s]\n",ps->losttlrno);
+	vtcp_log("bplosthis_c.unlosttlrno=[%s]\n",ps->unlosttlrno);
+	vtcp_log("bplosthis_c.filler=[%s]\n",ps->filler);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Bplosthis_Sel(reply,bplosthis_c,fmtstr,va_alist)
+char    *reply;
+struct  bplosthis_c *bplosthis_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Bplosthis_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Bplosthis_Fet_Sel( bplosthis_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Bplosthis_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Bplosthis_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,bplosthis.* FROM bplosthis WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE bplosthis_sel FROM :comm;
+	EXEC SQL DECLARE sel_bplosthis CURSOR FOR bplosthis_sel;
+
+	EXEC SQL OPEN sel_bplosthis;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Bplosthis_Fet_Sel ( struct bplosthis_c *bplosthis_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_bplosthis INTO :bplosthis_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch bplosthis error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch bplosthis finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(bplosthis_c);
+
+	return 0;
+}
+
+int Bplosthis_Clo_Sel (){
+	EXEC SQL CLOSE sel_bplosthis;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Bplosthis_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,bplosthis.* FROM bplosthis WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE bplosthis_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_bplosthis CURSOR FOR bplosthis_upd;
+
+	EXEC SQL OPEN upd_bplosthis;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Bplosthis_Fet_Upd( struct bplosthis_c *bplosthis_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_bplosthis INTO :bplosthis_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH bplosthis finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(bplosthis_c);
+
+	return 0;
+}
+
+int Bplosthis_Upd_Upd( struct bplosthis_c bplosthis_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE bplosthis SET lostday=:bplosthis_c.lostday,
+			pono=:bplosthis_c.pono,
+			lostcnt=:bplosthis_c.lostcnt,
+			signday=:bplosthis_c.signday,
+			unlostday=:bplosthis_c.unlostday,
+			lostbrno=:bplosthis_c.lostbrno,
+			unlostbrno=:bplosthis_c.unlostbrno,
+			inflag=:bplosthis_c.inflag,
+			bptype=:bplosthis_c.bptype,
+			paybrno=:bplosthis_c.paybrno,
+			paybrname=:bplosthis_c.paybrname,
+			cashbrno=:bplosthis_c.cashbrno,
+			cashbrname=:bplosthis_c.cashbrname,
+			avbal=:bplosthis_c.avbal,
+			feeflag=:bplosthis_c.feeflag,
+			feeamt=:bplosthis_c.feeamt,
+			stat=:bplosthis_c.stat,
+			losttlrno=:bplosthis_c.losttlrno,
+			unlosttlrno=:bplosthis_c.unlosttlrno,
+			filler=:bplosthis_c.filler
+	WHERE rowid=:bplosthis_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Bplosthis_Del_Upd(struct bplosthis_c bplosthis_c , char * reply  ){
+
+	EXEC SQL DELETE FROM bplosthis WHERE rowid=:bplosthis_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Bplosthis_Clo_Upd( ){
+	EXEC SQL CLOSE upd_bplosthis;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Bplosthis_Ins( struct bplosthis_c bplosthis_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO bplosthis VALUES (:bplosthis_c.lostday,
+			:bplosthis_c.pono,
+			:bplosthis_c.lostcnt,
+			:bplosthis_c.signday,
+			:bplosthis_c.unlostday,
+			:bplosthis_c.lostbrno,
+			:bplosthis_c.unlostbrno,
+			:bplosthis_c.inflag,
+			:bplosthis_c.bptype,
+			:bplosthis_c.paybrno,
+			:bplosthis_c.paybrname,
+			:bplosthis_c.cashbrno,
+			:bplosthis_c.cashbrname,
+			:bplosthis_c.avbal,
+			:bplosthis_c.feeflag,
+			:bplosthis_c.feeamt,
+			:bplosthis_c.stat,
+			:bplosthis_c.losttlrno,
+			:bplosthis_c.unlosttlrno,
+			:bplosthis_c.filler);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT bplosthis error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

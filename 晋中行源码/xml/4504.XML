@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4504 利息核销"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	dim @a as string;
+	commsend_001();
+	$MSGTYPE='03001';
+	$TXNO='3304';
+	$FD16='3304';
+	$FD65='3304';
+	$FD79=#PASSWD;
+	$FD120=substr($FD120,0,98)+'2'+getitems('#VOCTYPE#VOCNUM#TXAMT')+substr($FD120,134,30);
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4504                            利息核销)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <PAGE NAME="DEFAULT">
+
+  <!--输入变量-->
+  <ITEM LINE="06"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款账号:)"/>
+  <ITEM LINE="6"     COL="45"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="07"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款户名:)" NAME="#S_NAME"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="09"  COL="19"  TYPE="%-14s" FUNCTIONS="T(核销金额:)" NAME="#S_TXAMT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="9"     COL="45"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="11"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款余额:)" NAME="#S_AVBAL" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="12"  COL="19"  TYPE="%-14s" FUNCTIONS="T(表内欠息:)" NAME="#S_BNINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="19"  TYPE="%-14s" FUNCTIONS="T(表外欠息:)" NAME="#S_BWINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="14"  COL="19"  TYPE="%-14s" FUNCTIONS="T(复利欠息:)" NAME="#S_FLINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="15"  COL="19"  TYPE="%-14s" FUNCTIONS="T(未结本金利息:)" NAME="#S_WJBJINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"  COL="19"  TYPE="%-14s" FUNCTIONS="T(未结复利利息:)" NAME="#S_WJFLINT" INPUT="LABEL" VISABLE="FALSE"/>
+
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="06"   COL="29	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		dim @a as string;
+		dim @hxlx as string;
+		dim @tota as string;
+		$MSGTYPE='03001';
+		$TXNO='9814';
+		$FD2=$OPNBR;
+		$FD3=$KINBR;
+		$FD5=$HDATE;
+		$FD6='';
+		$FD7=$TLRNO;
+		$FD8='';
+		$FD9='';
+		$FD10=$TTYNAME;
+		$FD16='9814';
+		$FD17='';
+		$FD65='3304';
+		$FD108=#ACTNO;
+		
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+
+		#NAME=substr($FD108,28,50);
+		//#AVBAL=comma(substr($FD108,78,14)+'.'+substr($FD108,92,2),21);
+		//#BNINT=comma(substr($FD108,94,14)+'.'+substr($FD108,108,2),21);
+		//#BWINT=comma(substr($FD108,110,14)+'.'+substr($FD108,124,2),21);
+		//#FLINT=comma(substr($FD108,126,14)+'.'+substr($FD108,140,2),21);
+		//#WJBJINT=comma(substr($FD108,142,14)+'.'+substr($FD108,156,2),21);
+		//#WJFLINT=comma(substr($FD108,158,14)+'.'+substr($FD108,172,2),21);
+
+		//@a=itoa((atoi(substr($FD108,94,16))+atoi(substr($FD108,110,16))),'%016.0f');
+		//#TXAMT=comma(substr(@a,0,14)+'.'+substr(@a,14,2));
+		
+		#AVBAL=itoa(val(substr($FD108,88,16),0.01),'%17.2f');
+		//showmsg('avbal===='+substr($FD108,88,16));
+		#BNINT=itoa(val(substr($FD108,104,16),0.01),'%17.2f');
+		#BWINT=itoa(val(substr($FD108,120,16),0.01),'%17.2f');
+		#FLINT=itoa(val(substr($FD108,136,16),0.01),'%17.2f');
+		#WJBJINT=itoa(val(substr($FD108,152,16),0.01),'%17.2f');
+		#WJFLINT=itoa(val(substr($FD108,168,16),0.01),'%17.2f');
+		#TXAMT=itoa(val(substr($FD108,104,16),0.01)+val(substr($FD108,120,16),0.01)+val(substr($FD108 , 136, 16) , 0.01),'%13.2f');
+		// add by chenchao 检查信贷是否发起利息核销
+		commsend_001();
+		$FD16='9598';
+		$FD123='select to_char(intst_amt,'+chr(39)+'9999999.00'+chr(39)+') from ln_auth where type='+chr(39)+'11'+chr(39)+' and sts in('+chr(39)+'X'+chr(39)+','+chr(39)+'B'+chr(39)+') and pact_no in(select pact_no from ln_mst where ac_id in (select ac_id from mdm_ac_rel where ac_no='+chr(39)+#ACTNO+chr(39)+'))';
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if(@tota!='')
+		{
+			@hxlx=strfld(@tota,'|',0);
+		}
+		if(val(@hxlx) &lt;= 0)
+		{
+			showmsg('没有找到信贷发起的审批记录!!!');
+			return(false);
+		}
+
+		show(#NAME,true);
+		show(#AVBAL,true);
+		show(#BNINT,true);
+		show(#BWINT,true);
+		show(#FLINT,true);
+		show(#WJBJINT,true);
+		show(#WJFLINT,true);
+		show(#TXAMT,true);
+		show(#S_NAME,true);
+		show(#S_AVBAL,true);
+		show(#S_BNINT,true);
+		show(#S_BWINT,true);
+		show(#S_FLINT,true);
+		show(#S_WJBJINT,true);
+		show(#S_WJFLINT,true);
+		show(#S_TXAMT,true);
+		if( val(@hxlx) != val(#TXAMT))
+		{
+			showmsg('与信贷发起的核销金额['+@hxlx+']不符!!!');
+			return(false);
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#NAME" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="07"  COL="29	" TYPE="%-50s" 	FUNCTIONS=""/>
+  <ITEM NAME="#TXAMT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="09"  COL="29	" TYPE="%-16s"	FUNCTIONS=""/>
+  <ITEM NAME="#AVBAL" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="11"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#BNINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="12"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#BWINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="13"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#FLINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="14"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WJBJINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="15"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WJFLINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="16"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+ <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="6" COL="52" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9" COL="52" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  </PAGE>
+  <!-- 第2页 -->
+  <ITEM LINE="21" COL="59" NAME="#SECOND_PAGE" TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON">
+	<ONCLICK>"{
+		loadpage('PAGE2');
+	}"
+	</ONCLICK>
+  </ITEM>
+
+  <PAGE NAME="PAGE2">
+  <ITEM LINE="06"  COL="05"  TYPE="%-44s" FUNCTIONS="T(                              【借方】)"/>
+  <ITEM LINE="07"  COL="10"  TYPE="%-60s" FUNCTIONS="T(─────────────────────────────────────)"/>
+  <ITEM LINE="09"  COL="19"  TYPE="%-10s" FUNCTIONS="T(内部帐号:)"/>
+  <ITEM LINE="10"  COL="19"  TYPE="%-10s" FUNCTIONS="T(户    名:)"  NAME="#S_DNAME"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="11"  COL="19"  TYPE="%-10s" FUNCTIONS="T(币    种!:)" NAME="#S_CURCD"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="12"  COL="19"  TYPE="%-10s" FUNCTIONS="T(余额方向:)"  NAME="#S_DCRDB"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="19"  TYPE="%-10s" FUNCTIONS="T(余    额:)"  NAME="#S_DAVBAL"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="15"  COL="19"  TYPE="%-10s" FUNCTIONS="T(凭证种类!:)" NAME="#S_VOCTYPE" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"  COL="19"  TYPE="%-10s" FUNCTIONS="T(凭证号码:)"  NAME="#S_VOCNUM"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="17"  COL="19"  TYPE="%-10s" FUNCTIONS="T(发 生 额:)"  NAME="#S_XTXAMT"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="18"  COL="19"  TYPE="%-10s" FUNCTIONS="T(用    途!:)" NAME="#S_YT"      INPUT="LABEL" VISABLE="FALSE"/>
+
+  <ITEM NAME="#DACTNO" 	INPUT="TEXT" 	LINE="09"   COL="29	" TYPE="%-20s" 	FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#CON2"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		$MSGTYPE='03001';
+        $TXNO='9712';
+        $FD2=$OPNBR;
+        $FD3=$KINBR;
+        $FD5=$HDATE;
+        $FD6='';
+        $FD7=$TLRNO;
+        $FD8='';
+        $FD9='';
+        $FD10=$TTYNAME;
+        $FD16='9712';
+        $FD17='';
+		$FD120=#DACTNO;
+
+        callserver();
+        if($FD12!='0000')
+        {
+			showmsg(geterror());
+            return(false);
+        }
+
+		#DNAME=substr($FD120,20,50);
+		#CURCD=substr($FD120,96,2);
+		#DCRDB=substr($FD120,156,2);
+		//#DAVBAL=comma(substr($FD120,70,14)+'.'+substr($FD120,84,2),21);
+		#DAVBAL=itoa(val(substr($FD120,80,16),0.01),'%17.2f');
+		#VOCTYPE='299';
+		#YT='19';
+		#XTXAMT=#TXAMT;
+		show(#DNAME,true);
+		show(#CURCD,true);
+		show(#DCRDB,true);
+		show(#DAVBAL,true);
+		show(#VOCTYPE,true);
+		show(#VOCNUM,true);
+		show(#XTXAMT,true);
+		show(#YT,true);
+		show(#S_DNAME,true);
+		show(#S_CURCD,true);
+		show(#S_DCRDB,true);
+		show(#S_DAVBAL,true);
+		show(#S_VOCTYPE,true);
+		show(#S_VOCNUM,true);
+		show(#S_XTXAMT,true);
+		show(#S_YT,true);
+		enable(#CURCD,false);
+		enable(#VOCTYPE,false);
+		enable(#YT,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#DNAME" 	INPUT="LABEL" 	LINE="10"   COL="29	" TYPE="%-50s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#CURCD" 	INPUT="SELECT" 	LINE="11"   COL="29	" TYPE="%-2s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="01" TITLE="0.人民币"/>
+        <OPTION VALUE="12" TITLE="0.英镑"/>
+        <OPTION VALUE="13" TITLE="0.港元"/>
+        <OPTION VALUE="14" TITLE="0.美元"/>
+        <OPTION VALUE="15" TITLE="0.瑞士法郎"/>
+        <OPTION VALUE="27" TITLE="0.日元"/>
+        <OPTION VALUE="28" TITLE="0.加元"/>
+        <OPTION VALUE="29" TITLE="0.澳元"/>
+        <OPTION VALUE="38" TITLE="0.欧元"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#DCRDB" 	INPUT="LABEL" 	LINE="12"   COL="29	" TYPE="%-2s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#DAVBAL" 	INPUT="LABEL" 	LINE="13"   COL="29	" TYPE="%-21s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#VOCTYPE"	INPUT="SELECT" 	LINE="15"   COL="29	" TYPE="%-3s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="299" TITLE="其他凭证"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#VOCNUM" 	INPUT="TEXT" 	LINE="16"   COL="29	" TYPE="%-16s" 	VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#XTXAMT" 	INPUT="LABEL" 	LINE="17"   COL="29	" TYPE="%-21s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#YT"     INPUT="SELECT" 	LINE="18"   COL="29	" TYPE="%-12s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="19" TITLE="还贷款息"/>
+  </SELECT>
+  </ITEM>
+
+  </PAGE>
+	
+  <ITEM NAME="#PASSWD" 	    TYPE="%-6s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WSSRNO"      TYPE="%-6s"     />
+  <ITEM NAME="#OTXDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OSTDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OENDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OOPAMT"      TYPE="%-21s"    />
+  <ITEM NAME="#OTXAMT"      TYPE="%-21s"    />
+  <ITEM NAME="#OAMT"        TYPE="%-21s"    />
+  <ITEM NAME="#UAMT"        TYPE="%17.2f"    FUNCTIONS="J(#OUAMT)"/>
+  <ITEM NAME="#OUAMT"       TYPE="%-40s"    FUNCTIONS="U(#UAMT)"/>
+  <ITEM NAME="#OAVBAL"      TYPE="%-21s"    />
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="38" DESC="请打印贷款表内利息核销贷方凭证">
+LNHXBW||@actno|@jjno|@name|@lnkd|@amt|@stday|@enday|@opamt|@txamt|@avbal|@nomrate|@overrate|@wssrno|@acno|
+</PACKAGE>
+<INIT>
+"{
+	#OTXDAY=substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+//	#OSTDAY=substr(@stday,0,4)+'-'+substr(@stday,4,2)+'-'+substr(@stday,6,2);
+	#OSTDAY=@stday;
+	#OENDAY=substr(@enday,0,4)+'-'+substr(@enday,4,2)+'-'+substr(@enday,6,2);
+	#OOPAMT=comma(@opamt,21);
+	#OTXAMT=comma(@txamt,21);
+	#OAMT='￥'+ltrim(comma(#TXAMT,21));
+	#UAMT=itoa(atoi(#TXAMT)*100,'%016.0f');
+	#OUAMT='￥'+ltrim(comma(#TXAMT,21));
+	#OAVBAL=comma(@avbal,21);
+}"
+</INIT>
+<PRINT>"{
+print( 2,55,'\H0贷款利息核销贷方凭证\H1');
+print( 4,14,'      交易日期: [10        ]                                                 流 水 号: [5  ]',#OTXDAY,@wssrno);
+print( 5,14,'┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print( 6,14,'┃  机构名称: [60                                                          ]                    ┃',$BRNAME);
+print( 7,14,'┃  贷款账号: [19                   ]                          借 据 号: [20             ]     ┃',@actno,@jjno);
+print( 8,14,'┃  户    名: [50                                                ]                              ┃',@name);
+print( 9,14,'┃  产品名称: [50                                                ]                              ┃',@lnkd);
+print(10,14,'┠──────────────────────────────────────────────┨');
+print(11,14,'┃  总金额:   人民币[21                                     ]                                          ┃',#OUAMT);
+print(12,14,'┠──────────────────────────────────────────────┨');
+print(13,14,'┃  起止日期:  [10      ]  到  [10      ]                                                     ┃',#OSTDAY,#OENDAY);
+print(14,14,'┃  表内息: [21                   ] 表外息:[21                   ]复利:[21                   ]      ┃',#BNINT,#BWINT,#FLINT);
+print(15,14,'┃  还款账号: [21                   ]                                                           ┃',#DACTNO);
+print(16,14,'┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

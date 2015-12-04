@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01100000000000000000000000000000" TITLE="4618        本代他取款行内补账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<USERFUN NAME="saveprint">
+"{      
+        //用于补打凭证
+       	dim @file as file;
+       	dim @swtraceno as string;
+       	dim @traceno as string;
+       	dim @line as string;
+  	dim @txamt as string;
+  	dim @bal as string;
+  	dim @bal2 as string;
+  	dim @txtime  as string;
+  	dim @txfee as string;
+  	dim @feeamt as number;
+  	dim @oswtraceno as string;  //取款流水号
+  	@feeamt=val(substr($FD88,1,8),0.01);
+  	
+       	//写文件，用于补打流水
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);  	
+       	@swtraceno = substr($FD52,6,6);
+       	@traceno = $FD4; 
+       	@txamt = ltrim(comma(itoa(#TXAMT,'%15.2f'),16));
+        @oswtraceno = itoa(#OYYTRACENO);
+	@file=openfile('../dat/YYHZ_'+$HDATE+'_'+$TLRNO+'_'+@swtraceno+'.dat','ab');
+	@line = '7618';
+	writeline(@file, @line);
+	@line = @swtraceno + '|' + @traceno + '|' + #CARDNO + '|' + @txamt + '|' + @txtime + '|' +  @oswtraceno+ '|';
+	writeline(@file, @line);
+
+	closefile(@file);	
+				
+}"
+</USERFUN>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4618                    本代他取款行内补账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=761A)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!-- 本代他卡折取款补账输入项显示 --> 
+  
+  <ITEM LINE="8"   COL="15" TYPE="%-12s" FUNCTIONS="T(原卡折号:  )"/>
+  <ITEM LINE="9"   COL="15" TYPE="%-12s" FUNCTIONS="T(原操作员:  )"/>
+  <ITEM LINE="10"  COL="15" TYPE="%-12s" FUNCTIONS="T(原平台流水:)"/>
+  <ITEM LINE="11"  COL="15" TYPE="%-12s" FUNCTIONS="T(取款金额:  )"/>
+
+  <ITEM LINE="8" COL="27" NAME="#CARDNO" TYPE="%-19s" DEVICE="MSR" FUNCTIONS="T()V(NB)M($MSR2,1)"/>
+  <ITEM LINE="9" COL="27" NAME="#OTLRNO"  TYPE="%-6s" INPUT="LABEL"  FUNCTIONS="T($TLRNO)"/>
+  <ITEM LINE="10" COL="27" NAME="#OYYTRACENO" TYPE="%12d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="11" COL="27" NAME="#TXAMT" TYPE="%13.2f" DEVICE="KEYBOARD" FUNCTIONS="V(000000000100,999999999999)"/>
+  <ITEM NAME="#XTXAMT"  TYPE="%-16s" FUNCTIONS="X(#TXAMT)"/>
+  
+  <ITEM LINE="21" COL="59" TYPE="%-6s" NAME="#SUBMIT" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+   	<ONCLICK>
+   	"{
+	dim @tota as string;
+	$FD22='08';
+	$TXNO='761A';
+	$FD30=#CARDNO;
+	$FD39=itoa(#TXAMT*100,'%012.0f');
+	$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+	$FD52 = #OYYTRACENO;	
+	$FD49=#OTLRNO;
+	
+	commsend_001(); 
+	@tota=callagn(); 
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+	   	return(false);
+	}	
+	saveprint();
+	runoutput(@tota);		 			 	
+	  }"
+   	</ONCLICK>
+  </ITEM>
+
+  </VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="本代他取款行内补账">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+ 	print( 3,27,'本代他取款行内补账成功!');
+	print( 5,10,'帐    号:[19]',#CARDNO);
+	print( 6,10,'原平台流水:[12]',#OYYTRACENO);
+	print( 7,10,'取款金额:[50]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+    print( 10,10,'后台流水:[6]',$FD4);
+    print( 11,10,'平台流水:[12]',substr($FD52,6,6));
+    
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印储蓄取款凭证"  CHECK="$FD12=0000">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+
+	$KINDNO='00';
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}          	
+      dim @feeamt as number;
+      dim @opbankname as string;
+      dim @cardno as string;
+      dim @mediatype as string;
+      dim @clientname as string;
+      dim @tx_amt as string;
+      dim @acbal as string;
+      dim @acbal2 as string;
+      dim @tx_fee as string;
+      dim @txtime  as string;
+      dim @xmltxno as string;
+      dim @opbankno as string;
+      dim @file as file;
+      dim @line as string;  
+       	    	  
+   	@xmltxno='4618';
+   	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2); 
+     	@file = openfile('../dat/YYHZ_'+$HDATE+'_'+$TLRNO+'_'+#OYYTRACENO+'.dat'); 
+	if(@file==0)
+	{
+	  @line=readline(@file);
+	  @line=readline(@file);						
+	  if(@line=='')
+	  {
+	      closefile(@file);
+	      showmsg('出错: 该笔流水的信息错误!'); 
+	      return(false);
+       	  }
+	  delspace(@line); 
+	    
+	  @opbankname = strfld(@line,'|', 2);
+	  @cardno= strfld(@line,'|', 3);
+	  @mediatype= strfld(@line,'|', 4);
+	  @clientname= strfld(@line,'|', 5);
+	  @tx_amt= strfld(@line,'|', 6);
+	  @tx_fee= strfld(@line,'|', 7); 
+	  @acbal= strfld(@line,'|', 8);
+	  @acbal2= strfld(@line,'|', 9);
+	  @opbankno=strfld(@line,'|', 11);
+			       	  
+	 print(2,15,' 114      银银合作本代他取款 我行补账成功！请客户本人确认后签名！   [16]  [8]',@xmltxno,$HDATE));																																																																																																	
+	 print(5,99,'[20                  ]',@cardno);																																																																																																	
+	 print(9,104,'[16]',@clientname);																																																																																																	
+	 print(10,8,'开户行名:[20]    卡折标志:[16]  受理行:[5][20]      ',@opbankname,@mediatype,$KINBR,$BRNAME);																																																																																																	
+	 print(11,8,'帐    号:[20]    户    名:[16]  操作员:[25]',@cardno,@clientname,$FD7);																																																																																																	
+	 print(12,8,'取款金额:[20]    账户余额:[16]可用金额:[20]         [20]',@tx_amt,@acbal,@acbal2,@tx_amt);																																																																																																	
+	 print(13,8,'平台流水:[20]    后台流水:[12]',substr($FD52,6,6),$FD4);																																																																																																	
+	 print(14,8,'交易日期:[8]  [11]   ',$HDATE,@txtime);																																																																																																	
+//	 print(14,8,'交易日期:[8]  [11]   行内记账手续费:[10]',$HDATE,@txtime,@tx_fee);																																																																																																	
+//	 if(@opbankno=='03090000')																																																																																																	
+//	 {																																																																																																	
+//		print(14,0,'手续费账户行代付')																																																																																																	
+//	 }																																																																																																	
+  	  
+  	}  
+   		
+	}"
+	</PRINT>
+</RESPONSE>
+<!-----RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="打印专用凭证" CHECK="$FD12=0000">
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+  $KINDNO='00';
+  dim @txtime  as string;
+  @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}
+ 	print( 4, 25,'[5]',$KINBR);
+	print( 4, 10,'[30]',$BRNAME);
+	print( 4, 5,'操作员号:[4]',$FD7);
+	print( 5, 15,'[6]',$FD4);
+	print( 5, 26,'4618银银合作本代他取款 行内补账');
+	print( 5, 8,'[8] [8]',$HDATE,@txtime);
+	printacdtl_1();
+}"
+</PRINT>
+</RESPONSE---------->
+</TRANSACTION>
+

@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="8433  IC复合卡柜面圈存交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<VARIABLE UPLOOP="TRUE">
+      <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+       "T(8433                         IC复合卡柜面圈存)"/>
+      <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+       "T(─────────────────────────────────────)"/>
+      <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=8433)"/>
+      <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=0200)"/>
+      <ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(8433)"/>      <!---交易代码--->
+      <ITEM NAME="#TXNAME"  TYPE="%-26s" FUNCTIONS="T(IC复合卡提取电子现金)"/>  <!---交易名称--->
+      <ITEM  TYPE="%16.2f" NAME="#c_amt"  FUNCTIONS="" /> 
+      <ITEM  TYPE="%-6s"   NAME="#BRNO"   FUNCTIONS="" />           <!---卡开户网点号--->
+      <ITEM  TYPE="%17.2f" NAME="#ALLAMT" FUNCTIONS="" />           <!---交易后IC卡累计余额--->
+      <ITEM  TYPE="%-6s" NAME="#HXTRACENO"  FUNCTIONS="" >          <!---用于保存核心流水号--->	
+      <ONLOSTFOCUS>
+     	"{
+                 	        
+     	      initfd();                    // 网点柜员签到检查
+        	  commsend_001();
+	          $FD16='8100';
+	          callserver();
+        	  if($FD12!='0000')
+      	    {
+      	      showmsg(geterror());
+      	       return(false);
+      	    }  
+      	     
+     	}"
+     </ONLOSTFOCUS>	
+    </ITEM>
+    
+    <ITEM NAME="#LACTNO" LINE="7"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(金额来源:!)"/>
+    <ITEM NAME="#SOURES" LINE="7"  COL="25"   DEVICE="KEYBOARD" INPUT="SELECT" TYPE="%-1s"  FUNCTIONS="T(1)">
+    <SELECT>	
+   <!--  <OPTION VALUE="0" TITLE="1.现金" -->
+     <OPTION VALUE="1" TITLE="2.本卡活期" />
+     <ONLOSTFOCUS>
+     	"{      
+     	          initfd();                          // 获取IC卡余额
+			          dim @sTmp as string;
+			 	        @sTmp=ictagvalue('9f79');         
+			          @sTmp = delspace(itoa(val(@sTmp,0.01),'%-16.2f'));
+			          #ICYUE = @sTmp;
+			 	        showmsg('IC卡余额为: '+@sTmp+' 元');
+		           // return(false); 
+		           
+		           		           
+     	        if(#SOURES == '1')
+     	        {
+     	          show(#AA,true);             // 显示输入密码框
+     	          show(#PIN,true);
+     	        }
+     	        else
+     	        {
+     	          show(#AA,false);
+     	          show(#PIN,false);
+     	        }
+     	}"
+     </ONLOSTFOCUS>	
+    </SELECT> 
+    </ITEM>	
+    <ITEM NAME="#LACTNO" LINE="9"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(卡    号: )"/>
+    <ITEM NAME="#CARDNO" INPUT="TEXT"  LINE="9"  COL="25" TYPE="%-16s" VISABLE="TRUE" DEVICE="ICC" FUNCTIONS="V(NB)m($MSR2,1,16)">
+      <ONLOSTFOCUS>
+          "{
+          
+           
+            showmsg($MSR2);
+          
+            if(len(#CARDNO) &lt; 16)
+  			      {
+                showmsg('请输入不少于16位卡号!');
+                return(false);
+              }
+            
+            
+           if(#SOURES == '0')
+           {
+              // 根据卡号查询帐号信息    
+		          dim @txnobak as string;
+		          initfd();
+			        commsend_001();
+			        @txnobak=$TXNO;
+		  	      $FD16='5001';
+			        $FD65='5001'; 
+		          $FD38=#CARDNO;   
+			        $FD69='0';              //不校验密码
+			        $FD79='000000';         //密码     
+			        $FD26='DEBITCARD';
+			        $FD48='fix';
+			        callagn();
+			        $TXNO=@txnobak;
+			        //$FD12 ='0000';
+			        if($FD12!='0000')
+		             {
+			             showmsg(geterror());   
+			             return(false);
+		             }
+		             
+		          #BRNO = delspace($FD64);         //卡开户网点号
+		          #NAME =delspace($FD25); 
+		          //showmsg($FD60);
+		          #YUE=comma(itoa(val($FD60,0.01),'%-17.2f'),16);
+			        #YUE2=val($FD60,0.01);
+		          show(#NAME,true); 
+		          enable(#NAME,false);	
+		          show(#YUE,true); 
+		          enable(#YUE,false);	
+		          showblock('ACTINFO',true,true);	 
+           } 
+                                         
+          }"
+       </ONLOSTFOCUS>
+    </ITEM>
+    
+	  <ITEM LINE="9"  COL="44" NAME="#AA" TYPE="%-10s" INPUT="LABEL" DEVICE="KEYBOARD"  FUNCTIONS="T(密  码:)" VISABLE="FALSE" />
+	  
+    <ITEM LINE="9"  COL="52"  NAME="#PIN" TYPE="%-6s"  INPUT="TEXT" DEVICE="PINPAD"  FUNCTIONS="V(NB)i()"  VISABLE="FALSE" >
+     <ONLOSTFOCUS>
+       "{
+            
+          //根据卡号查询帐号信息    
+          dim @txnobak as string;
+          initfd();
+	        commsend_001();
+	        @txnobak=$TXNO;
+  	      $FD16='5001';
+	        $FD65='5001'; 
+          $FD38=#CARDNO;   
+	        $FD69='1';          //不校验密码
+	        $FD79=#PIN;         //密码     
+	        $FD26='DEBITCARD';
+	        $FD48='fix';
+	        callagn();
+	        $TXNO=@txnobak;
+	        //$FD12 ='0000';
+	        if($FD12!='0000')
+             {
+	             showmsg(geterror());   
+	             return(false);
+             }
+          #BRNO = delspace($FD64);          // 卡开户网点号
+          #NAME =delspace($FD25); 
+          //showmsg($FD60);
+          #YUE=comma(itoa(val($FD60,0.01),'%-17.2f'),16);//delspace(comma(itoa(atoi($FD60)*0.01,'%-17.2f'),16));
+	        #YUE2=val($FD60,0.01);
+          show(#NAME,true); 
+          enable(#NAME,false);	
+          show(#YUE,true); 
+          enable(#YUE,false);	
+          showblock('ACTINFO',true,true);	
+          
+            	               
+        }"
+     </ONLOSTFOCUS>
+    </ITEM>
+  
+   <BLOCK NAME="ACTINFO" LINE="10" COL="9" VISABLE="FALSE">
+      <ITEM LINE="1"  COL="6"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+      <ITEM NAME="#NAME" LINE="1"  COL="16" TYPE="%-60s" FUNCTIONS="" />
+      <ITEM LINE="2"  COL="6"  TYPE="%-10s" FUNCTIONS="T(账户余额:)"/>
+      <ITEM NAME="#YUE" LINE="2"  COL="16" TYPE="%17s" FUNCTIONS="" />      	
+      <ITEM LINE="3"  COL="6"  TYPE="%-10s" FUNCTIONS="T(IC卡余额:)"/>
+      <ITEM NAME="#ICYUE" LINE="3"  COL="16" TYPE="%-17s"  INPUT="TEXT"  FUNCTIONS="">
+			<ONGOTFOCUS>"{
+		        //	  showmsg('准备打开IC卡设备，获取芯片2磁及IC卡余额等重要信息...');   
+				   //  if(not openic())
+				   //     {
+		        	//	    showmsg('打开IC卡设备失败!');
+		       		//	    return(false);
+		           // 		}
+				  //  if(not readic())
+				  //     {
+				 	//   closeic();
+		        	//   	   showmsg('读IC卡失败!');
+		          //		   return(false);
+					//}
+				   // #ICYUE=fetchic('data');//从IC卡中读数据
+					
+				   // #ICYUE='850.00';
+				    show(#ICYUE,true);
+				    enable(#ICYUE,false);	
+			 }"
+		   </ONGOTFOCUS>  
+		   </ITEM>
+
+
+      <ITEM NAME="#SVOCTYPE"    TYPE="%-8s"         FUNCTIONS="S(#SNBFLAG,#SNBFLAG)"/>
+      <ITEM NAME="#AMT_BAL"     TYPE="%-17.2f" />
+	    <ITEM NAME="#YUE2"        TYPE="%-17.2f" />
+      <ITEM LINE="4" COL="6"    TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+      <ITEM NAME="#TXAMT" LINE="4"  COL="16" TYPE="%17.2f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)">
+		 <ONLOSTFOCUS>
+	   "{
+	      #YUE2=val(#ICYUE);
+	      #ALLAMT = 0.00;
+	      #ALLAMT = #TXAMT + #YUE2;
+				if((#TXAMT + #YUE2) &gt; 1000.00)
+				 {
+					 showmsg('IC卡累积余额不能超过1000');
+					 return(false);        
+				 }
+			
+			 
+			}"
+	   </ONLOSTFOCUS>  
+	   </ITEM>
+	 </BLOCK>	
+             
+       <!--输出变量--->
+     <ITEM LINE="20" NAME="#BU" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+       <ONCLICK>
+   	"{   		
+   	      dim @ICAMT as string;
+   	      dim @ICALLAMT as string;
+   	      @ICAMT = delspace(itoa(val(itoa(#TXAMT,'%-17.2f'),100),'%-12.0f'));
+   	      @ICALLAMT = delspace(itoa(val(itoa(#ALLAMT,'%-17.2f'),100),'%-12.0f'));
+   	   // showmsg('IC充值金额为:'+@ICAMT);   
+   	      	
+  	 	    initiccard(@ICAMT);        // IC卡参数初始化
+  	 	    commsend_001();
+  		    $FD16='0200';	 
+  		    $FD26='DEBITCARD';
+  		    $FD48='8583';
+		      $FD25=delspace(#NAME);     // 持卡人姓名
+		      $FD27=substr($MSR2,0,35);  // 二磁道信息
+  		    if(#SOURES =='0')
+  		    { 
+				    $FD65='630000';		       // 现金充值电子钱包 
+  		    }else{
+				    $FD65='600000'; 			   // 本卡活期充值电子钱包  
+  		    }
+  		    $FD40=delspace(itoa(val(itoa(#TXAMT,'%-17.2f'),100),'%-016.0f'));   // 交易金额
+  		    $FD38=#CARDNO;             // 卡号
+  		     $FD37=#CARDNO;           //  卡号
+			    $FD79=#PIN;                // 卡密码
+  		    calliccagn();
+  		    if($FD12 !='0000')
+		        {
+			       showmsg(geterror());
+			       return(false);
+		        }
+		      #HXTRACENO = $FD4;        // 保存核心流水号
+		      
+		      
+		     //  showmsg('IC卡芯片总余额:'+ @ICALLAMT);   
+		     ictagchg(@ICALLAMT);      // 更新IC卡芯片余额
+		      
+         runoutput();        
+				 show(#again,true);	
+				 show(#end,true);
+				 show(#BU,false);		 
+  	}"
+      </ONCLICK>
+     </ITEM>
+
+	<ITEM LINE="21" COL="42" NAME="#again" TYPE="%-16s" VISABLE="FALSE" FUNCTIONS="T(是否需要补打)" INPUT="BUTTON" >
+		 <ONCLICK>"{
+						runoutput();
+					}"
+		 </ONCLICK>  
+	</ITEM>	 		
+	<ITEM LINE="21" COL="60" NAME="#end" TYPE="%-6s" VISABLE="FALSE"  FUNCTIONS="T(结  束)" INPUT="BUTTON">
+		<ONCLICK>"{			
+				  closeall();
+  	 			return(true);
+			}"
+		</ONCLICK> 
+	</ITEM>
+
+</VARIABLE>
+
+ <REQUEST>
+ </REQUEST>
+   	
+ <RESPONSE>
+    <PACKAGE DEVICE="SCREEN"  LINESPACE="24" DESC="圈存成功">
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+          
+        dim @txtime as string;
+        @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 
+        print( 2,30,'IC复合卡柜面圈存');
+        print( 5,20,'机构名称: [30                                ]',$BRNAME);    
+        print( 6,20,'卡    号: [20                      ]',#CARDNO); 
+        print( 7,20,'户    名: [60                      ]',#NAME);
+        print( 8,20,'交易金额: [18                   ]',delspace(itoa(#TXAMT,'%-17.2f')));
+        print( 9,20,'IC卡余额: [18                   ]',delspace(itoa(#ALLAMT,'%-17.2f'))); 
+       
+        print(10,20,'柜员: [4]',$FD7);
+	      print(11,20,'核心流水: [12]',#HXTRACENO);
+	      print(12,20,'交易日期: [8] [8]',$HDATE,@txtime);
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER"  LINESPACE="24"  DESC="请打印普通业务凭证">
+    NOTHING
+    </PACKAGE> 
+    <PRINT>
+    "{
+        dim @txtime as string;
+        @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 
+        print( 4,46,'IC复合卡柜面圈存');
+        print( 6,14,'机构名称: [30                                ]',$BRNAME);    
+        print( 7,14,'卡    号: [20                      ]',#CARDNO); 
+        print( 8,14,'户    名: [60                      ]',#NAME);
+        print( 9,14,'交易金额: [18                   ]',delspace(itoa(#TXAMT,'%-17.2f')));
+        print(10,14,'IC卡余额: [18                   ]',delspace(itoa(#ALLAMT,'%-17.2f'))); 
+       
+        print(11,14,'柜员: [4]',$FD7);
+	      print(12,14,'核心流水: [12]',#HXTRACENO);
+	      print(13,14,'交易日期: [8] [8]',$HDATE,@txtime);
+    }"
+    </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

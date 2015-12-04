@@ -1,0 +1,53 @@
+/*********************************************************
+*完成时间：20150512
+*作者：  lwb
+*程序功能：给ods建立个临时dd_mst表
+**********************************************************/
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403){\
+	sprintf(acErrMsg,"sqlerror[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	strcpy( g_pub_tx.reply,"D103" );\
+	goto ErrExit;\
+	}
+
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include "dd_mst_c.h"
+#include "public.h"
+#define EXTERN
+
+EXEC SQL INCLUDE sqlca.h;
+gD555()
+{
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+	
+	pub_base_sysinit();
+	vtcp_log("getthere hehe [%s][%d]\n"__FILE__,__LINE__);
+	
+	EXEC SQL drop table dd_mst_tmp;
+	vtcp_log("getthere hehe [%s][%d]\n"__FILE__,__LINE__);
+	
+	EXEC SQL create table dd_mst_tmp as select * from dd_mst;
+	MYSQLERR
+
+	
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"导入dd_mst_tmp成功!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"导入dd_mst_tmp失败!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	strcpy( g_pub_tx.reply,"D103" );
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+
+}

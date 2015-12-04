@@ -1,0 +1,37 @@
+drop index mo_invest_1;
+drop  table mo_invest;
+create table mo_invest(
+	pact_no varchar2(20),
+	bkrl_code varchar2(3),
+	br_no varchar2(5),
+	ac_id number(9),
+	lx_ac_id number(9),
+	invest_type varchar2(1),
+	ticket_type varchar2(20),
+	intst_type varchar2(1),
+	cnt number(6),
+	isuue_date number(9),
+	term number(6),
+	par_bal number(16,2),
+	buy_amt number(16,2),
+	abate_ac_id number(9),
+	abate_amt number(16,2),
+	overflow_ac_id number(9),
+	overflow_amt number(16,2),
+	pre_intst number(16,2),
+	buy_date number(9),
+	rate number(8,5),
+	flt_rate number(8,5),
+	mtr_date number(9),
+	sol_amt number(16,2),
+	sol_date number(9),
+	singl_feeval number(12,2),
+	sol_feeval number(12,2),
+	wrk_date number(9),
+	trace_no number(9),
+	sts varchar2(1),
+	tel varchar2(4),
+	chk varchar2(4),
+	auth varchar2(4) 
+)tablespace users;
+create	 unique index mo_invest_1 on mo_invest( pact_no)tablespace indx;

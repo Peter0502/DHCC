@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="3205    存折户与一户通关联维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+    commsend_001();
+    $FD31=#CZAC_NO;
+    $FD32=#YHTAC_NO;
+    $FD40=getitems('#LMT_AMT');
+    $FD41=getitems('#ZZ_AMT');
+    //showmsg($FD40);
+    //showmsg($FD41);
+    $FD67=#FLAG;  
+       
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(3205                      存折户与一户通关联维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8928)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="7"   COL="05"   TYPE="%-12s" FUNCTIONS="T(处理  类型:)"/>
+  <ITEM LINE="9"   COL="05"   TYPE="%-12s" FUNCTIONS="T(存折  帐号:)"/>
+  <ITEM LINE="10"  COL="05"   TYPE="%-12s" FUNCTIONS="T(存折  密码:)"/>
+  <ITEM LINE="11"  COL="05"   TYPE="%-12s" FUNCTIONS="T(户      名:)" NAME="#N1" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="05"   TYPE="%-12s" FUNCTIONS="T(一户通帐号:)"/>
+  <ITEM LINE="15"  COL="05"   TYPE="%-12s" FUNCTIONS="T(户      名:)" NAME="#N2" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="17"  COL="05"   TYPE="%-12s" FUNCTIONS="T(控制  限额:)"/>
+  <ITEM LINE="17"  COL="40"   TYPE="%-12s" FUNCTIONS="T(转帐限额:)"/>
+  
+  <ITEM LINE="7"   COL="18" NAME="#FLAG" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)">
+    <SELECT>
+       <OPTION VALUE ="1" TITLE="增加" />
+      <!-- <OPTION VALUE ="2" TITLE="修改" />-->
+       <OPTION VALUE ="3" TITLE="删除" />
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#SFLAG" TYPE="%-4s" FUNCTIONS="S(#FLAG,#FLAG)"/>
+  <ITEM LINE="9"   COL="18"   NAME="#CZAC_NO"     TYPE="%-19s"        INPUT="TEXT"    FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10"  COL="18"   NAME="#PASSWD"     TYPE="%6d"    DEVICE="PINPAD"    INPUT="TEXT"    FUNCTIONS="V(NB)i()"> 
+  <ONLOSTFOCUS>
+  "{
+ 				 dim @txno as string;
+ 				 initfd();
+         @txno=$TXNO;
+         $TXNO='6700';
+         commsend_001();
+         $FD30=#CZAC_NO;
+         $FD67='1';
+         $FD79=#PASSWD;
+         callserver();
+         $TXNO=@txno;    
+         if($FD12!='0000')
+         {
+          showmsg(geterror());
+          return(false);
+         }
+       		#CZNAME=delspace($FD25);
+       if($FD23!='101')
+       {
+        showmsg('该帐号不是储蓄帐号!');
+        return(false);
+       }
+       show(#N1,true);
+       show(#CZNAME,true);
+       enable(#CZNAME,false); 
+       $FD79='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11"  COL="18"   NAME="#CZNAME" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM LINE="13"   COL="18"   NAME="#YHTAC_NO"    TYPE="%-19s"        INPUT="TEXT"    FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+   	     dim @txno as string;
+ 	       initfd();
+         @txno=$TXNO;
+         $TXNO='6700';
+         commsend_001();
+					$FD79='';
+         $FD30=#YHTAC_NO;
+         $FD67='1';
+         callserver();
+         $TXNO=@txno;    
+         if($FD12!='0000')
+         {
+         		 showmsg(geterror());
+             return(false);
+         }
+       #YHTNAME=delspace($FD25);
+       if($FD23!='103')
+       {
+        showmsg('该帐号不是一户通帐号!');
+        return(false);
+       }
+       show(#N2,true);
+       show(#YHTNAME,true);
+       enable(#YHTNAME,false); 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="15"  COL="18"   NAME="#YHTNAME" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#AAAA" TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+       if(#FLAG!='1') 			
+   		 {
+   			 dim @txno as string;
+ 				 initfd();
+         @txno=$TXNO;
+         $TXNO='8929';
+         commsend_001();
+         $FD31=#CZAC_NO;
+         $FD32=#YHTAC_NO;
+         callserver();
+         $TXNO=@txno;    
+         if($FD12!='0000')
+         {
+         		 showmsg(geterror());
+             return(false);
+         }
+        #LMT_AMT=val($FD41,0.01);
+        #ZZ_AMT=val($FD42,0.01);
+       }
+       initfd();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="17"  COL="18"   NAME="#LMT_AMT"     TYPE="%17.2f"       INPUT="TEXT"    FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#XLMT_AMT"      TYPE="%-21s"        FUNCTIONS="X(#LMT_AMT)"/>
+  <ITEM LINE="17"  COL="50"   NAME="#ZZ_AMT"      TYPE="%17.2f"       INPUT="TEXT"    FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#XZZ_AMT"       TYPE="%-21s"        FUNCTIONS="X(#ZZ_AMT)"/>
+  
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <!-- <ITEM NAME="#PASSWD" 	 TYPE="%-6s" FUNCTIONS="T()"/> --><!--同名ITEM liangq注-->
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="维护成功">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 6,30,'[4]成功',#SFLAG);
+	print( 8,25,'存款  帐号:[19]',#CZAC_NO);
+	print(10,25,'一户通帐号:[19]',#YHTAC_NO);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印特殊业务申请书">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print(16,27,'\L0理财签约\L1');
+	print(18,17,'控制  限额:[21]',#XLMT_AMT);
+	print(19,17,'转帐  限额:[21]',#XZZ_AMT);
+
+	print(27,17,'户      名:[6]',#CZNAME);
+	print(28,17,'存款  帐号:[19]',#CZAC_NO);
+	print(29,17,'一户通帐号:[19]',#YHTAC_NO);
+	print(30,17,'控制  限额:[21]',#XLMT_AMT);
+	print(31,17,'转帐  限额:[21]',#XZZ_AMT);
+	print(32,17,'流  水  号:[ 6]',$FD4);
+	
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

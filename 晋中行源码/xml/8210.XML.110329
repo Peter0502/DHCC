@@ -1,0 +1,820 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111010100000000000001100000" TITLE="8210 柜面通存款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+
+<FIRSTWORK RETURN="TRUE">"{   //柜员一进入交易就检查签到状态 20100708
+
+	commsend_001();
+	$FD16 = '9803';
+	$FD92 = $TLRNO; //本柜员
+	callserver();
+
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if($FD70!='0')
+	{
+		showmsg('此柜员尚未签到!');
+		return(false);
+	}
+
+	$FD26='';
+	$FD91='';
+	$FD70='';
+	$FD92='';
+	
+//	$MSR2='6224217066000016139=0000520223011410';
+//	$MSR3='996224217066000016139=1561560500050000000013141537520000000001=10000256320=000016139=1000000223011000';
+}"
+</FIRSTWORK>
+<USERFUN NAME="saveprint">
+"{      
+	//用于补打凭证
+	dim @coretraceno as string;
+	dim @svtxtime as string;
+	dim @file as file;
+	dim @line as string;
+	       	
+	//写文件，用于补打流水
+	@coretraceno=$FD4;
+	@svtxtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	 	
+	//格式 8210+卡号+受理行行号+开户行行号+户名+受理行日期+开户行日期+取款金额+余额+受理行流水+开户行流水+核心流水
+	
+	@file=openfile('../dat/UNICARD_'+$HDATE+'_'+$TLRNO+'_'+#acbksq+'.dat','ab');
+	@line = '8210'+'|'+ #CARDNO1 + '|' +  #acbkno + '|' + #isbkno + '|' + #acctna + '|' + #acbkdt + '|' + #isbkdt + '|' + ltrim(comma(#tranam,20)) + '|' + ltrim(comma(#onlnbl,20))  + '|' + #isbksq + '|'+ #acbksq +'|' + @coretraceno + '|';
+	writeline(@file, @line);
+	closefile(@file);	
+				
+}"
+</USERFUN>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+  "T(8210                           柜面通存款)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+
+  <ITEM ITEM="#TXNO" TYPE="%4d"  FUNCTIONS="T($TXNO=8210)"/>
+  <ITEM LINE="6"  COL="15"    TYPE="%-10s" FUNCTIONS="T(转入机构:)"/>
+  <ITEM LINE="7"  COL="15"   TYPE="%-10s" FUNCTIONS="T(客户类型:)"/>
+  <ITEM LINE="8"  COL="15"   NAME="#XZBZ" TYPE="%-10s" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(现转标志:)"/>
+  <ITEM LINE="9"  COL="15"   NAME="#ZH"   TYPE="%-10s" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(帐    号: )"/>
+  <!---- 根据杨巧荣和王师傅需求,存款不再检验密码 20100707
+  <ITEM LINE="10" COL="15"   NAME="#MM"   TYPE="%-10s" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(密    码: )"/>
+  <ITEM LINE="16" COL="15"   TYPE="%-10s" NAME="#B3"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(余    额: )"/>
+  ---->
+  <ITEM LINE="12" COL="15"   TYPE="%-10s" NAME="#B4"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(开户行名:)"/>
+  <ITEM LINE="18" COL="15"   TYPE="%-10s" NAME="#B1"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(存款金额: )"/>
+  <ITEM LINE="14" COL="15"   TYPE="%-10s" NAME="#B2"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(户    名: )"/>
+                                                       
+  <ITEM LINE="18" COL="15"   TYPE="%-10s" NAME="#A3"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(授 权 人: )"/>
+  <ITEM LINE="18" COL="45"   TYPE="%-12s" NAME="#A4"   VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(授权人密码: )"/>
+
+  <ITEM NAME="#INBRNO" INPUT="SELECT" LINE="6" COL="25" TYPE="%-2s" FUNCTIONS="T(01)V(NB)">
+  <SELECT>
+  	<!---
+	<OPTION VALUE="00" TITLE="商业银行"/>
+	---->
+  	<OPTION VALUE="01" TITLE="融信村镇银行"/>
+  	<OPTION VALUE="02" TITLE="亿通村镇银行"/>
+  	<OPTION VALUE="03" TITLE="汇通村镇银行"/>
+	<OPTION VALUE="04" TITLE="华丰村镇银行"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#SINBRNO"         TYPE="%-20s" FUNCTIONS="S(#INBRNO,#INBRNO)"/>
+  <ITEM NAME="#CIFTYPE" 	INPUT="SELECT" LINE="7" COL="25" TYPE="%-1s" FUNCTIONS="T(1)V(1|2)">
+  <SELECT>
+  	<OPTION VALUE="1" TITLE="储蓄"/>
+  	<OPTION VALUE="2" TITLE="对公"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+  	show(#ZH,false);
+  	//show(#MM,false);
+  	show(#CARDNO1,false);
+  	//show(#PASSWD,false);
+  	showblock('COMMON',false,false);
+  	show(#TRANTYPE,false);
+  	show(#XZBZ,false);
+  	show(#B1,false);
+  	show(#B2,false);
+  	//show(#B3,false);
+  	show(#B4,false);
+  	show(#HM,false);
+  	show(#KHH,false);
+  	//show(#YE,false);
+  	show(#FTXAMT,false);
+	if(#CIFTYPE=='1'){
+  		show(#ZH,true);
+  		//show(#MM,true);
+  		show(#CARDNO1,true);
+  		//show(#PASSWD,true);
+  		goitem(#CARDNO1);
+  	}else{
+  		show(#TRANTYPE,true);
+  		show(#XZBZ,true);
+  	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#TRANTYPE" 	INPUT="SELECT" LINE="8" COL="25" TYPE="%-1s" VISABLE="FALSE" FUNCTIONS="T(1)V(1|2)">
+  <SELECT>
+  	<OPTION VALUE="1" TITLE="现金"/>
+  	<OPTION VALUE="2" TITLE="转账"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+	show(#ZH,false);
+  	//show(#MM,false);
+  	show(#CARDNO1,false);
+  	//show(#PASSWD,false);
+  	show(#B1,false);
+  	show(#FTXAMT,false);
+  	showblock('COMMON',false,false);
+  	if(#TRANTYPE=='1'){
+  		show(#ZH,true);
+  		//show(#MM,true);
+  		show(#CARDNO1,true);
+  		//show(#PASSWD,true);
+  		enable(#CARDNO1,true);
+  		//enable(#PASSWD,true);
+  		goitem(#CARDNO1);
+  	}else{//进入转账处理
+  		showblock('COMMON',true,true);
+  	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <BLOCK NAME="COMMON" LINE="9" COL="06" VISABLE="FALSE">
+  <ITEM LINE="0"  COL="0"  TYPE="%-30s" FUNCTIONS="T(输入本行账号转出方信息:)"/>
+  <ITEM LINE="1"  COL="0"  TYPE="%-10s" FUNCTIONS="T(转出账号:)"/>
+  <ITEM LINE="2"  COL="0"  TYPE="%-10s" FUNCTIONS="T(转出户名:)"/>
+  <ITEM LINE="3"  COL="0"  TYPE="%-10s" FUNCTIONS="T(当前余额:)"/>
+  <ITEM LINE="4"  COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证类型:)"/>
+  <ITEM LINE="4"  COL="40" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="5"  COL="0"  TYPE="%-10s" FUNCTIONS="T(转账金额:)"/>
+  <ITEM LINE="7"  COL="0"  TYPE="%-30s" FUNCTIONS="T(输入村镇账号转入方信息:)"/>
+  <ITEM LINE="8"  COL="0"  TYPE="%-10s" FUNCTIONS="T(转入账号:)"/>
+  <ITEM LINE="9"  COL="0"  TYPE="%-10s" FUNCTIONS="T(转入户名:)"/>
+  <ITEM NAME="#OUTACTNO"	 LINE="1" COL="10" TYPE="%-24s" INPUT="TEXT"	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno as string;
+	dim @i as number;
+	dim @str as string;
+	@i=0;
+	@str='';
+	
+	if(len(#OUTACTNO) &lt; 13)
+	{
+		showmsg('转出户必须为对公或内部帐');
+		return(false);
+	}
+	
+	$FD30=#OUTACTNO;
+	if(substr(#OUTACTNO,0,1)=='5'){
+		$FD68='1';
+	}else if(substr(#OUTACTNO,0,1)=='9'){
+		$FD68='6';
+	}else {
+		showmsg('转出户必须为对公或内部帐');
+		return(false);
+	}
+	@txno=$TXNO;
+	$TXNO='9930';
+	commsend_001();
+	callserver();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	#OUTACTNO=delspace($FD30);
+	@i=0;
+	#OUTACTNAME=delspace($FD25);
+	while(@i &lt; 16)
+	{
+		if(substr($FD41,@i,1)=='0')
+		{
+			@str=@str+' ';
+		}
+		else
+		{
+			@str=@str+substr($FD41,@i,16-@i);
+			break;
+		}
+		@i=@i+1;
+	}
+	$FD41=@str;
+	#DQAVBAL=val(delspace($FD41),0.01);
+	enable(#DQAVBAL,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#OUTACTNAME"	 LINE="2"  COL="10"  TYPE="%-50s"  INPUT="LABEL"	FUNCTIONS=""/>
+  <ITEM NAME="#DQAVBAL"     LINE="3"  COL="10"  TYPE="%17.2f" INPUT="TEXT"  SIGNED="TRUE" FUNCTIONS=""/>
+  <ITEM NAME="#OUTVOCTYPE"  LINE="4"  COL="10"  TYPE="%-3s"   INPUT="SELECT"  FUNCTIONS="T(002)V(NB)">
+    <SELECT>
+  	<OPTION VALUE ="002" TITLE="0.转账支票" />
+	<OPTION VALUE ="139" TITLE="0.税票" />
+	<OPTION VALUE ="187" TITLE="0.委托付款凭证" />
+	<OPTION VALUE ="299" TITLE="0.其他" />
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#OUTVOCNUM" LINE="4" COL="50" TYPE="%16d" INPUT="TEXT"    FUNCTIONS="T()"/>
+  <!---------------- 商行没有专门销支票的短交易
+	<ONLOSTFOCUS>
+	"{
+		if(#OUTVOCTYPE == '002')
+		{
+			commsend_001();
+	 		$FD16 = '3405';
+	 		$FD30 = #OUTACTNO;
+	 		$FD58 = #OUTVOCNUM;
+	 		$FD89 = #OUTVOCTYPE;
+	 		$FD48 = '2502';
+	 		callserver();
+	 		if($FD12!='0000')
+	 		{
+	 	  		showmsg(geterror());
+	 	  		return(false);
+	 		}
+	 	}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  -------------->
+  <ITEM NAME="#OUTTXAMT"	 LINE="5" COL="10" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(0000000000000001,0000999999999999)">
+  <ONLOSTFOCUS>
+  "{
+	if(#OUTTXAMT &gt; 5000000000)
+  	{
+  		if(msgbox('请检查是否金额输入错误,确认继续,取消重新输入','金额太大提示','ok|cancel') == 1)
+  		{
+  			return(false);
+  		}
+  	}
+  	if(#OUTTXAMT &gt; #DQAVBAL){
+  		showmsg('金额输入错误，取款金额大于当前余额!');
+  		return(false);
+  	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#INACTNO"	 LINE="8"  COL="10"  TYPE="%-20s"  INPUT="TEXT"	FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno as string;
+	dim @qs_ac_no as string;  //清算帐号
+	$FD30=#INACTNO;
+	if(substr(#INACTNO,0,1)=='5'){
+		$FD68='1';
+	}else if(substr(#INACTNO,0,1)=='9'){
+		$FD68='6';
+	}
+	@txno=$TXNO;
+	$TXNO='9930';
+	commsend_001();
+	callserver();
+	$TXNO=@txno;
+	if($FD12=='0000'){
+		showmsg('账号输入有误,此处只能输入村镇银行账户');
+		return(false);
+	}
+
+	//从后台取清算帐号 20100629
+	dim @fd21 as string;
+	dim @fd23 as string;
+	@fd21=$FD21;
+	@fd23=$FD23;
+	$FD21='';
+	$FD23='';
+	initfd();
+	@txno=$TXNO;
+	$TXNO='5666';
+	$FD23='GMT';
+	$FD21=#INBRNO;
+	commsend_001();
+	callserver();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+	    showmsg(geterror());
+	    return(false);
+	}
+	@qs_ac_no = $FD37;
+	//showmsg('清算帐户='+@qs_ac_no);
+	$FD21=@fd21;
+	$FD23=@fd23;
+	
+
+	//开始取同业存放款项账户信息2010/6/26 17:35
+	//对商行来说这个地方的账号应该根据输入的机构号取相应的清算账号
+	initfd();
+	$MSGTYPE='03001';
+	@txno=$TXNO;
+	$TXNO='9730';
+	//$FD101='      5009851600011'+space(122,' ')+'2';
+	$FD101=@qs_ac_no+space(122,' ')+'2';//注意修改各个村镇银行2010/6/25 17:28
+	commsend_001();
+	callserver();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+	    showmsg(geterror());
+	    return(false);
+	}
+	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME#101MDMCODE',$FD101);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#INACTNAME"	 LINE="9"  COL="10"  TYPE="%-60s"   INPUT="TEXT"	FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+  	//通过平台返回户名
+	dim @tota as string;
+	dim @txno as string;
+	@txno=$TXNO;
+	commsend_001();
+	#cardno=#INACTNO;//取转入账号户名
+	ucgmup_pack();
+	$FD16='8220';//商行发起的查询交易代码是8220，村镇银行发起的查询时8210
+	$FD22=#INBRNO;
+	$FD24='gmt';
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		if($FD12=='CU14'){
+			showmsg('账号不存在');
+		}else{
+			showmsg(geterror());
+		}
+		return(false);
+	}
+	ucgmup_unpack();
+	$TXNO=@txno;
+	//开始比较户名
+	//showmsg('平台给的户名='+$FD25);
+	if(delspace($FD25)!=delspace(#INACTNAME)){
+		showmsg('输入户名不一致，请与开户行查询准确户名');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!------2010/6/26 17:37---->
+  
+  <ITEM NAME="#101ACTNO"    TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#101ACSEQ"    TYPE="%4d" FUNCTIONS=""/>
+  <ITEM NAME="#101VOCTYPE"  TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#101CNAME"    TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#101AVBAL"    TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM NAME="#101CURCD"    TYPE="%-2s"  FUNCTIONS=""/>
+  <ITEM NAME="#101PNAME"    TYPE="%-30s" FUNCTIONS=""/>
+  <ITEM NAME="#101MDMCODE"  TYPE="%-4s" FUNCTIONS=""/>
+                           
+  <ITEM NAME="#101AMT"      TYPE="%17.2f" FUNCTIONS="T()"/>
+  <ITEM NAME="#101VOCNUM"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#101DSCPT"    TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#101CARDFLAG" TYPE="%-1s" FUNCTIONS=""/>  
+  <ITEM NAME="#101CASHFLAG" TYPE="%-1s" FUNCTIONS="T(2)"/> 
+  <ITEM NAME="#101DSCTYPE"  TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#101ACTYPE"   TYPE="%-1s" FUNCTIONS=""/>  
+  <ITEM NAME="#101ACSEQ2"   TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#PRINTFLAG"   TYPE="%-1s" FUNCTIONS=""/>
+  
+  <ITEM NAME="#GYLS"   TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#JYLS"   TYPE="%-10s" FUNCTIONS=""/>  
+  <ITEM NAME="#GOTOSUBMIT"  FUNCTIONS="">
+    <ONLOSTFOCUS>
+    "{
+	if(#CIFTYPE=='2' and #TRANTYPE=='2'){
+		//showmsg('111111111111122222222222yyyyyyyyyyyyyy');
+		#PRINTFLAG='1';
+		//showmsg('PRINTFLAG=['+#PRINTFLAG+']');
+	}
+	goitem(#SUBMIT);
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <!------2010/6/26 17:37---->
+  </BLOCK>
+  
+  <ITEM LINE="9"  COL="25"   NAME="#CARDNO1" TYPE="%-19s" INPUT="TEXT" VISABLE="FALSE"  DEVICE="MSR" FUNCTIONS="V(NB)M($MSR2,1)">
+  <ONLOSTFOCUS>
+  "{
+	if(#CIFTYPE=='1'){
+		if(substr(#CARDNO1,0,1) != '1')
+		{
+			showmsg('客户类型选择与账户不符');
+			return(false);
+		}
+	}else {
+		if(substr(#CARDNO1,0,1) &lt; '5')
+		{
+			showmsg('客户类型选择与账户不符');
+			return(false);
+		}
+	}
+	if(substr(#CARDNO1,0,6) == '621223')
+	{
+		showmsg('暂不支持卡办理此业务!');
+        	return(false);
+	}
+	//if(substr(#CARDNO1,0,1) == '5')
+	//{
+	//	show(#PASSWD,false);
+	//	show(#MM,false);
+	//}
+	//else if(substr(#CARDNO1,0,1) != '5')
+	//{	
+	//	show(#PASSWD,true);
+	//	show(#MM,true);
+	//}
+	//if (substr(#CARDNO1,0,2)!='19')
+	//{
+		//showmsg('本行客户不支持此业务!');
+        	//return(false);
+	//}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!----  20100707
+  <ITEM NAME="#PASSWD" LINE="10" COL="25" TYPE="%6d"  VISABLE="FALSE" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()"/>
+  ---->
+  <ITEM LINE="12" COL="25"   TYPE="%-50s" NAME="#KHH" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T($FD76)"/>
+  <ITEM LINE="14" COL="25"   TYPE="%-50s" NAME="#HM" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(#acctna)"/>
+  <!---- 20100707
+  <ITEM LINE="16" COL="25"   TYPE="%-17.2f" NAME="#YE" VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(#onlnbl)"/>
+  ---->
+
+  <ITEM NAME="#hm"  TYPE="%-50s"    FUNCTIONS=""/>
+  <ITEM NAME="#jgh"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <!-- 中心结构 -->
+  <ITEM NAME="#pkhead"  TYPE="%-6s"    FUNCTIONS="T(ucgmup)"/>
+  <ITEM NAME="#spbkno"  TYPE="%-8s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#trancd"  TYPE="%-6s"    FUNCTIONS="T(ucmesv)"/>
+  <ITEM NAME="#cardno"  TYPE="%-20s"    FUNCTIONS="T(#CARDNO1)"/>
+  <ITEM NAME="#tranpw"  TYPE="%-16s"    FUNCTIONS="T()">
+  <ONLOSTFOCUS>"{
+	dim @tota as string;
+	dim @txno as string;
+	@txno=$TXNO;
+	commsend_001();
+	ucgmup_pack();
+	$FD16='8220';
+	$FD22=#INBRNO;
+	$FD24='gmt';
+	@tota=callagn();
+	$TXNO=@txno;
+	if($FD12!='0000'){
+		if($FD12=='CU14'){
+			showmsg('账号不存在');
+		}else{
+			showmsg(geterror());
+		}
+		return(false);
+	}
+	ucgmup_unpack();
+	$TXNO=@txno;
+	show(#B1,true);
+	show(#B2,true);
+	show(#B4,true);
+	show(#FTXAMT,true);
+	show(#HM,false);
+	show(#HM,true);
+	#hm=#acctna;
+	//if(substr(#CARDNO1,0,1) != '5' and substr(#CARDNO1,0,1) != '9')
+	//{
+	//	show(#B3,true);
+	//	show(#YE,false);
+	//	show(#YE,true);
+	//}
+	show(#KHH,false);
+	show(#KHH,true);
+	//#YE=atoi(#onlnbl);
+	#jgh=$FD91;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	
+  <ITEM NAME="#tranam"  TYPE="%-21s"    FUNCTIONS=""/>
+  <ITEM NAME="#tstime"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#inputp"  TYPE="%-3s"     FUNCTIONS="T(021)"/>
+  <ITEM NAME="#idtftp"  TYPE="%-1s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#idtfno"  TYPE="%-40s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#acbkdt"  TYPE="%-8s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#acbkno"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#acbksq"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#isbkdt"  TYPE="%-8s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#isbkno"  TYPE="%-10s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#isbksq"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#centdt"  TYPE="%-8s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#centsq"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#track2"  TYPE="%-39s"    FUNCTIONS="T($MSR2)"/>
+  <ITEM NAME="#track3"  TYPE="%-107s"   FUNCTIONS="T($MSR3)"/>
+  <ITEM NAME="#acctna"  TYPE="%-40s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#onlnbl"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#avalbl"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#handfe"  TYPE="%-21s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#corrdt"  TYPE="%-8s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#corrsq"  TYPE="%-12s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#extdt1"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#extdt2"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#extdt3"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#extdt4"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#extdt5"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#rspscd"  TYPE="%-2s"     FUNCTIONS="T()"/>
+  <ITEM NAME="#rtertx"  TYPE="%-80s"    FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#LIMAMT" TYPE="%16.2f" FUNCTIONS="T(000000004999999)"/>
+  <ITEM LINE="18"  COL="25" NAME="#FTXAMT"   TYPE="%17.2f" INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" NAME="#SUBMIT" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+  	dim @tota as string;
+	dim @baktxno as string;
+	dim @bh_teltrace as string;
+	if(#CIFTYPE=='2' and #TRANTYPE=='2'){
+		@baktxno=$TXNO;
+		$TXNO='2512';
+		commsend_001();
+		$FD23='与村镇通存';
+		$FD30=#OUTACTNO;
+		if(substr(#OUTACTNO,0,1)=='5'){
+			$FD68='1';
+		}else if(substr(#OUTACTNO,0,1)=='9'){
+			$FD68='6';
+		}
+		$FD40=itoa(#OUTTXAMT*100, '%016.0f');
+		$FD58=#OUTVOCNUM;
+		$FD66='1';//借
+		$FD67='2';//转
+		$FD88='与商行通存';
+		$FD89=#OUTVOCTYPE;
+		$FD21='01';
+		#101AMT=#OUTTXAMT;
+		$FD101=getitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME#101MDMCODE');
+		
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//开始调用平台给商行记账
+		@bh_teltrace=substr($FD126,2,6);
+		#GYLS=substr($FD126,2,6);
+		#JYLS=$FD4;
+		//调用平台记账
+		commsend_001();
+		#cardno=#INACTNO;
+		@baktxno=$TXNO;
+		$FD24='gmt';
+		$FD2=#jgh;
+		#tranam=itoa(#OUTTXAMT,'%-21.2f');
+		ucgmup_pack();
+		$FD16='8223';
+		$FD22=#INBRNO;
+		@tota=callagn();
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			showmsg('商行记账失败,'+geterror()+'需要冲正,柜员流水为['+@bh_teltrace+']');
+			return(false)
+		}
+		//恢复本行交易流水取会计分录
+		$FD4=#JYLS;
+		ucgmup_unpack();
+		runoutput();
+		rerun();
+    	}else {
+		commsend_001();
+		#cardno=#CARDNO1;
+		@baktxno=$TXNO;
+		$FD24='gmt';
+		$FD2=#jgh;
+		#tranam=itoa(#FTXAMT,'%-21.2f');
+		ucgmup_pack();
+		$FD16='8222';
+		$FD22=#INBRNO;
+		@tota=callagn();
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			if($FD12=='COMM' or $FD12=='999a'){
+				//showmsg('通讯失败,按任意键发送冲正...');
+				//首先取得最后一笔平台流水号
+				commsend_001();
+				$FD16='9598';
+				$FD123='select sys_date,max(sys_ejfno) from tracelog where sys_date=(select sys_date from swstat) and tel='+chr(39)+$TLRNO+chr(39)+' and tx_code='+chr(39)+'8210'+chr(39)+' group by sys_date';
+			//	@tota=callagn();
+				if(@tota!='')
+				{
+					#corrdt=strfld(@tota,'|',0);
+					#corrsq=strfld(@tota,'|',1);
+					commsend_001();
+					$FD16='9598';
+					$FD123='select ac_no from tracelog where sys_date=(select sys_date from swstat) and sys_date='+chr(39)+#corrdt+chr(39)+' and sys_ejfno='+chr(39)+#corrsq+chr(39);
+				//	@tota=callagn();
+					if(delspace(strfld(@tota,'|',0))!=delspace(#cardno))
+					{
+						showmsg('未找到原交易!');
+						rerun();
+						return(true);
+					}
+					showmsg(#corrdt+'|'+#corrsq);
+					#trancd='ucmedc';	
+					commsend_001();
+					ucgmup_pack();
+				//	@tota=callagn();
+					if($FD12!='0000')
+					{
+						showmsg(geterror());
+					}
+					else{
+						//showmsg('冲正成功');
+					}	
+					rerun();
+					return(true);
+				}
+				else
+				{
+					//showmsg('访问数据库失败,请手工冲正!');
+					rerun();
+					return(true);
+				}	
+			}
+			else
+			{
+				showmsg(geterror());
+				return(false);
+			}
+		}
+		ucgmup_unpack();
+		//saverpt(@tota);
+		// 增加凭证补打函数
+		//saveprint();
+		runoutput();
+		rerun();		
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	dim @txtime  as string;   
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+
+if(#CIFTYPE=='2' and #TRANTYPE=='2'){
+	print(4,5,'时间:[8]',@txtime);
+	print(5,5,'转出账号:[20]',#OUTACTNO);
+	print(6,5,'转出金额:[21]',itoa(#OUTTXAMT,'%-21.2f'));
+	print(7,5,'转入行号:[20]',#INBRNO);
+	print(8,5,'转入账号:[20]',#INACTNO);
+	print(9,5,'转入户名:[50]',#acctna);
+	print(10,5,'受理行日期:[8     ]               开户行日期:[8     ]',#acbkdt,#isbkdt);
+	print(11,5,'受理行流水:[12        ]           开户行流水:[12        ]',#JYLS,#isbksq);
+	print(12,5,'机      构:[7     ]                操  作  员:[6    ]',$KINBR,$TLRNO);
+}else{
+	print(4,5,'时间:[8]',@txtime);
+	print(5,5,'帐    号:[20]',#CARDNO1);
+	print(6,5,'存款金额:[21]',itoa(#FTXAMT,'%-21.2f'));
+	print(10,5,'受理行日期:[8     ]               开户行日期:[8     ]',#acbkdt,#isbkdt);
+	print(11,5,'受理行流水:[12        ]           开户行流水:[12        ]',#acbksq,#isbksq);
+	print(12,5,'机      构:[7     ]                操  作  员:[6    ]',$KINBR,$TLRNO);
+}
+}"
+</PRINT>
+</RESPONSE>
+<!--
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="11" DESC="打印异地存款凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	print(9,31,'[4]    [2]   [2]                      异地存款',substr(#acbkdt,0,4),substr(#acbkdt,4,2),substr(#acbkdt,6,2));
+	print(12,6,'卡      号：[20]                                                                  卡      号:[20]',#CARDNO1,#CARDNO1);
+	print(14,6,'户      名：[40]                                              户      名:[20]',#acctna,#acctna);
+	print(16,6,'存款  金额：[20]                                                                  存款  金额:[20]',ltrim(comma(#tranam,20)),ltrim(comma(#tranam,20)));
+	print(18,6,'余      额：[20]                                                                  余      额:[20]',ltrim(comma(#onlnbl,20)),ltrim(comma(#onlnbl,20)));
+	print(20,6,'受理行行号：[10]             开户行行号：[10]                                         受理行行号:[10]',#acbkno,#isbkno,#acbkno);
+	print(22,6,'受理行日期：[8]               开户行日期：[8]                                           受理行日期:[8]',#acbkdt,#isbkdt,#acbkdt);
+	print(24,6,'受理行流水：[12]           开户行流水：[12]                                       受理行流水:[12]',#acbksq,#isbksq,#acbksq);
+	print(26,6,'机      构：[7]                操  作  员：[6]                                             开户行行号:[10]',$KINBR,$TLRNO,#isbkno);
+	print(28,124,'开户行日期:[8]',#isbkdt);
+	print(30,124,'开户行流水:[12]',#isbksq);
+	print(32,124,'机      构:[7]',$KINBR);
+	print(34,124,'操  作  员:[6]',$TLRNO);
+//	print(30,112,'户      名:[80]',#acctna);
+}"
+</PRINT>
+</RESPONSE>
+-->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证" CHECK="#PRINTFLAG=1">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	dim @txtime  as string;   
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,15,'机构名称:[30]',$BRNAME);
+	print( 5,5,'代码:8210');
+	print( 5,5,'交易:柜面通存款(转帐)');
+
+	print( 7,15,'转出账号:[20]',#OUTACTNO);
+	print( 8,15,'转出户名:[50]',#OUTACTNAME);
+	print( 9,15,'转入行名:[20]',#SINBRNO);
+	print(10,15,'转入账号:[20]',#INACTNO);
+	print(11,15,'转入户名:[50]',#acctna);
+	print(12,15,'交易  金额:[20]  ',ltrim(comma(itoa(#OUTTXAMT,'%-21.2f'),20)));
+	
+	print(13,15,'开户行流水:[12]  ',#isbksq);
+	print(14,15,'本行会计分录如下：');
+	printacdtl_1();
+
+	print(24,15,'备注:');
+	print(24,13,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,14,'柜员:[6]',$FD7);
+	print(24,4,'交易流水:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印与商行对公转账通存凭证" CHECK="#PRINTFLAG=1">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	dim @txtime  as string;   
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+	print( 5,15,'机构名称:[30]',$BRNAME);
+	print( 5,5,'代码:8210');
+	print( 5,5,'交易:柜面通存款(转帐)');
+
+	print( 7,15,'转出账号:[20]',#OUTACTNO);
+	print( 8,15,'转出户名:[50]',#OUTACTNAME);
+	print( 9,15,'转入行名:[20]',#SINBRNO);
+	print(10,15,'转入账号:[20]',#INACTNO);
+	print(11,15,'转入户名:[50]    交易  金额:[20]  ',#INACTNAME,ltrim(comma(itoa(#OUTTXAMT,'%-21.2f'),20)));
+	print(12,15,'开户行流水:[12]  ',#isbksq);
+	
+	print(24,15,'备注:');
+	print(24,13,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,14,'柜员:[6]',$FD7);
+	print(24,4,'交易流水:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印异地存款凭证" CHECK="#PRINTFLAG?1">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	dim @txtime  as string;   
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+	print( 5,15,'机构名称:[30]',$BRNAME);
+	print( 5,5,'代码:8210');
+	print( 5,5,'交易:柜面通存款(现金)');
+	
+	print(07,15,'账    号:[20                  ]   开户行名称:[50]' ,#cardno,$FD76);
+	print(08,15,'户    名:[50]',#hm);
+	print(09,15,'受理行日期:[8       ]             开户行日期:[8]  ',#acbkdt,#isbkdt);
+	print(10,15,'存款金额:[20                  ]   开户行流水:[12]  ',ltrim(comma(#tranam,20)),#isbksq);
+	print(11,15,'机构编号:[20                  ]  ',$KINBR);
+	if(#CIFTYPE=='2')
+	{
+		print(13,15,'本行会计分录如下：');
+		printacdtl_1();
+		print(24,15,'备注:');
+		print(24,13,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,14,'柜员:[6]',$FD7);
+		print(24,4,'交易流水:[6]',$FD4);
+	}else{
+		print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		print(21,80,'客户签名:_____________________');
+		print(23,15,'备注:');
+		print(23,13,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,14,'柜员:[6]',$FD7);
+		print(23,4,'交易流水:[6]',$FD4);
+	}
+	
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

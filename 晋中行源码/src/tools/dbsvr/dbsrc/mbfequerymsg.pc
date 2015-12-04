@@ -1,0 +1,318 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbfequerymsg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbfequerymsg_con ( struct mbfequerymsg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbfequerymsg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->querymsgno);
+	zip_tail(ps->odficenter);
+	zip_tail(ps->isdficode);
+	zip_tail(ps->querybkcode);
+	zip_tail(ps->rdficenter);
+	zip_tail(ps->osdficode);
+	zip_tail(ps->rplybkcode);
+	zip_tail(ps->origodficode);
+	zip_tail(ps->origrdficode);
+	zip_tail(ps->origtxtype);
+	zip_tail(ps->origtxssno);
+	zip_tail(ps->querycontent);
+	zip_tail(ps->queryuser);
+	zip_tail(ps->procstate);
+	zip_tail(ps->statetime);
+	zip_tail(ps->errcode);
+	zip_tail(ps->errdesc);
+	zip_tail(ps->querysource);
+}
+int Mbfequerymsg_Debug(struct mbfequerymsg_c *ps){
+	vtcp_log("mbfequerymsg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbfequerymsg_c.querymsgno=[%s]\n",ps->querymsgno);
+	vtcp_log("mbfequerymsg_c.querydate=[%ld]\n",ps->querydate);
+	vtcp_log("mbfequerymsg_c.odficenter=[%s]\n",ps->odficenter);
+	vtcp_log("mbfequerymsg_c.isdficode=[%s]\n",ps->isdficode);
+	vtcp_log("mbfequerymsg_c.querybkcode=[%s]\n",ps->querybkcode);
+	vtcp_log("mbfequerymsg_c.rdficenter=[%s]\n",ps->rdficenter);
+	vtcp_log("mbfequerymsg_c.osdficode=[%s]\n",ps->osdficode);
+	vtcp_log("mbfequerymsg_c.rplybkcode=[%s]\n",ps->rplybkcode);
+	vtcp_log("mbfequerymsg_c.origconsigndate=[%ld]\n",ps->origconsigndate);
+	vtcp_log("mbfequerymsg_c.origodficode=[%s]\n",ps->origodficode);
+	vtcp_log("mbfequerymsg_c.origrdficode=[%s]\n",ps->origrdficode);
+	vtcp_log("mbfequerymsg_c.origtxtype=[%s]\n",ps->origtxtype);
+	vtcp_log("mbfequerymsg_c.origtxssno=[%s]\n",ps->origtxssno);
+	vtcp_log("mbfequerymsg_c.origamount=[%f]\n",ps->origamount);
+	vtcp_log("mbfequerymsg_c.querycontent=[%s]\n",ps->querycontent);
+	vtcp_log("mbfequerymsg_c.queryuser=[%s]\n",ps->queryuser);
+	vtcp_log("mbfequerymsg_c.procstate=[%s]\n",ps->procstate);
+	vtcp_log("mbfequerymsg_c.statetime=[%s]\n",ps->statetime);
+	vtcp_log("mbfequerymsg_c.errcode=[%s]\n",ps->errcode);
+	vtcp_log("mbfequerymsg_c.errdesc=[%s]\n",ps->errdesc);
+	vtcp_log("mbfequerymsg_c.printno=[%ld]\n",ps->printno);
+	vtcp_log("mbfequerymsg_c.querysource=[%s]\n",ps->querysource);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbfequerymsg_Sel(reply,mbfequerymsg_c,fmtstr,va_alist)
+char    *reply;
+struct  mbfequerymsg_c *mbfequerymsg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbfequerymsg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbfequerymsg_Fet_Sel( mbfequerymsg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbfequerymsg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbfequerymsg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbfequerymsg.* FROM mbfequerymsg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfequerymsg_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbfequerymsg CURSOR FOR mbfequerymsg_sel;
+
+	EXEC SQL OPEN sel_mbfequerymsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfequerymsg_Fet_Sel ( struct mbfequerymsg_c *mbfequerymsg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbfequerymsg INTO :mbfequerymsg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbfequerymsg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbfequerymsg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfequerymsg_c);
+
+	return 0;
+}
+
+int Mbfequerymsg_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbfequerymsg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbfequerymsg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbfequerymsg.* FROM mbfequerymsg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfequerymsg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbfequerymsg CURSOR FOR mbfequerymsg_upd;
+
+	EXEC SQL OPEN upd_mbfequerymsg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfequerymsg_Fet_Upd( struct mbfequerymsg_c *mbfequerymsg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbfequerymsg INTO :mbfequerymsg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbfequerymsg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfequerymsg_c);
+
+	return 0;
+}
+
+int Mbfequerymsg_Upd_Upd( struct mbfequerymsg_c mbfequerymsg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbfequerymsg SET querymsgno=:mbfequerymsg_c.querymsgno,
+			querydate=:mbfequerymsg_c.querydate,
+			odficenter=:mbfequerymsg_c.odficenter,
+			isdficode=:mbfequerymsg_c.isdficode,
+			querybkcode=:mbfequerymsg_c.querybkcode,
+			rdficenter=:mbfequerymsg_c.rdficenter,
+			osdficode=:mbfequerymsg_c.osdficode,
+			rplybkcode=:mbfequerymsg_c.rplybkcode,
+			origconsigndate=:mbfequerymsg_c.origconsigndate,
+			origodficode=:mbfequerymsg_c.origodficode,
+			origrdficode=:mbfequerymsg_c.origrdficode,
+			origtxtype=:mbfequerymsg_c.origtxtype,
+			origtxssno=:mbfequerymsg_c.origtxssno,
+			origamount=:mbfequerymsg_c.origamount,
+			querycontent=:mbfequerymsg_c.querycontent,
+			queryuser=:mbfequerymsg_c.queryuser,
+			procstate=:mbfequerymsg_c.procstate,
+			statetime=:mbfequerymsg_c.statetime,
+			errcode=:mbfequerymsg_c.errcode,
+			errdesc=:mbfequerymsg_c.errdesc,
+			printno=:mbfequerymsg_c.printno,
+			querysource=:mbfequerymsg_c.querysource
+	WHERE rowid=:mbfequerymsg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbfequerymsg_Del_Upd(struct mbfequerymsg_c mbfequerymsg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbfequerymsg WHERE rowid=:mbfequerymsg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfequerymsg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbfequerymsg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbfequerymsg_Ins( struct mbfequerymsg_c mbfequerymsg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbfequerymsg VALUES (:mbfequerymsg_c.querymsgno,
+			:mbfequerymsg_c.querydate,
+			:mbfequerymsg_c.odficenter,
+			:mbfequerymsg_c.isdficode,
+			:mbfequerymsg_c.querybkcode,
+			:mbfequerymsg_c.rdficenter,
+			:mbfequerymsg_c.osdficode,
+			:mbfequerymsg_c.rplybkcode,
+			:mbfequerymsg_c.origconsigndate,
+			:mbfequerymsg_c.origodficode,
+			:mbfequerymsg_c.origrdficode,
+			:mbfequerymsg_c.origtxtype,
+			:mbfequerymsg_c.origtxssno,
+			:mbfequerymsg_c.origamount,
+			:mbfequerymsg_c.querycontent,
+			:mbfequerymsg_c.queryuser,
+			:mbfequerymsg_c.procstate,
+			:mbfequerymsg_c.statetime,
+			:mbfequerymsg_c.errcode,
+			:mbfequerymsg_c.errdesc,
+			:mbfequerymsg_c.printno,
+			:mbfequerymsg_c.querysource);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfequerymsg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

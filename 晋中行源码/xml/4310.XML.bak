@@ -1,0 +1,808 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4310 一对多记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	dim @tota as string;
+	dim @filename1 as string;
+	dim @filename2 as string;
+	initfd();
+	commsend_001();
+	setvfile(true,true);
+	@filename1='../tmp/'+$HDATE+'_'+$TLRNO+'4310'+'.dat';
+	list_save(@filename1);
+	@filename2='../tmp/'+$KINBR+$TTYNAME;
+	call('cp '+@filename1+' '+@filename2);
+	list_del();
+	$FD16='2508';
+	$FD72=#JZFS;					//记账方式
+	$FD30=#ACNO;					//一方账号
+	$FD44=#MSUBAC;				//一方子户序号
+	$FD40=getitems('#AMT');//发起方交易金额
+	$FD63=#ZZY;						//摘要
+	$FD89=#VOC_T;
+	$FD58=#NUM;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+
+   <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4310                         一对多记账交易)"/>
+   <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=2508)"/>
+   <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+   <ITEM NAME="#TMPFLAG"   TYPE="%-1s"  FUNCTIONS="T(0)" />
+   <ITEM NAME="#TEMP_SHOW" FUNCTIONS="">
+   	<ONLOSTFOCUS>
+   	"{
+		   list_init(7,70,10,5);
+		   list_setcolcnt(7);
+		   list_setcol(0,'账    号',20);
+		   list_setcol(1,'子户序号',10);
+		   list_setcol(2,'交易金额',20);
+		   list_setcol(3,'凭证类型',10);
+		   list_setcol(4,'凭证号码',17);
+		   list_setcol(5,'摘    要',20);
+		   list_setcol(6,'户    名',50);
+		   list_show();
+   	}"
+   	</ONLOSTFOCUS>
+   </ITEM>
+	<ITEM LINE="05" COL="05" NAME="#LJZFS" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(记账方式:)"/>
+	<ITEM LINE="05" COL="15" NAME="#JZFS"  TYPE="%-20s" INPUT="SELECT" FUNCTIONS="T(1)">
+   	<SELECT>
+   		<OPTION VALUE="1" TITLE="一借多贷"/>
+   		<OPTION VALUE="2" TITLE="一贷多借"/>
+   	</SELECT>
+	</ITEM>
+	<ITEM LINE="06" COL="05" NAME="#LZH"   TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(借方账号:)" />
+	<ITEM NAME="#TEMP11" TYPE="%1s" FUNCTIONS="">
+   	<ONLOSTFOCUS>
+   	"{
+   		if(#JZFS=='1')
+   		{
+   			#LZH='借方账号:';
+   			#LDF='贷方账号:';
+
+   			show(#LVOC_T,true)
+   			show(#VOC_T,true);
+   			show(#LNUM,true);
+   			show(#NUM,true);
+   			show(#LCPRQ,true);
+   			show(#CPRQ,true);
+   			show(#LYZM,true);
+   			show(#YZM,true);
+
+   			show(#LSUB_VOC,false);
+   			show(#SUB_VOC,false);
+   			show(#LSUB_NUM,false);
+   			show(#SUB_NUM,false);
+   			show(#LSUB_CPRQ,false);
+   			show(#SUB_CPRQ,false);
+   			show(#LSUB_YZM,false);
+   			show(#SUB_YZM,false);
+   		}
+   		else
+   		{
+   			#LZH='贷方账号:';
+   			#LDF='借方账号:';
+   			#VOC_T='';
+   			show(#LVOC_T,false)
+   			show(#VOC_T,false);
+   			show(#LNUM,false);
+   			show(#NUM,false);
+   			show(#LCPRQ,false);
+   			show(#CPRQ,false);
+   			show(#LYZM,false);
+   			show(#YZM,false);
+
+   			show(#LSUB_VOC,true);
+   			show(#SUB_VOC,true);
+   			show(#LSUB_NUM,true);
+   			show(#SUB_NUM,true);
+   			show(#LSUB_CPRQ,true);
+   			show(#SUB_CPRQ,true);
+   			show(#LSUB_YZM,true);
+   			show(#SUB_YZM,true);
+   		}
+   		refresh();
+   		//list_show();
+   	}"
+   	</ONLOSTFOCUS>
+   </ITEM>
+   <ITEM LINE="06" COL="15" NAME="#ACNO"   TYPE="%-24s" INPUT="TEXT" FUNCTIONS="T()">
+   	<ONLOSTFOCUS>
+   	"{
+		initfd();
+		commsend_001();
+		$FD16='9731';
+		$FD102=#ACNO;
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if($FD2!=$KINBR and #JZFS=='1')
+		{
+			showmsg('非本机构账号['+$FD2+']');
+			return(false);
+		}
+		#OD_IND=delspace($FD73);
+			if(#JZFS=='1')
+			{
+				if($FD93=='9')
+				{
+					show(#LSUBAC,false);
+					show(#MSUBAC,false);
+				}
+				else if($FD93=='1' and substr($FD88,0,1)=='1')
+				{
+					show(#LSUBAC,true);
+					show(#MSUBAC,true);
+					#TMPFLAG='1';
+				}
+				else
+				{
+					showmsg('只可以记内部账和二级账');
+					return(false);
+				}
+			}
+			else if($FD93!='9')
+			{
+					showmsg('只允许记内部账');
+					return(false);
+			}
+				if($FD93=='9')
+				{
+					show(#LSUBAC,false);
+					show(#MSUBAC,false);
+				}
+				else if($FD93=='1' and substr($FD88,0,1)=='1')
+				{
+					show(#LSUBAC,true);
+					show(#MSUBAC,true);
+				}
+
+   		#HM=$FD25;
+			setitems('#TEMP_BAL',$FD43);
+			refresh();
+   	}"
+   	</ONLOSTFOCUS>
+   </ITEM>
+  <ITEM NAME="#OD_IND" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#SUB_AC_NO"   TYPE="%20s"  FUNCTIONS=""/>
+	<ITEM LINE="06" COL="45" NAME="#LSUBAC" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(子户序号:)" VISABLE="FALSE"/>
+	<ITEM LINE="06" COL="55" NAME="#MSUBAC" TYPE="%5d"   INPUT="TEXT"   FUNCTIONS="T()" VISABLE="FALSE" >
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='9677';
+			$FD101=#ACNO;
+			$FD44=#MSUBAC;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if($FD70=='*')
+			{
+				showmsg('该子账户已经销户');
+				return(false);
+			}
+			setitems('#TEMP_BAL',$FD40);
+			#HM=$FD25;
+			#SUB_AC_NO=$FD31;
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#TEMP_BAL"   TYPE="%17.2f"  FUNCTIONS=""/>
+	<ITEM LINE="07" COL="05" NAME="#LHM"    TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(户    名:)" />
+	<ITEM LINE="07" COL="15" NAME="#HM"     TYPE="%-50s" INPUT="LABEL"  FUNCTIONS=""  />
+	<ITEM LINE="08" COL="05" NAME="#LAMT" TYPE="%-10s" INPUT="LABEL"    FUNCTIONS="T(交易金额:)"/>
+	<ITEM LINE="08" COL="15" NAME="#AMT"  TYPE="%17.2f" INPUT="TEXT"    FUNCTIONS="V(0000000000000001,9999999999999999)" >
+		<ONLOSTFOCUS>
+		"{
+			if( (#TEMP_BAL &lt; #AMT ) and (#JZFS=='1') and #OD_IND!='Y' )
+			{
+				showmsg('账户余额不足');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="08" COL="40" NAME="#LVOC_T" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(凭证类型:)"/>
+	<ITEM LINE="08" COL="50" NAME="#VOC_T"  TYPE="%-03s" INPUT="SELECT" FUNCTIONS="T(002)" >
+		<SELECT>
+			<OPTION VALUE="002" TITLE="转账支票"/>
+			<OPTION VALUE="299" TITLE="其他凭证"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#VOC_T=='002')
+			{
+				show(#LCPRQ,true);
+				show(#CPRQ,true);
+				show(#LYZM,true);
+				show(#YZM,true);
+			}
+			else
+			{
+				show(#LCPRQ,false);
+				show(#CPRQ,false);
+				show(#LYZM,false);
+				show(#YZM,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="09" COL="05" NAME="#LNUM"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(凭证号码:)"/>
+	<ITEM LINE="09" COL="15" NAME="#NUM"    TYPE="%16d"  INPUT="TEXT"   FUNCTIONS="T()" />
+	<ITEM LINE="09" COL="32" NAME="#LCPRQ" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(出票日期:)" VISABLE="FALSE" />
+	<ITEM LINE="09" COL="42" NAME="#CPRQ"  TYPE="%8d"   INPUT="TEXT"  FUNCTIONS="D()" VISABLE="FALSE" >
+		<ONLOSTFOCUS>
+		"{
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="09" COL="51" NAME="#LYZM"  TYPE="%-7s"  INPUT="LABEL" FUNCTIONS="T(验证码:)" VISABLE="FALSE"/>
+	<ITEM LINE="09" COL="59" NAME="#YZM"   TYPE="%16d"  INPUT="TEXT"  FUNCTIONS="T()" VISABLE="FALSE">
+		<ONLOSTFOCUS>
+		"{
+			commsend_001();
+			$FD16 = '3406';
+			$FD30 = #ACNO;
+			$FD58 = #NUM;
+			$FD89 = #VOC_T;
+			$FD48 = $TXNO;
+			$FD44 = #CPRQ;
+			$FD54 =#MSUBAC;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+
+			//initfd();
+			//commsend_001();
+			//$FD16='0301';
+			//$FD22='03';
+			//$FD30=#ACNO;                             //账号
+			//$FD39=itoa(#AMT*100, '%016.0f');         //交易金额
+			//$FD44=#CPRQ;                             //出票日期
+			//$FD59=#NUM;                              //票据号
+			//$FD80=#YZM;                              //验证码
+			//$FD89=#VOC_T;                             //票据种类
+			//callagn();                               //20100921 zyl 已测通
+			//if( $FD12 !='0000' )
+			//{
+			//   showmsg(geterror());
+			//   return(false);
+			//}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="10" COL="05" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(摘    要:)"/>
+	<ITEM LINE="10" COL="15" TYPE="%-40s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#ZZY" />
+	<ITEM LINE="17" COL="30" TYPE="%-6s"  INPUT="BUTTON" FUNCTIONS="T(增加)" NAME="#ADD" >
+		<ONCLICK>
+		"{
+			goitem(#DFZH);
+			return(true);
+		}"
+		</ONCLICK>
+	</ITEM>
+	<ITEM LINE="17" COL="49" TYPE="%-6s"  INPUT="BUTTON" FUNCTIONS="T(删除)" NAME="#DEL">
+		<ONCLICK>
+		"{
+			dim @selid as number;
+			@selid=list_getrowcnt();
+			if(@selid &lt;= 0)
+			{
+				showmsg('没有记录，不能删除');
+				return(false);
+			}
+			list_work();
+			@selid=list_getselid();
+			list_rmitem(@selid);
+			//list_show();
+			goitem(#DEL);
+			return(false);
+		}"
+		</ONCLICK>
+	</ITEM>
+	<ITEM LINE="18" COL="05" NAME="#LDF" TYPE="%-10s"  INPUT="LABEL"  FUNCTIONS="T(对方账号:)"/>
+	<ITEM LINE="18" COL="15" NAME="#DFZH" TYPE="%-19s" INPUT="TEXT"  FUNCTIONS="T()"><!---对方账号--->
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='9731';
+			$FD102=#DFZH;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+   		if($FD2!=$KINBR and #JZFS=='2')
+   		{
+   			showmsg('非本机构账号');
+   			return(false);
+   		}
+   		#OD_IND=delspace($FD73);
+//			if(#JZFS=='1' and $FD93!='1' and  $FD93!='9' )
+//			{
+//					showmsg('账户类型错误');
+//					return(false);
+//			}
+//			else	if(#JZFS=='2' and $FD93!='9')
+//			{
+//					showmsg('账户类型错误');
+//					return(false);
+//			}
+			#MC=$FD25;
+			setitems('#TEMP_BAL2',$FD43);
+			if(substr($FD88,0,1)=='1')
+			{
+				show(#LZHXH,true);
+				show(#ZHXH,true);
+			}
+			else
+			{
+				show(#LZHXH,false);
+				show(#ZHXH,false);
+			}
+			if(substr($FD88,0,1)=='1')
+			{
+
+				show(#LZHXH,true);
+				show(#ZHXH,true);
+			}
+			else
+			{
+				show(#LZHXH,false);
+				show(#ZHXH,false);
+			}
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#TEMP_BAL2"  TYPE="%17.2f" FUNCTIONS=""/>
+	<ITEM LINE="18" COL="40" NAME="#LZHXH" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(子户序号:)" VISABLE="FALSE" />
+	<ITEM LINE="18" COL="50" NAME="#ZHXH"  TYPE="%5d"   INPUT="TEXT"   FUNCTIONS="T()" VISABLE="FALSE" >
+		<ONLOSTFOCUS>
+		"{
+			if( (#ACNO==#DFZH) and (#MSUBAC==#ZHXH) )
+			{
+				showmsg('不能对自己记账');
+				return(false);
+			}
+			initfd();
+			commsend_001();
+			$FD16='9677';
+			$FD101=#DFZH;
+			$FD44=#ZHXH;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if($FD70=='*')
+			{
+				showmsg('该子账户已经销户');
+				return(false);
+			}
+			#MC=$FD25;
+			setitems('#TEMP_BAL3',$FD40);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#TEMP_BAL3"  TYPE="%17.2f" FUNCTIONS=""/>
+	<ITEM LINE="19" COL="05" NAME="#LMC"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(户    名:)"/>
+	<ITEM LINE="19" COL="15" NAME="#MC"    TYPE="%-50s" INPUT="LABEL"   FUNCTIONS=""  />
+	<ITEM LINE="20" COL="05" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(交易金额:)" />
+	<ITEM LINE="20" COL="15" NAME="#SUB_AMT" TYPE="%16.2f" INPUT="TEXT"  FUNCTIONS="V(0000000000000001,9999999999999999)">
+		<ONLOSTFOCUS>
+		"{
+			dim @sum_amt as number;
+			dim @cnt     as number;
+			dim @selid   as number;
+			if( (#TEMP_BAL3 &lt; #SUB_AMT) and (#ZHXH &gt; '00000') and ( #JZFS=='2')  )
+			{
+				showmsg('余额不足');
+				return(false);
+			}
+			if( (#TEMP_BAL2 &lt; #SUB_AMT) and (#ZHXH &lt;= '00000') and (#JZFS=='2') and #OD_IND!='Y' )
+			{
+				showmsg('余额不足');
+				return(false);
+			}
+			@sum_amt=0.0;
+			@cnt=list_getrowcnt();
+			@selid=0;
+			while(@selid &lt; @cnt)
+			{
+
+				@sum_amt=@sum_amt+val(delspace(list_gettext(@selid,2)),1);
+				@selid=@selid+1;
+			}
+			@sum_amt=@sum_amt+#SUB_AMT;
+			if(@sum_amt &gt; #AMT)
+			{
+				showmsg('合计金额大于发起金额');
+				return(false);
+			}
+			#TMP_AMT=@sum_amt;
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#TMP_AMT" TYPE="%17.2f" FUNCTIONS=""/>
+	<ITEM LINE="20" COL="40" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(凭证类型:)" NAME="#LSUB_VOC"/>
+	<ITEM LINE="20" COL="50" NAME="#SUB_VOC" TYPE="%-3s" INPUT="SELECT"  FUNCTIONS="T(002)" >
+		<SELECT>
+			<OPTION VALUE="002" TITLE="转账支票"/>
+			<OPTION VALUE="299" TITLE="其他凭证"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#SUB_VOC=='002')
+			{
+				show(#LSUB_CPRQ,true);
+				show(#SUB_CPRQ,true);
+				show(#LSUB_YZM,true);
+				show(#SUB_YZM,true);
+			}
+			else
+			{
+				show(#LSUB_CPRQ,false);
+				show(#SUB_CPRQ,false);
+				show(#LSUB_YZM,false);
+				show(#SUB_YZM,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#S_VOC_TYPE" TYPE="%-8s" FUNCTIONS="S(#SUB_VOC,#SUB_VOC)">
+		<ONLOSTFOCUS>
+		"{
+			if(#JZFS=='1')
+			{
+				#S_VOC_TYPE='';
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="21" COL="05" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(凭证号码:)"  NAME="#LSUB_NUM" />
+	<ITEM LINE="21" COL="15" NAME="#SUB_NUM" TYPE="%16d" INPUT="TEXT"  FUNCTIONS=""/>
+	<ITEM LINE="21" COL="33" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(出票日期:)" NAME="#LSUB_CPRQ" />
+	<ITEM LINE="21" COL="43" TYPE="%8d"   INPUT="TEXT"  FUNCTIONS="T()D()" NAME="#SUB_CPRQ"/>
+	<ITEM LINE="21" COL="51" TYPE="%-8s"  INPUT="LABEL" FUNCTIONS="T(验证码:)" NAME="#LSUB_YZM" />
+	<ITEM LINE="21" COL="59" TYPE="%16d"  INPUT="TEXT"  FUNCTIONS="T()" NAME="#SUB_YZM" >
+		<ONLOSTFOCUS>
+		"{
+			commsend_001();
+			$FD16 = '3406';
+			$FD30 = #DFZH;
+			$FD58 = #SUB_NUM;
+			$FD89 = #SUB_VOC;
+			$FD48 = $TXNO;
+			$FD44 = #SUB_CPRQ;
+			$FD54 =#ZHXH;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//initfd();
+			//commsend_001();
+			//$FD16='0301';
+			//$FD22='03';
+			//$FD30=#DFZH;                             //账号
+			//$FD39=itoa(#SUB_AMT*100, '%016.0f');     //交易金额
+			//$FD44=#SUB_CPRQ;                         //出票日期
+			//$FD59=#SUB_NUM;                          //票据号
+			//$FD80=#SUB_YZM;                          //验证码
+			//$FD89=#SUB_VOC;                           //票据种类
+			//callagn();                               //20100921 zyl 已测通
+			//if( $FD12 !='0000' )
+			//{
+			//   showmsg(geterror());
+			//   return(false);
+			//}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="22" COL="05" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(摘    要:)" NAME="#LZY"/>
+	<ITEM LINE="22" COL="15" TYPE="%-50s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#ZY"/>
+	<ITEM LINE="23" COL="05" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(金额合计:)"/>
+	<ITEM NAME="#GET_SUB" TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			dim @cnt   as number;
+			dim @sum_amt as number;
+			dim @str as string;
+			@str=itoa(#SUB_AMT,'%-10.2f');
+			list_additem('',#DFZH,#ZHXH,@str,#S_VOC_TYPE,#SUB_NUM,#ZY,substr(#MC,0,50));
+			if(#ZHXH=='')
+			{
+				#DFZH='';
+			}
+			#ZHXH='';
+			#S_VOC_TYPE='';
+			#SUB_NUM='';
+			#ZY='';
+			#SUB_CPRQ='';
+			#MC='';
+			#SUB_AMT='';
+			#SUM_AMT=#TMP_AMT;
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="23" COL="15" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS=""  NAME="#SUM_AMT" ENABLE="FALSE" />
+	<ITEM NAME="#PROC" TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			if(#SUM_AMT != #AMT)
+			{
+				goitem(#ADD);
+				return(true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#PRINT_TIME" TYPE="%1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#PASSWD" TYPE="%16s" FUNCTIONS=""/>
+  <ITEM LINE="23"  COL="59" NAME="#OKEXIT" TYPE="%-6s" FUNCTIONS="T(确  认)"  INPUT="SUBMIT"/>
+
+</VARIABLE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24" CHECK="#PRINT_TIME=1">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	// if($REPRINT=='true')
+	// {
+	// 	reprint_nx();
+	// }
+		print( 5,10,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 4310');
+		print( 5, 2,'交易名称:一对多记账');
+		print( 7, 30,'一对多记账凭条');
+		if(len(#MSUBAC) &gt; 0)
+		{
+			print( 8,10,'[10][20] 子户序号:[5]',#LZH,#ACNO,#MSUBAC);
+		}
+		else
+		{
+			print( 8,10,'[10][20]',#LZH,#ACNO);
+		}
+		print( 9,10,'户      名:[50]',#HM);
+		print(10,10,'交易金额:[20]',itoa(#AMT,'%16.2f') );
+		print(11,10,'凭证类型:[10]  凭证号码:[16]',#VOC_T,#NUM);
+		print(18,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24" CHECK="#PRINT_TIME=2">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @file  as file;
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		@file=openfile('../tmp/'+$KINBR+$TTYNAME+'_print','r');
+		dim @line  as string;
+		dim @cnt   as number;
+		dim @acno  as string;
+		dim @seqn  as string;
+		dim @name  as string;
+		dim @amt   as string;
+		dim @voctype as string;
+		dim @vocnum  as string;
+		dim @brf   as string;
+		// if($REPRINT=='true')
+		// {
+		// 	reprint_nx();
+		// }
+		@cnt=11;
+		print( 5,10,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 4310');
+		print( 5,2,'交易名称:一对多记账');
+		if(len(#MSUBAC) &gt; 0)
+		{
+			print( 6,10,'[10][20] 子户序号:[5]',#LZH,#ACNO,#MSUBAC);
+		}
+		else
+		{
+			print( 6,10,'[10][20]',#LZH,#ACNO);
+		}
+		print( 7,10,'户      名:[50]',#HM);
+		print( 8,10,'交易总金额:[20]',itoa(#AMT,'%16.2f') );
+
+		print( 9,5,'    账  号          子户序号  子  户  名  称           交易金额        备       注');
+		print(10,5,'==================================================================================================');
+		while(true)
+		{
+			@line=readline(@file);
+			if(@line=='')
+			{
+				break;
+			}
+			@acno=strfld(@line,'|',0);
+			@seqn=strfld(@line,'|',1);
+			@name=substr(strfld(@line,'|',6),0,30);
+			@amt =strfld(@line,'|',2);
+			@brf=strfld(@line,'|',5);
+			print(@cnt,5,'[20                 ] [5    ] [30                            ] [16              ] [20                  ]',@acno,@seqn,@name,@amt,@brf);
+			@cnt=@cnt+1;
+		}
+		print(@cnt+2,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+		closefile(@file);
+		call('rm -f ../tmp/'+$KINBR+$TTYNAME+'_print');
+	}"
+	</PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+		dim @file  as file;
+		dim @file2 as file;
+		dim @line  as string;
+		dim @cnt   as number;
+
+		dim @filename1 as string;
+		dim @filename2 as string;
+		dim @filename3 as string;
+		dim @file1 as file;
+		dim @acno  as string;
+		dim @seqn  as number;
+		dim @amt   as string;
+		dim @zy    as string;
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		#PRINT_TIME='2';
+		@file =openfile('../tmp/'+$KINBR+$TTYNAME,'r');
+		@file2=openfile('../tmp/'+$KINBR+$TTYNAME+'_print','w');
+		if(@file &lt; 0)
+		{
+			closefile(@file);
+			return(true);
+		}
+		while(true)
+		{
+			@line='';
+			@line=readline(@file);
+			if(@line!='')
+			{
+				@cnt=@cnt+1;
+				writestr(@file2,@line);
+				if(@cnt &gt;= 50)
+				{
+					@cnt=0;
+					closefile(@file2);
+					runoutput();
+					@file2=openfile('../tmp/'+$KINBR+$TTYNAME+'_print','w');
+				}
+			}
+			else if(@cnt &gt; 0)//最后一页
+			{
+				@cnt=0;
+				closefile(@file2);
+				runoutput();
+				break;
+			}
+			else								//没有内容了
+			{
+				#PRINT_TIME='*';
+				closefile(@file2);
+				call('rm -f ../tmp/'+$KINBR+$TTYNAME+'_print');
+				break;
+			}
+		}
+		closefile(@file);
+
+		setvfile(true,true);
+
+		@filename1 ='../tmp/'+$HDATE+'_'+$TLRNO+'4310'+'.dat';
+		@file1 =openfile(@filename1,'r');
+
+		//把多账户的文件读出,提取二级账户的,组文件给平台算账户批量变动
+		while(true)
+		{
+			@line=readline(@file1);
+			if(@line=='')
+			{
+				break;
+			}
+			@acno=strfld(@line,'|',0);
+			@seqn=val(strfld(@line,'|',1),1);
+			@amt =strfld(@line,'|',2);
+			@zy  =strfld(@line,'|',5);
+
+			if(strfld(@line,'|',1)=='')
+			{
+				continue;
+			}
+			if(#JZFS=='1')
+			{
+				addvfile(@acno+'-'+itoa(@seqn)+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'转账取款 '+@zy+'|'+chr(10));
+			}
+			else
+			{
+				addvfile(@acno+'-'+itoa(@seqn)+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'转账存款 '+@zy+'|'+chr(10));
+			}
+		}
+
+		//批量处理的交易 留个文件备份
+		@filename2='../tmp/'+$KINBR+$TTYNAME;
+		@filename3='../txt/二级账户批量处理_4310_'+$HDATE+'_'+@txtime+'.txt';
+
+		call('cp '+@filename2+' '+@filename3);
+	
+		//如果一借多贷的借方也是子账户先发一次
+		if(#TMPFLAG=='1')
+		{
+			commsend_001();
+			$FD24='fwx';
+		  $FD16='J002';
+			$FD30=#SUB_AC_NO;              //账  号
+			$FD5=$HDATE;                   //交易日期
+  		$FD39=getitems('#AMT');        //交易金额
+	  	$FD41=$KINBR;                  //银行代码
+	    $FD81='转账取款'+' '+#ZZY;     //摘要
+	   	callagn();
+	  	if($FD12 != '0000')
+			{
+		 		showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+				return(false);
+			}
+		
+		}
+
+		// 如果没有子账户的交易就不发给平台了
+		@file2 =openfile(@filename2,'r');
+		@line=readline(@file2);
+		if(@line != '')
+		{
+			commsend_001();
+			
+			setvfile(true,true);
+			@filename1='../tmp/'+$HDATE+'_'+$TLRNO+'4310'+'.dat';
+			list_save(@filename1);
+			@filename2='../tmp/'+$KINBR+$TTYNAME;
+			call('cp '+@filename1+' '+@filename2);
+			list_del();
+			$FD24='fwx';
+			//$FD11='1';
+			$FD16='J012';
+			$FD5=$HDATE;                                  //交易日期
+			$FD41=$KINBR;                                 //银行代码
+			$FD82='PLZW_'+$HDATE+'_'+$FD4+'.txt';         //文件名
+			callagn();
+			if($FD12 != '0000')
+			{
+				showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+				return(false);
+			}
+		}
+		closefile(@file2);
+		closefile(@file1);
+	}"
+</LASTWORK>
+</TRANSACTION>

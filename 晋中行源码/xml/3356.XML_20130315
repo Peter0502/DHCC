@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3356  银联柜面通取现冲正"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3" COL="3" TYPE="%-48S" FUNCTIONS="T(3356                       银联柜面通取现冲正)"/>
+<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"     TYPE="%-4s"  FUNCTIONS="T($TXNO=3356)"/>
+<ITEM NAME="#MSGTYPE"  TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<!--
+<ITEM LINE="6"  COL="15" TYPE="%-10s" FUNCTIONS="T(读取方式: )"/>
+-->
+<ITEM LINE="8"  COL="15" TYPE="%-12s"  FUNCTIONS="T(账      号:)"/>
+<ITEM LINE="10" COL="15" TYPE="%-12s" FUNCTIONS="T(原交易币种:)"/>
+<ITEM LINE="12" COL="15" TYPE="%-12s" FUNCTIONS="T(原交易金额:)"/>
+<ITEM LINE="14" COL="15" TYPE="%-12s"  FUNCTIONS="T(原平台流水:)"/>
+<ITEM LINE="16" COL="15" TYPE="%-12s"  FUNCTIONS="T(原交易日期:)"/>
+<ITEM NAME="#CASH_ACCT"  TYPE="%-19s"  FUNCTIONS="" />
+<ITEM  TYPE="%-1s"  NAME="#DQFS"   FUNCTIONS="V(NB)T(0)"/>
+<!--
+<ITEM LINE="6" COL="27" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);  
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  -->
+<ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="8" COL="27" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" />
+<!--
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="8"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)"/>
+-->
+<ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+ if(#DQFS=='0')
+ {
+ #AC_NO=#ACTNO1;
+ }
+ else if (#DQFS=='1')
+ {
+ #AC_NO=#ACTNO2;
+ }
+  dim @tota as string;
+  initfd();
+	commsend_001();
+	$FD16 = '9930';
+	$FD68 = '7';
+	$FD21 = '01';
+	@tota=callserver();
+	if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#CASH_ACCT=$FD31;
+	showmsg('#CASH_ACCT='+delspace(#CASH_ACCT));
+	
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#CUR_NO"   TYPE="%-3s"   INPUT="SELECT" LINE="10" COL="27" FUNCTIONS="T(156)V(NB)">
+	<SELECT>
+		<OPTION VALUE="156" TITLE="01.人民币"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#TX_AMT" INPUT="TEXT" LINE="12" COL="27" TYPE="%12.2f"  FUNCTIONS="V(000000000100,999999999999)">
+<ONLOSTFOCUS>
+"{
+	if(#TX_AMT &gt; 200000.00 )
+	{
+		showmsg('取现单笔金额上限20万，冲正也应为20万上限，请注意哦!');
+		return(false);
+	}
+ }"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#XTX_AMT" TYPE="%-20s"  FUNCTIONS="X(#TX_AMT)"/>
+<ITEM NAME="#O_TRACE_NO" INPUT="TEXT" LINE="14" COL="27" TYPE="%12d"  FUNCTIONS="V(NB)T()"/>
+<ITEM NAME="#O_TX_DATE"  LINE="16" COL="27" TYPE="%8d"   FUNCTIONS="T($HDATE)">
+<ONLOSTFOCUS>
+"{
+	 <!--发往核心调用授权交易-->
+	         dim @tmp as string;
+	         <!--
+           initfd();
+           commsend_001();
+           $FD16='3369';
+           callserver();
+           if($FD12 !='0000')
+            {
+              showmsg(geterror());
+              return(false);
+            }
+          showmsg('撤销授权成功!!...');
+          
+         -->
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#TX_AMT"   TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM LINE="21" COL="60" TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONLOSTFOCUS>
+"{
+	initfd();
+	commsend_001();
+	$FD16='7831';//取现冲正,只能是当日
+	$FD30=#AC_NO;
+	$FD31 = delspace(#CASH_ACCT);
+	$FD40 = itoa(#TX_AMT*100,'%012.0f');
+	$FD58=#O_TRACE_NO;
+	$FD90=#CUR_NO;
+	$FD85=#O_TX_DATE;
+	callagn();
+	if('CU' == substr($FD12,1,2))
+	{
+		//银联错误
+		showmsg(geterror());
+		return(false);
+	}
+	else if('0000' != $FD12)
+	{
+		//平台或者核心错误
+		showmsg(geterror());
+		return(false);
+	}
+	#TX_AMT=val(delspace($FD40),0.01);
+	runoutput();
+	rerun();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通取现冲正成功，按任意键打印">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 3,30,'银联柜面通取现冲正');
+	print( 5,20,'交易帐号:[20]',#AC_NO):
+	print( 6,20,'冲正金额:[20]',comma(itoa(delspace(#TX_AMT),'%-17.2f'))):
+	print( 7,20,'原平台流水:[20]',#O_TRACE_NO):
+	print( 8,20,'原交易日期:[20]',$FD44):
+	print( 9,20,'平台流水号:[12]',$FD52);
+	print(10,20,'核心流水号:[8 ]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="银联柜面通取现冲正成功，请打印业务专用凭证(1/2打印纸)">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码:3356');
+	print( 5,15,'交易名称:银联柜面通取现冲正');
+	print( 7,20,'交易帐号:[20]',#AC_NO):
+	print( 8,20,'冲正金额:[20]',comma(itoa(delspace(#TX_AMT),'%-17.2f'))):
+	print( 9,20,'原平台流水:[20]',#O_TRACE_NO):
+	print(10,20,'原交易日期:[20]',#O_TX_DATE):
+	print(11,20,'平台流水号:[12]',$FD52);
+	print_sq();
+	print(20,90,'客户签字:________________');
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+	print(24,05,'柜员:[4]',$FD7);
+	print(24,05,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

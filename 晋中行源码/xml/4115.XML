@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4115 二级账户批量处理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    dim @tota as string;
+    dim @filename as string;
+    dim @filename1 as string;
+
+    initfd();
+    commsend_001();
+    setvfile(true,true);
+    $FD16='6615';
+    $FD67=#CLLX;
+    $FD68='0';  //检查标志 0-执行录入 1-只检查文件
+    @filename  ='../tmp/'+$KINBR+$TTYNAME;
+    @filename1 ='../tmp/tmp_4115';
+    call('cp '+@filename1+' '+@filename);
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+    "T(4115                         二级账户批量处理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6615)"/>
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(4115)" />
+  <ITEM NAME="#TXNAME" TYPE="%-20s" FUNCTIONS="T(二级账户批量处理)" />
+
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(处理类型:)" />
+  <ITEM LINE="6"  COL="15" NAME="#CLLX" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+    <OPTION VALUE="1" TITLE="0.批量开户"/>
+    <OPTION VALUE="2" TITLE="1.批量扣款"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+    if(#CLLX == '1')
+    {
+      showblock('KKTS',false,false);
+      showblock('KHTS',true,true);
+    }
+    else if(#CLLX == '2')
+    {
+      showblock('KHTS',false,false);
+      showblock('KKTS',true,true);
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6"  COL="25"  TYPE="%-10s" FUNCTIONS="T(录入类型:)" />
+  <ITEM LINE="6"  COL="35" NAME="#LRLX" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(1)V(NB)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.Excel导入"/>
+    <OPTION VALUE="1" TITLE="1.文件已传入"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+    dim @tmp as string;
+    dim @filename as string;
+    dim @num as string;
+    @filename  ='../tmp/'+$KINBR+$TTYNAME;
+    if(#LRLX == '0')
+    {
+        setvfile(true,true);
+        @tmp=getexcel();
+        @num=itoa(len(@tmp));
+        addvfile(@tmp+chr(10));
+        #WJMC=$KINBR+$TTYNAME;
+    }else
+    {
+        #WJMC=='';
+    }
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(文件名称:)" />
+  <ITEM LINE="7"  COL="15" NAME="#WJMC" TYPE="%-45s" INPUT="TEXT"  FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    dim @tota as string;
+    dim @filename as string;
+    dim @filename1 as string;
+    dim @f as file;
+    dim @line as string;
+
+    initfd();
+    commsend_001();
+    setvfile(true,false);
+    $FD16='6615';
+    $FD67=#CLLX;
+    $FD68='1';  //检查标志 0-执行录入 1-只检查文件
+    @filename  ='../tmp/'+$KINBR+$TTYNAME;
+    @filename1 ='../tmp/'+#WJMC;
+    if(#LRLX=='1')
+    {
+        call('cp -f '+@filename1+' '+@filename);
+    }
+    @f=openfile(@filename);
+    @line=readline(@f);
+    closefile(@f);
+    if(@line=='')
+    {
+        showmsg('文件不存在或者文件内容为空');
+        return(false);
+    }
+    @tota=callserver();
+    if($FD12=='B080')
+    {
+        showmsg('文件检查失败');
+        savefiletxt(@filename,@tota);
+        call('fview '+'../tmp/'+$KINBR+$TTYNAME);
+        return(false);
+    }
+    if ($FD12!='0000')
+    {
+       showmsg(geterror());
+       return(false);
+    }
+
+    call('rm -f ../tmp/tmp_4115');
+
+    savefiletxt('../tmp/tmp_4115',@tota);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <BLOCK NAME="KHTS" LINE="8"  COL="0" VISABLE="FALSE">
+  <ITEM LINE="1"  COL="5" TYPE="%-50s" FUNCTIONS="T(文件格式为: 将下列全部元素每一笔放在一行中)"/>
+  <ITEM LINE="2"  COL="5" NAME="#KHTS2" TYPE="%-73s" FUNCTIONS=
+    "T(主账号|子户名|计息标志|利率类型|利率|小区编号|楼盘编号|单元编号|)"/>
+  <ITEM LINE="3"  COL="5" NAME="#KHTS3" TYPE="%-73s" FUNCTIONS=
+    "T(房间编号|开户金额|户主证件类型|户主证件号码|联系电话|条形码|现转标志|)"/>
+  <ITEM LINE="4"  COL="5" NAME="#KHTS4" TYPE="%-73s" FUNCTIONS=
+    "T(转出帐号|转出凭证类型|转出凭证号码|摘要)"/>
+  <ITEM LINE="5"  COL="5" NAME="#KHTS5" TYPE="%-73s" FUNCTIONS=
+    "T(证件类型对照: 1-身份证 2-户口簿 3-护照 4-军人证 5-回乡证 6-士兵证)"/>
+  <ITEM LINE="6"  COL="5" NAME="#KHTS5" TYPE="%-73s" FUNCTIONS=
+    "T(              7-港澳居民来往通行证 E-临时身份证 F-外国人居留证)"/>
+  <ITEM LINE="7"  COL="5" NAME="#KHTS6" TYPE="%-73s" FUNCTIONS=
+    "T(              G-警官证 H-其他证件 I-台湾同胞来往通行证)"/>
+  <ITEM LINE="8"  COL="5" NAME="#KHTS7" TYPE="%-40s" FUNCTIONS="T(计息标志: 0-不计息 4-按季计息)"/>
+  <ITEM LINE="9"  COL="5" NAME="#KHTS8" TYPE="%-40s" FUNCTIONS="T(利率类型: 0-正常利率 1-优惠利率)" />
+  <ITEM LINE="10"  COL="5" NAME="#KHTS9" TYPE="%-40s" FUNCTIONS="T(利率: 填不带百分号的数值,如0.36% 填0.36)" />
+  <ITEM LINE="11"  COL="5" NAME="#KHTS10" TYPE="%-50s" FUNCTIONS="T(现转标志: 1-转账  转出账户只能为内部账户或对公账户)" />
+  <ITEM LINE="12"  COL="5" NAME="#KHTS11" TYPE="%-50s" FUNCTIONS="T(若开户金额为0,现转标志之后元素可不填入,保留'|'即可)" />
+  </BLOCK>
+  <BLOCK NAME="KKTS" LINE="8"  COL="0" VISABLE="FALSE">
+  <ITEM LINE="1"  COL="5" TYPE="%-50s" FUNCTIONS="T(文件格式为:)"/>
+  <ITEM LINE="2"  COL="5" NAME="#KKTS1" TYPE="%-70s" FUNCTIONS=
+    "T(扣款主账号|子户序号|子户户名|扣款金额|凭证类型|凭证号码|摘要|转入账号)" />
+  <ITEM LINE="4"  COL="5" NAME="#KKTS2" TYPE="%-40s" FUNCTIONS="T(凭证类型: 转帐凭证-002 其他凭证-299)" />
+  </BLOCK>
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="按任意键返回" LINESPACE="24">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    print(3 ,10,'二级账户批量处理成功');
+    print(4 ,10,'------------------------');
+    print(6 ,10,'处理成功笔数:[4] 笔',$FD48);
+    print(8 ,10,'流 水 号:[6]',$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24" CHECK="#CLLX=1">
+      NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @file  as file;
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    @file=openfile('../tmp/tmp_4115','r');
+    dim @line  as string;
+    dim @cnt   as number;
+    dim @acno  as string;
+    dim @seqn  as string;
+    dim @name  as string;
+    dim @amt   as string;
+    dim @voctype as string;
+    dim @vocnum  as string;
+    dim @brf   as string;
+    @cnt=9;
+    print( 5,20,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'交易代码: 4115');
+    print( 5,13,'交易名称:二级账户批量开户');
+
+    print( 7,5,'    账  号          子户序号     子  户  名  称           交易金额        备       注');
+    print( 8,5,'==================================================================================================');
+    while(true)
+    {
+      @line=readline(@file);
+      if(@line=='')
+      {
+        break;
+      }
+      @acno=strfld(@line,'|',0);
+      @seqn=strfld(@line,'|',1);
+      @name=substr(strfld(@line,'|',2),0,30);
+      @amt =strfld(@line,'|',10);
+      @brf=strfld(@line,'|',19);
+      print(@cnt,5,'[20                 ] [8       ] [30                            ] [16              ] [20                  ]',@acno,@seqn,@name,@amt,@brf);
+      @cnt=@cnt+1;
+    }
+    //print(@cnt+2,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+    print(24,15,'备注:');
+		print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+    closefile(@file);
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24" CHECK="#CLLX=2">
+      NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @file  as file;
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    @file=openfile('../tmp/tmp_4115','r');
+    dim @line  as string;
+    dim @cnt   as number;
+    dim @acno  as string;
+    dim @seqn  as string;
+    dim @name  as string;
+    dim @amt   as string;
+    dim @voctype as string;
+    dim @vocnum  as string;
+    dim @brf   as string;
+    @cnt=9;
+    print( 5,20,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'交易代码: 4115');
+    print( 5,13,'交易名称:二级账户批量扣款');
+
+    print( 7,5,'    账  号          子户序号     子  户  名  称           交易金额        备       注');
+    print( 8,5,'==================================================================================================');
+    while(true)
+    {
+      @line=readline(@file);
+      if(@line=='')
+      {
+        break;
+      }
+      @acno=strfld(@line,'|',0);
+      @seqn=strfld(@line,'|',1);
+      @name=substr(strfld(@line,'|',2),0,30);
+      @amt =strfld(@line,'|',3);
+      @brf=strfld(@line,'|',6);
+      print(@cnt,5,'[20                 ] [8       ] [30                            ] [16              ] [20                  ]',@acno,@seqn,@name,@amt,@brf);
+      @cnt=@cnt+1;
+    }
+    //print(@cnt+2,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+    print(24,15,'备注:');
+		print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+    closefile(@file);
+  }"
+  </PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+    dim @file  as file;
+    dim @file1 as file;
+    dim @file2 as file;
+    dim @line  as string;
+    dim @cnt   as number;
+
+    dim @filename  as string;
+    dim @filename1 as string;
+    dim @filename2 as string;
+    dim @filename3 as string;
+
+    dim @acno  as string;
+    dim @seqn  as number;
+    dim @amt   as string;
+    dim @txm   as string;
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+    if(#CLLX=='1')
+    {
+    <!--
+      @filename ='../tmp/tmp_4115';
+      @filename1 ='../tmp/'+$HDATE+'_'+$TLRNO+'4115'+'.dat';
+      call('cp '+@filename+' '+@filename1);
+      @file1 =openfile(@filename1,'r');
+      setvfile(true,true);
+
+      //把多账户的文件读出,提取二级账户的,组文件给平台 账户批量开户
+      while(true)
+      {
+        @line=readline(@file1);
+        if(@line=='')
+        {
+          break;
+        }
+        @txm=strfld(@line,'|',14);
+        @acno=strfld(@line,'|',0);
+        @seqn=val(strfld(@line,'|',1),1);
+        @amt =strfld(@line,'|',10);
+
+        addvfile(@txm+'|'+@acno+'-'+itoa(@seqn)+'|'+$HDATE+'|'+@amt+'|'+$KINBR+'|'+chr(10));
+      }
+      -->
+      @filename ='../tmp/'+$KINBR+$TTYNAME;
+      //批量处理的交易 留个文件备份
+      @filename2='../tmp/'+$KINBR+$TTYNAME;
+      @filename3='../txt/sub_batopen_4115_'+$HDATE+'_'+$FD4+'.txt';
+
+      call('cp '+@filename2+' '+@filename3);
+
+      commsend_001();
+      setvfile(true,false);
+      $FD24='fwx';
+      $FD11='1';
+      $FD16='J011';
+      $FD5=$HDATE;                                  //交易日期
+      $FD41=$KINBR;                                 //银行代码
+      $FD82='PLKH_'+$HDATE+'_'+$FD4+'.txt';         //文件名
+      $FD4='';
+      callagn();
+      if($FD12 != '0000')
+      {
+        showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+        return(false);
+      }
+
+      <!--closefile(@file1);-->
+    }
+    else if(#CLLX=='2')
+    {
+     <!--
+      @filename ='../tmp/'+$KINBR+$TTYNAME;
+      @filename1 ='../tmp/'+$HDATE+'_'+$TLRNO+'4115'+'.dat';
+      call('cp '+@filename+' '+@filename1);
+      @file1 =openfile(@filename1,'r');
+      setvfile(true,true);
+     
+      //把多账户的文件读出,提取二级账户的,组文件给平台 账户批量变动
+      while(true)
+      {
+        @line='';
+        @line=readline(@file1);
+        addvfile(@line);
+        if(@line=='')
+        {
+          break;
+        }
+        @acno=strfld(@line,'|',0);
+        @seqn=val(strfld(@line,'|',1),1);
+        @amt =strfld(@line,'|',3);
+        addvfile(@acno+'-'+itoa(@seqn)+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'2转账取款'+'|'+chr(10));
+      }
+      -->
+ @filename ='../tmp/'+$KINBR+$TTYNAME;
+      //批量处理的交易 留个文件备份
+      @filename2='../tmp/'+$KINBR+$TTYNAME;
+      @filename3='../txt/sub_batdraw_4115_'+$HDATE+'_'+$FD4+'.txt';
+
+      call('cp '+@filename2+' '+@filename3);
+      
+      initfd();
+      commsend_001();
+      setvfile(true,false);
+      $FD24='fwx';
+      $FD11='1';
+      $FD16='J012';
+      $FD5=$HDATE;                                  //交易日期
+      $FD41=$KINBR;                                 //银行代码
+      $FD82='PLZW_'+$HDATE+'_'+$FD4+'.txt';         //文件名
+      $FD4='';
+      callagn();
+      if($FD12 != '0000')
+      {
+        showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+        return(false);
+      }
+
+      <!--closefile(@file1);-->
+    }
+  }"
+</LASTWORK>
+</TRANSACTION>
+

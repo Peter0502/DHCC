@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1866      对账结果查询)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+     "{
+      }"
+</FIRSTWORK>
+<VARIABLE>
+        <ITEM LINE="3" COL="35" TYPE="%-30s" FUNCTIONS="T(1866            对账结果查询)"/>
+        <ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+        <ITEM NAME="#TXNAME"    TYPE="%-30s"  FUNCTIONS="T(对账结果查询)"/>
+        <ITEM NAME="#Result"    TYPE="%-60s"  FUNCTIONS="T()"/>
+        <ITEM NAME="#CheckResult"    TYPE="%-4s"  FUNCTIONS="T()"/>
+	<ITEM LINE="10" COL="25" TYPE="%-10s" FUNCTIONS="T(工作日期:)"/>
+	<ITEM LINE="10" COL="35" TYPE="%-8s" DEVICE="KEYBOARD" NAME="#Sttlmdt" FUNCTIONS="T()V(NB)D()"/>
+	<ITEM LINE="12" COL="25" TYPE="%-10s" FUNCTIONS="T(工作场次:)"/>
+	<ITEM LINE="12" COL="35" NAME="#Sttlmrnd" INPUT="TEXT" TYPE="%-2s" FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+	                dim @tota as string;
+	                dim @column as string;
+	                dim @where as string;
+	                commsend_001();
+	                $FD16='1114';
+	                $FD18='pbp';
+	                $FD23='0';
+	                @column='sys_chksts'; 
+	                @where = 'sys_date='+'|'+#Sttlmdt+'|'+' and ' + 'sys_rnd='+'|'+#Sttlmrnd+'|';
+	                $FD96=@column;
+	                $FD76=@where;
+	                $FD81='sxps_check_note';
+	                $FD82='4';
+			callagnpbp();
+			if($FD12 !='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	                @tota=delspace(@tota);
+	                #CheckResult=strfld(@tota,'|',0);
+	           
+	           	if (#CheckResult == '1')
+	           	{
+	           		#Result = '对账已成功，发送回执失败';
+	           	}
+	           	else if (#CheckResult == '2')
+	           	{
+	           		#Result = '中心对账处理已完成';
+	           	}
+	           	else if (#CheckResult == '3')
+	           	{
+	           		#Result = '主机对账成功';
+	           	}
+	           	else
+	           	{
+	           		#Result = '对账失败，请手工处理';
+	           	}
+	           	showmsg(#Result);
+	           	refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="14" COL="25" TYPE="%-9s" FUNCTIONS="T(查询类型:)"/>
+	<ITEM NAME="#CXLX" LINE="14" COL="35"  TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T(1)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1"     TITLE="0.汇总对账结果查询"/>
+			<OPTION VALUE="2"     TITLE="1.明细对账申请数据查询"/>
+		</SELECT>
+	</ITEM>
+	
+	
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @rcvbuffer as string;
+                initfd();
+                commsend_001();
+                $FD18 = 'pbp';
+                $FD28 = 'sxps';
+                $FD44 = #Sttlmdt;
+                $FD52 = #Sttlmrnd;
+                $FD35 = #CXLX;
+                $FD16 = '2321';
+                callagnpbp();
+                if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@rcvbuffer = getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		
+		if (@rcvbuffer =='')
+		{
+			showmsg('无记录！');
+			return(false);
+		}  
+		autolist('~'+@rcvbuffer);
+		call('rm -rf ../tmp/'+$KINBR+$TTYNAME);
+		#DOLIST='1';
+		goitem('#DOLIST');
+		return(true);        
+	}"
+	</ONCLICK>
+	</ITEM>
+	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+		dim @selid as number;
+		dim @data as string;
+		dim @file as file;
+		dim @count as number;
+		dim @line as string;
+		dim @a0 as string;
+		dim @a1 as string;
+		dim @a2 as string;
+		dim @a3 as string;
+		dim @a4 as string;
+		dim @a5 as string;
+		dim @a6 as string;
+		dim @a7 as string;
+		dim @a8 as string;
+		dim @a9 as string;
+		dim @a10 as string;
+		dim @a11 as string;
+		dim @a12 as string;
+		dim @a13 as string;
+		dim @a14 as string;
+		dim @a15 as string;
+		dim @a16 as string;
+		dim @a17 as string;
+		dim @a18 as string;
+		dim @a19 as string;
+		dim @a20 as string;
+		dim @a21 as string;
+		dim @a22 as string;
+		dim @a23 as string;
+		dim @a24 as string;
+		dim @a25 as string;
+		dim @a26 as string;
+		
+		if(#DOLIST=='1')
+		{
+			@selid=list_work();     
+			if(@selid &lt; 0)       
+			{                     
+				list_del();            
+				rerun();               
+				return(true);          
+			}    
+			      
+			@selid=list_getselid();
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+			
+			@a0=ltrim(list_gettext(@selid,0));
+			@a1=ltrim(list_gettext(@selid,1));
+			@a2=ltrim(list_gettext(@selid,2));
+			@a3=ltrim(list_gettext(@selid,3));
+			@a4=ltrim(list_gettext(@selid,4));
+			@a5=ltrim(list_gettext(@selid,5));
+			@a6=ltrim(list_gettext(@selid,6));
+			@a7=ltrim(list_gettext(@selid,7));
+			@a8=ltrim(list_gettext(@selid,8));
+			@a9=ltrim(list_gettext(@selid,9));
+			@a10=ltrim(list_gettext(@selid,10));
+			if (#CXLX == '1')
+			{
+				@a11=ltrim(list_gettext(@selid,11));
+				@a12=ltrim(list_gettext(@selid,12));
+				@a13=ltrim(list_gettext(@selid,13));
+				@a14=ltrim(list_gettext(@selid,14));
+				@a15=ltrim(list_gettext(@selid,15));
+				@a16=ltrim(list_gettext(@selid,16));
+				@a17=ltrim(list_gettext(@selid,17));
+				@a18=ltrim(list_gettext(@selid,18));
+			}
+			@a20=$FD7;
+			@a21=$FD5;
+			@a22=$FD56;
+			@a23=#CXLX;
+			if (#CXLX == '2')
+			{
+				open('1866_1.XML','#Sttldt='+@a0+';#Sttlrnd='+@a1+';#Txtype='+@a2+';#Sndpty='+@a3+';#Msgid='+@a4+';#Rcvpty='+@a5+';#Billtype='+@a6+';#Noteno='+@a7+';#Txamt='+@a8+';#Chksts='+@a9+';#Hoststs='+@a10+';#Teller='+@a20+';#Date='+@a21+';#Trace='+@a22+';#CXLX='+@a23+';');
+			}
+			else if (#CXLX == '1')
+			{
+				open('1866_2.XML','#Sttldt='+@a0+';#Sttlrnd='+@a1+';#Txtype='+@a2+';#Pbedbtcnt='+@a3+';#Pbedbtamt='+@a4+';#Pbedbtincnt='+@a5+';#Pbedbtinamt='+@a6+';#Pbecdtcnt='+@a7+';#Pbecdtamt='+@a8+';#Pbecdtincnt='+@a9+';#Pbecdtinamt='+@a10+';#Pbydbtcnt='+@a11+';#Pbydbtamt='+@a12+';#Pbydbtincnt='+@a13+';#Pbydbtinamt='+@a14+';#Pbycdtcnt='+@a15+';#Pbycdtamt='+@a16+';#Pbycdtincnt='+@a17+';#Pbycdtinamt='+@a18+';#Teller='+@a20+';#Date='+@a21+';#Trace='+@a22+';#CXLX='+@a23+';');		
+			}
+			
+			
+			list_del();
+			#DOLIST='';
+			//return(true);
+			
+		}
+		
+		
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();	 
+   		print(10,20,'对账结果:[60]',#Result);
+			
+		PrintTxTail();	
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

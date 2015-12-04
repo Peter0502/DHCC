@@ -1,0 +1,258 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"chnl_tradeadd_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int chnl_tradeadd_con ( struct chnl_tradeadd_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct chnl_tradeadd_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->tx_type);
+	zip_tail(ps->stat);
+}
+int Chnl_tradeadd_Debug(struct chnl_tradeadd_c *ps){
+	vtcp_log("chnl_tradeadd_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("chnl_tradeadd_c.tx_date=[%ld]\n",ps->tx_date);
+	vtcp_log("chnl_tradeadd_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("chnl_tradeadd_c.tx_type=[%s]\n",ps->tx_type);
+	vtcp_log("chnl_tradeadd_c.add_amt=[%f]\n",ps->add_amt);
+	vtcp_log("chnl_tradeadd_c.add_qk_cnt=[%ld]\n",ps->add_qk_cnt);
+	vtcp_log("chnl_tradeadd_c.add_pswd_cnt=[%ld]\n",ps->add_pswd_cnt);
+	vtcp_log("chnl_tradeadd_c.stat=[%s]\n",ps->stat);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Chnl_tradeadd_Sel(reply,chnl_tradeadd_c,fmtstr,va_alist)
+char    *reply;
+struct  chnl_tradeadd_c *chnl_tradeadd_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Chnl_tradeadd_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Chnl_tradeadd_Fet_Sel( chnl_tradeadd_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Chnl_tradeadd_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Chnl_tradeadd_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,chnl_tradeadd.* FROM chnl_tradeadd WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE chnl_tradeadd_sel FROM :comm;
+	EXEC SQL DECLARE sel_chnl_tradeadd CURSOR FOR chnl_tradeadd_sel;
+
+	EXEC SQL OPEN sel_chnl_tradeadd;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Chnl_tradeadd_Fet_Sel ( struct chnl_tradeadd_c *chnl_tradeadd_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_chnl_tradeadd INTO :chnl_tradeadd_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch chnl_tradeadd error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch chnl_tradeadd finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(chnl_tradeadd_c);
+
+	return 0;
+}
+
+int Chnl_tradeadd_Clo_Sel (){
+	EXEC SQL CLOSE sel_chnl_tradeadd;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Chnl_tradeadd_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,chnl_tradeadd.* FROM chnl_tradeadd WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE chnl_tradeadd_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_chnl_tradeadd CURSOR FOR chnl_tradeadd_upd;
+
+	EXEC SQL OPEN upd_chnl_tradeadd;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Chnl_tradeadd_Fet_Upd( struct chnl_tradeadd_c *chnl_tradeadd_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_chnl_tradeadd INTO :chnl_tradeadd_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH chnl_tradeadd finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(chnl_tradeadd_c);
+
+	return 0;
+}
+
+int Chnl_tradeadd_Upd_Upd( struct chnl_tradeadd_c chnl_tradeadd_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE chnl_tradeadd SET tx_date=:chnl_tradeadd_c.tx_date,
+			ac_no=:chnl_tradeadd_c.ac_no,
+			tx_type=:chnl_tradeadd_c.tx_type,
+			add_amt=:chnl_tradeadd_c.add_amt,
+			add_qk_cnt=:chnl_tradeadd_c.add_qk_cnt,
+			add_pswd_cnt=:chnl_tradeadd_c.add_pswd_cnt,
+			stat=:chnl_tradeadd_c.stat
+	WHERE rowid=:chnl_tradeadd_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Chnl_tradeadd_Del_Upd(struct chnl_tradeadd_c chnl_tradeadd_c , char * reply  ){
+
+	EXEC SQL DELETE FROM chnl_tradeadd WHERE rowid=:chnl_tradeadd_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Chnl_tradeadd_Clo_Upd( ){
+	EXEC SQL CLOSE upd_chnl_tradeadd;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Chnl_tradeadd_Ins( struct chnl_tradeadd_c chnl_tradeadd_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO chnl_tradeadd VALUES (:chnl_tradeadd_c.tx_date,
+			:chnl_tradeadd_c.ac_no,
+			:chnl_tradeadd_c.tx_type,
+			:chnl_tradeadd_c.add_amt,
+			:chnl_tradeadd_c.add_qk_cnt,
+			:chnl_tradeadd_c.add_pswd_cnt,
+			:chnl_tradeadd_c.stat);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT chnl_tradeadd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,1145 @@
+/*************************************************************
+* 文 件 名: gD0283.c
+* 功能描述：从dc_log_bk入机构发生额总帐 gl_amt
+*
+************************************************************/
+/***  DWDJDPH 1--单网点借贷平衡，多事物 0--全行借贷平衡，单事物***/
+/*	看以前的程序未判断是否空值,所以这里也不能有
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403) \
+*/
+#define MYSQLERR if(sqlca.sqlcode ) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "ln_mst_c.h"
+#include "dd_mst_bk_c.h"
+#include "td_mst_bk_c.h"
+#include "in_mst_bk_c.h"
+#include "dd_parm_c.h"
+#include "td_parm_c.h"
+#include "ln_parm_c.h"
+#include "in_parm_c.h"
+#include "note_mst_c.h"
+#include "cash_mst_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_amt_c.h"
+/*** JYW#include "com_branch_c.h" ***/
+
+EXEC SQL BEGIN DECLARE SECTION;
+	struct	gl_amt_c		gl_amt;
+	double d_amt,c_amt;
+EXEC SQL  END  DECLARE SECTION;
+	struct com_sys_parm_c com_sys_parm_c;
+
+gD0283( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &com_sys_parm_c );
+	MYRETERR
+
+	g_pub_tx.tx_date=com_sys_parm_c.lst_date;
+
+	ret=do_qs();	/* 处理期初数 */
+	if( ret ) goto ErrExit;
+
+	ret=sum_dc();	/* 按 tx_opn_br_no 合计 */
+	if( ret ) goto ErrExit;
+	
+	ret=sum_dc_tx();/* 按 tx_tx_br_no 合计 */
+	if( ret ) goto ErrExit;
+	
+	ret=mk_bal();	/* 更新gl_amt 的余额 */
+	if( ret ) goto ErrExit;
+
+/*	ret=do_up_br_no();*/
+	if( ret ) goto ErrExit;
+	
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+/*----------------------------------------------------------*/
+int sum_dc_tx()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_amt_c vgl_amt;
+		struct com_item_c v_item;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+
+	EXEC SQL declare cur_tx_dc cursor for
+		select tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		group by tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open cur_tx_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		memset(&d_k,'\0',sizeof(d_k));
+		EXEC SQL fetch cur_tx_dc 
+			into :d_k.tx_tx_br_no,:d_k.cur_no,:d_k.acc_hrt,
+			:d_k.dc_ind,:d_k.ct_ind,:d_k.amt,:d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**
+		if( z1 ) d_k.amt=0.00;
+		if( z2 ) d_k.trace_no=0;
+		**/
+			memset( &vgl_amt,0,sizeof(vgl_amt) );
+			strcpy( vgl_amt.br_no,d_k.tx_tx_br_no );
+			strcpy( vgl_amt.cur_no,d_k.cur_no );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_amt.tx_rdd_cnt=d_k.trace_no;
+				vgl_amt.tx_rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_amt.tx_cdd_cnt=d_k.trace_no;
+					vgl_amt.tx_cdd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_amt.tx_rcd_cnt=d_k.trace_no;
+				vgl_amt.tx_rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_amt.tx_ccd_cnt=d_k.trace_no;
+					vgl_amt.tx_ccd_amt=d_k.amt;
+				}
+			}
+		strcpy(vgl_amt.acc_hrt,d_k.acc_hrt);
+		strcpy(vgl_amt.dc_ind,d_k.dc_ind);
+		memset(&v_item,'\0',sizeof(v_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&v_item,
+			"acc_hrt='%s'",vgl_amt.acc_hrt);
+		MYRETERR
+		strcpy(vgl_amt.up_acc_hrt,v_item.up_acc_hrt);
+		
+		ret=sub_do_acc_and_up( vgl_amt);
+		MYRETERR
+	}
+	EXEC SQL close cur_tx_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+int sum_dc()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_amt_c vgl_amt;
+		struct com_item_c v_item;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+
+	EXEC SQL declare cur_1_dc cursor for
+		select tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		group by tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open cur_1_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		EXEC SQL fetch cur_1_dc 
+			into :d_k.tx_opn_br_no,:d_k.cur_no,:d_k.acc_hrt,
+			:d_k.dc_ind,:d_k.ct_ind,:d_k.amt,:d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		/**
+		if( z1 ) d_k.amt=0.00;
+		if( z2 ) d_k.trace_no=0;
+		**/
+
+			memset( &vgl_amt,0,sizeof(vgl_amt) );
+			strcpy( vgl_amt.br_no,d_k.tx_opn_br_no );
+			strcpy( vgl_amt.cur_no,d_k.cur_no );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_amt.rdd_cnt=d_k.trace_no;
+				vgl_amt.rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_amt.cdd_cnt=d_k.trace_no;
+					vgl_amt.cdd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_amt.rcd_cnt=d_k.trace_no;
+				vgl_amt.rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_amt.ccd_cnt=d_k.trace_no;
+					vgl_amt.ccd_amt=d_k.amt;
+				}
+			}
+		/*	 modified by liuxuan 2006-10-18
+		ret=sub_do_acc_and_up( vgl_amt,d_k.acc_hrt,10 );
+		*/
+		strcpy(vgl_amt.acc_hrt,d_k.acc_hrt);
+		strcpy(vgl_amt.dc_ind,d_k.dc_ind);
+		memset(&v_item,'\0',sizeof(v_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&v_item,
+			"acc_hrt='%s'",vgl_amt.acc_hrt);
+		MYRETERR
+		strcpy(vgl_amt.up_acc_hrt,v_item.up_acc_hrt);
+		ret=sub_do_acc_and_up( vgl_amt);
+		MYRETERR
+	}
+	EXEC SQL close cur_1_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+mk_bal()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_amt_c r;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+		double tmpdb=0;
+
+	EXEC SQL declare cur_b cursor for
+		select rowid,gl_amt.* 
+		from gl_amt
+		for update;
+	MYSQLERR
+
+	EXEC SQL open cur_b;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&r,'\0',sizeof(r));
+		EXEC SQL fetch cur_b
+		into :r ;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		if( r.dc_ind[0]=='1' )
+		{
+			r.cr_bal=0.00;
+			r.dr_bal=r.ldd_bal+r.rdd_amt-r.rcd_amt ;
+		}
+		else if( r.dc_ind[0]=='2' )
+		{
+			r.dr_bal=0.00;
+			r.cr_bal=r.lcd_bal+r.rcd_amt-r.rdd_amt ;
+		}
+		else
+		{
+			tmpdb=r.ldd_bal-r.lcd_bal+r.rdd_amt-r.rcd_amt ;
+			if( tmpdb<-0.005 )
+			{
+				r.dr_bal=0.00;
+				r.cr_bal=-tmpdb;
+			}
+			else
+			{
+				r.dr_bal=tmpdb;
+				r.cr_bal=0.00;
+			}
+		}
+
+		EXEC SQL update gl_amt set dr_bal=:r.dr_bal,cr_bal=:r.cr_bal
+			/*	oracle 不可以用这种方式
+			where current of cur_b;
+			*/
+			where br_no=:r.br_no and acc_hrt=:r.acc_hrt and cur_no=:r.cur_no;
+			if(sqlca.sqlcode){
+				sprintf(acErrMsg,"更新[%s]机构[%s]科目错[%d]",r.br_no,r.acc_hrt,sqlca.sqlcode);
+				WRITEMSG 
+				strcpy (g_pub_tx.reply, "AT03");
+				goto ErrExit;
+			}
+	}
+	EXEC SQL close cur_b;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/**增加科目记录及其上级 不用这种了**
+sub_do_acc_and_up( p_gl_amt,dc_code,mode )
+ struct gl_amt_c p_gl_amt;
+ char *dc_code;
+ int mode;
+{
+ 	struct gl_amt_c gl_amt;
+	struct dc_acc_rel_c vdc_acc_rel;
+	struct com_item_c vcom_item;
+	int ret=0;
+	char data_code[5];
+
+	memset( &gl_amt,'\0',sizeof(gl_amt) );
+	memcpy( &gl_amt,&p_gl_amt,sizeof(gl_amt) );
+
+	if( mode==10 || mode==11 )
+	{
+		strcpy( vdc_acc_rel.acc_hrt,dc_code );
+	}
+	else
+	{
+
+	if( mode==1 )
+		strcpy( data_code,"0155" );* 贷款表内利息科目 *
+	else if( mode==2 )
+		strcpy( data_code,"0156" );*贷款表外利息科目 *
+	else if( mode==3 )
+		strcpy( data_code,"0157" );* 贷款复利科目 *
+	else
+		strcpy( data_code,"0152" );* 存贷内部帐本金科目 *
+
+	ret=Dc_acc_rel_Sel( g_pub_tx.reply,&vdc_acc_rel,
+		"dc_code='%s' and data_code='%s'",
+		dc_code,data_code );
+	if( ret )
+	vtcp_log("dc_code='%s' and data_code='%s'",
+		dc_code,data_code );
+	MYRETERR
+	}
+
+	pub_base_strpack( vdc_acc_rel.acc_hrt );
+
+	while(1)
+	{
+		memset(&vcom_item,'\0',sizeof(vcom_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&vcom_item,
+			"acc_hrt='%s'",vdc_acc_rel.acc_hrt );
+		MYRETERR
+
+		vtcp_log("acchrt[%s]",vdc_acc_rel.acc_hrt );
+
+		strcpy( gl_amt.acc_hrt,vdc_acc_rel.acc_hrt );
+		strcpy( gl_amt.dc_ind,vcom_item.dc_ind );
+		strcpy( gl_amt.up_acc_hrt,vcom_item.up_acc_hrt );
+
+		ret=sub_add_do( gl_amt );
+		MYRETERR
+
+		strcpy( vdc_acc_rel.acc_hrt,vcom_item.up_acc_hrt );
+
+		if( vcom_item.acc_lvl[0]=='1' ) break;
+		if( !strcmp(vcom_item.up_acc_hrt,vcom_item.acc_hrt) ) break;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+*/
+/*----------------------------------------------------------*/
+/***期初数处理***/
+do_qs()
+{
+	struct gl_amt_c gl_amt_tmp;
+	struct gl_amt_c gl_amt_o;
+	struct com_branch_c com_branch;
+	int ret;
+
+	memset( &gl_amt_o,0,sizeof(gl_amt_o) );
+
+    ret=Gl_amt_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYSQLERR
+
+	while(1)
+	{
+     	ret = Gl_amt_Fet_Upd(&gl_amt_tmp,g_pub_tx.reply);
+		if( ret==100 ) break;
+		MYSQLERR
+
+		/**处理期初数**/
+		sub_begin_do( &gl_amt_tmp );
+
+       	ret = Gl_amt_Upd_Upd(gl_amt_tmp, g_pub_tx.reply);
+		MYSQLERR
+
+		memcpy( &gl_amt_o,&gl_amt_tmp,sizeof(gl_amt_tmp) );
+	}
+    Gl_amt_Clo_Upd();
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+sub_begin_do( struct gl_amt_c *p_gl_amt_c )
+{
+	struct gl_amt_c gl_amt_c;
+	int ret;
+
+	memcpy( &gl_amt_c,p_gl_amt_c,sizeof(gl_amt_c) );
+
+        gl_amt_c.date = com_sys_parm_c.lst_date; 
+        gl_amt_c.ldd_bal = gl_amt_c.dr_bal;
+        gl_amt_c.lcd_bal = gl_amt_c.cr_bal;
+        gl_amt_c.lac_cnt = gl_amt_c.ac_cnt;
+		gl_amt_c.rdd_cnt=0;
+		gl_amt_c.rcd_cnt=0;
+		gl_amt_c.rdd_amt=0.00;
+		gl_amt_c.rcd_amt=0.00;
+		gl_amt_c.cdd_cnt=0;
+		gl_amt_c.ccd_cnt=0;
+		gl_amt_c.cdd_amt=0.00;
+		gl_amt_c.ccd_amt=0.00;
+
+		gl_amt_c.tx_rdd_cnt=0;
+		gl_amt_c.tx_rcd_cnt=0;
+		gl_amt_c.tx_rdd_amt=0.00;
+		gl_amt_c.tx_rcd_amt=0.00;
+		gl_amt_c.tx_cdd_cnt=0;
+		gl_amt_c.tx_ccd_cnt=0;
+		gl_amt_c.tx_cdd_amt=0.00;
+		gl_amt_c.tx_ccd_amt=0.00;
+
+        ret = pub_base_day_xun(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 旬初 */
+            gl_amt_c.tddr_bal = gl_amt_c.dr_bal;    /* 旬初借方余额 */
+            gl_amt_c.tdcr_bal = gl_amt_c.cr_bal;    /* 旬初贷方余额 */
+        	gl_amt_c.tdac_cnt=0;
+            gl_amt_c.tddr_cnt = 0;
+            gl_amt_c.tdcr_cnt = 0;
+            gl_amt_c.tddr_amt = 0.00;
+            gl_amt_c.tdcr_amt = 0.00;
+
+            gl_amt_c.tx_tddr_cnt = 0;
+            gl_amt_c.tx_tdcr_cnt = 0;
+            gl_amt_c.tx_tddr_amt = 0.00;
+            gl_amt_c.tx_tdcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_month(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 月初 */
+            gl_amt_c.mdr_bal = gl_amt_c.dr_bal;
+            gl_amt_c.mcr_bal = gl_amt_c.cr_bal;
+        	gl_amt_c.mac_cnt=0;
+            gl_amt_c.mdr_cnt = 0;
+            gl_amt_c.mcr_cnt = 0;
+            gl_amt_c.mdr_amt = 0.00;
+            gl_amt_c.mcr_amt = 0.00;
+
+            gl_amt_c.tx_mdr_cnt = 0;
+            gl_amt_c.tx_mcr_cnt = 0;
+            gl_amt_c.tx_mdr_amt = 0.00;
+            gl_amt_c.tx_mcr_amt = 0.00;
+        }
+        
+        ret = pub_base_day_quarter(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 季初 */
+            gl_amt_c.qdr_bal = gl_amt_c.dr_bal;
+            gl_amt_c.qcr_bal = gl_amt_c.cr_bal;
+        	gl_amt_c.qac_cnt=0;
+            gl_amt_c.qdr_cnt = 0;
+            gl_amt_c.qcr_cnt = 0;
+            gl_amt_c.qdr_amt = 0.00;
+            gl_amt_c.qcr_amt = 0.00;
+
+            gl_amt_c.tx_qdr_cnt = 0;
+            gl_amt_c.tx_qcr_cnt = 0;
+            gl_amt_c.tx_qdr_amt = 0.00;
+            gl_amt_c.tx_qcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_year(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 年初 */
+            gl_amt_c.ydr_bal = gl_amt_c.dr_bal;
+            gl_amt_c.ycr_bal = gl_amt_c.cr_bal;
+        	gl_amt_c.yac_cnt=0;
+            gl_amt_c.ydr_cnt = 0;
+            gl_amt_c.ycr_cnt = 0;
+            gl_amt_c.ydr_amt = 0.00;
+            gl_amt_c.ycr_amt = 0.00;
+
+            gl_amt_c.tx_ydr_cnt = 0;
+            gl_amt_c.tx_ycr_cnt = 0;
+            gl_amt_c.tx_ydr_amt = 0.00;
+            gl_amt_c.tx_ycr_amt = 0.00;
+        }
+		gl_amt_c.dr_bal=0.00;
+		gl_amt_c.cr_bal=0.00;
+        gl_amt_c.ac_cnt=0;
+
+	memcpy( p_gl_amt_c , &gl_amt_c ,sizeof(gl_amt_c) );
+}
+sub_add_do( a_gl_amt )
+ struct gl_amt_c a_gl_amt;
+{
+	struct gl_amt_c gl_amt_c;
+	int ret=0;
+
+	ret=Gl_amt_Dec_Upd( g_pub_tx.reply,
+		"br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		a_gl_amt.br_no,a_gl_amt.cur_no,a_gl_amt.acc_hrt );
+	MYRETERR
+vtcp_log("[%d]br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		__LINE__,a_gl_amt.br_no,a_gl_amt.cur_no,a_gl_amt.acc_hrt );
+
+	ret=Gl_amt_Fet_Upd( &gl_amt_c , g_pub_tx.reply );
+	if( ret==100 )
+	{
+		memset( &gl_amt_c,0,sizeof(gl_amt_c) );
+		strcpy( gl_amt_c.br_no,a_gl_amt.br_no );
+		strcpy( gl_amt_c.cur_no,a_gl_amt.cur_no );
+		strcpy( gl_amt_c.acc_hrt,a_gl_amt.acc_hrt );
+		strcpy( gl_amt_c.dc_ind,a_gl_amt.dc_ind );
+		strcpy( gl_amt_c.up_acc_hrt,a_gl_amt.up_acc_hrt );
+vtcp_log("INS [%d][%s][%s][%s]",__LINE__,gl_amt_c.br_no,gl_amt_c.cur_no,gl_amt_c.acc_hrt );
+		gl_amt_c.date=g_pub_tx.tx_date;
+
+		sub_add( &gl_amt_c,a_gl_amt );
+
+		ret=Gl_amt_Ins( gl_amt_c,g_pub_tx.reply );
+		MYSQLERR
+	}
+	else
+	{
+		MYRETERR
+		sub_add( &gl_amt_c,a_gl_amt );
+		ret=Gl_amt_Upd_Upd( gl_amt_c,g_pub_tx.reply  );
+		MYRETERR
+	}
+
+	Gl_amt_Clo_Upd();
+
+    return 0;
+ErrExit:
+	return 1;
+}
+/*
+int sub_add_do(bb)
+struct gl_amt_c bb;
+{
+	return(0);
+}
+*/
+int upd_sum( d_k )
+ struct dc_log_bk_c d_k;
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct com_item_c kmb;
+		struct com_branch_c jgb;
+		struct gl_amt_c sub;
+ 		struct dc_log_bk_c vd_k;
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL select rowid,com_branch.* into :jgb from com_branch
+		where br_no=:d_k.tx_opn_br_no;
+	if( sqlca.sqlcode )
+	{
+		vtcp_log("=====[%d]==[%s]====",sqlca.sqlcode,d_k.tx_opn_br_no);
+		goto ErrExit;
+	}
+
+	pub_base_strpack( d_k.acc_hrt );
+
+	EXEC SQL declare cur_updzz cursor for
+		select rowid,gl_amt.* 
+		from gl_amt
+		where br_no=:d_k.tx_opn_br_no 
+		and cur_no=:d_k.cur_no
+		and acc_hrt=:d_k.acc_hrt
+		for UPDATE;
+	MYSQLERR
+
+	EXEC SQL open cur_updzz;
+	MYSQLERR
+
+	EXEC SQL fetch cur_updzz
+		into :sub ;
+	if( sqlca.sqlcode==1403 )
+	{
+		memset( &sub,0,sizeof(sub) );
+		strcpy( sub.br_no,d_k.tx_opn_br_no );
+		strcpy( sub.cur_no,d_k.cur_no );
+		strcpy( sub.acc_hrt,d_k.acc_hrt );
+		sub.date=g_pub_tx.tx_date;
+		EXEC SQL select rowid,com_item.*
+			into :kmb
+			from com_item where acc_hrt=:d_k.acc_hrt ;
+		if( sqlca.sqlcode )
+		{
+			vtcp_log("ACC_HRT[%s]",d_k.acc_hrt);
+			MYSQLERR
+		}
+		memcpy(sub.dc_ind,kmb.dc_ind,sizeof(sub.dc_ind));
+		memcpy(sub.up_acc_hrt,kmb.up_acc_hrt,sizeof(sub.dc_ind));
+
+		sub_add_do( d_k,&sub,kmb );
+vtcp_log(" Ins[%d] brno[%s] [%s][%s]",__LINE__,sub.br_no,sub.cur_no,sub.acc_hrt );
+		EXEC SQL insert into gl_amt values(:sub);
+		MYSQLERR
+	}
+	else
+	{
+		MYSQLERR
+		EXEC SQL select rowid,com_item.*
+			into :kmb
+			from com_item where acc_hrt=:d_k.acc_hrt ;
+		if( sqlca.sqlcode )
+		{
+			vtcp_log("ACC_HRT[%s]",d_k.acc_hrt);
+			MYSQLERR
+		}
+		memcpy(sub.dc_ind,kmb.dc_ind,sizeof(sub.dc_ind));
+		memcpy(sub.up_acc_hrt,kmb.up_acc_hrt,sizeof(sub.dc_ind));
+
+		sub_add_do( d_k,&sub,kmb );
+		/**
+		EXEC SQL update gl_amt set *=(:sub) where current of cur_updzz;
+		**/
+		Gl_amt_Upd_Upd(sub,g_pub_tx.reply);
+		MYSQLERR
+	}
+
+	if( kmb.acc_lvl[0]!='1' )
+	{
+		memcpy( &vd_k,&d_k,sizeof(d_k) );
+		strcpy( vd_k.acc_hrt,kmb.up_acc_hrt );
+		if( upd_sum( vd_k ) ) goto ErrExit;
+	}
+	/****
+	if( jgb.br_type[0]!='7' && strcmp(jgb.up_br_no,"61000") )
+	{
+		memcpy( &vd_k,&d_k,sizeof(d_k) );
+		strcpy( vd_k.tx_opn_br_no,jgb.up_br_no );
+		if( upd_sum( vd_k ) ) goto ErrExit;
+	}
+	****/
+
+	return 0;
+ErrExit:
+	return 1;
+}
+sub_do_acc_and_up( struct gl_amt_c a_gl_amt)
+{
+	struct gl_amt_c gl_amt_c;
+	int ret=0;
+
+	memset(&gl_amt_c,'\0',sizeof(gl_amt_c));
+	ret=Gl_amt_Dec_Upd( g_pub_tx.reply,
+		"br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		a_gl_amt.br_no,a_gl_amt.cur_no,a_gl_amt.acc_hrt );
+	if(ret && ret!=100)
+		MYSQLERR
+vtcp_log("[%d]br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+		__LINE__,a_gl_amt.br_no,a_gl_amt.cur_no,a_gl_amt.acc_hrt );
+
+	ret=Gl_amt_Fet_Upd( &gl_amt_c , g_pub_tx.reply );
+	if( ret==100 )
+	{
+		memset( &gl_amt_c,0,sizeof(gl_amt_c) );
+		strcpy( gl_amt_c.br_no,a_gl_amt.br_no );
+		strcpy( gl_amt_c.cur_no,a_gl_amt.cur_no );
+		strcpy( gl_amt_c.acc_hrt,a_gl_amt.acc_hrt );
+		strcpy( gl_amt_c.dc_ind,a_gl_amt.dc_ind );
+		strcpy( gl_amt_c.up_acc_hrt,a_gl_amt.up_acc_hrt );
+vtcp_log("INS[%d] [%s][%s][%s]",__LINE__,gl_amt_c.br_no,gl_amt_c.cur_no,gl_amt_c.acc_hrt );
+		gl_amt_c.date=g_pub_tx.tx_date;
+
+		sub_add( &gl_amt_c,a_gl_amt );
+
+		ret=Gl_amt_Ins( gl_amt_c,g_pub_tx.reply );
+		MYSQLERR
+	}
+	else
+	{
+		sub_add( &gl_amt_c,a_gl_amt );
+		ret=Gl_amt_Upd_Upd( gl_amt_c,g_pub_tx.reply  );
+		MYRETERR
+	}
+
+	Gl_amt_Clo_Upd();
+
+    return 0;
+ErrExit:
+	return 1;
+}
+sub_add( p_gl_amt_c,glamt )
+ struct gl_amt_c *p_gl_amt_c;
+ struct gl_amt_c glamt;
+{
+	struct gl_amt_c gl_amt_c;
+	int ret;
+
+	memcpy( &gl_amt_c,p_gl_amt_c,sizeof(gl_amt_c) );
+
+		gl_amt_c.dr_bal+=glamt.dr_bal;
+		gl_amt_c.cr_bal+=glamt.cr_bal;
+        gl_amt_c.ac_cnt+=glamt.ac_cnt;
+
+		gl_amt_c.rdd_cnt+=glamt.rdd_cnt;
+		gl_amt_c.rcd_cnt+=glamt.rcd_cnt;
+		gl_amt_c.rdd_amt+=glamt.rdd_amt;
+		gl_amt_c.rcd_amt+=glamt.rcd_amt;
+
+		gl_amt_c.cdd_cnt+=glamt.cdd_cnt;
+		gl_amt_c.ccd_cnt+=glamt.ccd_cnt;
+		gl_amt_c.cdd_amt+=glamt.cdd_amt;
+		gl_amt_c.ccd_amt+=glamt.ccd_amt;
+
+		gl_amt_c.tx_rdd_cnt+=glamt.tx_rdd_cnt;
+		gl_amt_c.tx_rcd_cnt+=glamt.tx_rcd_cnt;
+		gl_amt_c.tx_rdd_amt+=glamt.tx_rdd_amt;
+		gl_amt_c.tx_rcd_amt+=glamt.tx_rcd_amt;
+
+		gl_amt_c.tx_cdd_cnt+=glamt.tx_cdd_cnt;
+		gl_amt_c.tx_ccd_cnt+=glamt.tx_ccd_cnt;
+		gl_amt_c.tx_cdd_amt+=glamt.tx_cdd_amt;
+		gl_amt_c.tx_ccd_amt+=glamt.tx_ccd_amt;
+
+            gl_amt_c.tddr_cnt+=glamt.rdd_cnt;
+            gl_amt_c.tdcr_cnt+=glamt.rcd_cnt;
+            gl_amt_c.tddr_amt+=glamt.rdd_amt;
+            gl_amt_c.tdcr_amt+=glamt.rcd_amt;
+
+            gl_amt_c.tx_tddr_cnt+=glamt.tx_rdd_cnt;
+            gl_amt_c.tx_tdcr_cnt+=glamt.tx_rcd_cnt;
+            gl_amt_c.tx_tddr_amt+=glamt.tx_rdd_amt;
+            gl_amt_c.tx_tdcr_amt+=glamt.tx_rcd_amt;
+
+            gl_amt_c.mdr_cnt+=glamt.rdd_cnt;
+            gl_amt_c.mcr_cnt+=glamt.rcd_cnt;
+            gl_amt_c.mdr_amt+=glamt.rdd_amt;
+            gl_amt_c.mcr_amt+=glamt.rcd_amt;
+
+            gl_amt_c.tx_mdr_cnt+=glamt.tx_rdd_cnt;
+            gl_amt_c.tx_mcr_cnt+=glamt.tx_rcd_cnt;
+            gl_amt_c.tx_mdr_amt+=glamt.tx_rdd_amt;
+            gl_amt_c.tx_mcr_amt+=glamt.tx_rcd_amt;
+        
+            gl_amt_c.qdr_cnt+=glamt.rdd_cnt;
+            gl_amt_c.qcr_cnt+=glamt.rcd_cnt;
+            gl_amt_c.qdr_amt+=glamt.rdd_amt;
+            gl_amt_c.qcr_amt+=glamt.rcd_amt;
+
+            gl_amt_c.tx_qdr_cnt+=glamt.tx_rdd_cnt;
+            gl_amt_c.tx_qcr_cnt+=glamt.tx_rcd_cnt;
+            gl_amt_c.tx_qdr_amt+=glamt.tx_rdd_amt;
+            gl_amt_c.tx_qcr_amt+=glamt.tx_rcd_amt;
+
+            gl_amt_c.ydr_cnt+=glamt.rdd_cnt;
+            gl_amt_c.ycr_cnt+=glamt.rcd_cnt;
+            gl_amt_c.ydr_amt+=glamt.rdd_amt;
+            gl_amt_c.ycr_amt+=glamt.rcd_amt;
+
+            gl_amt_c.tx_ydr_cnt+=glamt.tx_rdd_cnt;
+            gl_amt_c.tx_ycr_cnt+=glamt.tx_rcd_cnt;
+            gl_amt_c.tx_ydr_amt+=glamt.tx_rdd_amt;
+            gl_amt_c.tx_ycr_amt+=glamt.tx_rcd_amt;
+
+	memcpy( p_gl_amt_c , &gl_amt_c ,sizeof(gl_amt_c) );
+}
+
+/*	长治是二级机构所以用不到下面的 */
+int do_up_br_no()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_amt_c r;	/* 存上级机构相同的行的合计值 */
+		struct gl_amt_c v;	/* 存gl_amt_sum中的值 */
+		long date;
+	EXEC SQL END DECLARE SECTION;
+
+	date=g_pub_tx.tx_date;
+	EXEC SQL delete from gl_amt_sum ;
+	MYSQLERR
+
+	EXEC SQL declare cur_upsub cursor for 
+		select up_br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt,
+		sum(dr_bal),sum(cr_bal),sum(ac_cnt),
+		sum(ldd_bal),sum(lcd_bal),sum(lac_cnt),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),
+		sum(tx_rdd_cnt),sum(tx_rcd_cnt),sum(tx_rdd_amt),sum(tx_rcd_amt),
+		sum(tx_cdd_cnt),sum(tx_ccd_cnt),sum(tx_cdd_amt),sum(tx_ccd_amt),
+		sum(tddr_bal),sum(tdcr_bal),sum(tdac_cnt),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(tx_tddr_cnt),sum(tx_tdcr_cnt),
+		sum(tx_tddr_amt),sum(tx_tdcr_amt),
+		sum(mdr_bal),sum(mcr_bal),sum(mac_cnt),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(tx_mdr_cnt),sum(tx_mcr_cnt),
+		sum(tx_mdr_amt),sum(tx_mcr_amt),
+		sum(qdr_bal),sum(qcr_bal),sum(qac_cnt),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(tx_qdr_cnt),sum(tx_qcr_cnt),
+		sum(tx_qdr_amt),sum(tx_qcr_amt),
+		sum(ydr_bal),sum(ycr_bal),sum(yac_cnt),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt),
+		sum(tx_ydr_cnt),sum(tx_ycr_cnt),
+		sum(tx_ydr_amt),sum(tx_ycr_amt)
+	from gl_amt a,com_branch b
+	where a.br_no=b.br_no
+	group by up_br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt
+	order by 1,2,3,4,5,6 ;
+	if(sqlca.sqlcode &&sqlca.sqlcode)
+	MYSQLERR
+
+	EXEC SQL open cur_upsub;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&r,'\0',sizeof(r));
+		EXEC SQL fetch cur_upsub
+	into 
+		:r.br_no,:r.cur_no,:r.acc_hrt,:r.date,:r.dc_ind,:r.up_acc_hrt,
+		:r.dr_bal,:r.cr_bal,:r.ac_cnt,
+		:r.ldd_bal,:r.lcd_bal,:r.lac_cnt,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.cdd_cnt,:r.ccd_cnt,:r.cdd_amt,:r.ccd_amt,
+		:r.tx_rdd_cnt,:r.tx_rcd_cnt,:r.tx_rdd_amt,:r.tx_rcd_amt,
+		:r.tx_cdd_cnt,:r.tx_ccd_cnt,:r.tx_cdd_amt,:r.tx_ccd_amt,
+		:r.tddr_bal,:r.tdcr_bal,:r.tdac_cnt,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.tx_tddr_cnt,:r.tx_tdcr_cnt,
+		:r.tx_tddr_amt,:r.tx_tdcr_amt,
+		:r.mdr_bal,:r.mcr_bal,:r.mac_cnt,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.tx_mdr_cnt,:r.tx_mcr_cnt,
+		:r.tx_mdr_amt,:r.tx_mcr_amt,
+		:r.qdr_bal,:r.qcr_bal,:r.qac_cnt,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.tx_qdr_cnt,:r.tx_qcr_cnt,
+		:r.tx_qdr_amt,:r.tx_qcr_amt,
+		:r.ydr_bal,:r.ycr_bal,:r.yac_cnt,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt,
+		:r.tx_ydr_cnt,:r.tx_ycr_cnt,
+		:r.tx_ydr_amt,:r.tx_ycr_amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+vtcp_log("%s-%s-%s",r.br_no,r.cur_no,r.acc_hrt);
+		EXEC SQL declare cur_sum1 cursor for
+			select rowid,gl_amt_sum.* 
+			from gl_amt_sum
+			where br_no=:r.br_no and cur_no=:r.cur_no and acc_hrt=:r.acc_hrt
+			and "date"=:r.date for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum1;
+		MYSQLERR
+
+		memset(&v,'\0',sizeof(v));
+		EXEC SQL fetch cur_sum1
+			into :v;
+		if( sqlca.sqlcode==1403 )
+		{
+			/**
+			EXEC SQL insert into gl_amt_sum values(:r);
+			**/
+			Gl_amt_sum_Ins(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			/**
+			EXEC SQL update gl_amt_sum set *=(:r)
+				where current of cur_sum1;
+			**/
+			Gl_amt_sum_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum1;
+	}
+	EXEC SQL close cur_upsub;
+
+	EXEC SQL declare cur_upsub2 cursor for 
+		select br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt,
+		sum(dr_bal),sum(cr_bal),sum(ac_cnt),
+		sum(ldd_bal),sum(lcd_bal),sum(lac_cnt),
+		sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),
+		sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),
+		sum(tx_rdd_cnt),sum(tx_rcd_cnt),sum(tx_rdd_amt),sum(tx_rcd_amt),
+		sum(tx_cdd_cnt),sum(tx_ccd_cnt),sum(tx_cdd_amt),sum(tx_ccd_amt),
+		sum(tddr_bal),sum(tdcr_bal),sum(tdac_cnt),
+		sum(tddr_cnt),sum(tdcr_cnt),
+		sum(tddr_amt),sum(tdcr_amt),
+		sum(tx_tddr_cnt),sum(tx_tdcr_cnt),
+		sum(tx_tddr_amt),sum(tx_tdcr_amt),
+		sum(mdr_bal),sum(mcr_bal),sum(mac_cnt),
+		sum(mdr_cnt),sum(mcr_cnt),
+		sum(mdr_amt),sum(mcr_amt),
+		sum(tx_mdr_cnt),sum(tx_mcr_cnt),
+		sum(tx_mdr_amt),sum(tx_mcr_amt),
+		sum(qdr_bal),sum(qcr_bal),sum(qac_cnt),
+		sum(qdr_cnt),sum(qcr_cnt),
+		sum(qdr_amt),sum(qcr_amt),
+		sum(tx_qdr_cnt),sum(tx_qcr_cnt),
+		sum(tx_qdr_amt),sum(tx_qcr_amt),
+		sum(ydr_bal),sum(ycr_bal),sum(yac_cnt),
+		sum(ydr_cnt),sum(ycr_cnt),
+		sum(ydr_amt),sum(ycr_amt),
+		sum(tx_ydr_cnt),sum(tx_ycr_cnt),
+		sum(tx_ydr_amt),sum(tx_ycr_amt)
+	from gl_amt
+	where br_no in(select up_br_no from com_branch )
+	group by br_no,cur_no,acc_hrt,"date",dc_ind,up_acc_hrt
+	order by 1,2,3,4,5,6 ;
+	MYSQLERR
+
+	EXEC SQL open cur_upsub2;
+	MYSQLERR
+
+	while(1)
+	{
+		memset(&r,'\0',sizeof(r));
+		EXEC SQL fetch cur_upsub2
+	into 
+		:r.br_no,:r.cur_no,:r.acc_hrt,:r.date,:r.dc_ind,:r.up_acc_hrt,
+		:r.dr_bal,:r.cr_bal,:r.ac_cnt,
+		:r.ldd_bal,:r.lcd_bal,:r.lac_cnt,
+		:r.rdd_cnt,:r.rcd_cnt,:r.rdd_amt,:r.rcd_amt,
+		:r.cdd_cnt,:r.ccd_cnt,:r.cdd_amt,:r.ccd_amt,
+		:r.tx_rdd_cnt,:r.tx_rcd_cnt,:r.tx_rdd_amt,:r.tx_rcd_amt,
+		:r.tx_cdd_cnt,:r.tx_ccd_cnt,:r.tx_cdd_amt,:r.tx_ccd_amt,
+		:r.tddr_bal,:r.tdcr_bal,:r.tdac_cnt,
+		:r.tddr_cnt,:r.tdcr_cnt,
+		:r.tddr_amt,:r.tdcr_amt,
+		:r.tx_tddr_cnt,:r.tx_tdcr_cnt,
+		:r.tx_tddr_amt,:r.tx_tdcr_amt,
+		:r.mdr_bal,:r.mcr_bal,:r.mac_cnt,
+		:r.mdr_cnt,:r.mcr_cnt,
+		:r.mdr_amt,:r.mcr_amt,
+		:r.tx_mdr_cnt,:r.tx_mcr_cnt,
+		:r.tx_mdr_amt,:r.tx_mcr_amt,
+		:r.qdr_bal,:r.qcr_bal,:r.qac_cnt,
+		:r.qdr_cnt,:r.qcr_cnt,
+		:r.qdr_amt,:r.qcr_amt,
+		:r.tx_qdr_cnt,:r.tx_qcr_cnt,
+		:r.tx_qdr_amt,:r.tx_qcr_amt,
+		:r.ydr_bal,:r.ycr_bal,:r.yac_cnt,
+		:r.ydr_cnt,:r.ycr_cnt,
+		:r.ydr_amt,:r.ycr_amt,
+		:r.tx_ydr_cnt,:r.tx_ycr_cnt,
+		:r.tx_ydr_amt,:r.tx_ycr_amt;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		EXEC SQL declare cur_sum2 cursor for
+			select rowid,gl_amt_sum.* 
+			from gl_amt_sum
+			where br_no=:r.br_no and cur_no=:r.cur_no and acc_hrt=:r.acc_hrt
+			and "date"=:r.date for UPDATE;
+		MYSQLERR
+
+		EXEC SQL open cur_sum2;
+		MYSQLERR
+		memset(&v,'\0',sizeof(v));
+		EXEC SQL fetch cur_sum2
+			into :v ;
+		if( sqlca.sqlcode==1403 )
+		{
+			Gl_amt_sum_Ins(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			sub_add_all( &r,v );
+			/**
+			EXEC SQL update gl_amt_sum set *=(:r)
+				where current of cur_sum2;
+			**/
+			Gl_amt_Upd_Upd(r,g_pub_tx.reply);
+			MYSQLERR
+		}
+
+		EXEC SQL close cur_sum2;
+	}
+	EXEC SQL close cur_upsub2;
+
+	EXEC SQL delete from gl_amt_sum where "date"!=:date;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+sub_add_all( p_gl_amt_c,glamt )
+ struct gl_amt_c *p_gl_amt_c;
+ struct gl_amt_c glamt;
+{
+	struct gl_amt_c gl_amt_c;
+	int ret;
+
+	memset( &gl_amt_c,'\0',sizeof(gl_amt_c) );
+	memcpy( &gl_amt_c,p_gl_amt_c,sizeof(gl_amt_c) );
+
+		gl_amt_c.dr_bal+=glamt.dr_bal;
+		gl_amt_c.cr_bal+=glamt.cr_bal;
+        gl_amt_c.ac_cnt+=glamt.ac_cnt;
+
+		gl_amt_c.ldd_bal+=glamt.ldd_bal;
+		gl_amt_c.lcd_bal+=glamt.lcd_bal;
+        gl_amt_c.lac_cnt+=glamt.lac_cnt;
+
+		gl_amt_c.rdd_cnt+=glamt.rdd_cnt;
+		gl_amt_c.rcd_cnt+=glamt.rcd_cnt;
+		gl_amt_c.rdd_amt+=glamt.rdd_amt;
+		gl_amt_c.rcd_amt+=glamt.rcd_amt;
+
+		gl_amt_c.tx_rdd_cnt+=glamt.tx_rdd_cnt;
+		gl_amt_c.tx_rcd_cnt+=glamt.tx_rcd_cnt;
+		gl_amt_c.tx_rdd_amt+=glamt.tx_rdd_amt;
+		gl_amt_c.tx_rcd_amt+=glamt.tx_rcd_amt;
+
+		gl_amt_c.cdd_cnt+=glamt.cdd_cnt;
+		gl_amt_c.ccd_cnt+=glamt.ccd_cnt;
+		gl_amt_c.cdd_amt+=glamt.cdd_amt;
+		gl_amt_c.ccd_amt+=glamt.ccd_amt;
+
+		gl_amt_c.tx_cdd_cnt+=glamt.tx_cdd_cnt;
+		gl_amt_c.tx_ccd_cnt+=glamt.tx_ccd_cnt;
+		gl_amt_c.tx_cdd_amt+=glamt.tx_cdd_amt;
+		gl_amt_c.tx_ccd_amt+=glamt.tx_ccd_amt;
+
+		gl_amt_c.tddr_bal+=glamt.tddr_bal;
+		gl_amt_c.tdcr_bal+=glamt.tdcr_bal;
+        gl_amt_c.tdac_cnt+=glamt.tdac_cnt;
+
+            gl_amt_c.tddr_cnt+=glamt.tddr_cnt;
+            gl_amt_c.tdcr_cnt+=glamt.tdcr_cnt;
+            gl_amt_c.tddr_amt+=glamt.tddr_amt;
+            gl_amt_c.tdcr_amt+=glamt.tdcr_amt;
+
+            gl_amt_c.tx_tddr_cnt+=glamt.tx_tddr_cnt;
+            gl_amt_c.tx_tdcr_cnt+=glamt.tx_tdcr_cnt;
+            gl_amt_c.tx_tddr_amt+=glamt.tx_tddr_amt;
+            gl_amt_c.tx_tdcr_amt+=glamt.tx_tdcr_amt;
+
+		gl_amt_c.mdr_bal+=glamt.mdr_bal;
+		gl_amt_c.mcr_bal+=glamt.mcr_bal;
+        gl_amt_c.mac_cnt+=glamt.mac_cnt;
+
+            gl_amt_c.mdr_cnt+=glamt.mdr_cnt;
+            gl_amt_c.mcr_cnt+=glamt.mcr_cnt;
+            gl_amt_c.mdr_amt+=glamt.mdr_amt;
+            gl_amt_c.mcr_amt+=glamt.mcr_amt;
+
+            gl_amt_c.tx_mdr_cnt+=glamt.tx_mdr_cnt;
+            gl_amt_c.tx_mcr_cnt+=glamt.tx_mcr_cnt;
+            gl_amt_c.tx_mdr_amt+=glamt.tx_mdr_amt;
+            gl_amt_c.tx_mcr_amt+=glamt.tx_mcr_amt;
+
+		gl_amt_c.qdr_bal+=glamt.qdr_bal;
+		gl_amt_c.qcr_bal+=glamt.qcr_bal;
+        gl_amt_c.qac_cnt+=glamt.qac_cnt;
+
+            gl_amt_c.qdr_cnt+=glamt.qdr_cnt;
+            gl_amt_c.qcr_cnt+=glamt.qcr_cnt;
+            gl_amt_c.qdr_amt+=glamt.qdr_amt;
+            gl_amt_c.qcr_amt+=glamt.qcr_amt;
+
+            gl_amt_c.tx_qdr_cnt+=glamt.tx_qdr_cnt;
+            gl_amt_c.tx_qcr_cnt+=glamt.tx_qcr_cnt;
+            gl_amt_c.tx_qdr_amt+=glamt.tx_qdr_amt;
+            gl_amt_c.tx_qcr_amt+=glamt.tx_qcr_amt;
+
+		gl_amt_c.ydr_bal+=glamt.ydr_bal;
+		gl_amt_c.ycr_bal+=glamt.ycr_bal;
+        gl_amt_c.yac_cnt+=glamt.yac_cnt;
+
+            gl_amt_c.ydr_cnt+=glamt.ydr_cnt;
+            gl_amt_c.ycr_cnt+=glamt.ycr_cnt;
+            gl_amt_c.ydr_amt+=glamt.ydr_amt;
+            gl_amt_c.ycr_amt+=glamt.ycr_amt;
+
+            gl_amt_c.tx_ydr_cnt+=glamt.tx_ydr_cnt;
+            gl_amt_c.tx_ycr_cnt+=glamt.tx_ycr_cnt;
+            gl_amt_c.tx_ydr_amt+=glamt.tx_ydr_amt;
+            gl_amt_c.tx_ycr_amt+=glamt.tx_ycr_amt;
+
+	memcpy( p_gl_amt_c , &gl_amt_c ,sizeof(gl_amt_c) );
+}

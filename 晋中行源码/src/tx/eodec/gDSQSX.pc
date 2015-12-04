@@ -1,0 +1,102 @@
+/*************************************************************
+* 文 件 名:   gDSQSX.pc
+* 功能描述：  进行30天预授权失效的处理 
+* 作    者: 	wzw
+* 完成日期:   2012-5-29
+**************************************************************/
+#define ERR_DEAL   if(ret){ WRITEMSG  goto ErrExit;} 
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "trace_log_c.h"
+#include "mdm_ac_rel_c.h"
+#include "chnl_premise_c.h"
+
+gDSQSX()
+{
+	int ret=0;
+	long tx_date=0;
+
+	struct com_sys_parm_c	sCom_sys_parm;
+	struct mdm_ac_rel_c sMdm_ac_rel;
+	struct chnl_premise_c sChnl_premise;
+
+	memset(&sCom_sys_parm,0x00,sizeof(sCom_sys_parm));
+	memset(&sMdm_ac_rel,0x00,sizeof(sMdm_ac_rel));
+	memset(&sChnl_premise,0x00,sizeof(sChnl_premise));
+
+	pub_base_sysinit();
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if(pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret){
+		sprintf(acErrMsg,"查询公共参数表错误!");
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O005");
+		goto ErrExit;
+	}
+
+	ret=Chnl_premise_Dec_Sel(g_pub_tx.reply, "sts='0'");
+		ERR_DEAL
+	while(1)
+	{
+		tx_date=0;
+		memset(&sChnl_premise,0x00,sizeof(sChnl_premise));
+		ret=Chnl_premise_Fet_Sel(&sChnl_premise, g_pub_tx.reply);
+		if(ret!=100 && ret)
+		{
+			goto ErrExit;
+		}
+		else if(ret==100)
+			break;
+
+		vtcp_log("%s%d,账号[%s],日期[%ld],预授权金额[%.2f],摘要[%s]",__FILE__,__LINE__,sChnl_premise.ac_no, sChnl_premise.pt_date, sChnl_premise.premise_amt, sChnl_premise.filler);
+		pub_base_deadlineD(sChnl_premise.pt_date, 30, &tx_date);
+		vtcp_log("%s%d,g_pub_tx.tx_date[%ld],tx_date[%ld]",__FILE__,__LINE__, g_pub_tx.tx_date, tx_date);
+
+		if(g_pub_tx.tx_date>=tx_date)
+		{
+			ret=sql_execute("update chnl_premise set sts ='3' , filler='预授权失效' where pt_date=%ld and pt_trace_no=%d and ac_no ='%s' ", sChnl_premise.pt_date, sChnl_premise.pt_trace_no, sChnl_premise.ac_no);
+				ERR_DEAL
+
+			ret=Mdm_ac_rel_Sel(g_pub_tx.reply, &sMdm_ac_rel, "ac_no='%s'", sChnl_premise.ac_no);
+				ERR_DEAL
+
+			ret=sql_execute("update dd_mst set ctl_amt=ctl_amt-%.2f where ac_id =%ld ",sChnl_premise.premise_amt, sMdm_ac_rel.ac_id);
+				ERR_DEAL
+		}
+		else
+		{
+			vtcp_log("%s%d,g_pub_tx.tx_date[%ld],tx_date[%ld]",__FILE__,__LINE__, g_pub_tx.tx_date, tx_date);
+			continue;
+		}
+	}
+	Chnl_premise_Clo_Sel();
+
+OkExit:
+	sql_commit();   /*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"进行30天预授权失效的处理成功[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+    
+ErrExit:
+	sql_rollback();/*--事务回滚--*/
+	sprintf(acErrMsg,"进行30天预授权失效的处理失败[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+

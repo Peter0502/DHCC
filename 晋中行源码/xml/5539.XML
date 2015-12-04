@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="5539 对账成功交易发送大额"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-64s" FUNCTIONS=
+    "T(5539                       对账成功交易发送大额)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>"{
+    if(#DOLIST!=''){
+           dim @selid as number;
+           dim @reckontrecode as string;
+           dim @paybkcode as string;
+           dim @succcnt as string;
+           dim @succamt as string;
+           dim @chkacctord as string;
+           dim @content as string;
+           dim @ckdate  as string;
+           dim @cmtno   as string;
+           dim @ywzl    as string;
+           dim @payacct as string;
+           dim @skacno  as string;
+           dim @skname  as string;
+           dim @connet as  string;
+           
+           @selid=list_work();
+           if(@selid &lt; 0){
+              list_del();
+              rerun();
+              return(true);
+           }
+           @selid=list_getselid();
+           if(@selid &lt; 0)
+           {
+              list_del();
+              rerun();
+              return(true);
+           }
+           @paybkcode=rtrim(list_gettext(@selid,0));     // 付款行行号
+           @reckontrecode=rtrim(list_gettext(@selid,1)); // 清算国库行号
+           @ckdate=rtrim(list_gettext(@selid,2));        // 对账日期
+           @chkacctord=rtrim(list_gettext(@selid,3));    // 对账批次 
+           @succamt=rtrim(list_gettext(@selid,4));       // 对账总金额
+           @succcnt=rtrim(list_gettext(@selid,5));       // 对账总笔数
+           @cmtno='103';
+           @ywzl='11';
+           @payacct='9223100000164';         //测试暂时使用，待确定
+           @skacno='37109';
+           @skname='衡水市待划转集中清算资金款项户';
+           
+           @connet=@ckdate+chr(43)+@chkacctord+chr(43)+@succcnt;
+           
+           open('5101.XML','#CMTNO='+@cmtno+';#YW_TYPE='+@ywzl+';#AC_BR_NO='+@reckontrecode+';#PAY_AC_NO='+@payacct+';#TX_AMT1='+@succamt+';#CASH_AC_NO='+@skacno+';#CASH_OPN_BR_NO='+@reckontrecode+';#CASH_NAME='+@skname+';#CONTENT='+@connet+';');
+           return(true);
+    }
+    list_del();
+    #DOLIST='';
+    return(true);
+  }"</ONLOSTFOCUS></ITEM>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5536)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="10" COL="25" TYPE="%-11s" FUNCTIONS="T(对账  日期:)"/>
+  <!--输入变量-->
+  <ITEM NAME="#TX_DATE" LINE="10" COL="36" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)D()"/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{  
+      dim @tota as string;
+      commsend_001();
+      $FD16='5536';
+      $FD44=#TX_DATE;
+      @tota=calltips();
+      if($FD12!='0000'){
+             showmsg(geterror());
+             return(false);
+      }
+      autolist(@tota);
+      #DOLIST='1';
+}"
+</ONCLICK>  
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>

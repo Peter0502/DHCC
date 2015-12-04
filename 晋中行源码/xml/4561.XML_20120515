@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="4561 小区明细打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4561                          小区明细打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=4561)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+
+	<ITEM NAME="#LACNO" LINE="6" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(主 账 户:)" />
+	<ITEM NAME="#ACTNO" LINE="6" COL="20" TYPE="%-19s" INPUT="TEXT"  FUNCTIONS="T()V(NB)" >
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='9706';
+			$FD30=#ACTNO;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if($FD2!=$KINBR)
+			{
+				showmsg('请到开户网点办理业务');
+				return(false);
+			}
+			if(substr($FD88,0,1)!='1')
+			{
+				showmsg('此账户不能开立子账户');
+				return(false);
+			}
+			//if(substr($FD88,9,1)!='1')
+			//{
+			//	showmsg('此账户不能关联小区');
+			//	return(false);
+			//}
+			#ZHMC=delspace($FD25);
+			#TEMP1=delspace($FD30);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#TEMP1" TYPE="%-50s" FUNCTIONS=""/>
+	<ITEM NAME="#LZHMC"  LINE="7" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(客户名称:)"/>
+	<ITEM NAME="#ZHMC"   LINE="7" COL="20" TYPE="%-50s" INPUT="LABEL" FUNCTIONS=""/>
+	<ITEM NAME="#LXQH" LINE="9" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区编号:)" />
+	<ITEM NAME="#XQBH" LINE="9" COL="20" TYPE="%-5s" INPUT="TEXT"  FUNCTIONS="T()" >
+		<ONLOSTFOCUS>
+		"{
+			dim @tota  as string;
+			if(#XQBH!='')
+			{
+				initfd();
+				commsend_001();
+				$FD16='9598';
+				$FD123='select xqdz15 from xqdz where xqdz100 in('+chr(39)+#ACTNO+chr(39)+','+chr(39)+#TEMP1+chr(39)+') and xqdz101='+chr(39)+#XQBH+chr(39);
+				@tota=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#XQMC=strfld(@tota,'|',0);
+				if(#XQMC=='')
+				{
+					showmsg('小区信息错误,该小区不存在!');
+					return(false);
+				}
+				refresh();
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#LXQMC" LINE="10" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区名称:)" />
+	<ITEM NAME="#XQMC"  LINE="10" COL="20" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="" />
+	<ITEM NAME="#LDATE" LINE="12" COL="10" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(日期范围:)"/>
+	<ITEM NAME="#START" LINE="12" COL="20" TYPE="%8s"   INPUT="TEXT"  FUNCTIONS="D()"/>
+	<ITEM LINE="12"    COL="29"  TYPE="%-3s" INPUT="LABEL" FUNCTIONS="T(-->)"/>
+	<ITEM NAME="#END"   LINE="12" COL="32" TYPE="%8s"   INPUT="TEXT"  FUNCTIONS="V(NB)D()T($HDATE)">
+	<ONLOSTFOCUS>
+	"{
+		if(val(#START) &gt; val(#END))
+		{
+			showmsg('输入日期错误');
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONLOSTFOCUS>
+	"{
+		dim @tota as string;
+		initfd();
+		commsend_001();
+		$FD16='4561';
+		$FD31=#ACTNO;
+		$FD30=#XQBH;
+		$FD44=#START;
+		$FD45=#END;
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		savefiletxt('../tmp/'+$KINBR+$TLRNO+$TTYNAME,@tota);
+		call('fview ../tmp/'+$KINBR+$TLRNO+$TTYNAME);
+		rerun();
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  </VARIABLE>
+</TRANSACTION>

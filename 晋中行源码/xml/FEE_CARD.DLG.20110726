@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="00111111" TITLE="收费录入界面"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+
+  <ITEM NAME="#INIT" TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+	dim @fd as file;
+	dim @fline as string;
+	//showmsg('file = ['+'../tmp/'+$KINBR+$TTYNAME+']');
+	@fd=openfile('../tmp/'+$KINBR+$TTYNAME,'rb');
+	#TOTAMT=0;
+	if(@fd &gt;= 0){
+		@fline=readline(@fd);
+		@fline=readline(@fd);
+
+		if(len(@fline) &gt; 0){
+			@fline=substr(@fline,0,len(@fline)-1);
+			#L1=strfld(@fline,'|',0);
+			#T1=val(strfld(@fline,'|',1));
+			show(#L1,true);
+			show(#T1,true);
+			show(#UNIT1,true);
+			#TOTAMT=#TOTAMT+#T1;
+		}else{
+			closefile(@fd);
+			show(#TOTAMT,true);
+			return(true);
+		}
+		@fline=readline(@fd);
+		if(len(@fline) &gt; 0){
+			@fline=substr(@fline,0,len(@fline)-1);
+			#L2=strfld(@fline,'|',0);
+			#T2=val(strfld(@fline,'|',1));
+			show(#L2,true);
+			show(#T2,true);
+			show(#UNIT2,true);
+			#TOTAMT=#TOTAMT+#T2;
+		}else{
+			closefile(@fd);
+			show(#TOTAMT,true);
+			return(true);
+		}
+		@fline=readline(@fd);
+		if(len(@fline) &gt; 0){
+			@fline=substr(@fline,0,len(@fline)-1);
+			#L3=strfld(@fline,'|',0);
+			#T3=val(strfld(@fline,'|',1));
+			show(#L3,true);
+			show(#T3,true);
+			show(#UNIT3,true);
+			#TOTAMT=#TOTAMT+#T3;
+		}else{
+			closefile(@fd);
+			show(#TOTAMT,true);
+			return(true);
+		}
+		show(#TOTAMT,true);
+		return(true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="1"  COL="3" TYPE="%-40s" FUNCTIONS=
+    "T(                   收费录入界面)"/>
+  <!-- 定义callserver返回但界面不用的变量 -->
+
+  <ITEM INPUT="LABEL" VISABLE="FALSE" LINE="5" COL="5"  TYPE="%-30s" NAME="#L1" FUNCTIONS=""/>
+  <ITEM INPUT="LABEL" VISABLE="FALSE" LINE="6" COL="5"  TYPE="%-30s" NAME="#L2" FUNCTIONS=""/>
+  <ITEM INPUT="LABEL" VISABLE="FALSE" LINE="7" COL="5"  TYPE="%-30s" NAME="#L3" FUNCTIONS=""/>
+  <ITEM INPUT="LABEL" VISABLE="FALSE" NAME="#UNIT1" LINE="5" COL="61"  TYPE="%-2s" FUNCTIONS="T(元)"/>
+  <ITEM INPUT="LABEL" VISABLE="FALSE" NAME="#UNIT2" LINE="6" COL="61"  TYPE="%-2s" FUNCTIONS="T(元)"/>
+  <ITEM INPUT="LABEL" VISABLE="FALSE" NAME="#UNIT3" LINE="7" COL="61"  TYPE="%-2s" FUNCTIONS="T(元)"/>
+	
+	<ITEM NAME="#FEE_FD91" TYPE="%4s"/>
+	<ITEM NAME="#FEE_FD92" TYPE="%6s"/>
+	<ITEM NAME="#FEE_FD93" TYPE="%1s"/>
+	
+  <ITEM INPUT="TEXT" ENABLE="FALSE" VISABLE="FALSE" LINE="5" COL="45" TYPE="%13.2f" NAME="#T1"   />
+  <ITEM INPUT="TEXT" ENABLE="FALSE" VISABLE="FALSE" LINE="6" COL="45" TYPE="%13.2f" NAME="#T2"   />
+  <ITEM INPUT="TEXT" ENABLE="FALSE" VISABLE="FALSE" LINE="7" COL="45" TYPE="%13.2f" NAME="#T3"   />
+  <ITEM INPUT="LABEL" LINE="9" COL="5"  TYPE="%-10s"  FUNCTIONS="T(收费方式:)">
+  <ONLOSTFOCUS>
+  "{
+	if($TXNO == '2405') //对挂失收费的处理(挂失不允许转账收费)
+	{
+		show(#LFEEFLAG,true);
+		show(#FEEFLAG,false);
+	}
+	else
+	{
+		show(#LFEEFLAG,false);
+		show(#FEEFLAG,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#LFEEFLAG" INPUT="SELECT" LINE="9" COL="15"  TYPE="%-1s"  FUNCTIONS="V(NB)T(1)">
+  <SELECT>
+	<OPTION VALUE="1" TITLE="1.现金"/>
+	<!--OPTION VALUE="3" TITLE="3.不收"/-->
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#FEEFLAG" INPUT="SELECT" LINE="9" COL="15"  TYPE="%-1s"  FUNCTIONS="V(NB)T(1)">
+  <SELECT>
+	<OPTION VALUE="1" TITLE="1.现金"/>
+	<OPTION VALUE="2" TITLE="2.转帐"/>
+	<!--OPTION VALUE="3" TITLE="3.不收"/-->
+  </SELECT>
+  </ITEM>
+
+  <ITEM INPUT="LABEL" LINE="9" COL="35" TYPE="%-10s"  FUNCTIONS="T(   总金额:)"/>
+  <ITEM INPUT="TEXT" ENABLE="FALSE" NAME="#TOTAMT" LINE="9" COL="45"  TYPE="%13.2f"  FUNCTIONS=""/>
+  <ITEM LINE="9" COL="61"  TYPE="%-2s" FUNCTIONS="T(元)"/>
+
+
+  <ITEM LINE="15" COL="65" NAME="#FEE_OK"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @len as number;
+	@len=len($FD9);
+	if(@len &lt; 10){
+		if($TXNO == '2405') //对挂失收费的处理(挂失不允许转账收费)
+		{
+			$FD9=$FD9+space(10-@len)+#LFEEFLAG;
+		}
+		else
+		{
+			$FD9=$FD9+space(10-@len)+#FEEFLAG;
+		}
+	}else{
+		if($TXNO == '2405')   //对挂失收费的处理(挂失不允许转账收费)
+		{
+			$FD9=substr($FD9,0,10)+#LFEEFLAG;	
+		}
+		else
+		{
+			$FD9=substr($FD9,0,10)+#FEEFLAG;
+		}
+	}
+	if(substr($FD122,231,1)=='1'){
+	$FD122=space(76)+itoa(#TOTAMT*100,'%012.0f')+space(143)+'1';
+	} else {
+	$FD122=space(76)+itoa(#TOTAMT*100,'%012.0f')+space(143);
+	}
+//		if(substr($FD122,211,1)=='1'){
+//	$FD122=space(76)+itoa(#TOTAMT*100,'%012.0f')+space(123)+'1';
+//	} else {
+//	$FD122=space(76)+itoa(#TOTAMT*100,'%012.0f')+space(123);
+//	}
+	close();
+  }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+</TRANSACTION>
+
+
+

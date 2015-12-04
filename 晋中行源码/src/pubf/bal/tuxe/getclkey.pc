@@ -1,0 +1,133 @@
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <time.h>
+
+/**** APP header files *****/
+#include "bal.h"
+#include "balcrypt.h"
+
+/**** ESQL header files ****/
+EXEC SQL include sqlca;
+EXEC SQL INCLUDE balhostvar.h;
+EXEC SQL INCLUDE sqlglobal.h;
+int balcrypt_get_clientkey(char*, char*, unsigned char[], unsigned char[],
+			               unsigned char[], unsigned char[]);
+
+/******************************************************************************\
+ * int get_cl_key(char* branch_no, 
+ *                char* tty, 
+ *                unsigned char wrkkey1[], 
+ *                unsigned char wrkkey2[],
+ *                unsigned char mackey1[],
+ *                unsigned char mackey2[]);
+ * Input: branch_no, branch number
+ *        tty,  tty name, with branch_no as balwrkkey key.
+ * Output: wrkkey1, working key 1
+ *         wrkkey2, working key 2
+ *         mackey1, mac key 1
+ *         mackey2, mac key 2
+ * Return: 0, OK
+ *         -1, FAIL
+\******************************************************************************/
+int balcrypt_get_clientkey(char* 			branch_no, 
+			               char* 			tty,
+			               unsigned	char 	wrkkey1[],
+			               unsigned char	wrkkey2[],
+			               unsigned char	mackey1[],
+			               unsigned char	mackey2[])
+{
+	/***
+    T_CryptReq  *crypt_req;
+    T_CryptRply *crypt_rply;
+	****/
+
+    long        sendlen;
+    long        recvlen;
+	unsigned char       appkey1[8];
+	unsigned char       appkey2[8];
+
+	if( branch_no == NULL || tty == NULL )
+		return CFailure;
+
+	/***** Commented by Sean 99-03-32, read clkey from database directly **
+
+    *** Allocate memory ***
+    crypt_req  = (T_CryptReq*)tpalloc("CARRAY", NULL, sizeof(T_CryptReq));
+    if( NULL == crypt_req )
+    {
+		balerrno = EBALTUXERR;
+        userlog("ERROR(%d): tpalloc() crypt_req failed! - %s\n",
+                tperrno,
+                tpstrerror(tperrno));
+        return CFailure;
+    }
+    crypt_rply = (T_CryptRply*)tpalloc("CARRAY", NULL, sizeof(T_CryptRply));
+    if( NULL == crypt_rply )
+    {
+		balerrno = EBALTUXERR;
+        userlog("ERROR(%d): tpalloc() crypt_rply failed! - %s\n",
+                tperrno,
+                tpstrerror(tperrno));
+        tpfree((char*)crypt_req);
+        return CFailure;
+    }
+    memset(crypt_req, 0, sizeof(T_CryptReq));
+    memset(crypt_rply, 0, sizeof(T_CryptRply));
+
+    ***** compose request ****
+    strcpy(crypt_req->branch_no, branch_no);
+    strcpy(crypt_req->tty, tty);
+    crypt_req->flags 	= 0;
+	crypt_req->reqtype 	= CRYPTREQ_READCLKEY;
+
+    sendlen = sizeof(T_CryptReq);
+    recvlen = sizeof(T_CryptRply);
+    tpcall("BAL_CRYPT", (char*)crypt_req, sendlen,
+           (char**)&crypt_rply, &recvlen, 0L);
+	if( 0 != tperrno )
+	{
+		balerrno = EBALCALLCRYPT;
+		userlog("ERROR(%d): get client key failed! - %s",
+		        tperrno,
+		        tpstrerror(tperrno));
+		userlog("ERROR(%d): user return code !", tpurcode);
+		return CFailure;
+	}
+
+	****/
+
+	/** read key from database **/
+    memset(&g_hv_balwrkkey,          0,         sizeof(g_hv_balwrkkey));
+    memcpy(g_hv_balwrkkey.branch_no, branch_no, strlen(branch_no));
+    memcpy(g_hv_balwrkkey.tty,       tty,       strlen(tty));
+
+    EXEC SQL select workkey, mackey
+        INTO :g_hv_balwrkkey.workkey, :g_hv_balwrkkey.mackey
+        FROM balwrkkey
+        WHERE branch_no = :g_hv_balwrkkey.branch_no AND
+              tty       = :g_hv_balwrkkey.tty;
+
+    if( sqlca.sqlcode != 0 )
+    {
+		balerrno = EBALGETCLKEY;
+		userlog("ERROR(%d): get client key failed!", sqlca.sqlcode);
+		return CFailure;
+    }
+
+	/*** convert them to binary ****/
+	balcrypt_cnv_binary(g_hv_balwrkkey.workkey, 	wrkkey1);
+	balcrypt_cnv_binary(&g_hv_balwrkkey.workkey[16],	wrkkey2);
+	balcrypt_cnv_binary(g_hv_balwrkkey.mackey, 		mackey1);
+	balcrypt_cnv_binary(&g_hv_balwrkkey.mackey[16], 	mackey2);
+
+	/*** decrypt them ***/
+	balcrypt_get_appkey(appkey1, appkey2);
+	chitty_decipher(appkey1, appkey2, wrkkey1, 8);
+	chitty_decipher(appkey1, appkey2, wrkkey2, 8);
+	chitty_decipher(appkey1, appkey2, mackey1, 8);
+	chitty_decipher(appkey1, appkey2, mackey2, 8);
+
+	return CSuccess;
+}

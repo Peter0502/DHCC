@@ -1,0 +1,617 @@
+/*************************************************************
+* 文 件 名: gD0279.pc
+* 功能描述:  将网点的帐汇到各级虚拟机构上,实体机构必须是br_type<=7
+            如果再增加虚拟机构级别那么照下面的程序增加代码就可以
+*          添加汇资产负债共同类科目余额的代码
+update com_eod_exec set do_seq=1019 where do_seq=1018
+update com_eod_exec set do_seq=1018 where do_seq=1017
+insert into com_eod_exec  values (1017, 'D279', 'gD0279', '入分行总账', '1111111111', '0', '0', '00', '00', '2', 'Y', 'Y', 'Y', '2', 'Y');
+************************************************************/
+#define MYSQLERR if(sqlca.sqlcode ) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d][%d]",sqlca.sqlcode,__LINE__); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]line[%d]",ret,__LINE__); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_sub_c.h"
+#include "gl_mst_c.h"
+
+gD0279()
+{
+	struct com_sys_parm_c com_sys_parm_c;
+	int ret=0;
+
+	memset(&com_sys_parm_c,'\0',sizeof(com_sys_parm_c));
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+	/* 删除非唯一索引，by LiuHuafeng 20100103 */
+	vtcp_log("%s %d drop index ",__FILE__,__LINE__);
+	/*lwb  ret =drop_gl_sub_idx();
+	if(ret)
+	{
+		vtcp_log("%s,%d drop index error ",__FILE__,__LINE__);
+		memcpy(g_pub_tx.reply,"D102",4);
+		goto ErrExit;
+	}*/
+
+	/* end by LiuHuafeng 20100103 */
+	pub_base_sysinit();
+	vtcp_log("%s %d delete br_type=7 机构号 ",__FILE__,__LINE__);
+
+	 EXEC SQL delete from gl_sub where br_no in (select br_no from com_branch where br_type='7');
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"删除虚拟机构帐务出错[%d]",sqlca.sqlcode);
+		WRITEMSG
+		memcpy(g_pub_tx.reply,"D104",4);
+		goto ErrExit;
+	}
+	/** 20150506 
+	EXEC SQL update gl_sub set tx_date=(select lst_date from com_sys_parm);
+	**/
+	/* 先将基层网点的账汇到归属的支行 20121202 BY WYW */
+	EXEC SQL insert into gl_sub select b.up_br_no,a.cur_no,a.acc_hrt,a."date",c.dc_ind,c.up_acc_hrt,
+		 sum(a.dr_bal), sum(a.cr_bal), sum(a.ldd_bal), sum(a.lcd_bal), sum(a.rdd_cnt), sum(a.rcd_cnt),
+		 sum(a.rdd_amt), sum(a.rcd_amt), sum(a.cdd_cnt), sum(a.ccd_cnt), sum(a.cdd_amt), sum(a.ccd_amt),
+		sum(a.tddr_bal), sum(a.tdcr_bal), sum(a.tddr_cnt), sum(a.tdcr_cnt), sum(a.tddr_amt), sum(a.tdcr_amt),
+		 sum(a.mdr_bal), sum(a.mcr_bal),sum(a.mdr_cnt), sum(a.mcr_cnt), sum(a.mdr_amt), sum(a.mcr_amt), 
+		 sum(a.qdr_bal), sum(a.qcr_bal),sum(a.qdr_cnt), sum(a.qcr_cnt), sum(a.qdr_amt), sum(a.qcr_amt), 
+		 sum(a.ydr_bal), sum(a.ycr_bal),sum(a.ydr_cnt),sum(a.ycr_cnt), sum(a.ydr_amt), sum(a.ycr_amt)
+		from gl_sub a, com_branch b ,com_item c
+		where a.br_no = b.br_no 	and a.acc_hrt=c.acc_hrt
+		and b.up_br_no	
+		in (select br_no from com_branch where br_type = '7' )
+		group by a.acc_hrt,a.cur_no,c.dc_ind,c.up_acc_hrt,a."date",b.up_br_no;
+
+	if(sqlca.sqlcode ){
+		sprintf(acErrMsg,"将网点帐汇到支行出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+#if 0 /* 20150506 BY WYW 汇总二级分行汇总数据 */
+	/* 先将基层网点或分行的账汇到归属的分行 */
+	EXEC SQL insert into gl_sub select b.up_br_no,a.cur_no,a.acc_hrt,a."date",c.dc_ind,c.up_acc_hrt,
+		 sum(a.dr_bal), sum(a.cr_bal), sum(a.ldd_bal), sum(a.lcd_bal), sum(a.rdd_cnt), sum(a.rcd_cnt),
+		 sum(a.rdd_amt), sum(a.rcd_amt), sum(a.cdd_cnt), sum(a.ccd_cnt), sum(a.cdd_amt), sum(a.ccd_amt),
+		sum(a.tddr_bal), sum(a.tdcr_bal), sum(a.tddr_cnt), sum(a.tdcr_cnt), sum(a.tddr_amt), sum(a.tdcr_amt),
+		 sum(a.mdr_bal), sum(a.mcr_bal),sum(a.mdr_cnt), sum(a.mcr_cnt), sum(a.mdr_amt), sum(a.mcr_amt), 
+		 sum(a.qdr_bal), sum(a.qcr_bal),sum(a.qdr_cnt), sum(a.qcr_cnt), sum(a.qdr_amt), sum(a.qcr_amt), 
+		 sum(a.ydr_bal), sum(a.ycr_bal),sum(a.ydr_cnt),sum(a.ycr_cnt), sum(a.ydr_amt), sum(a.ycr_amt)
+		from gl_sub a, com_branch b ,com_item c
+		where a.br_no = b.br_no and a.acc_hrt=c.acc_hrt
+		 and b.up_br_no	
+		in (select br_no from com_branch where br_type = '6' )
+				group by a.acc_hrt,a.cur_no,c.dc_ind,c.up_acc_hrt,a."date",b.up_br_no;
+
+
+	if(sqlca.sqlcode ){
+		sprintf(acErrMsg,"将网点帐汇到分行出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+	vtcp_log("%s %d delete insert into gl_sub br_type==8 机构号 ",__FILE__,__LINE__);
+	/* 将支行的帐汇到上级虚拟机构(总行) */
+	EXEC SQL insert into gl_sub select b.up_br_no,cur_no,acc_hrt,"date", dc_ind, up_acc_hrt,
+		 sum(dr_bal), sum(cr_bal), sum(ldd_bal), sum(lcd_bal), sum(rdd_cnt), sum(rcd_cnt),
+		 sum(rdd_amt), sum(rcd_amt), sum(cdd_cnt), sum(ccd_cnt), sum(cdd_amt), sum(ccd_amt),
+		 sum(tddr_bal), sum(tdcr_bal), sum(tddr_cnt), sum(tdcr_cnt), sum(tddr_amt), sum(tdcr_amt),
+		 sum(mdr_bal), sum(mcr_bal),sum(mdr_cnt), sum(mcr_cnt), sum(mdr_amt), sum(mcr_amt), 
+		 sum(qdr_bal), sum(qcr_bal),sum(qdr_cnt), sum(qcr_cnt), sum(qdr_amt), sum(qcr_amt), 
+		 sum(ydr_bal), sum(ycr_bal),sum(ydr_cnt),sum(ycr_cnt), sum(ydr_amt), sum(ycr_amt)
+		from gl_sub a, com_branch b 
+		where a.br_no = b.br_no and b.up_br_no
+		in (select br_no from com_branch where br_type = '8' ) 
+		group by a.acc_hrt,a.cur_no,a.dc_ind,a.up_acc_hrt,a."date",b.up_br_no;
+
+	if(sqlca.sqlcode ){
+		sprintf(acErrMsg,"联社间的汇总出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+	vtcp_log("%s %d delete insert into gl_sub br_type==B 机构号 ",__FILE__,__LINE__);
+	/* begin add by LiuHuafeng 20100104 
+	 * 恢复索引 
+	 */
+#endif /* 20150506 BY WYW */
+	/* 资产负债共同类汇总科目重新从下级科目汇总上来 */
+	ret=sql_execute("delete gl_sub where br_no !='10000' and acc_hrt in (select acc_hrt from com_item where acc_knd='0' and acc_lvl in ('2','1'))" );
+        if ( ret )
+        {
+                sprintf(acErrMsg,"gl_sub dec err![%d]",ret);
+                vtcp_log("L%d, %d %s", __LINE__, sqlca.sqlcode, acErrMsg);
+                goto ErrExit;
+        }
+
+	ret=sql_execute("insert into gl_sub select    \
+    br_no, \
+    cur_no, \
+    it.acc_hrt , \
+    \"date\", \
+    it.dc_ind, \
+    it.up_acc_hrt , \
+    sum(dr_bal), \
+        sum(cr_bal), \
+    sum(ldd_bal), \
+    sum(lcd_bal), \
+    sum(rdd_cnt), \
+    sum(rcd_cnt), \
+    sum(rdd_amt), \
+    sum(rcd_amt), \
+    sum(cdd_cnt), \
+    sum(ccd_cnt), \
+    sum(cdd_amt), \
+    sum(ccd_amt), \
+    sum(tddr_bal), \
+    sum(tdcr_bal), \
+    sum(tddr_cnt), \
+    sum(tdcr_cnt), \
+    sum(tddr_amt), \
+    sum(tdcr_amt), \
+    sum(mdr_bal), \
+    sum(mcr_bal), \
+    sum(mdr_cnt), \
+    sum(mcr_cnt), \
+    sum(mdr_amt), \
+    sum(mcr_amt), \
+    sum(qdr_bal), \
+    sum(qcr_bal), \
+    sum(qdr_cnt), \
+    sum(qcr_cnt), \
+    sum(qdr_amt), \
+    sum(qcr_amt), \
+    sum(ydr_bal), \
+    sum(ycr_bal), \
+    sum(ydr_cnt), \
+    sum(ycr_cnt), \
+    sum(ydr_amt), \
+    sum(ycr_amt) \
+ from gl_sub a \
+  left join com_item it on it.acc_hrt=a.up_acc_hrt  \
+  where br_no !='10000' and it.acc_lvl='2' and it.acc_knd='0'  \
+  group by br_no, cur_no, it.acc_hrt , \"date\", \
+    it.dc_ind, it.up_acc_hrt ");
+sprintf(acErrMsg, "插入2级gl_sub结束 %ld", ret);
+        vtcp_log("[F%s][%d]%s",__FILE__,__LINE__,acErrMsg); 
+        if ( ret )
+        {
+                sprintf(acErrMsg,"gl_mst dec err![%d]",ret);
+                vtcp_log("L%d, %d %s", __LINE__, sqlca.sqlcode, acErrMsg);
+                goto ErrExit;
+        }
+
+
+        ret=sql_execute("insert into gl_sub select    \
+    br_no, \
+    cur_no, \
+    it.acc_hrt , \
+    \"date\", \
+    it.dc_ind, \
+    it.up_acc_hrt , \
+    sum(dr_bal), \
+        sum(cr_bal), \
+    sum(ldd_bal), \
+    sum(lcd_bal), \
+    sum(rdd_cnt), \
+    sum(rcd_cnt), \
+    sum(rdd_amt), \
+    sum(rcd_amt), \
+    sum(cdd_cnt), \
+    sum(ccd_cnt), \
+    sum(cdd_amt), \
+    sum(ccd_amt), \
+    sum(tddr_bal), \
+    sum(tdcr_bal), \
+    sum(tddr_cnt), \
+    sum(tdcr_cnt), \
+    sum(tddr_amt), \
+    sum(tdcr_amt), \
+    sum(mdr_bal), \
+    sum(mcr_bal), \
+    sum(mdr_cnt), \
+    sum(mcr_cnt), \
+    sum(mdr_amt), \
+    sum(mcr_amt), \
+    sum(qdr_bal), \
+    sum(qcr_bal), \
+    sum(qdr_cnt), \
+    sum(qcr_cnt), \
+    sum(qdr_amt), \
+    sum(qcr_amt), \
+    sum(ydr_bal), \
+    sum(ycr_bal), \
+    sum(ydr_cnt), \
+    sum(ycr_cnt), \
+    sum(ydr_amt), \
+    sum(ycr_amt) \
+ from gl_sub a \
+  left join com_item it on it.acc_hrt=a.up_acc_hrt  \
+  where br_no !='10000' and it.acc_lvl='1' and it.acc_knd='0' \
+  group by br_no, cur_no, it.acc_hrt , \"date\", \
+    it.dc_ind, it.up_acc_hrt  ");
+        if ( ret )
+        {
+                sprintf(acErrMsg,"gl_mst dec err![%d]",ret);
+                vtcp_log("[F%s][%d]%s",__FILE__,__LINE__,acErrMsg); 
+                vtcp_log("L%d, %d %s", __LINE__, sqlca.sqlcode, "sqlca.sqlerrm.sqlerrmc");
+                goto ErrExit;
+        }
+        
+	/* 开始更新总账表，处理双性科目 20101221 by Wang Yongwei*/
+	vtcp_log("%s %d 更新余额双向轧差情况 ",__FILE__,__LINE__);
+	/* 将双向的科目置成一面 */
+	EXEC SQL update gl_sub set dr_bal=dr_bal-cr_bal, cr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and  
+		dc_ind='0' and dr_bal>=cr_bal and cr_bal !=0;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 更新昨日余额双向轧差情况 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set ldd_bal=ldd_bal-lcd_bal,lcd_bal=0
+			where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and  
+			dc_ind='0' and ldd_bal>=lcd_bal and lcd_bal !=0 ;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 更新旬余额双向轧差情况 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set tddr_bal=tddr_bal-tdcr_bal,tdcr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and  
+		dc_ind='0' and tddr_bal>=tdcr_bal and  tdcr_bal!=0 ;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 更新月余额双向轧差情况 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set mdr_bal=mdr_bal-mcr_bal,mcr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and
+		dc_ind='0' and mdr_bal>=mcr_bal  and mcr_bal !=0 ;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 更新季度余额双向轧差情况 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set qdr_bal=qdr_bal-qcr_bal,qcr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and
+		dc_ind='0' and qdr_bal>=qcr_bal  and qcr_bal !=0 ;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 更新年度余额双向轧差情况 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set ydr_bal=ydr_bal-ycr_bal,ycr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and
+		dc_ind='0' and ydr_bal>=ycr_bal and ycr_bal !=0;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差贷方数据 ",__FILE__,__LINE__);
+	/* 置贷方的 */
+	EXEC SQL update gl_sub set cr_bal=cr_bal-dr_bal, dr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and  
+		dc_ind='0' and cr_bal>=dr_bal and cr_bal !=0 and dr_bal !=0  ;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差昨日贷方数据 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set lcd_bal=lcd_bal-ldd_bal,ldd_bal=0
+			where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and 
+			dc_ind='0' and lcd_bal>=ldd_bal and ldd_bal !=0;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差旬贷方数据 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set tdcr_bal=tdcr_bal-tddr_bal,tddr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and 
+		dc_ind='0' and tdcr_bal>=tddr_bal and tddr_bal !=0.00;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差月贷方数据 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set mcr_bal=mcr_bal-mdr_bal,mdr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and 
+		dc_ind='0' and mcr_bal>=mdr_bal and mdr_bal !=0.00;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差季贷方数据 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set qcr_bal=qcr_bal-qdr_bal,qdr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and 
+		dc_ind='0' and qcr_bal>qdr_bal and qdr_bal!=0.00;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	vtcp_log("%s %d 设置轧差年贷方数据 ",__FILE__,__LINE__);
+	EXEC SQL update gl_sub set ycr_bal=ycr_bal-ydr_bal,ydr_bal=0
+		where br_no in(select br_no from com_branch where br_type='7') and acc_hrt in(select acc_hrt from com_item where roll_ind='Y') and 
+		dc_ind='0'  and ycr_bal>=ydr_bal and ydr_bal!=0.00;
+
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"汇轧差账出错[%d]",sqlca.sqlcode);
+		memcpy(g_pub_tx.reply,"D104",4);
+		WRITEMSG
+		goto ErrExit;
+	}
+	
+	/* 汇资产负债共同类科目结束 */
+	vtcp_log("%s %d 恢复索引",__FILE__,__LINE__);
+	ret = reback_gl_sub_idx();
+	if(ret)
+	{
+		vtcp_log("%s,%d create index error ",__FILE__,__LINE__);
+		memcpy(g_pub_tx.reply,"D102",4);
+		goto ErrExit;
+	}
+	vtcp_log("%s %d 恢复索引完成",__FILE__,__LINE__);
+	/* end by LiuHuafeng 20100103 */
+
+	ret = pub_eod_insert_oldglmst();
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"将总帐导入到历史总帐里去!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	if(strcmp(g_pub_tx.reply,"0000")==0 || strlen(g_pub_tx.reply)==0)
+	{
+		strcpy(g_pub_tx.reply,"H034");
+	}
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+
+/**********************************************************************
+ * 函 数 名：   pub_eod_insert_oldglmst
+ * 函数功能：   将总帐中的数据导入到历史总帐里去
+ * 作者/时间：  rob/20030315
+ *
+ * 参数：
+ *     输入: 
+ *     输出: 
+ *     返回: <>0失败
+             =0成功
+ *
+ * 修改历史：081024 从gD027中拿来的
+ * 放到gD0279里,因为到gD0279才机构汇总,在这导gl_mst_hst汇总机构数就不对了
+**********************************************************************/
+
+int pub_eod_insert_oldglmst()
+{
+    int ret;
+
+	vtcp_log("%s,%d 写入总账历史明细 ",__FILE__,__LINE__);
+    ret = sql_execute("insert into gl_mst_hst select br_no,cur_no,acc_hrt,\
+          \"date\",dc_ind,up_acc_hrt,dr_bal,cr_bal,ldd_bal,lcd_bal,rdd_cnt,\
+          rcd_cnt,rdd_amt,rcd_amt,cdd_cnt,ccd_cnt,cdd_amt,ccd_amt from gl_sub \
+	 where br_no not in (select br_no from com_branch where br_type ='6' or wrk_sts='*')");
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"向历史总帐中备份数据错误!! [%d]",ret);
+        WRITEMSG
+        return ret;
+    }
+	vtcp_log("%s,%d 写入总账历史明细完成 ",__FILE__,__LINE__);
+    return 0;
+}
+int drop_gl_sub_idx()
+{
+	/* return 0; *upd for tmp test 20141206 */
+	EXEC SQL drop index gl_sub_2;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_2 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_3;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_3 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_idx8;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_idx8 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_idx_4;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_idx_4 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_idx_5;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_idx_5 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_idx_6;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_idx_6 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+	EXEC SQL drop index gl_sub_idx_7;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("%s,%d drop index gl_sub_idx_7 err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+		return sqlca.sqlcode;
+	}
+}
+/* 恢复gl_sub的索引 */
+int reback_gl_sub_idx()
+{
+	return 0; /*upd for tmp test 20141206 */
+	if(memcmp(getenv("CREATE_IDX_AREA"),"KAIFA",5)==0)
+	{
+		EXEC SQL create index gl_sub_2 on gl_sub (up_acc_hrt,acc_hrt,cur_no,br_no) using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_2 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 3",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_3 on gl_sub (br_no,up_acc_hrt)  using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_3 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 4",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx8 on gl_sub (acc_hrt) using  btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx8 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 5",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_4 on gl_sub (br_no,cur_no,up_acc_hrt) using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_4 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 6",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_5 on gl_sub (br_no,acc_hrt)  using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_5 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 7",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_6 on gl_sub (cur_no,acc_hrt)   using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_6 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 8",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_7 on gl_sub (up_acc_hrt,br_no,cur_no) using btree  in datadbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_7 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 9",__FILE__,__LINE__);
+	}
+	else
+	{
+		EXEC SQL create index gl_sub_2 on gl_sub (up_acc_hrt,acc_hrt,cur_no,br_no) using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_2 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 3",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_3 on gl_sub (br_no,up_acc_hrt)  using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_3 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 4",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx8 on gl_sub (acc_hrt) using  btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx8 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 5",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_4 on gl_sub (br_no,cur_no,up_acc_hrt) using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_4 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 6",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_5 on gl_sub (br_no,acc_hrt)  using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_5 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 7",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_6 on gl_sub (cur_no,acc_hrt)   using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_6 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 8",__FILE__,__LINE__);
+		EXEC SQL create index gl_sub_idx_7 on gl_sub (up_acc_hrt,br_no,cur_no) using btree  in idxdbs;
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("%s,%d create gl_sub_idx_7 index err,sqlcode=%d",__FILE__,__LINE__,sqlca.sqlcode);
+			return sqlca.sqlcode;
+		}
+		vtcp_log("%s %d 9",__FILE__,__LINE__);
+	}
+	return 0;
+}
+

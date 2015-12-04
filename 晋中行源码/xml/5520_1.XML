@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="55201 银行端缴款业务交易申请税目明细录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(55201          银行端缴款业务交易申请税目明细录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5540)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+	<!--输入变量-->
+	<ITEM LINE="5" COL="5" TYPE="%-10s" FUNCTIONS="T(税种代码:)"/>
+	<ITEM NAME="#TAXTYPECODE" INPUT="LABEL" LINE="5" COL="15" TYPE="%10d" FUNCTIONS="V(NB)"/>
+	<ITEM LINE="5" COL="27" TYPE="%-16s" FUNCTIONS="T(税款所属日期起:)"/>
+	<ITEM NAME="#TAXSTARTDATE" INPUT="LABEL" LINE="5" COL="43" TYPE="%8d" FUNCTIONS="D()V(NB)T($HDATE)"/>
+	<ITEM LINE="5" COL="53" TYPE="%-9s" FUNCTIONS="T(税款类型:)"/>
+	<ITEM NAME="#TAXTYPE" INPUT="LABEL" LINE="5" COL="63" TYPE="%-1s" DEVICE="NONE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="1.当期收入"/>
+		<OPTION VALUE="2" TITLE="2.补缴欠税"/>
+		<OPTION VALUE="3" TITLE="3.三代结缴"/>
+		<OPTION VALUE="4" TITLE="4.检查补税"/>
+	</SELECT>
+	</ITEM>
+	<ITEM LINE="6" COL="5" TYPE="%-10s" FUNCTIONS="T(申请序号:)"/>
+	<ITEM LINE="6" COL="15" NAME="#SQXH" TYPE="%8d" INPUT="LABEL"/>
+	<ITEM LINE="6" COL="27" TYPE="%-14s" FUNCTIONS="T(税款所属日期止:)"/>
+	<ITEM NAME="#TAXENDDATE" INPUT="LABEL" LINE="6" COL="43" TYPE="%8d" DEVICE="NONE" FUNCTIONS=""/>
+	<ITEM LINE="6" COL="53" TYPE="%-9s" FUNCTIONS="T(项目序号:)"/>
+	<ITEM NAME="#PROID" INPUT="LABEL" LINE="6" COL="63" TYPE="%3d"/>
+	
+	<ITEM NAME="#TAXORGCODE" TYPE="%-12s"/>
+	<ITEM NAME="#TAXORGTYPE" TYPE="%-12s" FUNCTIONS=""/><!--征收机关类型 -->
+	<ITEM NAME="#INIT1" TYPE="%1s">	
+	<ONLOSTFOCUS>
+	"{
+		dim @baktxno as string;
+		dim @msg as string;
+		dim @filename as string;
+		dim @cnt as number;
+		initfd();
+		$FD44=getitems('$HDATE');
+		$FD61=getitems('#TAXORGCODE');
+		$FD28=getitems('#SQXH');
+		$FD50=getitems('#PROID');
+		//showmsg(#TAXORGCODE);
+		if(#INIT1=='')
+		{
+		list_init(12,60,9,5);
+		list_setcolcnt(5);
+		list_setcol(0,' 明 细 序 号 ',21,0);
+		list_setcol(1,' 税 目 代 码 ',21,0);
+		list_setcol(2,'课税数量',9,0);
+		list_setcol(3,'计税金额',19,0);
+		list_setcol(4,'实缴税额',19,0);
+		@baktxno=$TXNO;
+		$TXNO='9420';
+		commsend_001();
+		//@msg=callserver();
+		@msg=calltips();
+		@filename='../tmp/'+$KINBR+$TTYNAME;
+		savefiletxt(@filename,@msg);
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			if($FD12=='D104' or $FD12=='S049'){
+				showmsg('第一次输入税目明细',2);
+			} else {
+			showmsg(geterror());
+			}
+		}
+		list_load('../tmp/'+$KINBR+$TTYNAME);
+		@cnt=list_getrowcnt();
+		list_show();
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM> 
+
+	<ITEM LINE="7" COL="5" TYPE="%-10s" FUNCTIONS="T(税目代码:)"/>
+	<ITEM NAME="#TAXSUBJECTCODE" INPUT="TEXT" LINE="7" COL="15" TYPE="%-20s" FUNCTIONS="V(NB)">
+	 <ONLOSTFOCUS>
+  "{
+    initfd();
+    commsend_001();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9418';
+    $FD33=#TAXSUBJECTCODE;
+    $FD20=#TAXORGTYPE;
+    commsend_001();
+    //callserver();
+    calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+         showmsg(geterror());
+         return(false);
+    }
+    showhelp(3,70,8,3,'税目名称',substr($FD95,21,60));
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+	<ITEM LINE="7" COL="39" TYPE="%-120s" FUNCTIONS="T(课税数量:)"/>
+	<ITEM NAME="#TAXNUMBER" INPUT="TEXT" LINE="7" COL="49" TYPE="%4d" FUNCTIONS="V(0001,0020)"/>	
+	<ITEM LINE="8" COL="5" TYPE="%-10s" FUNCTIONS="T(计税金额:)"/>
+	<ITEM NAME="#TAXAMT" INPUT="TEXT" LINE="8" COL="15" TYPE="%17.2f" FUNCTIONS="V(00000000000100,99999999999999)"/>
+	<ITEM LINE="8" COL="39" TYPE="%-120s" FUNCTIONS="T(实缴税额:)"/>
+	<ITEM NAME="#FACTTAXAMT" INPUT="TEXT" LINE="8" COL="49" TYPE="%17.2f" FUNCTIONS="V(00000000000100,99999999999999)"/>
+	<ITEM LINE="21" COL="5" TYPE="%-120s" FUNCTIONS="T(税目数量:)"/>
+	<ITEM LINE="21" COL="15" INPUT="LABEL" NAME="#SZDTLCNT"  TYPE="%4d" FUNCTIONS=""/>
+
+	
+	<ITEM NAME="#DETAILNO" TYPE="%10d"/>
+	<ITEM NAME="#ADDSZ" LINE="10" COL="65" TYPE="%-8s" FUNCTIONS="T(添    加)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @cTxamt as string;
+		dim @cTxamt1 as string;
+		dim @cTxamt2 as string;
+		dim @iLen as number;
+		dim @a as number;
+		dim @subdetailno as string;
+		// FD28 申报序号8位
+		// FD61 存放征收机关代码
+		// 因为本行申报，所以付款人开户行根据付款人帐户查
+		// 付款人帐号只要本行有效就可以使用fd30
+		// FD25 存放缴款单位名称 仅仅60位
+		// FD20 申报状态
+		// FD37 外部申报电子序号
+		// FD39 交易金额
+		// FD72 缴款类型
+		//      明细条数要自己计算
+		//----------------------------------------
+		// FD53 税种代码
+		// FD44 税款所属日期起
+		// FD45 税款所属日期止
+		// fd67 税款类型
+		// FD40 税种金额
+		//      税目明细条数自己计算
+		// FD50 项目序号
+		//-----------------------------------
+		// FD38 税目代码
+		// FD48 课税数量
+		// FD41 计税金额
+		// FD42 实缴税额
+		//      明细序号自己计算
+		//-------------------------------------
+		//      FD54返回明细序号
+		$FD28=getitems('#SQXH');
+		$FD53=getitems('#TAXTYPECODE');
+		$FD50=getitems('#PROID');
+		$FD61=getitems('#TAXORGCODE');
+		$FD38=getitems('#TAXSUBJECTCODE');
+		$FD48=getitems('#TAXNUMBER');
+		$FD41=getitems('#TAXAMT');
+		$FD42=getitems('#FACTTAXAMT');
+		$FD98='3';
+		commsend_001();
+		@cTxamt=itoa(#TAXAMT*100);
+		@iLen=len(@cTxamt);
+		@cTxamt1=substr(@cTxamt,0,@iLen-2)+'.'+substr(@cTxamt,@iLen-2,2);
+		@cTxamt=itoa(#FACTTAXAMT*100);
+		@iLen=len(@cTxamt);
+		@cTxamt2=substr(@cTxamt,0,@iLen-2)+'.'+substr(@cTxamt,@iLen-2,2);
+		@a=msgbox('是否将上述明细增加？','确认增加吗','ok|cancel');
+		if(@a==0){
+			//callserver();
+			calltips();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+			}
+			setitems('#DETAILNO',$FD54);
+			@subdetailno=substr(#DETAILNO,4,6);
+			list_additem('',@subdetailno,#TAXSUBJECTCODE,#TAXNUMBER,@cTxamt1,@cTxamt2);
+			#SZDTLCNT=itoa(atoi(#SZDTLCNT)+1,'%04d');enable(#SZDTLCNT,true);
+		};
+		list_work();
+		#INIT1='1';
+		@a=msgbox('是否继续增加新的明细？','继续新增加吗','ok|cancel');
+		if(@a==0){
+			goitem(#TAXSUBJECTCODE);
+		};
+	}"
+	</ONCLICK>
+	</ITEM>
+	<ITEM NAME="#DELSZ" LINE="11"   COL="65"  TYPE="%-8s" FUNCTIONS="T(删    除)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @id as number;
+		dim @a as number;
+		dim @msg as string;
+		dim @cnt as number;
+		@cnt=0;
+		@cnt=list_getrowcnt();
+		list_work();
+		if(@cnt!=0){
+			@id =list_getselid();
+			@msg='确认要删除第'+itoa(@id+1)+'条税种明细';
+			@a=msgbox(@msg,'删除确认？','ok|cancel');
+			if(@a==0){
+				#DETAILNO=list_gettext(@id,0); enable(#DETAILNO,true);
+				$FD61=getitems('#TAXORGCODE');
+				$FD28=getitems('#SQXH');
+				$FD53=getitems('#TAXTYPECODE');
+				$FD50=getitems('#PROID');
+				$FD54=getitems('#DETAILNO');
+				$FD98='5';
+				commsend_001();
+				//callserver();
+				calltips();
+				if($FD12!='0000'){
+					showmsg(geterror());
+					return(false);
+				}
+				list_rmitem(@id);
+				#SZDTLCNT=itoa(atoi(#SZDTLCNT)-1,'%04d');enable(#SZDTLCNT,true);
+			}
+		} else {
+			showmsg('请先添加税目明细然后再删除');
+			goitem(#TAXSUBJECTCODE);
+			return(false);
+		}
+	}"
+	</ONCLICK>
+	</ITEM>
+
+
+
+	<ITEM NAME="#OK" LINE="20"  COL="65" TYPE="%-6s" FUNCTIONS="T(返  回)" INPUT="BUTTON">
+	<ONCLICK>"{
+		//首先打印授权信息
+		//开始打印
+		//	dim @f as file;
+		//	@f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp','w');
+		//		writeline(@f,'b'+#AUTHNUM+#WSSRNO);
+		//	closefile(@f);
+		//showmsg('RETURN szdtl=='+#SZDTLCNT);
+		close('#CLOSERET','#SZDTLCNT='+#SZDTLCNT+';');
+	}"
+	</ONCLICK>
+	</ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="授信额度维护">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 3,30,'客户授信额度[4]',#SCZFS);
+		print( 5,22,'客 户 号: [8]',#KHH);
+//		print( 3,22,'客户授信额度[4]',#SCZFS);
+//		print( 3,22,'客户授信额度[4]',#SCZFS);
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

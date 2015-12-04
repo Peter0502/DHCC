@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7405 拆借查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<COMMSEND>"{
+	commsend_001();
+	$FD39=space(16);
+	$FD47=#HTH;
+	$FD67=#PRTFLAG;
+	$FD91=#BR_NO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(7405                          上存/拆借查询  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5405)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="7"   COL="20" TYPE="%-10s" FUNCTIONS="T(合 同 号:)"/>
+  <ITEM LINE="9"   COL="20" TYPE="%-10s" FUNCTIONS="T(机 构 号:)"/>
+  <ITEM LINE="11"  COL="20" TYPE="%-10s" FUNCTIONS="T(打印标志:)"/>
+<!--
+  <ITEM LINE="9"  COL="20" TYPE="%-11s" NAME="#A1" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(考核机构号:)"/>
+  <ITEM LINE="10" COL="20" TYPE="%-10s" NAME="#A2" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(拆借机构:)"/>
+  <ITEM LINE="11" COL="20" TYPE="%-10s" NAME="#A3" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(机构名称:)"/>
+  <ITEM LINE="12" COL="20" TYPE="%-10s" NAME="#A4" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(拆借类型:)"/>
+  <ITEM LINE="13" COL="20" TYPE="%-10s" NAME="#A5" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(拆借金额:)"/>
+  <ITEM LINE="14" COL="20" TYPE="%-10s" NAME="#A6" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(拆借日期:)"/>
+  <ITEM LINE="15" COL="20" TYPE="%-10s" NAME="#A7" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(到期日期:)"/>
+--->
+  <ITEM NAME="#HTH"       INPUT="TEXT"   LINE="7" COL="30" TYPE="%8d" 	FUNCTIONS=""/>
+  <ITEM NAME="#BR_NO"     INPUT="TEXT"   LINE="9" COL="30" TYPE="%-5s" 	FUNCTIONS="T($KINBR)">
+  <ONLOSTFOCUS>
+  	"{
+  		if($KINBR != '10001' and #BR_NO != $KINBR)
+  		{
+  			showmsg ('只能查询本机构相关信息');
+  			#BR_NO = $KINBR;
+  			show(#BR_NO, true);
+  			return (false);
+  		}
+  	}"
+</ONLOSTFOCUS>
+</ITEM>
+
+  <ITEM NAME="#PRTFLAG"   INPUT="SELECT" LINE="11" COL="30" TYPE="%-1s" 	FUNCTIONS="T(0)">
+   <SELECT LINE="0" COL="0">
+			  <OPTION VALUE="0" TITLE="不打印"/>
+			  <OPTION VALUE="1" TITLE="打  印"/>
+	  </SELECT>
+  </ITEM>
+<!---
+  <ITEM NAME="#B1"  LINE="9"  COL="31" TYPE="%-5s"  VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#B2"  LINE="10" COL="31" TYPE="%-5s"  VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#B3"  LINE="11" COL="31" TYPE="%-41s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#B4"  LINE="12" COL="31" TYPE="%-1s"  VISABLE="FALSE" INPUT="SELECT" FUNCTIONS="">
+	  <SELECT LINE="0" COL="0">
+			  <OPTION VALUE="1" TITLE="拆出"/>
+			  <OPTION VALUE="2" TITLE="上存"/>
+	  </SELECT>
+  </ITEM>
+  <ITEM NAME="#B5"  LINE="13" COL="31" TYPE="%-16s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#B6"  LINE="14" COL="31" TYPE="%-8s"  VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#B7"  LINE="15" COL="31" TYPE="%-8s"  VISABLE="FALSE" INPUT="LABEL" FUNCTIONS=""/>
+  --->
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @f as file;
+    dim @tota as string;
+    commsend_001();
+	  $FD39=space(16);
+	  $FD47=#HTH;
+	  $FD67=#PRTFLAG;
+	  $FD91=#BR_NO;
+	  $TXNO="5405";
+	  $MSGTYPE='03001';
+	   if($FD67=='1')
+	   {
+	      @tota=callserver();
+        if($FD12!='0000')
+        {
+                showmsg(geterror());
+                return(false);
+        }
+        @f=openfile('../tmp/dzd['+$HDATE+$TLRNO+$TTYNAME+']','w');
+        writeline(@f,@tota);
+        closefile(@f);
+        call('fview ../tmp/dzd['+$HDATE+$TLRNO+$TTYNAME+']');
+   }
+   else
+   {
+        @tota=callserver();
+        if($FD12!='0000')
+        {
+                showmsg(geterror());
+                return(false);
+        }
+        if(autolist(@tota))
+        {
+				list_work();
+			  }
+
+   }
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+</TRANSACTION>

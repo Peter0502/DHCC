@@ -1,0 +1,648 @@
+/*************************************************************
+* 文 件 名: gD0284.c
+* 功能描述：从dc_log_bk按开户行汇总入支行总帐表 gl_sub,并增加平衡科目 41600(这下面千万不可开子科目)
+*           而且416是轧差的
+*           增加将总行数据导入支行的功能，为了出日报、月报等方便 
+************************************************************/
+#define MYSQLERR if(sqlca.sqlcode ) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d][%d]",sqlca.sqlcode,__LINE__); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]line[%d]",ret,__LINE__); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_sub_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "ln_mst_c.h"
+#include "dd_mst_bk_c.h"
+#include "td_mst_bk_c.h"
+#include "in_mst_bk_c.h"
+#include "dd_parm_c.h"
+#include "td_parm_c.h"
+#include "ln_parm_c.h"
+#include "in_parm_c.h"
+#include "note_mst_c.h"
+#include "cash_mst_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_sub_c.h"
+/*** JYW#include "com_branch_c.h" ***/
+
+EXEC SQL BEGIN DECLARE SECTION;
+	struct	gl_sub_c		gl_sub;
+	double d_amt,c_amt;
+EXEC SQL  END  DECLARE SECTION;
+	struct com_sys_parm_c com_sys_parm_c;
+
+gD0284( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &com_sys_parm_c );
+	MYRETERR
+
+	g_pub_tx.tx_date=com_sys_parm_c.lst_date;
+
+	ret=do_qs();	/* 处理期初数 */
+	if( ret ) goto ErrExit;
+
+	ret=sum_dc();	/* 按 tx_opn_br_no 合计 */
+	if( ret ) goto ErrExit;
+	
+	/*ret=sum_dc_tx();不要* 按 tx_tx_br_no 合计 */
+	if( ret ) goto ErrExit;
+
+    ret = pub_eod_insert_msthst();
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"将支行总帐导入到历史总帐里去!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+	
+	EXEC SQL delete from gl_sub  where br_no in (select br_no from com_branch where br_type = '6');
+	if(sqlca.sqlcode){
+        sprintf(acErrMsg,"删除gl_sub中总行数据出错\n");
+        WRITEMSG
+        goto ErrExit;
+	}
+	EXEC SQL insert into gl_sub select * from gl_mst;
+	if(sqlca.sqlcode){
+        sprintf(acErrMsg,"总行总帐导入支行出错\n");
+        WRITEMSG
+        goto ErrExit;
+	}
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+/*----------------------------------------------------------*/
+int sum_dc_tx()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_sub_c vgl_sub;
+		struct com_item_c v_item;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+
+	EXEC SQL declare cur_tx_dc cursor for
+		select tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		group by tx_tx_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open cur_tx_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		memset(&d_k,'\0',sizeof(d_k));
+		EXEC SQL fetch cur_tx_dc 
+			into :d_k.tx_tx_br_no,:d_k.cur_no,:d_k.acc_hrt,
+			:d_k.dc_ind,:d_k.ct_ind,:d_k.amt,:d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+			memset( &vgl_sub,0,sizeof(vgl_sub) );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_sub.rdd_cnt=d_k.trace_no;
+				vgl_sub.rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.cdd_cnt=d_k.trace_no;
+					vgl_sub.cdd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_sub.rcd_cnt=d_k.trace_no;
+				vgl_sub.rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.ccd_cnt=d_k.trace_no;
+					vgl_sub.ccd_amt=d_k.amt;
+				}
+			}
+		strcpy( vgl_sub.br_no,d_k.tx_tx_br_no );
+		strcpy( vgl_sub.cur_no,d_k.cur_no );
+		strcpy(vgl_sub.acc_hrt,d_k.acc_hrt);
+		strcpy(vgl_sub.dc_ind,d_k.dc_ind);
+		memset(&v_item,'\0',sizeof(v_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&v_item,
+			"acc_hrt='%s'",vgl_sub.acc_hrt);
+		MYRETERR
+		strcpy(vgl_sub.up_acc_hrt,v_item.up_acc_hrt);
+
+		ret=sub_do_acc_and_up( vgl_sub);
+		MYRETERR
+	}
+	EXEC SQL close cur_tx_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+int sum_dc()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c d_k;
+		struct gl_sub_c vgl_sub,gl_sub_416,tmp_gl_sub;
+		struct com_item_c v_item;
+		int z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+	int first=0;
+
+	EXEC SQL declare cur_1_dc cursor for
+		select tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0'
+		group by tx_opn_br_no,cur_no,acc_hrt,dc_ind,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open cur_1_dc;
+	MYSQLERR
+
+	first=0;
+	while( 1 )
+	{
+		EXEC SQL fetch cur_1_dc 
+			into :d_k.tx_opn_br_no,:d_k.cur_no,:d_k.acc_hrt,
+			:d_k.dc_ind,:d_k.ct_ind,:d_k.amt,:d_k.trace_no;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+			memset( &vgl_sub,0,sizeof(vgl_sub) );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_sub.rdd_cnt=d_k.trace_no;
+				vgl_sub.rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.cdd_cnt=d_k.trace_no;
+					vgl_sub.cdd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_sub.rcd_cnt=d_k.trace_no;
+				vgl_sub.rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.ccd_cnt=d_k.trace_no;
+					vgl_sub.ccd_amt=d_k.amt;
+				}
+			}
+		strcpy( vgl_sub.br_no,d_k.tx_opn_br_no );
+		strcpy( vgl_sub.cur_no,d_k.cur_no );
+		strcpy(vgl_sub.acc_hrt,d_k.acc_hrt);
+		memset(&v_item,'\0',sizeof(v_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&v_item,
+			"acc_hrt='%s'",vgl_sub.acc_hrt);
+		MYRETERR
+		strcpy(vgl_sub.dc_ind,v_item.dc_ind);
+		strcpy(vgl_sub.up_acc_hrt,v_item.up_acc_hrt);
+		ret=sub_do_acc_and_up( vgl_sub,&d_k);
+		MYRETERR
+
+		/*	参与平衡的科目还要记 416科目 为了平衡 */
+	if(vgl_sub.acc_hrt[0]<'6' && memcmp(vgl_sub.acc_hrt,"41600",5)!=0){
+		memset(&gl_sub_416,'\0',sizeof(gl_sub_416));
+		memset(&tmp_gl_sub,'\0',sizeof(tmp_gl_sub));
+		strcpy(gl_sub_416.br_no,d_k.tx_opn_br_no );
+		strcpy(gl_sub_416.cur_no,d_k.cur_no );
+		strcpy(gl_sub_416.dc_ind,"0");
+		strcpy(gl_sub_416.acc_hrt,"41600");
+		strcpy(gl_sub_416.up_acc_hrt,"41600");	
+		/* 416记的正好和对应的科目相反 */
+			memset( &vgl_sub,0,sizeof(vgl_sub) );
+			if( d_k.dc_ind[0]=='1' )
+			{
+				vgl_sub.rcd_cnt=d_k.trace_no;
+				vgl_sub.rcd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.ccd_cnt=d_k.trace_no;
+					vgl_sub.ccd_amt=d_k.amt;
+				}
+			}
+			else
+			{
+				vgl_sub.rdd_cnt=d_k.trace_no;
+				vgl_sub.rdd_amt=d_k.amt;
+
+				if( d_k.ct_ind[0]=='1' )
+				{
+					vgl_sub.cdd_cnt=d_k.trace_no;
+					vgl_sub.cdd_amt=d_k.amt;
+				}
+			}
+		ret=Gl_sub_Dec_Upd( g_pub_tx.reply,"br_no='%s' and cur_no='%s' and acc_hrt='41600'",
+			gl_sub_416.br_no,gl_sub_416.cur_no);
+		if(ret && ret!=100)
+			MYSQLERR
+
+		ret=Gl_sub_Fet_Upd( &tmp_gl_sub , g_pub_tx.reply );
+		if(ret && ret!=100)
+			MYRETERR
+
+		if(ret==100){
+			vtcp_log("新加的机构[%s]当天416不存在",gl_sub_416.br_no);
+			gl_sub_416.date=g_pub_tx.tx_date;
+			ret=sub_add( &gl_sub_416,vgl_sub,3-atoi(d_k.dc_ind)+'0','Y');
+			MYRETERR
+			ret=Gl_sub_Ins( gl_sub_416,g_pub_tx.reply );
+			MYRETERR
+		}
+		else
+		{
+			ret=sub_add( &tmp_gl_sub,vgl_sub,3-atoi(d_k.dc_ind)+'0','Y');
+			MYRETERR
+			ret=Gl_sub_Upd_Upd( tmp_gl_sub,g_pub_tx.reply  );
+			MYRETERR
+		}
+		Gl_sub_Clo_Upd();
+	}
+
+	}
+	EXEC SQL close cur_1_dc;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/***期初数处理***/
+do_qs()
+{
+	struct gl_sub_c gl_sub_tmp;
+	struct gl_sub_c gl_sub_o;
+	struct com_branch_c com_branch;
+	int ret;
+
+	memset( &gl_sub_o,0,sizeof(gl_sub_o) );
+
+    ret=Gl_sub_Dec_Upd(g_pub_tx.reply,"1=1");
+	MYSQLERR
+
+	while(1)
+	{
+     	ret = Gl_sub_Fet_Upd(&gl_sub_tmp,g_pub_tx.reply);
+		if( ret==100 ) break;
+		MYSQLERR
+
+		/**处理期初数**/
+		sub_begin_do( &gl_sub_tmp );
+
+       	ret = Gl_sub_Upd_Upd(gl_sub_tmp, g_pub_tx.reply);
+		MYSQLERR
+
+		memcpy( &gl_sub_o,&gl_sub_tmp,sizeof(gl_sub_tmp) );
+	}
+    Gl_sub_Clo_Upd();
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/*----------------------------------------------------------*/
+sub_begin_do( struct gl_sub_c *p_gl_sub_c )
+{
+	struct gl_sub_c gl_sub_c;
+	int ret;
+
+	memset( &gl_sub_c,'\0',sizeof(gl_sub_c) );
+	memcpy( &gl_sub_c,p_gl_sub_c,sizeof(gl_sub_c) );
+
+        gl_sub_c.date = com_sys_parm_c.lst_date; 
+        gl_sub_c.ldd_bal = gl_sub_c.dr_bal;
+        gl_sub_c.lcd_bal = gl_sub_c.cr_bal;
+		gl_sub_c.rdd_cnt=0;
+		gl_sub_c.rcd_cnt=0;
+		gl_sub_c.rdd_amt=0.00;
+		gl_sub_c.rcd_amt=0.00;
+		gl_sub_c.cdd_cnt=0;
+		gl_sub_c.ccd_cnt=0;
+		gl_sub_c.cdd_amt=0.00;
+		gl_sub_c.ccd_amt=0.00;
+
+        ret = pub_base_day_xun(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 旬初 */
+            gl_sub_c.tddr_bal = gl_sub_c.dr_bal;    /* 旬初借方余额 */
+            gl_sub_c.tdcr_bal = gl_sub_c.cr_bal;    /* 旬初贷方余额 */
+            gl_sub_c.tddr_cnt = 0;
+            gl_sub_c.tdcr_cnt = 0;
+            gl_sub_c.tddr_amt = 0.00;
+            gl_sub_c.tdcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_month(com_sys_parm_c.lst_date);
+        if (ret == 1)
+        {
+            /* 月初 */
+            gl_sub_c.mdr_bal = gl_sub_c.dr_bal;
+            gl_sub_c.mcr_bal = gl_sub_c.cr_bal;
+            gl_sub_c.mdr_cnt = 0;
+            gl_sub_c.mcr_cnt = 0;
+            gl_sub_c.mdr_amt = 0.00;
+            gl_sub_c.mcr_amt = 0.00;
+        }
+
+        ret = pub_base_day_quarter(com_sys_parm_c.lst_date);
+        if (ret == 0)
+        {
+            /* 季初 */
+            gl_sub_c.qdr_bal = gl_sub_c.dr_bal;
+            gl_sub_c.qcr_bal = gl_sub_c.cr_bal;
+            gl_sub_c.qdr_cnt = 0;
+            gl_sub_c.qcr_cnt = 0;
+            gl_sub_c.qdr_amt = 0.00;
+            gl_sub_c.qcr_amt = 0.00;
+        }
+
+        /*ret = pub_base_day_year(com_sys_parm_c.lst_date);  *年末为99**
+        if (ret == 99)
+		*/
+		if(com_sys_parm_c.lst_date%10000==101)
+        {
+            /* 年初 */
+            gl_sub_c.ydr_bal = gl_sub_c.dr_bal;
+            gl_sub_c.ycr_bal = gl_sub_c.cr_bal;
+            gl_sub_c.ydr_cnt = 0;
+            gl_sub_c.ycr_cnt = 0;
+            gl_sub_c.ydr_amt = 0.00;
+            gl_sub_c.ycr_amt = 0.00;
+        }
+	memcpy( p_gl_sub_c , &gl_sub_c ,sizeof(gl_sub_c) );
+}
+/* 将本科目和上级科目的值进行处理 */
+sub_do_acc_and_up( struct gl_sub_c a_gl_sub,struct dc_log_bk_c *p_log)
+{
+	struct gl_sub_c gl_sub_c;
+	struct com_item_c p_item;
+	char tmp_acc_hrt[6];
+	int ret=0;
+
+	memset(tmp_acc_hrt,'\0',sizeof(tmp_acc_hrt));
+	memset(&gl_sub_c,'\0',sizeof(gl_sub_c));
+	strcpy(tmp_acc_hrt,a_gl_sub.acc_hrt);
+
+	while(1){
+		memset(&p_item,'\0',sizeof(p_item));
+		ret=Com_item_Sel( g_pub_tx.reply,&p_item,"acc_hrt='%s'",tmp_acc_hrt);
+		MYRETERR
+
+		ret=Gl_sub_Dec_Upd( g_pub_tx.reply,"br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+			a_gl_sub.br_no,a_gl_sub.cur_no,tmp_acc_hrt);
+		MYRETERR
+		vtcp_log("[%d]br_no='%s' and cur_no='%s' and acc_hrt='%s'",
+			__LINE__,a_gl_sub.br_no,a_gl_sub.cur_no,tmp_acc_hrt);
+
+		ret=Gl_sub_Fet_Upd( &gl_sub_c , g_pub_tx.reply );
+		if(ret && ret!=100)
+			MYRETERR
+		if( ret==100 )
+		{
+			memset( &gl_sub_c,0,sizeof(gl_sub_c) );
+			strcpy( gl_sub_c.br_no,a_gl_sub.br_no);
+			strcpy( gl_sub_c.cur_no,a_gl_sub.cur_no );
+			strcpy( gl_sub_c.acc_hrt,tmp_acc_hrt);
+			strcpy( gl_sub_c.dc_ind,a_gl_sub.dc_ind );
+			strcpy( gl_sub_c.up_acc_hrt,p_item.up_acc_hrt);
+			vtcp_log("INS[%d][%s][%s][%s]",__LINE__,gl_sub_c.br_no,gl_sub_c.cur_no,gl_sub_c.acc_hrt );
+			gl_sub_c.date=g_pub_tx.tx_date;
+
+			ret=sub_add( &gl_sub_c,a_gl_sub,p_log->dc_ind[0],p_item.roll_ind[0]);
+			MYRETERR
+
+			ret=Gl_sub_Ins( gl_sub_c,g_pub_tx.reply );
+			MYRETERR
+		}
+		else
+		{
+			ret=sub_add( &gl_sub_c,a_gl_sub,p_log->dc_ind[0],p_item.roll_ind[0]);
+			MYRETERR
+			ret=Gl_sub_Upd_Upd( gl_sub_c,g_pub_tx.reply );
+			MYRETERR
+		}
+		Gl_sub_Clo_Upd();
+		if(memcmp(tmp_acc_hrt,p_item.up_acc_hrt,sizeof(p_item.up_acc_hrt)-1)==0)/*一级科目了*/
+			break;
+		strcpy(tmp_acc_hrt,p_item.up_acc_hrt);	/* 将改完的这条科目的上级科目再选出来进行修改 */
+	}
+
+    return 0;
+ErrExit:
+	return 1;
+}
+/* 将从dc_log_bk汇出的发生额 glsub 赋值给p_gl_sub_c */
+/* 从 glsub 传来的发生额只是在一方，所以借贷都加也没关系因为只有一面有值 */
+int sub_add( p_gl_sub_c,glsub,crdb,roll_ind )
+ struct gl_sub_c *p_gl_sub_c;
+ struct gl_sub_c glsub;
+ char   crdb;
+ char   roll_ind;
+{
+	struct gl_sub_c gl_sub_c;struct com_item_c com_item_c;
+	int ret=0;
+	double tmpdbl=0,tmp_ddbal,tmp_ccbal;
+
+	memset(&gl_sub_c,'\0',sizeof(gl_sub_c));
+	memcpy( &gl_sub_c,p_gl_sub_c,sizeof(gl_sub_c) );
+
+	memset( &com_item_c,0x00,sizeof(struct com_item_c) );
+	ret=Com_item_Sel(g_pub_tx.reply,&com_item_c,"acc_hrt='%s'",gl_sub_c.acc_hrt);
+	MYSQLERR
+
+
+		gl_sub_c.rdd_cnt+=glsub.rdd_cnt;
+		gl_sub_c.rdd_amt+=glsub.rdd_amt;
+		gl_sub_c.cdd_cnt+=glsub.cdd_cnt;
+		gl_sub_c.cdd_amt+=glsub.cdd_amt;
+		gl_sub_c.rcd_cnt+=glsub.rcd_cnt;
+		gl_sub_c.rcd_amt+=glsub.rcd_amt;
+		gl_sub_c.ccd_cnt+=glsub.ccd_cnt;
+		gl_sub_c.ccd_amt+=glsub.ccd_amt;
+		/*旬*/
+		gl_sub_c.tddr_cnt+=glsub.rdd_cnt;
+		gl_sub_c.tdcr_cnt+=glsub.rcd_cnt;
+		gl_sub_c.tddr_amt+=glsub.rdd_amt;
+		gl_sub_c.tdcr_amt+=glsub.rcd_amt;
+		/* 月 */
+		gl_sub_c.mdr_cnt+=glsub.rdd_cnt;
+		gl_sub_c.mcr_cnt+=glsub.rcd_cnt;
+		gl_sub_c.mdr_amt+=glsub.rdd_amt;
+		gl_sub_c.mcr_amt+=glsub.rcd_amt;
+		/* 季 */
+		gl_sub_c.qdr_cnt+=glsub.rdd_cnt;
+		gl_sub_c.qcr_cnt+=glsub.rcd_cnt;
+		gl_sub_c.qdr_amt+=glsub.rdd_amt;
+		gl_sub_c.qcr_amt+=glsub.rcd_amt;
+		/* 年 */
+		gl_sub_c.ydr_cnt+=glsub.rdd_cnt;
+		gl_sub_c.ycr_cnt+=glsub.rcd_cnt;
+		gl_sub_c.ydr_amt+=glsub.rdd_amt;
+		gl_sub_c.ycr_amt+=glsub.rcd_amt;
+
+	if(crdb=='1')/* 借 */
+	{
+		if(gl_sub_c.dc_ind[0]=='1'){
+			gl_sub_c.dr_bal+=glsub.rdd_amt-glsub.rcd_amt;
+		}
+		else if(gl_sub_c.dc_ind[0]=='2'){
+			gl_sub_c.cr_bal +=glsub.rcd_amt-glsub.rdd_amt;
+		}
+		else
+		{
+			if( roll_ind=='Y' )
+			{
+				tmpdbl=gl_sub_c.dr_bal-gl_sub_c.cr_bal+glsub.rdd_amt+glsub.rcd_amt;
+				gl_sub_c.dr_bal=0.00;
+				gl_sub_c.cr_bal=0.00;
+				if( tmpdbl>0.005 )
+				gl_sub_c.dr_bal=tmpdbl;
+				else
+					gl_sub_c.cr_bal=-tmpdbl;
+			}
+			else if( roll_ind=='N' ){
+				gl_sub_c.dr_bal +=glsub.rdd_amt+glsub.rcd_amt;
+					/* added by liuxuan 20070920 非轧差双性科目特殊处理 */
+					if(com_item_c.acc_knd[0]=='0'){
+						tmp_ddbal=0;tmp_ccbal=0;
+						EXEC SQL select sum(dr_bal),sum(cr_bal) into :tmp_ddbal,:tmp_ccbal from gl_sub where cur_no=:gl_sub_c.cur_no and br_no=:gl_sub_c.br_no and acc_hrt in(select acc_hrt from com_item where up_acc_hrt=:gl_sub_c.acc_hrt and acc_hrt!=:gl_sub_c.acc_hrt);
+						if(sqlca.sqlcode){
+							vtcp_log("[%s][%d]合计金额错[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+							goto ErrExit;
+						}
+						gl_sub_c.dr_bal=tmp_ddbal; gl_sub_c.cr_bal=tmp_ccbal;
+					}
+					/* added over */
+			}
+			else{
+				vtcp_log("[%s][%d]roll_ind轧差标志错[%c]\n",__FILE__,__LINE__,roll_ind);
+				goto ErrExit;
+			}
+		}
+	}
+	else if(crdb=='2')/* 贷 */
+	{
+		if(gl_sub_c.dc_ind[0]=='2'){
+			gl_sub_c.cr_bal+=glsub.rcd_amt-glsub.rdd_amt;
+		}
+		else if(gl_sub_c.dc_ind[0]=='1'){
+			gl_sub_c.dr_bal +=glsub.rdd_amt-glsub.rcd_amt;
+		}
+		else
+		{
+			if( roll_ind=='Y' )
+			{
+				tmpdbl=gl_sub_c.dr_bal-gl_sub_c.cr_bal-glsub.rdd_amt-glsub.rcd_amt;
+				gl_sub_c.dr_bal=0.00;
+				gl_sub_c.cr_bal=0.00;
+				if( tmpdbl>0.005 )
+				gl_sub_c.dr_bal=tmpdbl;
+				else
+					gl_sub_c.cr_bal=-tmpdbl;
+			}
+			else if( roll_ind=='N' ){
+				gl_sub_c.cr_bal +=glsub.rdd_amt+glsub.rcd_amt;
+					/* added by liuxuan 20070920 非轧差双性科目特殊处理 */
+					if(com_item_c.acc_knd[0]=='0'){
+						tmp_ddbal=0; tmp_ccbal=0;
+						EXEC SQL select sum(dr_bal),sum(cr_bal) into :tmp_ddbal,:tmp_ccbal from gl_sub where cur_no=:gl_sub_c.cur_no and br_no=:gl_sub_c.br_no and acc_hrt in(select acc_hrt from com_item where up_acc_hrt=:gl_sub_c.acc_hrt and acc_hrt!=:gl_sub_c.acc_hrt);
+						if(sqlca.sqlcode){
+							vtcp_log("[%s][%d]合计金额错[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+							goto ErrExit;
+						}
+						gl_sub_c.dr_bal=tmp_ddbal; gl_sub_c.cr_bal=tmp_ccbal;
+					}
+					/* added over */
+			}
+			else{
+				vtcp_log("[%s][%d]roll_ind轧差标志错[%c]\n",__FILE__,__LINE__,roll_ind);
+				goto ErrExit;
+			}
+		}
+	}
+	else{
+		vtcp_log("[%s][%d]sub_add借贷标志错[%c]\n",__FILE__,__LINE__,crdb);
+		goto ErrExit;
+	}
+
+	memcpy( p_gl_sub_c , &gl_sub_c ,sizeof(gl_sub_c) );
+    return 0;
+ErrExit:
+	return 1;
+}
+
+int pub_eod_insert_msthst()
+{
+    int ret;
+
+    ret = sql_execute("insert into gl_mst_hst select br_no,cur_no,acc_hrt,\
+          \"date\",dc_ind,up_acc_hrt,dr_bal,cr_bal,ldd_bal,lcd_bal,rdd_cnt,\
+          rcd_cnt,rdd_amt,rcd_amt,cdd_cnt,ccd_cnt,cdd_amt,ccd_amt from gl_sub where br_no!='%s'", TOT_BR_NO);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"向历史总帐中备份数据错误!! [%d]",ret);
+        WRITEMSG
+        return ret;
+    }
+    return 0;
+}

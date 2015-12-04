@@ -1,0 +1,346 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"pbtotab_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int pbtotab_con ( struct pbtotab_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct pbtotab_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->brno);
+	zip_tail(ps->brname);
+	zip_tail(ps->txday);
+	zip_tail(ps->txtime);
+	zip_tail(ps->aptype);
+	zip_tail(ps->txcd);
+	zip_tail(ps->sendday);
+	zip_tail(ps->apflg);
+	zip_tail(ps->paybrno);
+	zip_tail(ps->paybrtype);
+	zip_tail(ps->payname);
+	zip_tail(ps->payactno);
+	zip_tail(ps->paycode);
+	zip_tail(ps->cashbro);
+	zip_tail(ps->cashbrtype);
+	zip_tail(ps->cashname);
+	zip_tail(ps->cashactno);
+	zip_tail(ps->cashcode);
+	zip_tail(ps->cashertype);
+	zip_tail(ps->cashcertif);
+	zip_tail(ps->txamt);
+	zip_tail(ps->paydate);
+	zip_tail(ps->cashdate);
+	zip_tail(ps->dscpt);
+	zip_tail(ps->paytype);
+	zip_tail(ps->crdno);
+	zip_tail(ps->txtypeno);
+	zip_tail(ps->expand);
+}
+int Pbtotab_Debug(struct pbtotab_c *ps){
+	vtcp_log("pbtotab_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("pbtotab_c.brno=[%s]\n",ps->brno);
+	vtcp_log("pbtotab_c.brname=[%s]\n",ps->brname);
+	vtcp_log("pbtotab_c.txday=[%s]\n",ps->txday);
+	vtcp_log("pbtotab_c.txtime=[%s]\n",ps->txtime);
+	vtcp_log("pbtotab_c.aptype=[%s]\n",ps->aptype);
+	vtcp_log("pbtotab_c.txcd=[%s]\n",ps->txcd);
+	vtcp_log("pbtotab_c.sendday=[%s]\n",ps->sendday);
+	vtcp_log("pbtotab_c.apflg=[%s]\n",ps->apflg);
+	vtcp_log("pbtotab_c.paybrno=[%s]\n",ps->paybrno);
+	vtcp_log("pbtotab_c.paybrtype=[%s]\n",ps->paybrtype);
+	vtcp_log("pbtotab_c.payname=[%s]\n",ps->payname);
+	vtcp_log("pbtotab_c.payactno=[%s]\n",ps->payactno);
+	vtcp_log("pbtotab_c.paycode=[%s]\n",ps->paycode);
+	vtcp_log("pbtotab_c.cashbro=[%s]\n",ps->cashbro);
+	vtcp_log("pbtotab_c.cashbrtype=[%s]\n",ps->cashbrtype);
+	vtcp_log("pbtotab_c.cashname=[%s]\n",ps->cashname);
+	vtcp_log("pbtotab_c.cashactno=[%s]\n",ps->cashactno);
+	vtcp_log("pbtotab_c.cashcode=[%s]\n",ps->cashcode);
+	vtcp_log("pbtotab_c.cashertype=[%s]\n",ps->cashertype);
+	vtcp_log("pbtotab_c.cashcertif=[%s]\n",ps->cashcertif);
+	vtcp_log("pbtotab_c.txamt=[%s]\n",ps->txamt);
+	vtcp_log("pbtotab_c.paydate=[%s]\n",ps->paydate);
+	vtcp_log("pbtotab_c.cashdate=[%s]\n",ps->cashdate);
+	vtcp_log("pbtotab_c.dscpt=[%s]\n",ps->dscpt);
+	vtcp_log("pbtotab_c.paytype=[%s]\n",ps->paytype);
+	vtcp_log("pbtotab_c.crdno=[%s]\n",ps->crdno);
+	vtcp_log("pbtotab_c.txtypeno=[%s]\n",ps->txtypeno);
+	vtcp_log("pbtotab_c.expand=[%s]\n",ps->expand);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Pbtotab_Sel(reply,pbtotab_c,fmtstr,va_alist)
+char    *reply;
+struct  pbtotab_c *pbtotab_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Pbtotab_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Pbtotab_Fet_Sel( pbtotab_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Pbtotab_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Pbtotab_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,pbtotab.* FROM pbtotab WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE pbtotab_sel FROM :comm;
+	EXEC SQL DECLARE sel_pbtotab CURSOR FOR pbtotab_sel;
+
+	EXEC SQL OPEN sel_pbtotab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Pbtotab_Fet_Sel ( struct pbtotab_c *pbtotab_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_pbtotab INTO :pbtotab_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch pbtotab error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch pbtotab finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(pbtotab_c);
+
+	return 0;
+}
+
+int Pbtotab_Clo_Sel (){
+	EXEC SQL CLOSE sel_pbtotab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Pbtotab_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,pbtotab.* FROM pbtotab WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE pbtotab_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_pbtotab CURSOR FOR pbtotab_upd;
+
+	EXEC SQL OPEN upd_pbtotab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Pbtotab_Fet_Upd( struct pbtotab_c *pbtotab_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_pbtotab INTO :pbtotab_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH pbtotab finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(pbtotab_c);
+
+	return 0;
+}
+
+int Pbtotab_Upd_Upd( struct pbtotab_c pbtotab_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE pbtotab SET brno=:pbtotab_c.brno,
+			brname=:pbtotab_c.brname,
+			txday=:pbtotab_c.txday,
+			txtime=:pbtotab_c.txtime,
+			aptype=:pbtotab_c.aptype,
+			txcd=:pbtotab_c.txcd,
+			sendday=:pbtotab_c.sendday,
+			apflg=:pbtotab_c.apflg,
+			paybrno=:pbtotab_c.paybrno,
+			paybrtype=:pbtotab_c.paybrtype,
+			payname=:pbtotab_c.payname,
+			payactno=:pbtotab_c.payactno,
+			paycode=:pbtotab_c.paycode,
+			cashbro=:pbtotab_c.cashbro,
+			cashbrtype=:pbtotab_c.cashbrtype,
+			cashname=:pbtotab_c.cashname,
+			cashactno=:pbtotab_c.cashactno,
+			cashcode=:pbtotab_c.cashcode,
+			cashertype=:pbtotab_c.cashertype,
+			cashcertif=:pbtotab_c.cashcertif,
+			txamt=:pbtotab_c.txamt,
+			paydate=:pbtotab_c.paydate,
+			cashdate=:pbtotab_c.cashdate,
+			dscpt=:pbtotab_c.dscpt,
+			paytype=:pbtotab_c.paytype,
+			crdno=:pbtotab_c.crdno,
+			txtypeno=:pbtotab_c.txtypeno,
+			expand=:pbtotab_c.expand
+	WHERE rowid=:pbtotab_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Pbtotab_Del_Upd(struct pbtotab_c pbtotab_c , char * reply  ){
+
+	EXEC SQL DELETE FROM pbtotab WHERE rowid=:pbtotab_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Pbtotab_Clo_Upd( ){
+	EXEC SQL CLOSE upd_pbtotab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Pbtotab_Ins( struct pbtotab_c pbtotab_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO pbtotab VALUES (:pbtotab_c.brno,
+			:pbtotab_c.brname,
+			:pbtotab_c.txday,
+			:pbtotab_c.txtime,
+			:pbtotab_c.aptype,
+			:pbtotab_c.txcd,
+			:pbtotab_c.sendday,
+			:pbtotab_c.apflg,
+			:pbtotab_c.paybrno,
+			:pbtotab_c.paybrtype,
+			:pbtotab_c.payname,
+			:pbtotab_c.payactno,
+			:pbtotab_c.paycode,
+			:pbtotab_c.cashbro,
+			:pbtotab_c.cashbrtype,
+			:pbtotab_c.cashname,
+			:pbtotab_c.cashactno,
+			:pbtotab_c.cashcode,
+			:pbtotab_c.cashertype,
+			:pbtotab_c.cashcertif,
+			:pbtotab_c.txamt,
+			:pbtotab_c.paydate,
+			:pbtotab_c.cashdate,
+			:pbtotab_c.dscpt,
+			:pbtotab_c.paytype,
+			:pbtotab_c.crdno,
+			:pbtotab_c.txtypeno,
+			:pbtotab_c.expand);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT pbtotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

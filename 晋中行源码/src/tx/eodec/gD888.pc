@@ -1,0 +1,126 @@
+/*************************************************************
+* 文 件 名: gD888.c
+* 功能描述：日终入总帐
+*           翻牌后执行。
+* 作    者: 
+* 完成日期: 2003年3月14日
+*
+* 修改记录：
+* 日    期: 2003年6月25日
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+EXEC SQL include sqlca;
+#include "dc_log_bk_c.h"
+
+gD888()
+{
+	int ret = 0;
+	int cnt=0;
+EXEC SQL BEGIN DECLARE SECTION;
+    double lst_ybal1,lst_ybal2,lst_ybal_sum,tdy_accu1,tdy_accu2,tdy_accu_sum;
+	char ywtjbm[4],item_no[6];
+	char inst_no1[6];
+	char inst_no2[6];
+EXEC SQL END DECLARE SECTION;
+
+    ret=sql_begin();
+    if( ret )
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+	EXEC SQL DECLARE cur_1 CURSOR FOR SELECT ywtjbm,inst_no,item_no,lst_ybal,tdy_accu from dda_zyywzk_tmp1 where 1=1;
+		if(sqlca.sqlcode)
+    	{
+        	sprintf( acErrMsg, "sqlcode[%ld]!",sqlca.sqlcode );
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+		EXEC SQL OPEN cur_1;
+		if(sqlca.sqlcode)
+    	{
+        	sprintf( acErrMsg, "sqlcode[%ld]!",sqlca.sqlcode );
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+	while(1)
+	{
+	cnt++;
+	vtcp_log("cnt=[%d]",cnt);
+		memset(ywtjbm,0x00,sizeof(ywtjbm));
+		memset(item_no,0x00,sizeof(item_no));
+		memset(inst_no1,0x00,sizeof(inst_no1));
+		memset(inst_no2,0x00,sizeof(inst_no2));
+
+		EXEC SQL FETCH cur_1 INTO :ywtjbm,:inst_no1,:item_no,:lst_ybal1,:tdy_accu1;
+		if( sqlca.sqlcode == 1403 ) break;
+		else if(sqlca.sqlcode)
+    	{
+        	sprintf( acErrMsg, "sqlcode[%ld]!",sqlca.sqlcode );
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+
+vtcp_log("inst_no1[%s]",inst_no1);
+pub_base_strpack(inst_no1);
+		if( !strcmp(inst_no1,"61034"))
+		{
+		vtcp_log("inst_no2[%s]",inst_no2);
+			strcpy(inst_no2,"61042");
+			}
+		else if( !strcmp(inst_no1,"61072"))
+			strcpy(inst_no2,"61040");
+		else if( !strcmp(inst_no1,"61096"))
+			strcpy(inst_no2,"61060");
+		vtcp_log("inst_no2[%s]",inst_no2);
+
+		EXEC SQL select lst_ybal,tdy_accu INTO :lst_ybal2,:tdy_accu2
+			from dda_zyywzk_tmp2 where ywtjbm=:ywtjbm and inst_no=:inst_no2 and item_no=:item_no;
+		if(sqlca.sqlcode)
+    	{
+		vtcp_log("ywtjbm[%s],inst_no[%s],item_no[%s]",ywtjbm,inst_no2,item_no);
+        	sprintf( acErrMsg, "sqlcode[%ld]!",sqlca.sqlcode );
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+
+		lst_ybal_sum=lst_ybal1+lst_ybal2;
+		tdy_accu_sum=tdy_accu1+tdy_accu2;
+
+		EXEC SQL UPDATE dda_zyywzk SET lst_ybal=:lst_ybal_sum,tdy_accu=:tdy_accu_sum
+			where ywtjbm=:ywtjbm and inst_no=:inst_no2 and item_no=:item_no;
+		if(sqlca.sqlcode)
+    	{
+        	sprintf( acErrMsg, "sqlcode[%ld]!",sqlca.sqlcode );
+        	WRITEMSG
+        	goto ErrExit;
+    	}
+	}
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"测试程序执行成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	strcpy(g_pub_tx.reply,"D008");
+	sprintf(acErrMsg,"测试程序执行失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

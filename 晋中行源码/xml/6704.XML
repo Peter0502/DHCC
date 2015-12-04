@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="6704    再贷款还款记帐"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    $FD58=#PROTID;
+    $FD31=#ACTNO;
+    $FD100=getitems('#AMT#HKLX');
+    commsend_001();
+}"
+</COMMSEND>
+<COMMRECV> 
+"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(6704                         再贷款还款记帐)"/>
+  <ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=4804)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="6"   COL="15"  TYPE="%-10s" FUNCTIONS="T(协议编号:)"/> 
+  <ITEM LINE="8"   COL="9"   TYPE="%-15s" FUNCTIONS="T(人行准备金帐号:)"/>
+ 
+ <ITEM LINE="10" COL="8"  TYPE="%-60s" FUNCTIONS="T(------------------------------------------------------------)"/>
+  <ITEM LINE="12"  COL="13"  TYPE="%-12s" FUNCTIONS="T(再贷款类型:)" />
+  <ITEM LINE="13"  COL="15"  TYPE="%-12s" FUNCTIONS="T(贷款金额:)" />
+  <ITEM LINE="14"  COL="15"  TYPE="%-12s" FUNCTIONS="T(起 息 日:)" />
+  <ITEM LINE="14"  COL="35"  TYPE="%-12s" FUNCTIONS="T(计 息 日:)" />
+  <ITEM LINE="14"  COL="55"  TYPE="%-12s" FUNCTIONS="T(到 期 日:)" />
+  <ITEM LINE="15"  COL="15"  TYPE="%-10s" FUNCTIONS="T(利    率:)"/>
+  <ITEM LINE="16"  COL="15"  TYPE="%-10s" FUNCTIONS="T(利    息:)"/>
+
+  <ITEM LINE="6"   COL="25"  NAME="#PROTID" TYPE="%-16s"  INPUT="TEXT"  FUNCTIONS="">
+   <ONLOSTFOCUS>
+ "{
+	initfd();
+      commsend_001();
+	$FD16='9856';
+    $FD58=#PROTID;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//#RATE= ltrim(comma(itoa(val($FD84,0.000001),'%.6f'),8));
+		//#AMT = ltrim(comma(itoa(val($FD100,0.01),'%.2f'),16));
+		#RATE=val($FD84,0.000001);
+		#AMT = val($FD100,0.01);
+		#HKLX=#AMT*fund($FD45,$HDATE)*#RATE/30*0.001; //当前交易日－起息日
+	if($FD67=='1'){
+		#ZDKLX='短期再贷款';
+	}
+	else if($FD67=='2'){
+		#ZDKLX='发展再贷款';
+	}
+	else{
+		showmsg('再贷款类型错误!');
+		return(false);
+	}
+	#SDATE=$FD45;
+	#EDATE=$FD44;
+	#JXDATE=$HDATE;
+	show(#ZDKLX,true);
+	show(#AMT,true);
+	show(#JXDATE,true);
+	show(#SDATE,true);
+	show(#EDATE,true);
+	show(#RATE,true);
+	show(#HKLX,true);
+ }"
+ </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="8"  COL="25" NAME="#ACTNO"    TYPE="%-19s" INPUT="TEXT"  FUNCTIONS="V(NB)"/> 
+  <ITEM NAME="#ZDKLX"  LINE="12"  COL="25"  TYPE="%-12s"   />
+  <ITEM NAME="#AMT"    LINE="13"  COL="25"  INPUT="TEXT" ENABLE="FALSE" TYPE="%17.2f" />
+  <ITEM NAME="#SDATE"  LINE="14"  COL="25"  TYPE="%-8s"   FUNCTIONS=""/>
+  <ITEM NAME="#JXDATE"  LINE="14"  COL="45"  TYPE="%-8s"   FUNCTIONS=""/>
+  <ITEM NAME="#EDATE"  LINE="14"  COL="65"  TYPE="%-8s"   FUNCTIONS=""/>
+  <ITEM NAME="#RATE"   LINE="15"  COL="25"  INPUT="TEXT" ENABLE="FALSE" TYPE="%9.6f"  FUNCTIONS=""/>
+  <ITEM NAME="#HKLX"   LINE="16"  COL="25"  INPUT="TEXT" ENABLE="FALSE" TYPE="%17.2f" FUNCTIONS=""/>
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="再贷款还款记账显示内容">
+      NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+	        print(5, 30,'再贷款还款记帐');
+		print(7, 20,'协议  编号 :[16  ]',#PROTID);
+		print(8, 20,'还款  本金 :[22 ]',ltrim(comma(itoa(#AMT,'%17.2f'),22)));
+		print(9, 20,'还款  利息 :[22 ]',ltrim(comma(itoa(#HKLX,'%17.2f'),22)));
+		print(10, 20,'人行准备金帐号:[24]',#ACTNO);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+ </RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"   DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+ <PRINT>"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	$KINDNO='00';
+	print( 5, 20,'机构名称:[30]',$BRNAME); 
+        print( 5, 2,'代码:6704');
+        print( 5, 13,'交易: 再贷款还款记帐');
+	print( 7, 20,'协议  编号 :[16  ]',#PROTID);
+	print( 7, 5,'人行准备金帐号:[24]',#ACTNO);
+        printacdtl_1();
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+   }"
+</PRINT>
+ </RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="6503 债券投资未到期收息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+  		$TXNO='4603';
+  		commsend_001();
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(6503                       债券投资未到期收息  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4603)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   <!--输入变量-->
+  <ITEM LINE="7"   COL="3" TYPE="%-14s" FUNCTIONS="T(投资协议编号:)"/>
+  <ITEM LINE="8"   COL="3" TYPE="%-14s" FUNCTIONS="T(买入债券品种: )"/>
+
+  
+   <ITEM LINE="11"   COL="3" TYPE="%-10s" FUNCTIONS="T(借方帐号:)"/>
+  <ITEM LINE="12"   COL="3" TYPE="%-10s" FUNCTIONS="T(对方户名:)"/>
+
+  
+  <ITEM LINE="14"   COL="3" TYPE="%-10s" FUNCTIONS="T(凭证种类:)"/>
+  <ITEM LINE="14"   COL="40" TYPE="%-14s" FUNCTIONS="T(凭 证 号:)"/>
+
+  <ITEM LINE="17"   COL="3" TYPE="%-10s" FUNCTIONS="T(利息金额:)"/>
+
+  <ITEM NAME="#CPBH"   TYPE="%-3s" 	FUNCTIONS=""/>
+  <ITEM NAME="#XYBH" 	INPUT="TEXT" LINE="7" COL="19" TYPE="%-15s" 	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	$FD58=#XYBH;
+		commsend_001();
+		$FD16='9825';
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+			}
+   #ZQPZ=$FD86;
+
+  }"
+  </ONLOSTFOCUS>
+   </ITEM> 
+  <ITEM NAME="#ZQPZ" 	INPUT="LABEL" LINE="8" COL="19" TYPE="%-10s" 	FUNCTIONS=""/>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+   <ITEM NAME="#XZBZ"  TYPE="%-1s" FUNCTIONS="T(2)"/>
+<ITEM NAME="#DFZH"	 LINE="11" COL="15" TYPE="%-24s" INPUT="TEXT"	FUNCTIONS="T()">
+<ONLOSTFOCUS>
+"{
+				dim @txno as string;
+
+    $FD30=#DFZH;
+		@txno=$TXNO;
+		$TXNO='9812';
+		commsend_001();
+		$TXNO=@txno;
+		callserver();
+		#DFHM=$FD27;	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+			}
+
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#DFHM"	 LINE="12" COL="15" TYPE="%-48s" DEVICE="KEYBORD"	FUNCTIONS="T()"/>
+  <ITEM NAME="#PZZL" 	INPUT="SELECT" LINE="14" COL="13" TYPE="%-3s" 	FUNCTIONS="T(299)V(NB)">
+ 	 <SELECT>
+  		<OPTION VALUE="299" TITLE="其他凭证"/>
+  	</SELECT>
+   </ITEM>
+      <ITEM NAME="#PZHM" INPUT="TEXT" LINE="14"  COL="50" TYPE="%16d" 	FUNCTIONS="T()"/>
+
+  <ITEM NAME="#LXJE"	 LINE="17" COL="13" TYPE="%16.2f" INPUT="TEXT"	FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#XLXJE"	 TYPE="%-21s"	FUNCTIONS="X(#LXJE)"/>
+
+  <ITEM NAME="#FD" TYPE="%-1s">
+  <ONLOSTFOCUS>
+  "{
+
+		$FD27=#DFHM;
+		$FD30=#DFZH;
+		$FD58=#XYBH;
+
+		$FD39=itoa(#LXJE*100, '%016.0f');
+
+		$FD69=#XZBZ;
+		$FD89=#PZZL;
+		$FD59=#PZHM;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">
+    </VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功!">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	 print( 5, 30,'债券投资未到期收息');
+	 print( 7, 20,'流水号:  [6]', $FD4);
+	 print( 8, 20,'投资协议编号:[15]',#XYBH);
+   print(11, 20,'利息金额: [21   ]',#XLXJE);
+ }"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:6503');
+	print( 5, 13,'交易:债券投资未到期收息');
+
+	print(07,20,'投资协议编号:[15]',#XYBH);
+	print(08,20,'利息金额: [16]',itoa(#LXJE,'%16.2f'));
+	print(09,20,'借方帐号:[24]',#DFZH);
+	print(10,20,'对方户名:[48]',#DFHM);
+	
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+
+</OUTPUT>
+</TRANSACTION>

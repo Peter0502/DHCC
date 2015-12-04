@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="业务名称：批量账户管理"
+		xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<INIT>"{
+	list_init(17,75,5,1);
+	list_setcolcnt(3);
+	list_setcol(0,'开户行号',20);
+	list_setcol(1,'账号',20);
+	list_setcol(2,'帐户名称',20);
+}"
+</INIT>
+
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+	strfld(@fline,'|',1)+'|'+
+	strfld(@fline,'|',2)+'|';
+}"
+</LOAD>
+
+<SHOW>"{
+	#KHHH=strfld(@line,'|',0);
+	#ZH =strfld(@line,'|',1);
+	#ZHMC=strfld(@line,'|',2);
+}"
+</SHOW>
+
+<UPDATE>
+"{
+	@line=#KHHH+'|'+#ZH+'|'+#ZHMC;
+}"
+</UPDATE>
+
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+	strfld(@line,'|',1)+'|'+
+	strfld(@line,'|',2)+'|';
+}"
+</SAVE>
+
+<VARIABLE>
+
+	<ITEM LINE="01"  COL="03" TYPE="%-40s" FUNCTIONS="T(                批量账户管理)"/>
+	<ITEM NAME="#PAY_QS_NO"  TYPE="%-14s" FUNCTIONS=""/>
+	<ITEM LINE="5"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(开户行号:)" />
+	<ITEM LINE="5"  COL="17"  NAME="#KHHH" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="T()" >
+		<ONLOSTFOCUS> 
+		"{
+			//调短交易检测行号是否正确
+			
+			initfd();
+			commsend_001();
+			$FD16='1101';
+			$FD18='pbp';
+			$FD59=#KHHH;
+			callagnpbp();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+		
+
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(账号:)" />
+	<ITEM LINE="6"  COL="17"  NAME="#ZH" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="V(NB)T()" >
+		<ONLOSTFOCUS>
+			"{
+				if(len(#ZH) &gt; 10)
+				{
+					initfd();
+					commsend_001();
+					$FD16='6232';
+					$FD30=#ZH;
+					$FD73='00001000';
+					callserver();
+					if($FD12 != 'C114')
+					{
+						showmsg('账号不能为行内账号');
+						return(false);
+					}
+				}			
+				else
+				{
+					showmsg('账号长度错误');
+					return(false);
+				}
+				
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7"  COL="3"  TYPE="%-14s"  FUNCTIONS="T(账户名称:)" />
+	<ITEM LINE="7"  COL="17"  NAME="#ZHMC" TYPE="%-48s" INPUT="TEXT" FUNCTIONS="V(NB)T()" />
+	<ITEM LINE="15" COL="65"   TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+
+</TRANSACTION>

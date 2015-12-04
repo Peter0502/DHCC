@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="5573 银行端划款业务交易申请"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  //定义各个域，并把前台的值往域内赋值    又用了9591，9592，9594 三个短交易
+  //FD62 财政机关代码12
+  //FD61 国库主体代码10
+  //FD67 支出凭证类型1
+  //FD68 支付方式1    
+  //FD81 凭证编号 32 
+  //FD44 凭证日期 8
+  //FD82 付款  账户 32
+  //FD25 付款人名称60
+  //FD76 付款人地址60
+  //FD83 收款人账号32
+  //FD95 收款人名称60
+  //FD26 收款人地址 60
+  //FD31  收款人开户行行号12 
+  //FD27  附      言 60 
+  //FD69  预算  种类 1  
+  //FD71  整理期标志 1 71
+  //FD40--32  交易总金额19.2
+
+  $FD62=getitems('#FINORGCODE'); 
+  $FD61=getitems('#TRECODE'); 
+  $FD67=getitems('#PAYOUTVOUTYPE'); 
+  $FD68=getitems('#PAYMODE'); 
+  $FD69=getitems('#BUDGETTYPE'); 
+  $FD81=getitems('#VOUNO');
+  $FD44=getitems('#VOUDATE');
+  $FD82=getitems('#PAYERACCT');
+  $FD25=getitems('#PAYERNAME');
+  $FD76=getitems('#PAYERADDR');
+  $FD83=getitems('#PAYEEACCT');
+  $FD26=getitems('#PAYEEADDR');
+  $FD31=getitems('#PAYEEOPNBNKNO');
+  $FD27=getitems('#ADDWORD');
+  $FD69=getitems('#BUDGETTYPE');
+  $FD71=getitems('#TRIMSIGN');
+  $FD40=getitems('#ALLAMT');
+   commsend_001();     
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();         
+
+}"    
+</COMMRECV>
+
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(5573                    银行端划款业务交易申请)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--此处要定义几个变量并赋值 -->  
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5593)"/>      
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>  
+  <ITEM NAME="#INIT" TYPE="%1s">    
+  
+  <ONLOSTFOCUS>   
+  "{
+ if(#INIT=='')
+    {
+    list_init(7,60,16,5);
+    list_setcolcnt(10);  
+    list_setcol(0,'项目序号',11,0);
+    list_setcol(1,'该项目序号下划款总金额',27,0);
+    list_setcol(2,'明细数量',17,0);
+    list_setcol(3,'付款账户',10,0);
+    list_setcol(4,'收款人账号',12,0);
+    list_setcol(5,'收款人地址',12,0);
+    list_setcol(6,'收款人开户行行号',18,0);
+    list_setcol(7,'附言',5,0); 
+    list_setcol(8,'预算种类',9,0);
+    list_setcol(9,'整理期标志',11,0);
+    list_show();       //显示但不激活列表框
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+
+  <!--输入变量-->
+  <ITEM LINE="5" COL="5" TYPE="%-13s" FUNCTIONS="T(支出凭证类型:)"/>
+  <ITEM NAME="#PAYOUTVOUTYPE" INPUT="SELECT" LINE="5" COL="19" TYPE="%1d" FUNCTIONS="T(1)V(0|1)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.无纸凭证"/>
+    <OPTION VALUE="1" TITLE="1.有纸凭证"/>
+  </SELECT>
+  </ITEM>   
+   <ITEM LINE="5" COL="51" TYPE="%-9s" FUNCTIONS="T(支付方式:)"/>
+  <ITEM NAME="#PAYMODE" INPUT="SELECT" LINE="5" COL="61" TYPE="%1d" FUNCTIONS="T(0)V(0|1)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.直接支付"/>
+    <OPTION VALUE="1" TITLE="1.授权支付"/>
+  </SELECT>
+  </ITEM>
+
+  <ITEM LINE="6" COL="5" TYPE="%-13s" FUNCTIONS="T(财政机关代码:)"/>
+  <ITEM  NAME="#FINORGCODE" INPUT="TEXT" LINE="6" COL="18" TYPE="%-12s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="6" COL="31" TYPE="%-9s" FUNCTIONS="T(国库代码:)"/>
+  <ITEM NAME="#TRECODE" INPUT="TEXT" LINE="6" COL="40" TYPE="%-10s" FUNCTIONS="V(NB)"/>
+
+<ITEM NAME="#ADDSQ" LINE="6" COL="51" TYPE="%-8s" FUNCTIONS="T(添加申请)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+  initfd();
+  $FD98='1';
+  //$FD16='5593';
+  //$FD31=getitems('#STATINFNUM');  
+  //$TXNO='5593';
+  $FD40=getitems('#ALLAMT');
+  $FD67=getitems('#PAYOUTVOUTYPE');   // 支付方式
+  $FD68=getitems('#PAYMODE');         // 支付类型
+  $FD62=getitems('#FINORGCODE');      // 财政
+  $FD61=getitems('#TRECODE');         // 国库
+  $FD28=getitems('#SQXH');           //  申请序号    
+
+  commsend_001();
+  
+  if(len(#SQXH)==0){
+      //callserver();  
+      calltips();
+  }  
+  if($FD12!='0000')
+	 {
+      showmsg(geterror());
+      return(false);
+   }
+  setitems('#SQXH',$FD28);
+  showmsg('申请添加成功,序号=['+#SQXH+']');
+  enable(#SQXH,true);  
+  
+ }"
+  </ONCLICK>
+</ITEM> 
+
+  <ITEM LINE="6" COL="63" TYPE="%-7s" FUNCTIONS="T(申请号:)"/>
+  <ITEM NAME="#SQXH"  INPUT="TEXT" LINE="6" COL="70" TYPE="%8d" FUNCTIONS=""> 
+  <ONLOSTFOCUS>
+  "{
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<!--   
+  <ITEM LINE="7" COL="5" TYPE="%-11s" FUNCTIONS="T(交易总金额:)"/>
+  <ITEM NAME="#ALLAMT" INPUT="TEXT" LINE="7" COL="17" TYPE="%-17.2f"  DEVICE="NONE" ENABLE="FALSE" FUNCTIONS="V(00000000000000001,99999999999999999)"/>   
+ -->
+  <ITEM NAME="#STATINFNUM" TYPE="%3d"/>       <!--统计信息数--> 
+  <ITEM NAME="#ALLNUM" TYPE="%3d"/>              <!--统计信息数--> 
+  <ITEM NAME="#ALLAMT"  TYPE="%-17.2f"/>      <!-- 交易总金额 -->
+
+
+  <ITEM LINE="7"   COL="5" TYPE="%-64s" FUNCTIONS="T(---------------划款信息-----------------------------------------------)"/>
+
+   <ITEM LINE="8" COL="5" TYPE="%-11s" FUNCTIONS="T(凭证  编号:)"/>
+  <ITEM NAME="#VOUNO" INPUT="TEXT" LINE="8" COL="17" TYPE="%-32s" FUNCTIONS="V(NB)"/>
+   <ITEM LINE="8" COL="51" TYPE="%-9s" FUNCTIONS="T(凭证日期:)"/>
+  <ITEM NAME="#VOUDATE" INPUT="TEXT" LINE="8" COL="61" TYPE="%-8s" FUNCTIONS="D()V(NB)T($HDATE)"/>   
+
+  <ITEM NAME="#ACC_BAL" TYPE="%17.2f"/> <!-- 帐户余额 -->
+  <ITEM NAME="#PayeeName"   TYPE="%-61s" FUNCTIONS=""/>     <!-- 户名 -->
+  <ITEM LINE="9" COL="5" TYPE="%-11s" FUNCTIONS="T(付款  账户:)"/>
+  <ITEM NAME="#PAYERACCT" INPUT="TEXT" LINE="9" COL="17" TYPE="%-32s" FUNCTIONS="V(NB)"/>
+ 
+  <ITEM LINE="10" COL="5" TYPE="%-11s" FUNCTIONS="T(付款人名称:)"/>
+  <ITEM NAME="#PAYERNAME" INPUT="TEXT" LINE="10" COL="17" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="11" COL="5" TYPE="%-11s" FUNCTIONS="T(付款人地址:)"/>
+  <ITEM NAME="#PAYERADDR" INPUT="TEXT" LINE="11" COL="17" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="12" COL="5" TYPE="%-11s" FUNCTIONS="T(收款人账号: )"/>
+  <ITEM NAME="#PAYEEACCT" INPUT="TEXT" LINE="12" COL="17" TYPE="%-32s" FUNCTIONS="V(NB)"/>
+  	  <!--进入短交易，从而显示相关帐户信息-->  
+    <!--收款人名称 由上一短交易自动弹出 -->  
+    <ITEM LINE="12" COL="49" TYPE="%-18s" FUNCTIONS="T(收款人开户行行号: )"/>
+  <ITEM NAME="#PAYEEOPNBNKNO" INPUT="TEXT" LINE="12" COL="66" TYPE="%-12s" FUNCTIONS="V(NB)"/>    
+  <ITEM LINE="13" COL="5" TYPE="%-11s" FUNCTIONS="T(收款人地址:)"/>
+  <ITEM NAME="#PAYEEADDR" INPUT="TEXT" LINE="13" COL="17" TYPE="%-60s" FUNCTIONS="V(NB)"/> 
+  <ITEM LINE="14" COL="5" TYPE="%-11s" FUNCTIONS="T(附      言: )"/>
+  <ITEM NAME="#ADDWORD" INPUT="TEXT" LINE="14" COL="17" TYPE="%-60s" FUNCTIONS="V(NB)"/> 
+  <ITEM LINE="15" COL="5" TYPE="%-11s" FUNCTIONS="T(预算  种类: )"/>
+  <ITEM NAME="#BUDGETTYPE" INPUT="SELECT" LINE="15" COL="17" TYPE="%-1d" FUNCTIONS="T(1)V(1|2)">  
+  <SELECT>
+    <OPTION VALUE="1" TITLE="1.预算内"/>
+    <OPTION VALUE="2" TITLE="2.预算外"/>
+  </SELECT>  
+ </ITEM>   
+
+  <ITEM NAME="#SZDTLCNT"  TYPE="%03d"/>  <!-- 明细信息的条数  -->
+  <ITEM NAME="#CFXNO"  TYPE="%4d" FUNCTIONS="T(2201)"/>
+  <ITEM NAME="#TAXTYPEAMT"  TYPE="%-17.2f"/>  <!-- 每个申请信息的总金额 -->
+  
+   <ITEM LINE="15" COL="55" TYPE="%-11s" FUNCTIONS="T(整理期标志: )"/>  
+  <ITEM NAME="#TRIMSIGN" INPUT="SELECT" LINE="15" COL="67" TYPE="%-1d" FUNCTIONS="T(0)V(0|1)">  
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.本年度"/>
+    <OPTION VALUE="1" TITLE="1.上年度"/>
+  </SELECT>
+  </ITEM>  
+
+
+<ITEM NAME="#PROID"  TYPE="%3d"/>
+<ITEM NAME="#ADDHK" LINE="17" COL="66" TYPE="%-8s" FUNCTIONS="T(添加划款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @cTxamt as string;
+    dim @cTxamt1 as string;
+    dim @txamt as string;
+    dim @iLen as number;
+    dim @a as number;
+    dim @id as number;
+    dim @cnt as number;
+  //FD82 付款  账户 32
+  //FD74 付款人名称60
+  //FD76 付款人地址60
+  //FD83 收款人账号32
+  //FD95 收款人名称60
+  //FD26 收款人地址 60
+  //FD31  收款人开户行行号12 
+  //FD27  附      言 60 
+  //FD69  预算  种类 1  
+  //FD71  整理期标志 1
+    initfd();
+  $FD16='5593';
+  $FD98='2';
+  #SZDTLCNT='0';
+  
+  $FD81=getitems('#VOUNO');
+  $FD44=getitems('#VOUDATE');
+  $FD82=getitems('#PAYERACCT');  
+  $FD25=getitems('#PAYERNAME');
+  $FD76=getitems('#PAYERADDR');
+  $FD83=getitems('#PAYEEACCT');
+ // $FD95=getitems('#PAYEENAME');
+  $FD26=getitems('#PAYEEADDR');
+  $FD31=getitems('#PAYEEOPNBNKNO');
+  $FD27=getitems('#ADDWORD');
+  $FD69=getitems('#BUDGETTYPE');
+  $FD71=getitems('#TRIMSIGN');
+  
+  $FD40=getitems('#ALLAMT');
+  $FD28=getitems('#SQXH'); 
+  $FD41=getitems('#TAXTYPEAMT');
+    commsend_001();
+
+    @cTxamt=itoa(#TAXTYPEAMT*100);
+    @iLen=len(@cTxamt);
+    @cTxamt1=substr(@cTxamt,0,@iLen-2)+'.'+substr(@cTxamt,@iLen-2,2);  
+    
+    @a=msgbox('是否将上述划款信息增加？','确认添加吗','ok|cancel');
+    if(@a==0){
+           //callserver();  chengbo 20090619 HS
+           calltips();
+           if($FD12!='0000'){
+           showmsg(geterror());
+           return(false);
+           }
+    setitems('#PROID',$FD50);
+    list_additem('',#PROID,@cTxamt1,#SZDTLCNT,#PAYERACCT, #PAYEEACCT,#PAYEEADDR,#PAYEEOPNBNKNO,#ADDWORD,#BUDGETTYPE,#TRIMSIGN);
+   }
+   @cnt=list_getrowcnt();
+   list_work();
+   if(@cnt!=0){
+       #INIT='1';
+       }   
+   }" 
+  </ONCLICK>
+</ITEM> 
+
+<ITEM NAME="#ADDMX" LINE="18" COL="66" TYPE="%-8s" FUNCTIONS="T(输入明细)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @cnt as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @id as number;
+    dim @opflag as number;
+    @id=0;
+    @cnt=list_getrowcnt();
+    @opflag=0;
+    if(@cnt!=0){
+      @msg='选中后回车，即可输入明细';
+      showmsg(@msg,2);
+      list_work();
+      @id =list_getselid();
+      #PROID=list_gettext(@id,0);
+      
+      #SZDTLCNT=list_gettext(@id,2);
+      #PAYERACCT=list_gettext(@id,3);
+      #PAYEEACCT=list_gettext(@id,4);    
+      }
+    if(@cnt!=0){
+         open('557301.XML','#PROID='+#PROID+';#SQXH='+#SQXH+';#PAYERACCT='+#PAYERACCT+';#PAYEEACCT='+#PAYEEACCT+';#SZDTLCNT='+#SZDTLCNT+';');
+         @opflag=1;
+         return(true);
+    } else {
+      showmsg('请先添加划款，然后再增加划款明细');
+      goitem(#VOUNO);
+      @opflag=0;
+      return(false);
+    }
+    @a=msgbox('是否继续增加新的划款？','继续新增加吗','ok|cancel');
+    if(@a==0){
+      goitem(#VOUNO);
+    };
+  }"
+    
+  </ONCLICK>
+</ITEM>  
+
+  <ITEM NAME="#CLOSERET" TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+     dim @id as number;
+     dim @baktxno as string;
+     dim @filename as string;
+     dim @msg as string;
+      //开始查询申请信息
+	$FD44=getitems('#VOUDATE');
+	$FD28=getitems('#SQXH');
+	$FD36=getitems('#CFXNO');
+	@baktxno=$TXNO;
+	$TXNO='9594';
+	$FD36=getitems('#CFXNO');
+	//$FD52=getitems('#TAXPAYCODE');
+	commsend_001();
+	$TXNO=@baktxno;
+	//@msg=callserver();
+	@msg=calltips();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+//	setitems('#ALLAMT',$FD43);
+//	show(#ALLAMT,true);		
+
+	@filename='../tmp/'+$KINBR+$TTYNAME;
+	savefiletxt(@filename,@msg);
+	list_load('../tmp/'+$KINBR+$TTYNAME);
+	list_work();
+   }"
+   </ONLOSTFOCUS>
+   </ITEM>
+
+<ITEM NAME="#NEXT" LINE="19" COL="66" TYPE="%-8s" FUNCTIONS="T(下一划款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+     goitem(#VOUNO);
+      return(true);
+    }"
+  </ONCLICK>
+</ITEM> 
+  
+<ITEM NAME="#DELTK" LINE="20" COL="66" TYPE="%-8s" FUNCTIONS="T(删除划款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @id as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @txamt as string;
+    dim @cnt as number;
+	  dim @baktxno as string;
+	  dim @filename as string;
+    $FD98='4';
+   
+    @cnt=list_getrowcnt(); 
+    list_work();
+    if(@cnt!=0)
+	  {
+      @id =list_getselid();                                  
+      #PROID=list_gettext(@id,0); enable(#PROID,true);
+    //  #PAYERNAME=list_gettext(@id,1); enable(#PAYERNAME,true);
+    //  #SZDTLCNT=list_gettext(@id,2); enable(#SZDTLCNT,true);
+      #PAYERACCT=list_gettext(@id,3); enable(#PAYERACCT,true);
+      #PAYEEACCT=list_gettext(@id,4); enable(#PAYEEACCT,true);
+      #PAYEEADDR=list_gettext(@id,5); enable(#PAYEEADDR,true);
+      #PAYEEOPNBNKNO=list_gettext(@id,6); enable(#PAYEEOPNBNKNO,true);
+      #ADDWORD=list_gettext(@id,7); enable(#ADDWORD,true);
+      #BUDGETTYPE=list_gettext(@id,8); enable(#BUDGETTYPE,true);
+      #TRIMSIGN=list_gettext(@id,9); enable(#TRIMSIGN,true);                   
+      $FD40=getitems('#ALLAMT');
+      $FD50=getitems('#PROID');
+      $FD28=getitems('#SQXH');   //申请序号 
+      $FD81=getitems('#VOUNO');
+      $FD44=getitems('#VOUDATE');
+      $FD82=getitems('#PAYERACCT');
+      $FD25=getitems('#PAYERNAME');
+      $FD76=getitems('#PAYERADDR');
+      $FD83=getitems('#PAYEEACCT');
+   // $FD95=getitems('#PAYEENAME');
+      $FD26=getitems('#PAYEEADDR');
+      $FD31=getitems('#PAYEEOPNBNKNO');
+      $FD27=getitems('#ADDWORD');
+      $FD69=getitems('#BUDGETTYPE');
+      $FD71=getitems('#TRIMSIGN');      
+      commsend_001();
+      @msg='确认要删除第'+itoa(@id+1)+'条划款信息';
+      @a=msgbox(@msg,'删除确认？','ok|cancel');
+      if(@a==0){
+        //callserver();
+        calltips();
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return(false);
+        }
+        list_rmitem(@id);
+      }
+    } else {
+      showmsg('请先添加划款，然后再删除');
+      goitem(#VOUNO);
+      return(false);
+      }
+    
+    //重新查询
+    initfd();
+    @baktxno=$TXNO;
+    $TXNO='9591';
+    $FD62=getitems('#FINORGCODE');
+    $FD44=getitems('$HDATE');
+	  $FD78=getitems('#SQXH');
+    commsend_001();
+    // @msg=callserver();
+    @msg=calltips();
+		@filename='../tmp/'+$KINBR+$TTYNAME;                   
+		savefiletxt(@filename,@msg);
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    list_load('../tmp/'+$KINBR+$TTYNAME);  
+    @cnt=list_getrowcnt();//得到列表框的行数
+    if(@cnt!=0)
+	  {
+      list_work(); 
+      @id =list_getselid();                                  
+      #PROID=list_gettext(@id,0); enable(#PROID,true);
+      @txamt=list_gettext(@id,1);
+      // #TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true); 
+      // #PAYERADDR=list_gettext(@id,2); enable(#PAYERADDR,true);
+      #SZDTLCNT=list_gettext(@id,2); enable(#SZDTLCNT,true);
+      #PAYERACCT=list_gettext(@id,3); enable(#PAYERACCT,true);
+      #PAYEEACCT=list_gettext(@id,4); enable(#PAYEEACCT,true);
+      #PAYEEADDR=list_gettext(@id,5); enable(#PAYEEADDR,true);
+      #PAYEEOPNBNKNO=list_gettext(@id,6); enable(#PAYEEOPNBNKNO,true);
+      #ADDWORD=list_gettext(@id,7); enable(#ADDWORD,true);
+      #BUDGETTYPE=list_gettext(@id,8); enable(#BUDGETTYPE,true);
+      #TRIMSIGN=list_gettext(@id,9); enable(#TRIMSIGN,true); 
+      // @txamt=list_gettext(@id,5);
+      // #TAXTYPEAMT=val(@txamt);enable(#TAXTYPEAMT,true);    
+      goitem(#NEXT);
+    } 
+   }"
+  </ONCLICK>
+</ITEM> 
+
+<ITEM NAME="#SUBMIT" LINE="21"   COL="66"  TYPE="%-8s" FUNCTIONS="T(发送申请)" INPUT="BUTTON">
+	<ONCLICK>
+		"{
+		dim @id as number;
+		dim @a as number;
+		dim @msg as string;
+		dim @txamt as string;
+		dim @cnt as number;
+		dim @baktxno as string;
+		dim @filename as string;
+		$FD98='6';
+		//判断金额是否够扣
+
+		$FD28=getitems('#SQXH');
+    $FD62=getitems('#FINORGCODE'); 
+    $FD61=getitems('#TRECODE'); 
+    $FD67=getitems('#PAYOUTVOUTYPE');   
+		$TXNO='5593';
+		commsend_001();
+		//@msg=callserver();
+		@msg=calltips();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	
+    setitems('#AllAMT',$FD40);
+		if(substr($FD54,7,3)=='499')
+		{
+			showmsg('发送成功，且收到9121回执，请用户确认划款');
+		}
+		else
+		{
+			showmsg('发送成功，但收到9120回执，划款申请失败');
+			return(false);
+		}
+	}"
+	</ONCLICK>
+ </ITEM>
+
+  <ITEM NAME="#CLOSERET1" TYPE="%1s">
+  <ONLOSTFOCUS>
+  "{
+    showmsg('应答结束');
+    closeall();
+   }"
+   </ONLOSTFOCUS>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银行端缴款业务交易申请单">
+NOTHING
+</PACKAGE>
+  <PRINT>
+  "{
+   // 打印输出的东西
+   //print(5,2, '交易代码:5526');
+  }"
+  </PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

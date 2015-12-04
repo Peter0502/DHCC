@@ -1,0 +1,457 @@
+/***************************************************************************
+ *** ³ÌÐò×÷Õß : Shi shenghui Ê¯Éý»Ô                                      ***
+ *** ÈÕ    ÆÚ : 2008-09-09           [46B[K:q
+[A
+[J[?25h>[?7h[J[?25h ËùÊôÄ£¿é :                                                          ***
+ *** ³ÌÐòÃû³Æ : mobdata.c                                                ***
+ *** ³ÌÐò×÷ÓÃ : ¶ÌÐÅÊµÊ±·¢ËÍ³ÌÐò×é°üº¯Êý¿â                               ***
+ ***                                                                     ***
+ *** Ê¹ÓÃ×¢Òâ :                                                          ***
+ ***************************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
+#include <varargs.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <iconv.h>
+#include "mob_sendmail_c.h"
+#include "mobile_time_c.h"
+#include "com_sys_parm_c.h"
+#define  SEND_TYPE_NOW        "00"        /****·¢ËÍÀàÐÍ:¼°Ê±·¢ËÍ****/
+#define  CHANNEL_TYPE_AC    "CB"        /****ÇþµÀ:ºËÐÄ****/
+#define  FEE_TYPE_CZ        "00"        /****¼Æ·ÑÀàÐÍ:Ãâ·Ñ****/
+#define  INTERACTION_CZ        "D"            /****½»»¥ÀàÐÍ:ÏÂÐÐ¶ÌÐÅ****/
+#define  SERVICE_TYPE_COMM    "00"        /****ÒµÎñÀàÐÍ:Í¨ÓÃ****/
+#define TRACE vtcp_log("%s,%d,Gethere\n",__FILE__,__LINE__);
+/**#define  ACCOUNT	"wuzihaoma" **/
+#define  ACCOUNT1	"sc-ye-duisi"
+#define  ACCOUNT2	"sc-ye-duigong"
+#define  PASSWORD  "sc-ye.com"
+extern int Sock_connect(char *addr,int port);
+int md5(char*desc,char*md);
+extern char * pub_base_daynumLAT(char *date, int num);
+int changeTime(long date,long time,char *standTime);
+int code_convert(char *from_charset,char *to_charset,char *inbuf,size_t *inlen,char *outbuf,size_t *outlen);
+/*************************************************************************
+º¯ÊýÃû:nMobSendRecord
+¹¦ÄÜ  :·¢ËÍÒ»ÌõÖ¸¶¨¼ÇÂ¼µ½¶ÌÐÅÆ½Ì¨
+²ÎÊý  :
+       addr      Æ½Ì¨µØÖ·
+       port      Æ½Ì¨¶Ë¿Ú
+       st        mob_sendmail¼ÇÂ¼
+·µ»ØÖµ:
+      -1         Ê§°Ü
+      0          ³É¹¦ 
+**************************************************************************/ 
+int nMobSendRecord(char *addr,int port,struct mob_sendmail_c *st){
+    int iRc;
+    int len=0;
+    char sReply[33];
+    char res[1024*10];
+    char req[1024*10];
+    char body[1024];
+    char acno[24];
+    char tmp[10000];
+    char passwd[100];
+    char standTime[40];
+    char errcode[5];
+    char tmpmsg[10000];
+    char des[2000];
+    char tmpdes[100];
+    int nSocketId;
+    char *p=NULL;
+    char *Des=NULL;
+    int i=0;
+    long date;
+    char *pDate;
+    char sDate[8];
+		struct com_sys_parm_c sCom_sys_parm;
+		struct mobile_time_c sMobile_time;
+    size_t inlen,outlen;
+    memset(tmpdes,0x00,sizeof(tmpdes));
+    memset(des,0x00,sizeof(des));
+		memset(req,0x00,sizeof(req));
+		memset(res,0x00,sizeof(res));
+		memset(body,0x00,sizeof(body));
+		memset(acno,0x00,sizeof(acno));
+		memset(tmp,0x00,sizeof(tmp));
+		memset(passwd,0x00,sizeof(passwd));
+		memset(errcode,0x00,sizeof(errcode));
+		memset(tmpmsg,0x00,sizeof(tmpmsg));
+    /****×é°ü****/
+		sprintf(acno,"%s",st->ac_no);
+		if ( acno[0] == '5' )
+		{
+			sprintf(body,"account=%s",ACCOUNT2);
+		}
+		else
+		{
+			sprintf(body,"account=%s",ACCOUNT1);
+		}
+    strcpy(tmp,PASSWORD);
+    md5(tmp,passwd);
+    memset(tmp,0x00,sizeof(tmp));
+    memset(&sCom_sys_parm,0x0,sizeof(sCom_sys_parm));
+    memset(&sMobile_time,0x0,sizeof(sMobile_time));
+    memset(sReply,0x00,sizeof(sReply));
+		if ( acno[0] == '5' )
+		{
+			sprintf(tmp,"&password=%s&smsType=5&message=",passwd);
+		}
+		else
+		{
+			sprintf(tmp,"&password=%s&smsType=1&message=",passwd);
+		}
+    strcat(body,tmp);
+    /*memset(tmp,0x00,sizeof(tmp));
+    sprintf(tmp,"&%s",st->mobile);
+    strcat(body,tmp);
+    memset(tmp,0x00,sizeof(tmp));
+    sprintf(tmp,"&%s",st->message);*/
+    if(strlen(st->mobile) != 11)
+    {
+    	vtcp_log("[%s][%d]ÊÖ»úºÅÂë³¤¶È´íÎó![%d]\n",__FILE__,__LINE__,strlen(st->mobile));
+    	return(-1);
+    }
+    inlen=strlen(st->message);
+    outlen=inlen*2;
+    memset(tmpmsg,0x00,outlen+1);
+    code_convert("GBK","UTF-8",st->message,&inlen,tmpmsg,&outlen);
+    
+  	if(strcmp(st->timeflag,"1") == 0||strcmp(st->tel,"9999") == 0)
+  	{
+  		memset(standTime,0x00,sizeof(standTime));
+  		iRc= Com_sys_parm_Sel(sReply,&sCom_sys_parm,"1=1");
+			if(iRc)
+			{
+				vtcp_log("[%s][%d]µÃµ½ÏµÍ³ÈÕÆÚ´í![%d]\n",__FILE__,__LINE__,iRc);
+				return(-1);
+			}
+			vtcp_log("[%s][%d]µÃµ½µÄÏµÍ³ÈÕÆÚ£¡£¡£¡£¡£¡£¡£¡£¡£¡![%ld]\n",__FILE__,__LINE__,sCom_sys_parm.sys_date);
+			sprintf(sDate,"%ld",sCom_sys_parm.sys_date);
+			/*memcpy(standTime,pub_base_daynumLAT(sDate,1),sizeof(standTime));*/
+			iRc = Mobile_time_Sel(sReply,&sMobile_time,"1=1");
+			if(iRc)
+			{
+				vtcp_log("[%s][%d]µÃµ½¶ÌÐÅ·¢ËÍÊ±¼ä´í![%d]\n",__FILE__,__LINE__,iRc);
+				return(-1);
+			}
+  		/*strcat(standTime,sMobile_time.time);*/
+  		changeTime(atol(pub_base_daynumLAT(sDate,1)),atol(sMobile_time.time),standTime);
+  		vtcp_log("[%s][%d]´«³öµÄÏµÍ³ÈÕÆÚ£¡£¡£¡£¡£¡£¡£¡£¡![%s]\n",__FILE__,__LINE__,standTime);
+    	memset(tmp,0x00,sizeof(tmp));
+    	sprintf(tmp,"<com.ctc.ema.server.jwsserver.sms.MtMessage><content>%s</content><phoneNumber>%s</phoneNumber><sendTime>%s</sendTime></com.ctc.ema.server.jwsserver.sms.MtMessage>",tmpmsg,st->mobile,standTime);
+ 	  }
+ 	  else
+   	{
+    	memset(tmp,0x00,sizeof(tmp));
+    	sprintf(tmp,"<com.ctc.ema.server.jwsserver.sms.MtMessage><content>%s</content><phoneNumber>%s</phoneNumber></com.ctc.ema.server.jwsserver.sms.MtMessage>",tmpmsg,st->mobile);
+  	}
+  	
+    strcat(body,tmp);
+    len=strlen(body);
+    body[len]='\0';
+    sprintf(req,"POST /ema/httpSms/sendSms HTTP/1.1\r\nHost: 172.168.99.126:8080\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s",len,body);
+    nMobMsgDebug(req);
+    /****·¢ËÍ****/
+    nSocketId=Sock_connect(addr,port);
+    if(nSocketId<0){
+        vtcp_log("%s,%d,Á¬½Ó¶ÌÐÅÆ½Ì¨Ê§°Ü![%d]\n",__FILE__,__LINE__,errno);
+        return(-1);
+    }    
+    iRc=Sock_send(nSocketId,req,strlen(req));
+    if(iRc){
+        vtcp_log("%s,%d,·¢ËÍÊý¾Ýµ½¶ÌÐÅÆ½Ì¨Ê§°Ü![%d]\n",__FILE__,__LINE__,errno);
+        Sock_close(nSocketId);
+        return(-1);
+    }
+    
+    iRc=Sock_recv(nSocketId,res,1000);
+    if(iRc){    	
+        vtcp_log("%s,%d,½ÓÊÕÊý¾Ý´Ó¶ÌÐÅÆ½Ì¨Ê§°Ü![%d]\n",__FILE__,__LINE__,errno);
+        Sock_close(nSocketId);
+        return(-1);
+    }
+    Sock_close(nSocketId);
+    nMobMsgDebug(res);
+    p=strtok(res,"<");
+	  while((p=strtok(NULL,"<"))!=NULL)
+		{
+			/* memset(des,0x00,sizeof(des));
+			if(memcmp("statDes",p,7)==0)
+				{
+				strcpy(des,p+8);
+				Des=strtok(des,"<");
+				strcpy(tmpdes,Des);
+			}*/
+			if(memcmp("subStat",p,7)==0)
+				{
+				memcpy(errcode,p+10,3);
+			}
+			memset(des,0x00,sizeof(des));
+			p=strtok(NULL,"<");
+			p=strtok(NULL,"<");
+			Des=p;
+			Des=strtok(NULL,"<");
+			if(memcmp("subStatDes",p,10)==0)
+			{
+				p+=11;
+				while(p!=Des) 
+				{	
+						des[i++] = *(p++);
+				}
+				des[i+1] = '\0';
+			break;
+			}
+		}
+		memset(tmpdes,0x00,sizeof(tmpdes));
+		inlen=strlen(des);
+		outlen=inlen*2;
+		code_convert("UTF-8","GBK",des,&inlen,tmpdes,&outlen);
+    if(memcmp(errcode,"000",3)==0){
+        vtcp_log("·¢ËÍÊý¾Ýµ½¶ÌÐÅÆ½Ì¨ÇÒÓ¦´ð³É¹¦![%s]\n",tmpdes);
+        return(0);
+    }else{
+        vtcp_log("·¢ËÍÊý¾Ýµ½¶ÌÐÅÆ½Ì¨µ«Ó¦´ðÊ§°Üerrcode=[%.3s][%s]!\n",errcode,tmpdes);
+        return(-1);
+    }
+    return(0);
+}
+/******************************************************************
+º¯ÊýÃû:nMobSendOne
+¹¦ÄÜ  :·¢ËÍÒ»ÌõÖ¸¶¨¼ÇÂ¼µ½¶ÌÐÅÆ½Ì¨
+²ÎÊý  :
+       addr      Æ½Ì¨µØÖ·
+       port      Æ½Ì¨¶Ë¿Ú
+       date      ÈÕÆÚ
+       traceno   Á÷Ë®
+·µ»ØÖµ:
+      -1         Ê§°Ü
+      0          ³É¹¦ 
+********************************************************************/ 
+int nMobSendOne(char *addr,int port,int date,int traceno){
+    struct mob_sendmail_c mob_sendmail;
+    int iRc;
+    char buf[33];
+    
+
+    if(sql_begin()<0){
+        vtcp_log("%s,%d,¿ªÊ¼ÊÂÎñÊ§°Ü!\n",__FILE__,__LINE__);
+        return(-1);
+    }
+
+    memset(&mob_sendmail,'\0',sizeof(mob_sendmail));
+    iRc=Mob_sendmail_Dec_Upd(buf,"tx_date=%d and trace_no=%d and proc_flag='0'",date,traceno);
+    if(iRc){
+        vtcp_log("%s,%d,HEREÓÎ±ê¶¨Òå´íÎó!\n",__FILE__,__LINE__);
+        sql_rollback();
+        return(-1);
+    }
+    iRc=Mob_sendmail_Fet_Upd(&mob_sendmail,buf);
+    if(iRc && iRc!=100){
+        vtcp_log("%s,%d,FETCHÓÎ±ê´íÎó!\n",__FILE__,__LINE__);
+        Mob_sendmail_Clo_Upd();
+        sql_rollback();
+        return(-1);
+    }else if(iRc==100){
+        vtcp_log("%s,%d,Ö¸¶¨¶ÌÐÅ¼ÇÂ¼²»´æÔÚ!\n",__FILE__,__LINE__);
+        Mob_sendmail_Clo_Upd();
+        sql_commit();
+        return(0);
+    }
+    /*************houyiºóÌ¨×ª·¢µ½Æ½Ì¨Ò»´Î¾Í²»ÔÙ·¢ËÍ
+    if(nMobSendRecord(addr,port,&mob_sendmail)<0){
+        sql_rollback();
+        Mob_sendmail_Clo_Upd();
+        return(-1);
+    }
+    mob_sendmail.proc_flag[0]='1';
+    ******************************************/
+    /*****ºîÒã20100528******/
+    if(nMobSendRecord(addr,port,&mob_sendmail)<0)
+    {
+    	mob_sendmail.proc_flag[0]='2';
+    }
+    else
+    {
+	    mob_sendmail.proc_flag[0]='1';
+    }
+    /******ºîÒã½áÊø******/
+    iRc=Mob_sendmail_Upd_Upd(mob_sendmail,buf);
+    if(iRc){
+        vtcp_log("%s,%d,¸üÐÂÊý¾Ý¿âÊ§°Ü!\n",__FILE__,__LINE__);
+        Mob_sendmail_Clo_Upd();
+        sql_rollback();
+        return(-1);
+    }
+    Mob_sendmail_Clo_Upd();
+    sql_commit();
+    return(0);
+}
+/*************************************************************************
+º¯ÊýÃû:nMobSendAll
+¹¦ÄÜ  :·¢ËÍËùÓÐÎ´·¢ËÍ¼ÇÂ¼µ½¶ÌÐÅÆ½Ì¨
+²ÎÊý  :
+       addr      Æ½Ì¨µØÖ·
+       port      Æ½Ì¨¶Ë¿Ú
+       date      ÈÕÆÚ
+       traceno   Á÷Ë®
+·µ»ØÖµ:
+      -1         Ê§°Ü
+      0          ³É¹¦ 
+**************************************************************************/ 
+int nMobSendAll(char *addr,int port,int date,int traceno){
+    struct mob_sendmail_c mob_sendmail;
+    int iRc;
+    char buf[33];
+
+
+    if(sql_begin()<0){
+       vtcp_log("%s,%d,¿ªÊ¼ÊÂÎñÊ§°Ü!\n",__FILE__,__LINE__);
+       return(-1);
+    }
+
+    while(1){
+        memset(&mob_sendmail,'\0',sizeof(mob_sendmail));
+        iRc=Mob_sendmail_Dec_Upd(buf,"proc_flag='0'");
+        if(iRc){
+            vtcp_log("%s,%d,ÓÎ±ê¶¨Òå´íÎó!\n",__FILE__,__LINE__);
+            sql_rollback();
+            return(-1);
+        }
+        iRc=Mob_sendmail_Fet_Upd(&mob_sendmail,buf);
+        if(iRc && iRc!=100){
+            vtcp_log("%s,%d,FETCHÓÎ±ê´íÎó!\n",__FILE__,__LINE__);
+            Mob_sendmail_Clo_Upd();
+            sql_rollback();
+            return(-1);
+        }else if(iRc==100){
+            vtcp_log("%s,%d,ËùÓÐ¶ÌÐÅ·¢ËÍÍê±Ï!\n",__FILE__,__LINE__);
+            Mob_sendmail_Clo_Upd();
+            sql_commit();
+            return(0);
+        }
+        /*************houyiºóÌ¨°Ñ¶ÌÐÅÖ»·¢ÍùÆ½Ì¨Ò»´Î£¬Òì³£Ê±Ö»×´Ì¬2
+        if(nMobSendRecord(addr,port,&mob_sendmail)<0){
+            vtcp_log("[%s][%d] ×¢ÒâÒªÖ´ÐÐsql_rollback",__FILE__,__LINE__);
+            Mob_sendmail_Clo_Upd();
+            sql_rollback();
+            return(-1);
+        }
+        mob_sendmail.proc_flag[0]='1';
+        **********************************************/
+        /**ºîÒã20100528**/
+        if(nMobSendRecord(addr,port,&mob_sendmail)<0)
+        {
+	        mob_sendmail.proc_flag[0]='2';
+        }
+        else
+        {
+	        mob_sendmail.proc_flag[0]='1';
+        }
+        /**ºîÒã20100528½áÊø**/
+        iRc=Mob_sendmail_Upd_Upd(mob_sendmail,buf);
+        if(iRc){
+            vtcp_log("%s,%d,¸üÐÂÊý¾Ý¿âÊ§°Ü!\n",__FILE__,__LINE__);
+            Mob_sendmail_Clo_Upd();
+            sql_rollback();
+            return(-1);
+        }
+        Mob_sendmail_Clo_Upd();
+        sql_commit();
+    	if(sql_begin()<0){
+       	vtcp_log("%s,%d,¿ªÊ¼ÊÂÎñÊ§°Ü!\n",__FILE__,__LINE__);
+       	return(-1);
+    	}
+    }
+   
+    return(0);
+}
+int nMobMsgDebug( char *buf){
+	vtcp_log("package:[%s]\n",buf);
+	return(0);
+}
+int md5(char*desc,char*md)
+{
+char msg[50];
+char tmp[50];
+char out[50];
+memset(out,0x00,sizeof(out));
+memset(tmp,0x00,sizeof(tmp));
+memset(msg,0x00,sizeof(msg));
+strcpy(tmp,desc);
+MD5ENC(tmp,out,strlen(tmp));
+sprintf(msg,"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",out[0],out[1],out[2],out[3],out[4],out[5],out[6],out[7],out[8],out[9],out[10],out[11],out[12],out[13],out[14],out[15]);
+strcpy(md,msg); 
+return 0;
+}
+int code_convert(char *from_charset,char *to_charset,char *inbuf,size_t *inlen,char *outbuf,size_t *outlen)
+{
+ iconv_t cd;
+ int rc;
+ char **pin = &inbuf;
+ char **pout = &outbuf;
+        cd = iconv_open(to_charset,from_charset);
+        if (cd==0) return -1;
+                memset(outbuf,0,*outlen);
+        if (iconv(cd,pin,inlen,pout,outlen)==-1)
+        {
+                return -1;
+        }
+        iconv_close(cd);
+        return 0;
+}
+int changeTime(long date,long time,char *standTime)
+{
+	char tmp[40];
+	char Date[20];
+	char Time[20];
+	char hour[3];
+	char min[3];
+	char sec[3];
+	char year[5];
+	char mon[3];
+	char day[3];
+	memset(tmp,0x00,sizeof(tmp));
+	memset(Date,0x00,sizeof(Date));
+	memset(Time,0x00,sizeof(Time));
+	memset(hour,0x00,sizeof(hour));
+	memset(min,0x00,sizeof(min));
+	memset(sec,0x00,sizeof(sec));
+	memset(year,0x00,sizeof(year));
+	memset(mon,0x00,sizeof(mon));
+	memset(day,0x00,sizeof(day));
+	sprintf(Date,"%ld",date);
+	zip_space(Date);
+	memcpy(year,Date,4);
+	memcpy(mon,Date+4,2);
+	memcpy(day,Date+6,2);
+	sprintf(Time,"%ld",time);
+	zip_space(Time);
+	if(strlen(Time)==6)
+		{
+	memcpy(hour,Time,2);
+	memcpy(min,Time+2,2);
+	memcpy(sec,Time+4,2);
+		}
+		else
+			{
+	memcpy(hour,Time,1);
+	memcpy(min,Time+1,2);
+	memcpy(sec,Time+3,2);
+			}
+	sprintf(tmp,"%s-%02s-%02s %02s:%02s:%02s",year,mon,day,hour,min,sec);
+	strcpy(standTime,tmp);
+	return 0;
+}

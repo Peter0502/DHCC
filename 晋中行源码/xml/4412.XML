@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4412 老贷款还欠息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD30=getitems('#ACTNO');      // 账号
+	$FD34='0000';                  // 账户序号
+	$FD77=#OWESEQN;                // 还款序号
+	$FD40=getitems('#OWE_AMT');    // 还款金额
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(4412                       老贷款还息后下登记簿)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=3212)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"  COL="15" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="25" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		$FD31=#ACTNO;
+		$TXNO='9976';
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#ACTNAME',$FD25);
+		//showmsg($FD41);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+   <ITEM LINE="7"  COL="15" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+   <ITEM LINE="9"  COL="15" TYPE="%-10s" FUNCTIONS="T(还款序号:)"/>
+   <ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(还款金额:)"/>
+
+   <ITEM LINE="7"  COL="25" NAME="#ACTNAME"   INPUT="LABEL"   TYPE="%-60s"  FUNCTIONS=""/>
+   <ITEM LINE="9"  COL="25" NAME="#OWESEQN"   INPUT="TEXT"    TYPE="%-5s"   FUNCTIONS="V(NB)"/>
+   <ITEM LINE="10" COL="25" NAME="#OWE_AMT"   INPUT="TEXT"    TYPE="%17.2f" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+
+    
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="老贷款还款成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 25,'老贷款还款成功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<!----
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3509');
+		print( 5,13,'交易:帐户证件号码信息维护');
+
+		print( 7,20,'帐      号:[20                  ]             帐户  序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'客  户  号:[8       ]                         户      名:[50]',$FD28,#NAME);
+		print( 9,20,'证件  类型:[20                  ]',#SID_TYPE);
+		print(10,20,'原证件号码:[20                  ]             新证件号码:[20]',#OLD_ID_NO,#NEW_ID_NO);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+---->
+</TRANSACTION>
+

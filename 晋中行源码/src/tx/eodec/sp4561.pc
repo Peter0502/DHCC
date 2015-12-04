@@ -1,0 +1,216 @@
+/*************************************************
+* 文 件 名:  sp4561.ec
+* 功能描述： 小区明细查询
+*
+* 作    者:  chenchao
+* 完成日期： 2011/8/22 11:17:30
+*
+* 修改记录：
+* 日   期:
+* 修 改 人:
+* 修改内容:
+insert into tx_def values('4561','小区明细查询','10000000000000000000000010000000000000001100010000000000010001000000000000000000010000000000000000001000000000000000000000000100','0','4','0','3',NULL);
+insert into tx_flow_def values('4561','0','4561','#$');
+insert into tx_sub_def values('4561','小区明细查询','sp4561','0','0');
+*************************************************/
+#define EXTERN
+#include "public.h"
+#include "sub_dd_mst_c.h"
+#include "sub_dd_mst_hst_c.h"
+EXEC SQL INCLUDE sqlca.h;
+int sp4561()
+{
+	int	iRet = 0;
+	int	fp_flag=0;
+	FILE	*fp=NULL;
+	long	lBeg_date = 0;
+	long	lEnd_date = 0;
+	int	iNum_flag=0;
+	char	filename[201];
+	char	wheretmp[101];
+	char	cDc_flag[3];
+	double	dTot_d=0;
+	double	dTot_c=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cAc_no[25];	/**  主帐号  **/
+		char	cXq_no[25];	/** 小区编号  **/
+		char	wherelist[401];
+		char	cXQ_name[101];
+		long	lTx_date=0;
+		char	cSub_ac_no[25];
+		char	cName[201];
+		double	dTx_amt=0.00;
+		char	cDc_ind[2];
+		char	cBrf[201];
+		char	zhu_name[101];
+		double	dBal=0;
+	EXEC SQL END   DECLARE SECTION;
+
+	struct	sub_dd_mst_c		sSub_dd_mst;
+	struct	sub_dd_mst_hst_c	sSub_dd_mst_hst;
+
+	memset(cSub_ac_no,0x00,sizeof(cSub_ac_no));
+	memset(cAc_no,0x00,sizeof(cAc_no));
+	memset(cName,0x00,sizeof(cName));
+	memset(zhu_name,0x00,sizeof(zhu_name));
+	memset(cXQ_name,0x00,sizeof(cXQ_name));
+	memset(cDc_ind,0x00,sizeof(cDc_ind));
+	memset(cBrf,0x00,sizeof(cBrf));
+
+	memset(cXq_no,0x00,sizeof(cXq_no));
+	memset(filename,0x00,sizeof(filename));
+	memset(wherelist,0x00,sizeof(wherelist));
+	memset(wheretmp,0x00,sizeof(wheretmp));
+	memset(&sSub_dd_mst,0x00,sizeof(sSub_dd_mst));
+	memset(&sSub_dd_mst_hst,0x00,sizeof(sSub_dd_mst_hst));
+
+	pub_base_sysinit();
+
+	get_zd_data("0310",cAc_no);
+	get_zd_data("0300",cXq_no);
+	get_zd_long("0440",&lBeg_date);
+	get_zd_long("0450",&lEnd_date);
+
+	pub_base_old_acno(cAc_no);
+
+	vtcp_log("[%s][%d]帐号=[%s]小区编号=[%s]开始日期=[%d]结束日期=[%d]",__FILE__,__LINE__,cAc_no,cXq_no,lBeg_date,lEnd_date);
+
+	EXEC SQL select name into :zhu_name from dd_mst where ac_id in (select ac_id from mdm_ac_rel where ac_no =:cAc_no);
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(" %s, %d, sql error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"D101" );
+		goto ErrExit;
+	}
+
+	sprintf(wherelist,"select b.tx_date, a.sub_ac_no,a.name,b.tx_amt,b.add_ind,b.brf from sub_dd_mst a,sub_dd_mst_hst b where a.ac_no='%s'  and a.sub_ac_no=b.sub_ac_no and b.tx_date >= %d and b.tx_date<=%d ",cAc_no,lBeg_date,lEnd_date);
+	pub_base_strpack(cXq_no);
+
+	memset(wheretmp,0x00,sizeof(wheretmp));
+	if(strlen(cXq_no) > 0)
+	{
+		sprintf(wheretmp," and a.xq_num='%s' ",cXq_no);
+		strcat(wherelist,wheretmp);
+		strcat(wherelist," order by tx_date,trace_no,trace_cnt ");
+		EXEC SQL select xqdz15 into :cXQ_name from xqdz where xqdz100=:cAc_no and xqdz101=:cXq_no;
+		if (sqlca.sqlcode)
+		{
+			vtcp_log(" %s, %d, sql error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+			strcpy(g_pub_tx.reply,"D101" );
+			goto ErrExit;
+		}
+	}
+	vtcp_log("[%s][%d]wherelist=[%s]",__FILE__,__LINE__,wherelist);
+	EXEC SQL PREPARE SUB_PRE FROM :wherelist;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(" %s, %d, sql error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"D101" );
+		goto ErrExit;
+	}
+	EXEC SQL DECLARE SUB_CUR CURSOR FOR SUB_PRE;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(" %s, %d, SQL error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"D101" );
+		goto ErrExit;
+	}
+	EXEC SQL OPEN SUB_CUR;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(" %s, %d, SQL error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"D101" );
+		goto ErrExit;
+	}
+	while(1)
+	{
+		dTx_amt=0.00;
+		memset(cName,0x00,sizeof(cName));
+		memset(cDc_ind,0x00,sizeof(cDc_ind));
+		memset(cBrf,0x00,sizeof(cBrf));
+		memset(cDc_flag,0x00,sizeof(cDc_flag));
+		memset(cSub_ac_no,0x00,sizeof(cSub_ac_no));
+		EXEC SQL FETCH SUB_CUR into :lTx_date,:cSub_ac_no,:cName,:dTx_amt,:cDc_ind,:cBrf ;
+		if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+		{
+			vtcp_log(" %s, %d, SQL error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+			strcpy(g_pub_tx.reply,"D101" );
+			goto ErrExit;
+		}else if (sqlca.sqlcode == 1403)
+		{
+			EXEC SQL select sum(bal) into :dBal from sub_dd_mst where ac_no=:cAc_no and xq_num=:cXq_no;
+			if (sqlca.sqlcode)
+			{
+				vtcp_log(" %s, %d, SQL error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+				strcpy(g_pub_tx.reply,"D104" );
+				goto ErrExit;
+			}
+
+			fprintf(fp,"---------------------------------------------------------------------------------------------------------------\n");
+			fprintf(fp,"    借方总发生额:%16.2f                          贷方总发生额:%16.2f\n",dTot_d,dTot_c);
+			fprintf(fp,"    本小区余额:%16.2f\n",dBal);
+			break;
+		}
+		if(iNum_flag == 0)
+		{
+			/* 生成下传全路经文件名 */
+			pub_base_AllDwnFilName(filename);
+			fp = fopen(filename, "w");
+			if (fp == NULL) {
+				sprintf(acErrMsg, "open file error [%s]", filename);
+				WRITEMSG
+				strcpy(g_pub_tx.reply, "S047");
+				goto ErrExit;
+			}
+			fp_flag = 100;
+		}
+		if(iNum_flag==51 || iNum_flag==0)
+		{
+			iNum_flag=0;
+			fprintf(fp,"---------------------------------------------------------------------------------------------------------------\n");
+			fprintf(fp,"%c%c",0x1B,0x33);
+			fprintf(fp,"                              小区明细打印\n");
+			fprintf(fp,"  主 账 号:%.20s              户    名:%s\n",cAc_no,zhu_name);
+			fprintf(fp,"  小区编号:%.20s              小区名称:%s\n",cXq_no,cXQ_name);
+			fprintf(fp,"---------------------------------------------------------------------------------------------------------------\n");
+			fprintf(fp," 日   期       帐   号              户           名                 交易金额        借方 贷方       摘要\n");
+			iNum_flag = iNum_flag+5;
+		}
+		if(cDc_ind[0] == '0')
+		{
+			memcpy(cDc_flag,"借",2);
+			dTot_d += dTx_amt;
+			fprintf(fp," %8d   %21.21s  %27.27s  %16.2f      %2.2s  %2s       %s\n",lTx_date,cSub_ac_no,cName,dTx_amt,cDc_flag,"",cBrf);
+		}else if(cDc_ind[0] == '1')
+		{
+			memcpy(cDc_flag,"贷",2);
+			dTot_c += dTx_amt;
+			fprintf(fp," %8d   %21.21s  %27.27s  %16.2f      %2.2s  %2s       %s\n",lTx_date,cSub_ac_no,cName,dTx_amt,"",cDc_flag,cBrf);
+		}
+		iNum_flag++;
+		vtcp_log("[%s][%d]",__FILE__,__LINE__);
+	}
+	EXEC SQL CLOSE SUB_CUR;
+	if (sqlca.sqlcode && sqlca.sqlcode!=100)
+	{
+		vtcp_log(" %s, %d, SQL error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"D101" );
+		goto ErrExit;
+	}
+OkExit:
+	if(fp_flag == 100)
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND, "1");
+	}
+	strcpy(g_pub_tx.reply,"0000");
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	if(fp_flag == 100)
+	{
+		fclose(fp);
+	}
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

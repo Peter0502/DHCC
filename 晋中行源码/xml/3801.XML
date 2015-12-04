@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11010000" TITLE="3801 IC卡电子现金调账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{
+  }"
+</COMMSEND>
+<COMMRECV>
+ "{
+  }"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(3801                          IC卡电子现金调账)"/>
+  <ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>  
+  <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=3801)"/>
+  <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXNAME"    TYPE="%-20s" FUNCTIONS="T(IC卡电子现金调账)"/>
+  <PAGE NAME="DEFAULT">  
+    <ITEM LINE="6" COL="9" TYPE="%-13s" FUNCTIONS="T(帐        号:)"/> 
+    <ITEM LINE="6" COL="19" TYPE="%-19s" NAME="#CARD_NO" INPUT="TEXT"  FUNCTIONS="V(NB)">
+      <ONLOSTFOCUS>
+      "{
+        dim @tota as string;
+        if(len(rtrim(#CARD_NO))!=19)
+        {
+          showmsg('卡号长度不正确，请重新输入!');
+          return(false); 
+        }
+        if(substr(#CARD_NO,0,6) != '621780')
+        {
+          showmsg('卡号的前6位必须为'+#CARDBIN2);
+          return(false);
+        }
+       }"
+      </ONLOSTFOCUS>
+    </ITEM>
+    <ITEM LINE="6"  COL="49"   TYPE="%-30s"  FUNCTIONS="T(账 户  种 类:    电子现金账户)"/>
+    <ITEM NAME="#TEMP"  TYPE="%6d"    FUNCTIONS="" >
+    <ONLOSTFOCUS>
+      "{
+            initfd();
+            commsend_001();
+            $FD62=rtrim(#CARD_NO);
+            $FD27='dzxjtzcx';
+            $FD16='1717' ;//查询账户信息
+            callserver();
+            if($FD12!='0000')
+            {
+              showmsg(geterror());
+              return(false);
+            }
+            #KH_NAME = $FD26 ;//户名
+            #OPEN_AC_ID = substr($FD44,3,5);
+            enable(#KH_NAME,false);
+            enable(#AVAILABLE_BAL,false);
+            
+      }"
+    </ONLOSTFOCUS>	
+    </ITEM>
+    <ITEM LINE="8" COL="9"  TYPE="%-13s" FUNCTIONS="T(户        名:)" />
+    <ITEM LINE="8" COL="19" TYPE="%-20s" NAME="#KH_NAME" INPUT="TEXT" FUNCTIONS="T()"/>
+    <ITEM LINE="8" COL="49"  TYPE="%-13s" FUNCTIONS="T(电子现金余额:)">
+     <ONLOSTFOCUS>
+      "{
+       dim @tagvalue as string;
+       initfd();
+       commsend_001();
+       $FD16='7773';
+       $FD30=#CARD_NO;
+       callagn();
+       if($FD12 != '0000')
+       {		
+       	showmsg(geterror());
+       	return(false);
+       }
+       #AVAILABLE_BAL=delspace(itoa(val($FD40,0.01),'%17.2f'));
+      }"
+     </ONLOSTFOCUS>
+    </ITEM>
+    <ITEM LINE="8"  COL="59" NAME="#AVAILABLE_BAL"  INPUT="TEXT" TYPE="%-17s" FUNCTIONS=""/>	
+    <ITEM LINE="11"  COL="9"   TYPE="%-16s"  FUNCTIONS="T(【交 易 信 息】)"  />
+    <ITEM LINE="12"  COL="9"   TYPE="%-70s" FUNCTIONS="T(-------------------------------------------------------------------------------------------------------)"/>
+    <ITEM LINE="14" COL="9"  NAME="#L_TZFX"  TYPE="%-13s"   FUNCTIONS="T(调 整  方 向:)/>
+    <ITEM LINE="14" COL="19" TYPE="%-1s"  NAME="#TZFX" INPUT="SELECT"   FUNCTIONS="V(NB)T(1)">
+     <SELECT>
+      <OPTION VALUE="1" TITLE="增加余额"/>
+      <OPTION VALUE="2" TITLE="减少余额"/>
+     </SELECT>
+     <ONLOSTFOCUS>
+      "{
+      
+      }"
+     </ONLOSTFOCUS>
+    </ITEM>
+    <ITEM LINE="16" COL="9"  NAME="#L_TZJE"  TYPE="%-13s"   FUNCTIONS="T(调 整  金 额:)/>
+    <ITEM LINE="16"  COL="19" TYPE="%17.2f" NAME="#TZJE"    INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)J(#LTXAMT)"/>
+    <ITEM LINE="18" COL="9"  NAME="#L_TZYY"  TYPE="%-13s"   FUNCTIONS="T(调 整  原 因:)/>
+    <ITEM LINE="18"  COL="19" TYPE="%-50s" NAME="#TZYY"    INPUT="TEXT" FUNCTIONS="V(NB)"/>
+    <ITEM LINE="20" COL="9"  NAME="#L_TZYY"  TYPE="%-13s"   FUNCTIONS="T(错 帐  日 期:)/>
+    <ITEM LINE="20"  COL="19" TYPE="%-8s" NAME="#CZRQ"    INPUT="TEXT" FUNCTIONS="V(NB)"/>
+    <ITEM NAME="#OPEN_AC_ID"   LINE="4" COL="49" TYPE="%-5s"  VISABLE="false"  FUNCTIONS=""/>
+    <ITEM NAME="#CARDBIN1"        TYPE="%-6s"   FUNCTIONS="T(621223)"/>  <!--卡bin1-->
+    <ITEM NAME="#CARDBIN2"        TYPE="%-6s"   FUNCTIONS="T(621780)"/>  <!--卡bin2--> 
+    <ITEM NAME="#CHG_AVAILABLE_BAL"   TYPE="%-17s" FUNCTIONS=""/>	
+    <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+       <ONCLICK>
+       "{
+          dim @totle as string;
+          dim @shuju as string;
+          dim @update as string;
+          <!--发往核心调用授权交易-->         
+          initfd();
+          commsend_001();
+          $FD16='3369';
+          callserver();
+          if($FD12 !='0000')
+          {
+            showmsg(geterror());
+            return(false);
+          }
+          //showmsg('授权成功!!...');
+          <!-- 往平台IC卡账户明细查询-->
+          initfd(); 
+          commsend_001();
+          $FD30 = #CARD_NO ; //卡号
+          $FD67 = #TZFX; //调整方向
+          $FD39 = itoa(val(#TZJE,100),'%016.2f');//调整金额
+          $FD81 = #TZYY; //调整原因
+          $FD16 = '7772';//
+          callagn();
+         if($FD12!='0000')
+          {
+          showmsg(geterror());
+          return (false);
+          }
+          #CHG_AVAILABLE_BAL=delspace(itoa(val($FD40,0.01),'%17.2f'));
+          runoutput();
+          rerun();
+      }"
+     
+     </ONCLICK>
+   </ITEM>
+  </PAGE>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE> 
+  <PACKAGE DEVICE="SCREEN"  DESC="交易完成">
+   NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    print( 3,20,'交易名称:IC卡电子现金调账');
+    print( 5,20,'账户卡号:[24]',#CARD_NO);
+    if(#TZFX == '1')
+    {
+    print(7, 20,'调整方向:余额增加');
+    }
+    if(#TZFX == '2')
+    {
+    print(7, 20,'调整方向:余额减少');
+    }
+    print( 9,20,'调整金额:[20]',#TZJE);
+    print(11,20,'调后余额:[12]',#CHG_AVAILABLE_BAL);
+   }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+    NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+		dim @txday  as string;
+		dim @txtime as string;
+		dim @amt    as string;
+		dim @ltxamt1    as string;
+		@amt       ='￥'+ltrim(comma(#AMT));
+		@ltxamt1   ='￥'+ltrim(comma(#LTXAMT1));
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5, 20,'机构名称:[30]',$BRNAME);
+		print( 5,  2,'代码:3801');
+		print(5,13,'交易:IC卡电子现金调账');	
+		print( 7,30,'\L0IC卡电子现金调账凭条\L1');  
+    print( 9,20,'开 户 行:[5    ]                  交 易 行:[7]',#OPEN_AC_ID,$FD3);
+    print(10, 20,'IC卡 号:[20                    ]    户    名:[20                    ]',#CARD_NO,#KH_NAME);
+    print(11, 20,'账户类型:[20                    ]   交易类型:[20                    ]','电子现金账户','IC卡电子现金调账');
+    if(#TZFX == '1')
+    {
+    print(12, 20,'错帐日期:[21  ]  调整方向:[21                       ]',#CZRQ,'余额增加');
+    }
+    if(#TZFX == '2')
+    {
+    print(12, 20,'错帐日期:[21  ]  调整方向:[21                       ]',#CZRQ,'余额减少');
+    }
+    print(13, 20,'调整金额:[21  ]  调后余额:[21                       ]',#TZJE,#CHG_AVAILABLE_BAL);
+    print(14, 20,'调整原因:[200  ] ',#TZYY);
+    print_sq(); 
+    <!--
+    print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+    print(21,80,'客户签名:_____________________'); 
+    -->
+	
+    print(23,20,'备注:');
+    print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print(23,5,'柜员:[4]',$FD7);
+    print(23,5,'流水号:[6]',$FD4);
+   }"
+  </PRINT>
+</RESPONSE>
+</TRANSACTION>

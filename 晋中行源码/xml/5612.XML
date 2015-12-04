@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="5907 拆分票据管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+        commsend_001();
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO = '9986';
+        $FD12 = '4343';
+        $FD26 = #PAYNAME;
+        $FD27 = #CASHNAME;
+        $FD31 = #PAYACTNO;
+        $FD32 = #CASHACTNO;
+        $FD39 = space(16);
+        $FD45 = #EDATE;
+        $FD60 = #PJNUM;
+        $FD62 = #ZYNUM;
+        $FD81 = #PAYBRNAME;
+        $FD82 = #CASHBRNAME;
+        $FD83 = #BZJACTNO;
+        $FD90 = #PJTYPE;
+        $FD100 = getitems('#ZWF16#HPAVBAL');
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        $FD16 = '4343';
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(5612                            拆分票据管理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <PAGE NAME="DEFAULT">
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4343)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(质押编号:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-14s" FUNCTIONS="T(保证金帐号:)"/>
+  <ITEM LINE="9"  COL="8"  TYPE="%-50s" FUNCTIONS=
+   "T(-------------------- 以下为票面信息 ---------------------)"/>
+
+  <ITEM LINE="11"  COL="5"  TYPE="%-14s" FUNCTIONS="T(出票人账号:)"/>
+  <ITEM LINE="12"  COL="5"  TYPE="%-14s" FUNCTIONS="T(出票人全称:)"/>
+  <ITEM LINE="13"  COL="5"  TYPE="%-14s" FUNCTIONS="T(付款行全称:)"/>
+  <ITEM LINE="14" COL="5"  TYPE="%-14s" FUNCTIONS="T(收款人帐号:)"/>
+  <ITEM LINE="15" COL="5"  TYPE="%-14s" FUNCTIONS="T(收款人全称:)"/>
+  <ITEM LINE="16" COL="5"  TYPE="%-17s" FUNCTIONS="T(收款人开户行全称:)"/>
+
+  <ITEM LINE="18" COL="5"  TYPE="%-10s" FUNCTIONS="T(票据类型:!)"/>
+  <ITEM LINE="18" COL="45" TYPE="%-12s" FUNCTIONS="T(票  据  号:)"/>
+  <ITEM LINE="19" COL="5"  TYPE="%-10s" FUNCTIONS="T(汇票金额:)"/>
+  <ITEM LINE="19" COL="45" TYPE="%-12s" FUNCTIONS="T(汇票到期日:)"/>
+
+<!-- 定义callserver占位符变量 -->
+  <ITEM TYPE="%-16s" NAME="#ZWF16" FUNCTIONS="T(                )"/>
+
+  <ITEM LINE="6"  COL="15" TYPE="%-12s" NAME="#ZYNUM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="7"  COL="19" TYPE="%-32s" NAME="#BZJACTNO" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="11"  COL="19" TYPE="%-24s" NAME="#PAYACTNO"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12"  COL="19" TYPE="%-50s" NAME="#PAYNAME"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13"  COL="19" TYPE="%-30s" NAME="#PAYBRNAME" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="14" COL="19" TYPE="%-24s" NAME="#CASHACTNO" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="15" COL="19" TYPE="%-50s" NAME="#CASHNAME"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="16" COL="22" TYPE="%-30s" NAME="#CASHBRNAME"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="18"  COL="15" TYPE="%-3s" NAME="#PJTYPE" INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T(111)V(NB)">
+    <SELECT LINE="0" COL="0">
+        <OPTION VALUE="111" TITLE="银行承兑汇票"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#PJNAME" TYPE="%-12s" FUNCTIONS="S(#PJTYPE,#PJTYPE)"/>
+
+  <ITEM LINE="18" COL="57" TYPE="%-16s" NAME="#PJNUM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="19" COL="15" TYPE="%16.2f" NAME="#HPAVBAL" DEVICE="KEYBOARD" FUNCTIONS="V(NB)J(#XHPAVBAL)"/>
+  <ITEM NAME="#XHPAVBAL" TYPE="%-16s" DEVICE="KEYBOARD" FUNCTIONS="X(#HPAVBAL)"/>
+
+  <ITEM LINE="19" COL="57" TYPE="%-8s"  NAME="#EDATE"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)D()">
+  <ONLOSTFOCUS>
+    "{
+        if( #EDATE  &lt; $HDATE)
+        {
+            showmsg('到期日期必须大于当前日期，请重新输入!');
+            return(false);
+        }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+
+  <!--输出变量--->
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">
+<!--
+  <ONLOSTFOCUS>"{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO = '9986';
+		$FD12 = '4343';
+        $FD26 = #PAYNAME;
+        $FD27 = #CASHNAME;
+        $FD31 = #PAYACTNO;
+        $FD32 = #CASHACTNO;
+        $FD39 = space(16);
+        $FD45 = #EDATE;
+        $FD60 = #PJNUM;
+        $FD62 = #ZYNUM;
+        $FD81 = #PAYBRNAME;
+        $FD82 = #CASHBRNAME;
+        $FD83 = #BZJACTNO;
+        $FD90 = #PJTYPE;
+        $FD100 = getitems('#ZWF16#HPAVBAL');
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+	}"
+  </ONLOSTFOCUS>
+-->
+  </ITEM>
+  </PAGE>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print( 8,  8,'质押编号: [12]',#ZYNUM);
+        print( 8, 40,'保证金账号: [19]',#BZJACTNO);
+        print(10,  8,'票据类型: [16]',#PJNAME);
+        print(10, 40,'票据号码: [8]',#PJNUM);
+        print(12,  8,'汇票金额: [16]',#XHPAVBAL);
+        print(12, 40,'到期日期: [8]',#EDATE);
+    }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="请插入打印凭条">
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print( 5, 16,'[4]      [2]     [2]',#YEAR,#MON,#DAY);
+        print( 7,  8,'[5]',$FD2);
+        print( 7, 24,'5612拆分票据管理');
+        print( 7, 46,'[4]',$FD7);
+        print( 7, 62,'[6]',$FD4);
+        print( 8,  8,'质押  编号: [12]',#ZYNUM);
+        print( 8, 40,'保证金账号: [19]',#BZJACTNO);
+
+        print( 9,  8,'出票人账号: [20]',#PAYACTNO);
+        print(10,  8,'出票人全称: [50]',#PAYNAME);
+        print(11,  8,'付款行全称: [50]',#PAYBRNAME);
+        print(12,  8,'收款人帐号: [32]',#CASHACTNO);
+        print(13,  8,'收款人全称: [32]',#CASHNAME);
+        print(14,  8,'收款行全称: [40]',#CASHBRNAME);
+
+        print(16,  8,'票据类型: [16]',#PJNAME);
+        print(16, 40,'票据号码: [8]',#PJNUM);
+        print(16,  8,'汇票金额: [16]',#XHPAVBAL);
+        print(16, 40,'到期日期: [8]',#EDATE);
+    }"
+    </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

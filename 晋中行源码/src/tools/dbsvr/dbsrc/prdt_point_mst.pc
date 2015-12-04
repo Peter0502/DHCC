@@ -1,0 +1,250 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"prdt_point_mst_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int prdt_point_mst_con ( struct prdt_point_mst_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct prdt_point_mst_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->prdt_no);
+}
+int Prdt_point_mst_Debug(struct prdt_point_mst_c *ps){
+	vtcp_log("prdt_point_mst_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("prdt_point_mst_c.prdt_no=[%s]\n",ps->prdt_no);
+	vtcp_log("prdt_point_mst_c.beg_date=[%ld]\n",ps->beg_date);
+	vtcp_log("prdt_point_mst_c.point=[%ld]\n",ps->point);
+	vtcp_log("prdt_point_mst_c.yt_point=[%ld]\n",ps->yt_point);
+	vtcp_log("prdt_point_mst_c.used_point=[%ld]\n",ps->used_point);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Prdt_point_mst_Sel(reply,prdt_point_mst_c,fmtstr,va_alist)
+char    *reply;
+struct  prdt_point_mst_c *prdt_point_mst_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Prdt_point_mst_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Prdt_point_mst_Fet_Sel( prdt_point_mst_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Prdt_point_mst_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Prdt_point_mst_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,prdt_point_mst.* FROM prdt_point_mst WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE prdt_point_mst_sel FROM :comm;
+	EXEC SQL DECLARE sel_prdt_point_mst CURSOR FOR prdt_point_mst_sel;
+
+	EXEC SQL OPEN sel_prdt_point_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Prdt_point_mst_Fet_Sel ( struct prdt_point_mst_c *prdt_point_mst_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_prdt_point_mst INTO :prdt_point_mst_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch prdt_point_mst error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch prdt_point_mst finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(prdt_point_mst_c);
+
+	return 0;
+}
+
+int Prdt_point_mst_Clo_Sel (){
+	EXEC SQL CLOSE sel_prdt_point_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Prdt_point_mst_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,prdt_point_mst.* FROM prdt_point_mst WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE prdt_point_mst_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_prdt_point_mst CURSOR FOR prdt_point_mst_upd;
+
+	EXEC SQL OPEN upd_prdt_point_mst;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Prdt_point_mst_Fet_Upd( struct prdt_point_mst_c *prdt_point_mst_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_prdt_point_mst INTO :prdt_point_mst_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH prdt_point_mst finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(prdt_point_mst_c);
+
+	return 0;
+}
+
+int Prdt_point_mst_Upd_Upd( struct prdt_point_mst_c prdt_point_mst_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE prdt_point_mst SET prdt_no=:prdt_point_mst_c.prdt_no,
+			beg_date=:prdt_point_mst_c.beg_date,
+			point=:prdt_point_mst_c.point,
+			yt_point=:prdt_point_mst_c.yt_point,
+			used_point=:prdt_point_mst_c.used_point
+	WHERE rowid=:prdt_point_mst_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Prdt_point_mst_Del_Upd(struct prdt_point_mst_c prdt_point_mst_c , char * reply  ){
+
+	EXEC SQL DELETE FROM prdt_point_mst WHERE rowid=:prdt_point_mst_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Prdt_point_mst_Clo_Upd( ){
+	EXEC SQL CLOSE upd_prdt_point_mst;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Prdt_point_mst_Ins( struct prdt_point_mst_c prdt_point_mst_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO prdt_point_mst VALUES (:prdt_point_mst_c.prdt_no,
+			:prdt_point_mst_c.beg_date,
+			:prdt_point_mst_c.point,
+			:prdt_point_mst_c.yt_point,
+			:prdt_point_mst_c.used_point);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT prdt_point_mst error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

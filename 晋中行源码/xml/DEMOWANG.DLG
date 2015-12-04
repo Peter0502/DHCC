@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="00111111" TITLE="质押存单批量录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<INIT>"{
+	list_init(17,78,5,1);
+	list_setcolcnt(3);
+	list_setcol(0,'质押编号',22);
+	list_setcol(1,'质押帐号',24);
+	list_setcol(2,'余    额',16);
+	list_sumcol(2,16,2);
+}"
+</INIT>
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+			strfld(@fline,'|',1)+'|'+
+			strfld(@fline,'|',2)+'|';
+		
+}"
+</LOAD>
+<SHOW>"{
+
+	#ZYNUM=strfld(@line,'|',0);
+	#ZYACTNO=strfld(@line,'|',1);
+	#AVBAL=strfld(@line,'|',2);			
+}"
+</SHOW>
+<UPDATE>"{
+//不能把金额写成有逗号的形式	@line=#ZYACTNO+'|'+'|'+#NAME+'|';
+	@line=#ZYNUM+'|'+#ZYACTNO+'|'+itoa(#AVBAL,'%17.2f')+'|';
+}"
+</UPDATE>
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+			strfld(@line,'|',1)+'|'+
+			strfld(@line,'|',2)+'|';
+}"
+</SAVE>
+<VARIABLE>
+
+  <ITEM LINE="1"  COL="3" TYPE="%-40s" FUNCTIONS=
+    "T(                   质押存单批量录入维护)"/>
+  <!-- 定义callserver返回但界面不用的变量 -->
+  <ITEM TYPE="%17.2f" NAME="#FD100_1"  FUNCTIONS="V(NB)J(#XFD100_1)"/>
+  <ITEM NAME="#XFD100_1" TYPE="%-16s"  FUNCTIONS="X(#FD100_1)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_2"  FUNCTIONS="V(NB)J(#XFD100_2)"/>
+  <ITEM NAME="#XFD100_2" TYPE="%-16s"  FUNCTIONS="X(#FD100_2)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_3"  FUNCTIONS="V(NB)J(#XFD100_3)"/>
+  <ITEM NAME="#XFD100_3" TYPE="%-16s"  FUNCTIONS="X(#FD100_3)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_4"  FUNCTIONS="V(NB)J(#XFD100_4)"/>
+  <ITEM NAME="#XFD100_4" TYPE="%-16s"  FUNCTIONS="X(#FD100_4)"/>
+<!--
+  <ITEM LINE="5" COL="5"  TYPE="%-10s" NAME="#L1" FUNCTIONS="T(质押编号:)"/>
+    -->
+  <ITEM LINE="6" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(质押帐号:)"/>
+  <ITEM LINE="7" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="8" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(余    额:)"/>
+<!--
+  <ITEM LINE="5" COL="15" TYPE="%-20s" NAME="#ZYNUM"   DEVICE="KEYBOARD" ISKEY="TRUE" />
+  -->
+   <ITEM LINE="6" COL="15" TYPE="%-24s" NAME="#ZYACTNO" DEVICE="KEYBOARD" FUNCTIONS="">
+  <ONLOSTFOCUS>
+    "{
+		initfd();
+		$MSGTYPE='03001';
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9907';
+	    	$FD32=#ZYACTNO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+		setitems('#FD100_1#FD100_2#FD100_3#FD100_4',$FD100);
+		#NAME=$FD82;
+		#AVBAL=val(substr( $FD100,49,16),0.01);
+		show(#NAME,true);
+		show(#AVBAL,true);
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="7" COL="15" TYPE="%-50s" NAME="#NAME"  INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="8" COL="15" INPUT="TEXT" TYPE="%17.2f" NAME="#AVBAL" ENABLE="FALSE" FUNCTIONS=""/>
+
+  <ITEM LINE="15" COL="65" NAME="#RAM_NAME"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+</TRANSACTION>

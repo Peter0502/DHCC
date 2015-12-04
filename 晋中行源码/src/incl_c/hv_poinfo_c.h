@@ -1,0 +1,53 @@
+#ifndef __hv_poinfo_CH__
+#define __hv_poinfo_CH__
+struct hv_poinfo_c{
+	char      rowid[20];
+	char      po_no[21];
+	char      br_no[8];
+	char      bank_type[2];
+	char      or_br_no[13];
+	char      pay_qs_no[13];
+	long      l_tx_date;
+	long      td_cnt;
+	long      lost_cnt;
+	char      note_type[4];
+	char      note_no[17];
+	char      o_note_type[4];
+	char      o_note_no[17];
+	double    po_bal;
+	double    cash_amt;
+	double    fee_amt;
+	double    rem_amt;
+	char      cur_id[4];
+	char      pay_br_no[13];
+	char      pay_ac_no[33];
+	char      pay_name[61];
+	char      pay_br_name[61];
+	char      pay_addr[61];
+	char      cash_ac_no[33];
+	char      cash_br_no[13];
+	char      cash_br_name[61];
+	char      cash_addr[61];
+	char      cash_name[61];
+	char      hold_ac_no[33];
+	char      hold_name[61];
+	char      l_po_sts[2];
+	char      po_sts[2];
+	long      reg_date;
+	long      sign_date;
+	long      pay_date;
+	char      pwd[11];
+	char      po_ind[2];
+	char      deal_mode[2];
+	char      drsubject[8];
+	char      crsubject[8];
+	char      content[61];
+	char      tx_chrg_type[2];
+	char      checkflag[2];
+	char      op_tel[7];
+	char      chk_tel[7];
+	char      pass_tel[7];
+	char      add_pwd_ind[2];
+	char      brf[61];
+};
+#endif 

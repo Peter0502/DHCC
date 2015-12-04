@@ -1,0 +1,957 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100010000000000000000000000" TITLE="4680       理财产品信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"  
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+                rerun();        
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS= "T(4680                        理财产品信息维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+<!--屏幕输入内容 --> 
+ <ITEM LINE="06"      COL="7"  TYPE="%-13s"     FUNCTIONS="T(产品  编号: )"/>
+ <ITEM LINE="06"      COL="41" TYPE="%-12s"     FUNCTIONS="T(操作  类型:!)"/> 
+ 
+ <!--控制输入内容 -->  
+ <ITEM LINE="06"   COL="19"  TYPE="%-12s"  NAME="#CPNO"  VISABLE="TRUE" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T()">
+        <ONLOSTFOCUS>
+        "{
+             initfd();
+       commsend_001();
+	//放开对营业部控制 限制在黄行 ModByYl 2013/3/26 16:04:01
+	//if($FD3!='01002')
+	//{
+	//	showmsg('此交易只有黄河银行营业部有权使用!');
+	//	return(false);
+	//}
+	//if(substr($FD3,0,2)!='01')                                   
+	//{                                                   
+	//	showmsg('此交易只有黄河银行有权使用!'); 
+	//	return(false);                                
+	//}                                                   
+	//ModEnd 2013/3/26 16:05:38
+        }"
+        </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="06"   COL="53"  NAME="#OPTYPE" TYPE="%1d"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+       <SELECT>
+         <!--OPTION VALUE="0" TITLE="查询"/-->
+         <OPTION VALUE="1" TITLE="新增"/>
+         <OPTION VALUE="2" TITLE="修改"/>
+         <OPTION VALUE="3" TITLE="删除"/>
+       </SELECT>
+                <ONLOSTFOCUS>
+              "{
+                    dim @tota as string;
+                        dim @sql as string;
+                        dim @file as file;
+            dim @filename as string;
+            dim @line as string;
+                        dim @csts as string;
+                        
+                        @csts='0';
+                        
+            initfd();
+          // if(#OPTYPE=='1')
+          // {
+          //         showblock('MODIFY',false,false);
+            //               showblock('INSERT',true,true);
+                    //               resetblock('INSERT');
+                    //               
+          //         
+          // }
+                         //showblock('INSERT',false,false);
+           if( #OPTYPE!='3' )
+          {              
+                showblock('MODIFY',true,true);
+                        resetblock('MODIFY');
+                        //reset();
+                        refresh();
+                     }
+                    if(#OPTYPE=='1')
+                    {
+                        initfd();
+                    commsend_001();
+                    $FD16='9598';
+                  
+                  
+                  @sql='select sts  from financing_products_parm   where  prot_code='+chr(39)+#CPNO+chr(39)+''; 
+                    $FD123=rtrim(@sql);
+                    @tota=callserver();  
+                    //showmsg(@tota);
+                    
+                    if($FD12!='0000')
+                    {
+                showmsg(geterror());
+                return(false);
+                    }
+                    #YWSTS1=strfld(@tota,'|',0);
+                        if(#YWSTS1!='')
+                        {
+                showmsg('此理财产品编号已经存在,不能新增.');
+                return(false);
+                    }
+                    
+                    }
+                    
+            if( #OPTYPE!='2' )
+          {
+            show(#recede_hz,false);
+            show(#cls_hz,false);
+            show(#if_recede,false);
+            show(#ahed_delay,false);
+            
+            show(#recede_date,false);
+            show(#cls_date,false);
+            show(#recede_ts,false);
+            show(#cls_ts,false);         
+            
+           } 
+                         
+           if( #OPTYPE=='2' )
+           {
+                    initfd();
+                    commsend_001();
+                    $FD16='9598';        
+                     @sql='select prot_name,area,prot_type,issue_type,cif_type,raise_beg,raise_end,plan_date,limit,term,concentrate_acno,cls_date,sts,filler,redemption_acno 
+                             from financing_products_parm  where  prot_code='+chr(39)+#CPNO+chr(39)+'and sts= '+chr(39)+@csts+chr(39)+'';
+                    //超长了@sql='select prot_name,area,prot_type,issue_type,cif_type,raise_beg,raise_end,plan_date,limit,term,concentrate_acno,cls_date,sts  from financing_products_parm  where  prot_code='+chr(39)+#CPNO+chr(39)+'and sts in ( '+chr(39)+'0'+chr(39)+','+chr(39)+'2'+chr(39)+')'';
+                     
+                    $FD123=rtrim(@sql);
+                    @tota=callserver();  
+                    //showmsg(@tota);
+                    
+                    if($FD12!='0000')
+                    {
+                showmsg(geterror());
+                return(false);
+                    }
+                        if(@tota==''){
+                showmsg('无此理财产品编号.');
+                return(false);
+                    }
+              
+                        #CPMC1=strfld(@tota,'|',0);
+              #AERA1=strfld(@tota,'|',1);
+              #PROT_TYPE1=strfld(@tota,'|',2);
+              #ISSUE_TYPE1=strfld(@tota,'|',3);
+              #CIF_TYPE1=strfld(@tota,'|',4);
+              #raise_beg1=strfld(@tota,'|',5);
+              #raise_end1=strfld(@tota,'|',6);
+              #plan_date1=strfld(@tota,'|',7);
+              #limit1=atoi(strfld(@tota,'|',8));
+              #term1=strfld(@tota,'|',9);
+              #GJ_ACNO1=strfld(@tota,'|',10);
+           //   #DF_ACNO1=strfld(@tota,'|',11);
+           //   #JGXCK=strfld(@tota,'|',11);
+              #cls_date=strfld(@tota,'|',11);
+              #YWSTS1=strfld(@tota,'|',12);
+              #BRANCHLIST=strfld(@tota,'|',13); 
+              #RISK_RATE=strfld(@tota,'|',14);
+              #RISK_RATE=delspace(#RISK_RATE);
+       
+              
+                            //判断YWSTS1 决定是否容许修改更好!!! 弃用block方式
+                            //showmsg('cls_date'+#cls_date);
+                        //showmsg('AERA1'+#AERA1);
+                        //showmsg('ISSUE_TYPE1'+#ISSUE_TYPE1);
+                        //showmsg('plan_date1'+#plan_date1);
+                        //showmsg('term1'+#term1);
+                        //showmsg(itoa(#limit1));
+                        //show(#CPMC1,true);
+                      // resetblock('MODIFY');       
+           }
+            
+            //show(#raise_beg,true);
+            //show(#raise_end,true);
+            //show(#plan_date,true);
+            
+            
+            refresh();
+            
+                }"
+                 </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#DYOPTYPE" TYPE="%-6s"  FUNCTIONS="S(#OPTYPE,#OPTYPE)"/>
+ <ITEM    NAME="#JUMP1"    TYPE="%-1d"    FUNCTIONS="j(#OPTYPE=0,T{1}T{0})G(1,#OK)"/>
+ <ITEM    NAME="#JUMP2"    TYPE="%-1d"    FUNCTIONS="j(#OPTYPE=3,T{1}T{0})G(1,#OK)"/>
+ <ITEM NAME="#SPACE1"  TYPE="%1s" FUNCTIONS="T()"/> 
+
+ 
+<!--BLOCK NAME="INSERT" LINE="7" COL="7"  VISABLE="FALSE" >
+ <ITEM LINE="1"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(产品  名称: )"/>
+ <ITEM LINE="2"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(发行  地区:!)"/>
+ <ITEM LINE="2"      COL="34" TYPE="%-13s"     FUNCTIONS="T(产品  类型:!)"/>
+ <ITEM LINE="3"      COL="0"  TYPE="%-13s"     FUNCTIONS="T(发行  方式:!)"/>
+ <ITEM LINE="3"      COL="34" TYPE="%-13s"     FUNCTIONS="T(适用  客户:!)"/> 
+ <ITEM LINE="4"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(认购开始日: )"/>
+ <ITEM LINE="4"      COL="34" TYPE="%-12s"     FUNCTIONS="T(认购结束日: )"/>
+ <ITEM LINE="5"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(计划到期日: )"/>
+ <ITEM LINE="5"          COL="34" TYPE="%-12s"       FUNCTIONS="T(认购总限额: )"/>
+ <ITEM LINE="6"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(理财  期限: )"/> 
+ <ITEM LINE="6"      COL="15" TYPE="%4s"     FUNCTIONS="T(天)"/> 
+ <ITEM LINE="6"      COL="34" TYPE="%-12s"     FUNCTIONS="T(理财归集户: )"/> 
+ <ITEM LINE="7"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(归集户名称: )"/>
+ <ITEM LINE="9"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(产品  状态:!)"/>
+ <ITEM LINE="10"     COL="0"  TYPE="%-12s"     FUNCTIONS="T(备      注: )"/>
+
+ <ITEM LINE="1"   COL="12"  TYPE="%-60s"  NAME="#CPMC"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T(黄河银行'金喜鹊'第1101期人民币理财产品)"/> 
+ <ITEM LINE="2"  COL="12"  NAME="#AERA" TYPE="%2s"  INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="T(01)V(00|01)">
+    <SELECT >
+       <OPTION VALUE="00" TITLE="全区"/>
+       <OPTION VALUE="01" TITLE="黄河银行"/>
+    </SELECT>
+ </ITEM>
+ <ITEM NAME="#DYAERA"       TYPE="%-10s"   FUNCTIONS="S(#AERA,#AERA)"/>
+ 
+ <ITEM LINE="2"  COL="46"  NAME="#PROT_TYPE" TYPE="%3s"    DEVICE="KEYBOARD" FUNCTIONS="T(001)V(001|002)">
+        <SELECT LINE="7" COL="55">
+       <OPTION VALUE="001" TITLE="保证收益型"/>
+       <OPTION VALUE="002" TITLE="非保证收益型"/>
+    </SELECT>
+ </ITEM>
+ <ITEM NAME="#DY_PROT_TYPE"       TYPE="%-20s"   FUNCTIONS="S(#PROT_TYPE,#PROT_TYPE)"/>
+ 
+ <ITEM LINE="3"  COL="12"  NAME="#ISSUE_TYPE" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(2)V(1|2)">
+        <SELECT >
+       <OPTION VALUE="1" TITLE="单一型"/>
+       <OPTION VALUE="2" TITLE="公开募集"/>
+    </SELECT>
+ </ITEM>
+ 
+ <ITEM LINE="3"  COL="46"  NAME="#CIF_TYPE" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1|2|)">
+        <SELECT LINE="09" COL="55">
+       <OPTION VALUE="0" TITLE="全部类型"/>
+       <OPTION VALUE="1" TITLE="对私"/>
+       <OPTION VALUE="2" TITLE="对公"/>
+    </SELECT>
+ </ITEM>
+ <ITEM                                           TYPE="%8s"    NAME="#date1"   FUNCTIONS=""/>
+ <ITEM LINE="4"   COL="12"  TYPE="%8s"  NAME="#raise_beg"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T($HDATE)"/> 
+ <ITEM LINE="4"   COL="46"  TYPE="%8s"  NAME="#raise_end"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T(20110815)">
+ <ONLOSTFOCUS>
+ "{
+   dim @dategap as number;
+   
+   @dategap=func(#raise_beg,#raise_end);
+   //showmsg(itoa(@dategap,'%3d'));
+   if( @dategap  &lt; 0)
+     {
+            showmsg('募集起止日期有误.');
+        return(false);
+        }
+        
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="5"   COL="12"  TYPE="%-8s"  NAME="#plan_date"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T(20111114)"/>
+ <ITEM LINE="5"   COL="46"  NAME="#limit"   TYPE="%16.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+ <ITEM LINE="6"   COL="12"  TYPE="%-3s"  NAME="#term"     DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+        dim @datenum as number;
+        dim @dateterm as number;
+        
+         @dateterm=atoi(#term);
+         @datenum=func(#raise_end,#plan_date);       
+         
+         if( @dateterm  != @datenum)
+         {
+            showmsg('理财期限=['+itoa(@dateterm)+']天与计算结果['+itoa(@datenum)+']天不符!请重新输入');
+            //showmsg('输入理财期限与计算不一致，请重新输入.');
+        return(false);
+         }
+         
+    }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="6"   COL="46"  TYPE="%-20s"  NAME="#GJ_ACNO"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+       dim @line as string;
+       dim @file as file;
+       dim @filename as string;
+             dim @tota as string;
+              dim @index as number;
+       
+       $TXNO='8501';
+       $FD38=#GJ_ACNO;
+       commsend_001();
+       @tota=callserver();
+       //showmsg(@tota);
+       
+       if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+       }
+       if(@tota!='')
+       {
+             @filename='../tmp/'+$KINBR+$TTYNAME+'.mdmname';
+             savefiletxt(@filename,@tota);
+             @file=openfile(@filename,'rb');
+             if(@file &lt; 0)
+             {
+                 showmsg(geterror());
+                 return(false);
+             }
+             @line=readline(@file);
+             //showmsg('@line ='+@line);
+             @index=0;
+             while(@line!='')
+             {
+                  #PAYNAME = strfld(@line,'|',2);
+                  @line = readline(@file);
+             }
+       }
+        //showmsg('PAYNAME'+#PAYNAME);
+       
+   showhelp(3,70,8,3,'理财归集户账户名称',substr(#PAYNAME,0,60));
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="7"   COL="12"  TYPE="%-60s"  NAME="#PAYNAME"  ENABLE="FALSE"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/> 
+ 
+ <ITEM NAME="#AC_NO"   TYPE="%-21s" FUNCTIONS=""/>
+ <ITEM NAME="#AC_SEQN"   TYPE="%-4s" FUNCTIONS=""/>
+ <ITEM  NAME="#ID_TYPE"     TYPE="%-1s"        FUNCTIONS=""/>
+ 
+
+ <ITEM NAME="#YWTYPE"   TYPE="%-12s"  FUNCTIONS="j(#YWTYPE1?,T{#YWTYPE1}T{#YWTYPE12_1})"/> 
+ <ITEM NAME="#SPACE2"  TYPE="%1s" FUNCTIONS="T()"/>
+ <ITEM LINE="9"  COL="12"  NAME="#YWSTS" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1)">
+    <SELECT>
+       <OPTION VALUE="0" TITLE="募集期"/>
+       <OPTION VALUE="1" TITLE="募集失败"/>
+       <OPTION VALUE="2" TITLE="募集完成"/>
+       <OPTION VALUE="3" TITLE="到期处理中"/>
+       <OPTION VALUE="4" TITLE="到期入账完成"/>
+       <OPTION VALUE="*" TITLE="作废"/>
+    </SELECT>
+</ITEM>
+ <ITEM NAME="#SYWSTS"       TYPE="%-14s"   FUNCTIONS="S(#YWSTS,#YWSTS)"/>
+
+ <ITEM LINE="10"  COL="12"  TYPE="%-60s"  NAME="#FILLER"    DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+ </BLOCK-->
+
+<BLOCK NAME="MODIFY" LINE="7" COL="7"  VISABLE="FALSE" >
+ <ITEM LINE="0"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(产品  名称: )"/>
+ <ITEM LINE="1"      COL="0" TYPE="%-13s"     FUNCTIONS="T(产品类型:!)"/>
+ <ITEM LINE="1"      COL="36"  TYPE="%-12s"     FUNCTIONS="T(发行地区:!)"/>
+ <ITEM LINE="2"      COL="0" TYPE="%-26s"     FUNCTIONS="T(网点列表[多个用逗号分隔]:)"/>
+ <ITEM LINE="3"      COL="0"  TYPE="%-13s"     FUNCTIONS="T(发行  方式:!)"/>
+ <ITEM LINE="3"      COL="34" TYPE="%-13s"     FUNCTIONS="T(适用  客户:!)"/> 
+ <ITEM LINE="4"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(认购开始日: )"/>
+ <ITEM LINE="4"      COL="34" TYPE="%-12s"     FUNCTIONS="T(认购结束日: )"/>
+ <ITEM LINE="5"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(计划到期日: )"/>
+ <ITEM LINE="5"          COL="34" TYPE="%-12s"       FUNCTIONS="T(认购总限额: )"/>
+ <ITEM LINE="6"      COL="0"  TYPE="%-12s"     FUNCTIONS="T(理财  期限: )"/> 
+ <ITEM LINE="6"      COL="16" TYPE="%4s"         FUNCTIONS="T(天)"/> 
+ <ITEM LINE="6"      COL="34" TYPE="%-14s"     FUNCTIONS="T(理财归集账户：)"/> 
+ <!--ITEM LINE="7"      COL="0"     TYPE="%-14s"     FUNCTIONS="T(理财兑付账户)"/--> 
+ <ITEM LINE="7"      COL="0"  TYPE="%14s"       FUNCTIONS="T(产品风险等级: )"/> 
+ <ITEM LINE="8"      COL="0"  TYPE="%-12s"       NAME="#recede_hz"   FUNCTIONS="T(产品是否撤销:!)"/>
+ <ITEM LINE="9"      COL="0"  TYPE="%-12s"       NAME="#cls_hz"   FUNCTIONS="T(产品到期调整:!)"/>
+ <ITEM LINE="10"     COL="0"  TYPE="%-12s"     FUNCTIONS="T(产品  状态:!)"/>
+ <!--ITEM LINE="11"     COL="0"  TYPE="%-12s"     FUNCTIONS="T(备      注: )"/-->
+
+ <ITEM LINE="0"   COL="12"  TYPE="%-60s"  NAME="#CPMC1"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/> 
+  <ITEM LINE="1"  COL="10"  NAME="#PROT_TYPE1" TYPE="%3s"  INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="T(001)V(001|002|003)">
+    <SELECT>
+       <OPTION VALUE="001" TITLE="保本浮动收益型"/>
+       <OPTION VALUE="002" TITLE="非保本浮动收益型"/>
+       <OPTION VALUE="003" TITLE="保本固定收益型"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#DY_PROT_TYPE1"       TYPE="%-20s"   FUNCTIONS="S(#PROT_TYPE1,#PROT_TYPE1)"/>
+  
+ <ITEM LINE="1"  COL="46"  NAME="#AERA1" TYPE="%2s"  INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="T(01)">
+    <SELECT>
+       <OPTION VALUE="00" TITLE="全区"/>
+       <OPTION VALUE="01" TITLE="黄河银行"/>
+       <OPTION VALUE="AA" TITLE="部分网点"/>
+       <OPTION VALUE="BB" TITLE="部分联社"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+        if(#AERA1=='AA' or #AERA1=='BB'){
+            enable(#BRANCHLIST,true);
+        }else{
+            #BRANCHLIST='';
+            enable(#BRANCHLIST,false);            
+        }
+    }"
+    </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#DYAERA1"       TYPE="%-10s"   FUNCTIONS="S(#AERA1,#AERA1)"/>
+ 
+  <ITEM LINE="2"  COL="26"  NAME="#BRANCHLIST" TYPE="%-35s"  INPUT="TEXT"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>"{
+        dim @ii     as number;
+        dim @branch as string;
+        dim @br_no  as string;
+        dim @sqls   as string;
+        dim @tota   as string;
+        @ii=1;
+        @branch=strfld(#BRANCHLIST,',',0);
+        @branch=delspace(@branch);
+        while(@branch!=''){
+            if(#AERA1=='AA' and len(@branch)!=5){
+                showmsg('网点列表中的网点号必须是5位');
+                return(false);
+            }
+            if(#AERA1=='BB' and len(@branch)!=2){
+                showmsg('联社列表中的网点号必须是2位');
+                return(false);
+            }
+            if(#AERA1=='AA' and substr(@branch,0,2)!=substr($KINBR,0,2)){
+                showmsg('必须输入本联社的网点号');
+                return(false);
+            }
+            
+            initfd();
+            commsend_001();
+            $FD16='9598';
+            if(#AERA1=='AA'){
+            @sqls='select br_no from com_branch where br_no='+chr(39)+@branch+chr(39)+
+                  ' and substr(br_no,3,3)!='+chr(39)+'666'+chr(39)+' and br_type in ('
+                  +chr(39)+'6'+chr(39)+','+chr(39)+'7'+chr(39)+') and wrk_sts!='+chr(39)+'*'+chr(39);
+            }
+            else if(#AERA1=='BB'){
+            @sqls='select substr(br_no,1,2) from com_branch where br_no='+chr(39)+@branch+'001'+chr(39)
+                  +' and wrk_sts!='+chr(39)+'*'+chr(39);
+            }
+            $FD123=@sqls;
+            @tota=callserver();
+            if($FD12!='0000')
+            {
+                showmsg(geterror());
+                return(false);
+            }
+            @tota=delspace(@tota);
+            @br_no=strfld(@tota,'|',0);
+            @br_no=delspace(@br_no);
+            if(#AERA1=='AA' and @br_no!=@branch){
+                showmsg('网点列表中的网点号不存在');
+                return(false);
+            }
+            if(#AERA1=='BB' and @br_no!=@branch){
+                showmsg('联社列表中的联社号不存在');
+                return(false);
+            }
+            @branch=strfld(#BRANCHLIST,',',@ii);
+            @branch=delspace(@branch);
+            @ii=@ii+1;
+        }
+    }"
+    </ONLOSTFOCUS>
+ </ITEM>
+ 
+
+ 
+ <ITEM LINE="3"  COL="12"  NAME="#ISSUE_TYPE1" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(2)V(1|2)">
+        <SELECT  LINE="09" COL="25" >
+       <OPTION VALUE="1" TITLE="单一型"/>
+       <OPTION VALUE="2" TITLE="公开募集"/>
+    </SELECT>
+ </ITEM>
+ 
+ <ITEM LINE="3"  COL="46"  NAME="#CIF_TYPE1" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(1)V(0|1|2|)">
+        <SELECT LINE="09" COL="55">
+       <OPTION VALUE="0" TITLE="全部类型"/>
+       <OPTION VALUE="1" TITLE="对私"/>
+       <OPTION VALUE="2" TITLE="对公"/>
+        </SELECT>
+    <ONLOSTFOCUS>
+     "{
+         if(#OPTYPE=='2')
+         {
+                enable(#raise_beg1,false);
+                
+         }
+         
+
+    }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM                                           TYPE="%8s"    NAME="#date1"   FUNCTIONS=""/>
+ <ITEM LINE="4"   COL="12"  TYPE="%8s"  NAME="#raise_beg1"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T($HDATE)D()"/> 
+ 
+ <ITEM LINE="4"   COL="46"  TYPE="%8s"  NAME="#raise_end1"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T($HDATE)D()">
+ <ONLOSTFOCUS>
+ "{
+   dim @dategaps as number;      
+     
+     
+   @dategaps=func(#raise_beg1,#raise_end1)+1;
+   
+   //enable(#term1,false);  
+   if( @dategaps  &lt; 1)
+     {
+            showmsg('认购起止日期错误.');
+        return(false);
+        }
+        
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="5"   COL="12"  TYPE="%-8s"  NAME="#plan_date1"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)D()">
+        <ONLOSTFOCUS>
+        "{
+            dim @bjrq as number;
+              
+             @bjrq = func(#raise_end1,#plan_date1)-1;
+             //showmsg('计划到期日与认购结束日相差天数'+itoa(@bjrq));
+             
+                if( @bjrq  &lt; 0)
+             {
+                showmsg('计划到期日,要大于认购结束日至少一天.');
+            return(false);
+             } 
+     }"
+        </ONLOSTFOCUS>
+ </ITEM>             
+ <ITEM LINE="5"   COL="46"  NAME="#limit1"   TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+ <ITEM LINE="6"   COL="12"  TYPE="%-3s"  NAME="#term1"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+             dim @datenum as number;
+             dim @dateterm as number;
+             
+           @dateterm=atoi(#term1);
+           if( #OPTYPE== '1')
+           {
+               @datenum=func(#raise_end1,#plan_date1)-1;
+             }
+             if( #OPTYPE== '2') 
+             {
+                 @datenum=func(#raise_end1,#cls_date)-1;
+             }
+             
+           if( @dateterm  != @datenum)
+           {
+              showmsg('理财期限=['+itoa(@dateterm)+']天与计算结果['+itoa(@datenum)+']天不符!请重新输入');
+              //showmsg('输入理财期限与计算不一致，请重新输入.');
+            return(false);
+           }
+         
+    }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM  TYPE="%-60s"  NAME="#PAYNAME1"  ENABLE="FALSE"  DEVICE="KEYBOARD"  FUNCTIONS="T()"/> 
+ <ITEM LINE="6"   COL="48"  TYPE="%-20s"  NAME="#GJ_ACNO1"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+       dim @line as string;
+       dim @file as file;
+       dim @filename as string;
+       dim @tota as string;
+       dim @zhname as string;
+       dim @index as number;
+ 
+       
+       if( substr(#GJ_ACNO1,0,1)!='9')
+       {
+          showmsg('账户类型错误');
+          return(false);
+       }
+       
+       initfd();
+       commsend_001();
+        // $FD16='9954';
+        // $FD101=#GJ_ACNO1;
+       
+       $FD16='8501';
+       $FD38=#GJ_ACNO1;
+       $FD69='1';
+       //showmsg(#GJ_ACNO1);
+       @tota=callserver();
+       //showmsg(@tota);
+       
+       if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+       }
+       if(@tota!='')
+       {
+             @filename='../tmp/'+$KINBR+$TTYNAME+'.mdmname';
+             savefiletxt(@filename,@tota);
+             @file=openfile(@filename,'rb');
+             if(@file &lt; 0)
+             {
+                 showmsg(geterror());
+                 closefile(@file);
+                 return(false);
+             }
+             @line=readline(@file);
+             //showmsg('@line ='+@line);
+             @index=0;
+             while(@line!='')
+             {
+                  @zhname = strfld(@line,'|',2);
+                  @line = readline(@file);
+             }
+             //@zhname = substr($FD101,74,60);
+             closefile(@file);
+       }
+       else {
+            showmsg('无此帐号');
+            return(false);
+       }
+       
+        //showmsg('@zhname'+@zhname);
+        #PAYNAME1= substr(@zhname,0,60);  
+        showhelp(3,70,8,3,'理财归集户账户名称',substr(@zhname,0,60));
+   
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ 
+  <ITEM LINE="7"   COL="14"  TYPE="%2s"  NAME="#RISK_RATE"  INPUT="SELECT"  FUNCTIONS="V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="R1" TITLE="R1"/>
+  		<OPTION VALUE="R2" TITLE="R2"/>
+  		<OPTION VALUE="R3" TITLE="R3"/>
+  		<OPTION VALUE="R4" TITLE="R4"/>
+  		<OPTION VALUE="R5" TITLE="R5"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+    	#RISK_RATE=delspace(#RISK_RATE);
+    	if(#RISK_RATE=='')
+    	{    	
+    		showmsg('产品风险等级不能为空');
+    		return(flase);
+    	}	
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <!--ITEM  TYPE="%-60s"  NAME="#DFNAME"   DEVICE="KEYBOARD"   FUNCTIONS=""/--> 
+  <!--ITEM LINE="7"   COL="12"  TYPE="%-19s"  NAME="#DF_ACNO1"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+             dim @file as file;
+             dim @line as string;
+             dim @zhname as string;
+       dim @tota as string;
+       dim @filename as string;
+             dim @index as number;       
+             
+             
+       initfd();
+       commsend_001();
+             $FD16='8501';
+       //$TXNO='8501';
+       $FD38=#DF_ACNO1;
+       
+       @tota=callserver();
+       //showmsg(@tota);
+       
+       if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+       }
+       if(@tota!='')
+       {
+             @filename='../tmp/'+$KINBR+$TTYNAME+'.mdmname';
+             savefiletxt(@filename,@tota);
+             @file=openfile(@filename,'rb');
+             if(@file &lt; 0)
+             {
+                 showmsg(geterror());
+                 return(false);
+             }
+             @line=readline(@file);
+             
+             @index=0;
+             while(@line!='')
+             {
+                  @zhname = strfld(@line,'|',2);
+                  @line = readline(@file);
+             }
+             
+       }
+       else {
+                
+                showmsg('无此帐号');
+            return(false);
+                        
+       }
+       #DFNAME = substr(@zhname,0,60);
+         showhelp(3,70,8,3,'理财兑付账户名称,请核实',#DFNAME);
+ 
+  }"
+ </ONLOSTFOCUS>
+ </ITEM-->
+ <!--ITEM  TYPE="%-60s"  NAME="#JGNAME"   DEVICE="KEYBOARD"   FUNCTIONS=""/-->
+   <!--ITEM LINE="7"   COL="16"  TYPE="%-19s"  NAME="#JGXCK"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+ "{
+ 	if(substr(#JGXCK,1,4)!='2001' and substr(#JGXCK,1,4)!='2002' and substr(#JGXCK,1,4)!='2003' and substr(#JGXCK,1,4)!='2004'){
+ 		showmsg('输入账户'+#JGXCK+'非机构性存款账户，请确认！');
+ 		return(false);
+ 	}
+       dim @file as file;
+       dim @line as string;
+       dim @zhname as string;
+       dim @tota as string;
+       dim @filename as string;
+       dim @index as number;       
+             
+             
+       initfd();
+       commsend_001();
+       $FD16='8501';
+       $FD38=#JGXCK;
+       $FD92='4680';
+       @tota=callserver();
+       
+       if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+       }
+       if(@tota!='')
+       {
+             @filename='../tmp/'+$KINBR+$TTYNAME+'.mdmname';
+             savefiletxt(@filename,@tota);
+             @file=openfile(@filename,'rb');
+             if(@file &lt; 0)
+             {
+                 showmsg(geterror());
+                 closefile(@file);
+                 return(false);
+             }
+             @line=readline(@file);
+             
+             @index=0;
+             while(@line!='')
+             {
+                  @zhname = strfld(@line,'|',2);
+                  @line = readline(@file);
+             }
+             closefile(@file);
+       }
+       else {
+                
+                showmsg('无此帐号');
+            return(false);
+                        
+       }
+       #JGNAME = substr(@zhname,0,60);
+         showhelp(3,70,8,3,'结构性存款账户名称,请核实',#JGNAME);
+ 
+  }"
+ </ONLOSTFOCUS>
+ </ITEM-->
+ 
+ <ITEM  LINE="8"  COL="14"  NAME="#if_recede" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1)">
+        <SELECT >
+       <OPTION VALUE="0" TITLE="否"/>
+       <OPTION VALUE="1" TITLE="是"/>
+    </SELECT>
+   <ONLOSTFOCUS>
+    "{
+        if( #if_recede  == '0' ){ 
+                    
+                    //showmsg('if_recede'+#if_recede);
+                    show(#recede_ts,false);
+          show(#recede_date,false);
+          enable(#recede_date, false);          
+        }
+        if( #if_recede  == '1' ){ 
+                    
+                    //showmsg('if_recede'+#if_recede);
+                    show(#recede_ts,true);
+          show(#recede_date,true);
+          enable(#recede_date, true);          
+        }
+      }"
+    </ONLOSTFOCUS>  
+ </ITEM>
+ <ITEM  NAME="#set_recede"   TYPE="%-10s"  FUNCTIONS="S(#if_recede, #if_recede)"/>
+ <ITEM LINE="8"  COL="34"  TYPE="%-12s"  NAME="#recede_ts"   FUNCTIONS="T(产品撤销日:)"/>
+ <ITEM LINE="8"  COL="46"  NAME="#recede_date" TYPE="%8s"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)D()"> 
+      <ONLOSTFOCUS>
+    "{
+         dim @datechaq as number;
+         dim @datechah as number;
+         
+          @datechaq=func(#raise_beg1,#recede_date);
+          @datechah=func(#recede_date,#raise_end1);
+          if( @datechaq &lt; 0  or  @datechah  &lt; 0) ) 
+         { 
+                        showmsg('日期错误.撤销日必须在认购期内');
+                        return(false);                  
+         }
+         
+     }"
+        </ONLOSTFOCUS>  
+ </ITEM>
+ <ITEM LINE="9"  COL="14"  NAME="#ahed_delay"  TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1|2)">
+        <SELECT >
+             <OPTION VALUE="0" TITLE="不调整"/>
+       <OPTION VALUE="1" TITLE="提前到期"/>
+       <OPTION VALUE="2" TITLE="延迟到期"/>
+    </SELECT>
+   <ONLOSTFOCUS>
+    "{
+        if( #ahed_delay  == '0' ){ 
+                    
+                    //showmsg('ahed_delay'+#ahed_delay);
+                    show(#cls_ts,false);
+          show(#cls_date,false);
+          enable(#cls_date,false);          
+        }
+        else { 
+                    
+                    //showmsg('if_recede'+#if_recede);
+                    show(#cls_ts,true);
+          show(#cls_date,true);
+          enable(#cls_date,true);          
+        }
+      }"
+    </ONLOSTFOCUS>     
+ </ITEM>
+ <ITEM LINE="9"  COL="34"  TYPE="%-12s"  NAME="#cls_ts"   FUNCTIONS="T(实际到期日:)"/>
+ <ITEM LINE="9"  COL="46"  NAME="#cls_date" TYPE="%8s"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)D()"/>
+ 
+ <ITEM NAME="#AC_NO"   TYPE="%-21s" FUNCTIONS=""/>
+ <ITEM NAME="#AC_SEQN"   TYPE="%-4s" FUNCTIONS=""/>
+ <ITEM NAME="#ID_TYPE"     TYPE="%-1s"        FUNCTIONS=""/>
+ 
+
+ <!--ITEM NAME="#YWTYPE"   TYPE="%-12s"  FUNCTIONS="j(#YWTYPE1?,T{#YWTYPE1}T{#YWTYPE12_1})"/--> 
+ <ITEM NAME="#SPACE2"  TYPE="%1s" FUNCTIONS="T()"/>
+ <ITEM LINE="10"  COL="12"  NAME="#YWSTS1" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="">
+    <SELECT>
+       <OPTION VALUE="0" TITLE="募集期"/>       
+    </SELECT>
+</ITEM>
+ <ITEM NAME="#SYWSTS1"       TYPE="%-14s"   FUNCTIONS="S(#YWSTS1,#YWSTS1)"/>
+
+ <!--ITEM LINE="11"  COL="12"  TYPE="%-60s"  NAME="#FILLER1"    DEVICE="KEYBOARD"  FUNCTIONS="T()"/-->
+ </BLOCK> 
+
+
+<ITEM NAME="#SERVER"  TYPE="%-7s" FUNCTIONS="T($ORKINBR=#OPNBR)T($TTSKID=UP)"/>
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+    
+    commsend_001();
+    $FD16='4680';
+    $FD67=#OPTYPE;
+    
+    $FD74=#CPNO;
+    if(  #OPTYPE != '3' )
+ {
+    $FD25=#CPMC1;
+    $FD89=#AERA1;
+    $FD90=#PROT_TYPE1;
+    $FD69=#ISSUE_TYPE1;
+    $FD68=#CIF_TYPE1;
+    // $FD27=#YWTYPE;
+    $FD44=#raise_beg1;
+    $FD45=#raise_end1;
+    $FD46=#plan_date1;
+    $FD39=itoa(#limit1);
+    $FD52=#term1;
+    $FD30=#GJ_ACNO1;
+    $FD34=#RISK_RATE;
+    //$FD33=#GJ_ACNO1;ModByYl 2013/3/22 14:22:27 更改33域账号为结构性存款
+    //$FD33=#JGXCK;
+    
+    if( #OPTYPE == '2' )
+    {
+        $FD70=#if_recede;
+      $FD47=#recede_date;
+        $FD65=#cls_date;
+    }
+    $FD71=#YWSTS1;
+    $FD81=#BRANCHLIST;
+  }
+
+    callserver();
+    if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+    }
+    
+    runoutput();
+    rerun();
+    return(true);
+        
+ }"
+ </ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功" CHECK="#OPTYPE?0">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        print(5, 25,'理财产品信息维护交易:[4]成功',getseltitle(#OPTYPE,#OPTYPE));
+        print(7, 20,'理财产品编号:[20]',#CPNO);
+        print(8, 20,'理财产品状态:[14]',getseltitle(#YWSTS1,#YWSTS1));
+    }"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印理财产品维护凭证 " CHECK="#OPTYPE?0" LINESPACE="24">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        dim @txtime as string;
+        dim @space as string;
+        @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        $KINDNO = '00'; 
+        @space = ' ';       
+        
+        print( 4,10,'机构名称:[30]',$BRNAME);
+        print( 4,5,'代码:4680');
+        print( 4,5,'交易:理财产品信息维护');
+        print( 6,40,'理财产品信息【[4]】成功',getseltitle(#OPTYPE,#OPTYPE));
+        print( 7,10,'理财产品编号:[13]',#CPNO);
+        print( 7,10,'理财产品名称:[60       ]',#CPMC1);
+        print( 8,10,'发行地区:[19          ]           产品发行方式:[20]',#DYAERA1,#DY_PROT_TYPE1);
+        print( 9,10,'归集户账号:[19                 ]',#GJ_ACNO1);
+        print( 9,5,'归集户名称:[60          ]',#PAYNAME1);    
+      //  print( 10,10,'结构性存款户:[19                 ]',#JGXCK);
+      //  print( 10,5,'结构性存款户名:[60          ]',#JGNAME);  
+      //  print( 10,10,'兑付户账号:[19                 ]',#DF_ACNO1);
+      //  print( 10,5,'兑付户名称:[60          ]',#DFNAME); 
+        print( 10,10,'允许发售的网点号: [35]',#BRANCHLIST);    
+        print( 11,10,'产品风险等级：[2]',#RISK_RATE);
+        print( 14,10,'认购开始日:[8 ]             购结束日:[8]',#raise_beg1,#raise_end1);
+        //认购划款日、 产品成立日
+        print(15,10,'理财期限:[4](天)',#term1);
+        print(16,10,'认购限额:[17]',itoa(#limit1,'%16.2f'));
+        //print(15,10,'理财产品状态:[14]',#SYWSTS1);
+        //print(17,10,'产品计划到期日:[14]',#plan_date1);
+        if( len(#cls_date)==8 )
+        {
+             print(17,10,'产品计划到期日:[8 ]          产品实际到期日:[8]',#plan_date1,#cls_date); 
+            
+         }
+         else
+         {
+                print(17,10,'产品计划到期日:[8 ]        产品实际到期日:[8]',#plan_date1,#plan_date1); 
+         }
+        //print(18,10,'备    注:[60]',#FILLER1);
+        print(21,10,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(21,5,'柜员:[6]',$FD7);
+        print(21,5,'流水号:[6]',substr($FD126,2,6));
+        print_sq();
+        
+    }"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

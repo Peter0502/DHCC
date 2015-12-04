@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3502 支取密码维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	//add by luolz 20090924 调用7007去卡系统进行校验
+    if(substr(#ACTNO,0,6) == '621223')
+    {
+		initfd();
+		commsend_001();
+		$FD16='7007';
+		$FD30=delspace(#ACTNO);
+		$FD67=delspace(#CERTTYPE);
+		$FD62=delspace(#CERTNO);
+		$FD34=delspace(#OLDPWDFLAG);
+		$FD75=$MSR2;
+		$FD76=$MSR3;
+		$FD68=delspace(#OPTION);
+		$FD79=delspace(#OLD_DRAW_PWD);
+		$FD80=delspace(#NEW_DRAW_PWD);
+        
+		if(#OPTION=='1'){
+		  $FD44=delspace(#EFFECT_DATE);
+		}
+		
+		callagn();
+		if( $FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}	
+		#TRAN_FEE = val($FD40);
+		#TRAN_FEE1 = val($FD40,0.01);
+		#CARD_TRACENO = delspace(itoa(val($FD43),'%16d'));
+
+		initfd(); 
+		
+		//增加收手续费
+		//#TRAN_FEE = 129;//暂时TRAN_FEE 赋初值
+		//#TRAN_FEE1=1.29;
+		
+		$TXNO='2602';
+		$FD30=delspace(#ACTNO);	 
+		$FD40 = itoa(#TRAN_FEE,'%16.0f');
+		//showmsg('$FD40 = ['+$FD40+']');
+		call_9986_card();
+		setitems('#FEETLRNO#FEE_PWD#FEEFLAG',$FD9);  //得到收费标志
+		//showmsg('#FEEFLAG = ['+#FEEFLAG+']');
+		if(#FEEFLAG != '3' and #FEEFLAG != '' and substr(#ACTNO,0,6)=='621223' and #OPTION=='1') //费用为0时,#FEEFLAG为空
+		{
+			#FEEFLAG1 = '0';
+		}
+		else
+		{
+			#FEEFLAG1 = '1';
+		}	
+	}
+		commsend_001();
+		$FD16='2602';
+		$FD30=getitems('#ACTNO24');  // 账号
+		$FD62=getitems('#CERTNO');   // 证件号码
+		$FD67=getitems('#OLDPWDFLAG');   // 密码标志
+		$FD68=getitems('#CERTTYPE');   // 证件类型
+		$FD79=getitems('#OLD_DRAW_PWD');   // 原支取密码
+		$FD102=space(49)+getitems('#NEW_DRAW_PWD')+space(323);	 
+		 // FD1027:新支取密码 (注：后台为1027，实际应为8583中的FD1028)
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+	//setitems('#FEETLRNO#FEE_PWD#FEEFLAG',$FD9);  //得到收费标志
+	//showmsg('收费标志='+#FEEFLAG);
+	//showmsg('$FD12 = ['+$FD12+']');	 
+		if(($FD12!='0000') and ($FD12!='Z003') and ($FD12!='Z201') and (substr(#ACTNO,0,6)=='621223')) 
+		{
+				#RESP_CODE=$FD12;
+				showmsg(geterror());
+				initfd();
+				commsend_001();
+				$FD16='7777';
+				$FD12=#RESP_CODE;
+				$FD30=#ACTNO;
+				$FD43=#CARD_TRACENO;
+				callagn();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return (false);
+				}
+				showmsg('支取密码维护失败!!...');
+				rerun();
+		}
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC ='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3502                          支取密码维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2602)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM NAME="#TRAN_FEE"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费---->  
+  <ITEM NAME="#TRAN_FEE1"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费---->
+  <ITEM NAME="#TXNAME"      TYPE="%-20s" FUNCTIONS="T(支取密码维护)"/>  <!---交易名称---> 
+  <ITEM NAME="#CERTTYPE20" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO20"   TYPE="%-20s"  FUNCTIONS=""/> 
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s"  FUNCTIONS="T(账/卡 号:)"/>
+  <ITEM LINE="8"  COL="5" NAME="#LBLPIC" TYPE="%-10s"  FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="8"  COL="35" NAME="#LBLPIC1" TYPE="%-10s"  FUNCTIONS="T(印   件:)"/>
+  <ITEM LINE="6"  COL="35" TYPE="%-10s"   FUNCTIONS="T(户   名:)"/>
+  <ITEM NAME="#ACTNO" DEVICE="MSR" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)m($MSR2,1,19)">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+    	$TXNO='9734';
+    	$FD30=#ACTNO;
+    	commsend_001();
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	setitems('#ACTNO24',$FD30);
+    	setitems('#OLDPWDFLAG',$FD67);    	
+    	setitems('#OLDPWDCHANGEFLAG',$FD70);  
+        //2009-10-21 ZXP start修改
+		//#CERTTYPE = $FD68;
+        
+		#CERTTYPE20=$FD68;
+        //2009-10-21 ZXP end修改
+
+		#CERTNO20 = $FD62;
+       // showmsg('#CERTNO20 = ['+#CERTNO20+']');
+  		//add by luolz 20090924 
+  		if(substr(#ACTNO,0,6) == '621223')
+  		{        
+    		showblock('OPTIONINFO',true,true);
+    		//enable(#OPTION,false);
+    		enable(#OLDPWDFLAG,false);
+    		#OPTION = '2';
+    		show(#OPTION,true);
+			//2009-10-22 start ZXP
+			show(#EFFECT_DATE1,true);
+			show(#EFFECT_DATE,true);
+			//2009-10-22 end ZXP
+    	} 
+    	else
+    	{
+    		showblock('OPTIONINFO',false,false);    	
+    		//enable(#OPTION,true);
+    		enable(#OLDPWDFLAG,true);
+			//2009-10-22 start ZXP
+			show(#EFFECT_DATE,false);
+			show(#EFFECT_DATE1,false);
+		   //2009-10-22 end ZXP
+    	} 
+    	 //add by luolz 20090924       
+    	showblock('CERTINFO1',true,true); 
+    	showblock('PWDINFO',true,true);	 
+        showblock('NEWPWDINFO',false,false);
+        
+     	if(#OLDPWDFLAG=='Y')
+    	{
+    		 show(#LOLD_DRAW_PWD,true);
+    		 show(#OLD_DRAW_PWD,true);
+    	}
+    	else
+    	{
+    		 show(#LOLD_DRAW_PWD,false);
+    		 show(#OLD_DRAW_PWD,false);
+    	}
+    	 if (#CERTTYPE == ' ')
+        {
+          #CERTTYPE='1';
+        } 
+  		@baktxno=$TXNO;
+    	$TXNO='9731';
+    	$FD102=#ACTNO;
+    	commsend_001();
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000')
+    	{
+    		showmsg(geterror());
+    		return(false);
+    	}  	
+	    #HM=delspace($FD25);
+	    enable(#HM,false);
+      //修改定额冻结 start(zhuxiaoping)
+	if(substr(#ACTNO,0,6) == '621223')
+	{
+
+	 }else{}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="8" COL="15" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="41" LINES="160" COLS="120" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-1 显示图片信息 end-->
+  <ITEM NAME="#HM" INPUT="TEXT" LINE="6"  COL="45" TYPE="%-20s" FUNCTIONS=""/>
+  
+   <ITEM NAME="#ACTNO24"            TYPE="%-24s" FUNCTIONS=""/>
+   <ITEM NAME="#OLDPWDCHANGEFLAG"   TYPE="%-1s"  FUNCTIONS=""/>
+       
+   <BLOCK NAME="CERTINFO1" LINE="8" COL="0" VISABLE="FALSE">  
+   <ITEM LINE="1"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(---------------------------【检验申请信息】-------------------------------)"/>
+   <ITEM LINE="2"  COL="15"  NAME="#LCERTTYPE" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)" /> 
+   <ITEM LINE="2"  COL="25"  NAME="#CERTTYPE"  INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(1)">
+    	<SELECT>
+    		<OPTION VALUE="1" TITLE="身份证"/>
+    		<OPTION VALUE="2" TITLE="户口簿"/>		
+    		<OPTION VALUE="3" TITLE="护照"/>		
+    		<OPTION VALUE="4" TITLE="军官证"/>		
+    		<OPTION VALUE="5" TITLE="回乡证"/>	
+    		<OPTION VALUE="6" TITLE="居住证"/>
+    		<OPTION VALUE="7" TITLE="驾照"/>		
+    		<OPTION VALUE="8" TITLE="企业代码证"/>		
+    		<OPTION VALUE="9" TITLE="组织机构号"/>		
+    		<OPTION VALUE="A" TITLE="营业执照"/>			
+    		<OPTION VALUE="B" TITLE="经营许可证"/>
+    		<OPTION VALUE="C" TITLE="事业法人证书"/>				
+    	</SELECT>
+  <ONLOSTFOCUS>"{
+		 if(#CERTTYPE!=rtrim(#CERTTYPE20))
+		 {
+		   showmsg('输入证件类型不符！');
+		   return(false);
+		 }
+	   }"
+	  </ONLOSTFOCUS>
+
+  </ITEM> 
+  
+  <ITEM LINE="2"  COL="47" NAME="#LCERTNO"  TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件号码:)" /> 
+  <ITEM LINE="2"  COL="57" NAME="#CERTNO"   TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+     if(#CERTNO!=rtrim(#CERTNO20)){
+       showmsg('输入的证件号码与原登记证件号码不同');
+       return(false);
+     }
+     //add by luolz 20090924 如果是卡，则动作标志为2-修改,密码支取为Y-是
+  	if(substr(#ACTNO,0,6) == '621223')
+  	{
+  		#OPTION = '2';
+  		#OLDPWDFLAG = 'Y';
+        if(#OLDPWDCHANGEFLAG=='2')
+        {
+          showblock('NEWPWDINFO',true,true);
+          showblock('CERTINFO',true,true);         	        
+        }	 		
+  		//goitem(#OLD_DRAW_PWD);
+  		
+  	}
+     
+  }"</ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK> 
+  <ITEM LINE="12"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(-----------------------------------------------------------------------)"/>
+  <!--add by luolz 20090924 增加动作标志-->
+  <BLOCK NAME="OPTIONINFO" LINE="13" COL="25" VISABLE="FALSE"> 
+      <ITEM  LINE="0"  COL="0" NAME="#DZBZ" TYPE="%-10s"  FUNCTIONS="T(动作标志:!)"/> 
+      <ITEM  NAME="#OPTION" LINE="0"  COL="10"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(2)">
+    	<SELECT>
+      		<OPTION VALUE="1" TITLE="重置"/>	
+      		<OPTION VALUE="2" TITLE="修改"/>	
+      		<!--OPTION VALUE="3" TITLE="锁定"/>	
+      		<OPTION VALUE="4" TITLE="校验"/-->      			
+    	</SELECT>
+    	<ONLOSTFOCUS>"{
+    		if(#OPTION == '1'){
+    			show(#LOLD_DRAW_PWD,false);
+    			show(#OLD_DRAW_PWD,false);
+				 show(#EFFECT_DATE1,true);
+                show(#EFFECT_DATE,true);
+
+    		} else if(#OPTION == '2'){
+    			show(#LOLD_DRAW_PWD,true);
+    			show(#OLD_DRAW_PWD,true); 
+                show(#EFFECT_DATE1,false);
+				show(#EFFECT_DATE,false);
+    		}
+    		showblock('NEWPWDINFO',true,true); 
+      }"
+      </ONLOSTFOCUS>
+      </ITEM>     
+  </BLOCK> 
+  <!--add by luolz 20090924 增加动作标志 结束-->   
+  <BLOCK NAME="PWDINFO" LINE="15" COL="25" VISABLE="FALSE"> 
+      <ITEM  LINE="0"  COL="0" NAME="#LOLDPWDFLAG" TYPE="%-10s"  FUNCTIONS="T(密码支取:!)"/> 
+      <ITEM  NAME="#OLDPWDFLAG" LINE="0"  COL="10"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="">
+    	<SELECT>
+      		<OPTION VALUE="Y" TITLE="0.是"/>	
+      		<OPTION VALUE="N" TITLE="1.否"/>		
+    	</SELECT>
+    	<ONLOSTFOCUS>"{
+    	    if(#OLDPWDFLAG=='Y')
+         	{
+         	    if(#OLDPWDCHANGEFLAG=='2')
+         	    {
+         	        showblock('NEWPWDINFO',true,true);
+         	        showblock('CERTINFO',true,true);         	        
+         	    }	 
+        	 }
+        	 else
+        	 {
+          	        showblock('NEWPWDINFO',false,false); 
+         	        showblock('CERTINFO',false,false);          	        	 
+        	 }
+      }"
+      </ONLOSTFOCUS>
+      </ITEM>  	
+	 <!--start zxp 修改-->
+       <ITEM  LINE="1"  COL="0"  NAME="#EFFECT_DATE1" TYPE="%-13s"  FUNCTIONS="T(密码生效日期: )"  />  
+	   <ITEM  LINE="1"  COL="13" NAME="#EFFECT_DATE"  TYPE="%-8s"  DEVICE="KEYBOARD" INPUT="TEXT"  FUNCTIONS="T($HDATE)D()V(NB)"> 
+       <ONLOSTFOCUS>"{
+    	    if($HDATE &gt; #EFFECT_DATE)
+         	{
+         	  showmsg('密码生效日期不能小于当日!');
+         	  return (false);
+        	 }
+      }"
+      </ONLOSTFOCUS>
+       </ITEM> 
+
+        <!--end zxp 修改修改--> 
+      <ITEM  LINE="2"  COL="0" NAME="#LOLD_DRAW_PWD" TYPE="%-10s"  FUNCTIONS="T(原 密 码: )"  />	   
+      <ITEM  LINE="2"  COL="9" NAME="#OLD_DRAW_PWD"  TYPE="%6d"  DEVICE="PINPAD" INPUT="TEXT"  FUNCTIONS="V(NB)i()" > 
+      <ONLOSTFOCUS>"{
+     if(substr(#ACTNO,0,6) != '621223')
+     {     
+         	dim @baktxno as string;
+
+        	@baktxno=$TXNO;
+        	
+        	commsend_001();        	
+        	$FD16='9735';
+        	$FD30=#ACTNO24;
+        	$FD79=#OLD_DRAW_PWD;     
+     	   	
+        	callserver();
+        	$TXNO=@baktxno;
+        	if($FD12!='0000'){
+        		showmsg(geterror());
+        		return(false);
+        	}
+        }else if(substr(#ACTNO,0,6) == '621223') //add by zhangjie 20091124
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#ACTNO;
+							$FD79=#OLD_DRAW_PWD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+        	
+       	  if(#OLDPWDFLAG=='Y')
+         	{      
+         	        showblock('NEWPWDINFO',true,true);  
+         	}         	
+         }"
+      </ONLOSTFOCUS>
+       </ITEM> 
+  </BLOCK>
+
+  <BLOCK NAME="NEWPWDINFO" LINE="19" COL="25" VISABLE="FALSE">
+      <ITEM  LINE="0"  COL="0" NAME="#LNEW_DRAW_PWD" TYPE="%-15s"  FUNCTIONS="T(请输入新的密码:)"/> 
+      <ITEM  LINE="0"  COL="15" NAME="#NEW_DRAW_PWD"  TYPE="%-6s"  DEVICE="PINPAD" INPUT="TEXT"  FUNCTIONS="I()i()V(NB)">
+	  <ONLOSTFOCUS>
+	  "{    //将密码改为-6s型,以便机器控制密码是否为六位
+		if(len(#NEW_DRAW_PWD) &lt; 6 )
+		{
+			showmsg('新密码必须为六位!');
+			return(false);
+		}
+		if(#NEW_DRAW_PWD == #OLD_DRAW_PWD)
+		{
+			showmsg('您没做任何改动!');
+			return(false);
+		}
+	  }"
+	  </ONLOSTFOCUS>
+	  </ITEM>
+  </BLOCK>
+  <ITEM NAME="#FEETLRNO" TYPE="%4s" FUNCTIONS=""/><!---授权柜员号---> 
+  <ITEM NAME="#FEE_PWD"  TYPE="%6s" FUNCTIONS=""/><!---授权柜员口令---> 
+  <ITEM NAME="#FEEFLAG"  TYPE="%1s" FUNCTIONS=""/><!---收费标志---> 
+  <ITEM NAME="#FEEFLAG1"  TYPE="%1s" FUNCTIONS=""/><!---收费标志--->  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="支取密码维护成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 25,'支 取 密 码 维 护 成 功 ！');
+		print(10,25,'操 作 员:[4]',$FD7);
+	    print(11,25,'流 水 号:[6]',$FD4);
+		//2009-10-22 start ZXP
+		if(#OPTION == '1')
+		{
+			
+			print( 12,25,'密码生效日期:[8]',#EFFECT_DATE);
+		}
+       //2009-10-22 end ZXP
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+	dim @mima as string;
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if(#OLDPWDFLAG=='Y')
+	{
+		if(#OPTION == '1')
+		{
+			@mima='重置';
+					
+		}
+		else 	if(#OPTION == '2')
+		{
+	   		@mima='更改';
+	   	}
+	}
+	else
+	{
+	  @mima='撤销';
+	}
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3502');
+		print( 5,13,'交易:支取密码维护');
+		print( 7,20,'帐    号:[20]',#ACTNO);
+		print( 8,20,'密码状态:[20]',@mima);
+		//2009-10-22 start ZXP
+        if(#OPTION=='1'){
+	       print( 9,20,'密码生效日期:[30]',#EFFECT_DATE);	
+	    }
+		//2009-10-22 end ZXP
+        print_sq();
+		print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		print(21,80,'客户签名:_____________________');
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<!--add by Hxc 20091107 重置卡密码收取手续费打印凭证-->
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证(手续费)" LINESPACE="24" CHECK="#FEEFLAG1=0">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @txtime as string;
+		dim @feetype as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		$KINDNO='00';
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 3502');
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0重置卡密码交易\L1');
+		print( 9,20,'卡号:[19]',#ACTNO);
+		switch( #FEEFLAG ) {
+			case '1' :
+				print(10,20,'缴费方式:现金');	
+				break;
+			case '2' :
+				print(10,20,'缴费方式:转账');
+				break;	
+			default :
+				print(10,20,'缴费方式:不收');	
+				break;
+		}
+		if( delspace(itoa(#TRAN_FEE1,'%16.2f')) != '0.00' )
+		{
+			print(11,20,'银行卡手续费:[21]',delspace(itoa(#TRAN_FEE1,'%16.2f')));
+		}
+		if( delspace(itoa((#TRAN_FEE1),'%16.2f')) != '0.00' )
+		{
+			print(12,20,'收费总额:[21]',delspace(itoa(#TRAN_FEE1,'%16.2f')));											
+		}
+		printacdtl_1();	
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+

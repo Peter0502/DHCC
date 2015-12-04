@@ -1,0 +1,151 @@
+<PAGE NAME="PAGE1">
+   <ITEM TYPE="%-1s" NAME="#FIRSTINIT" >
+	<ONLOSTFOCUS>"{
+		if(#CASHCD=='2')
+		{	  
+			show(#SUBMIT_1,false);
+			show(#PAGETRAN,true);
+		}
+		else
+		{
+			show(#PAGETRAN,false);
+			show(#SUBMIT_1,true);
+		}
+		
+		
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#LPRODNO" INPUT="LABEL" LINE="6"  COL="11" TYPE="%-10s" FUNCTIONS="T(产品代码:!)" VISABLE="TRUE"/>
+  <ITEM LINE="6"  COL="21" TYPE="%-3s"  NAME="#PRODNO" INPUT="SELECT" FUNCTIONS="V(NB)" VISABLE="TRUE">
+	<ONLOSTFOCUS>"{
+		dim @custname as string;
+		dim @showactno as string;
+		
+		@custname=#CUSTNAME;
+		@showactno=#SHOWACTNO20;
+		initfd();
+		commsend_001();
+		$FD16='9844';
+		$FD103=#PRODNO;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		commrecv_103();
+		showblock('PRODINFO',true,true);
+		
+		// 整整要求输入自动转存标志
+		if(#PRODNO &gt; '200' and #PRODNO &lt; '209')
+		{
+			show(#SAUTOSVCD,true);
+			show(#AUTOSVCD,true);
+		}else{
+			show(#SAUTOSVCD,false);
+			show(#AUTOSVCD,false);
+		}
+		#CUSTNAME=@custname;
+		#SHOWACTNO20=@showactno;
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="8"   COL="10"  TYPE="%-20s" FUNCTIONS="T(【新开产品信息】)"  /> 
+  <ITEM LINE="9"   COL="11"  TYPE="%-61s" FUNCTIONS="T(-------------------------------------------------------------)"/>
+  
+  <BLOCK LINE="4"  COL="0" NAME="PRODINFO" VISABLE="FALSE">
+  <ITEM LINE="7"   COL="11"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="8"   COL="25"  TYPE="%-2s"  FUNCTIONS="" NAME="#LUNIT" INPUT="LABEL" />
+  <ITEM LINE="8"   COL="11"  TYPE="%-10s" FUNCTIONS="T(存    期:)"/>
+  <ITEM LINE="9"   COL="11"  TYPE="%-10s" FUNCTIONS="T(存款类型:!)"/>
+  <ITEM LINE="10"  COL="11"  TYPE="%-10s" FUNCTIONS="T(计息类型:!)"/>
+  
+  <ITEM LINE="11"  COL="11"  TYPE="%-10s" FUNCTIONS="T(自动转存:!)" NAME="#SAUTOSVCD" INPUT="LABEL" />
+  <ITEM LINE="12"  COL="11"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="13"  COL="11" TYPE="%-10s"  FUNCTIONS="T(开户金额:)"/>
+  
+  <ITEM LINE="7"   COL="21"  TYPE="%-2s"  NAME="#CURCD" INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCUR"        TYPE="%-8s"  FUNCTIONS="S(#CURCD,#CURCD)"/><!---币种--->
+  <ITEM LINE="8"   COL="21" TYPE="%3d"   NAME="#TERM"   INPUT="TEXT"   ENABLE="FALSE"/>
+  <ITEM LINE="9"   COL="21" TYPE="%-1s"  NAME="#SVTYPE" INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T(0)"><!---此处将选项加全--->
+	<SELECT>
+		<OPTION VALUE="0" TITLE="0.普通"/>
+		<OPTION VALUE="1" TITLE="0.定额续存"/>
+		<OPTION VALUE="2" TITLE="0.定额续取"/>
+		<OPTION VALUE="3" TITLE="0.定额取息"/>
+		<OPTION VALUE="4" TITLE="0.通知存款"/>
+		<OPTION VALUE="5" TITLE="0.协议存款"/>
+		<OPTION VALUE="6" TITLE="0.定活两便"/>
+		<OPTION VALUE="7" TITLE="0.不定额续存"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="10"  COL="21" TYPE="%-1s"  NAME="#JXLX"   INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.利随本清"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM LINE="11"  COL="21" TYPE="%-1s"  NAME="#AUTOSVCD" INPUT="SELECT"  FUNCTIONS="T(N)"><!---自动转存标志--->
+  <SELECT>
+		<OPTION VALUE="Y" TITLE="是"/>
+		<OPTION VALUE="N" TITLE="否"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SAUTOFLG"    TYPE="%-2s"  FUNCTIONS="S(#AUTOSVCD,#AUTOSVCD)"/> 
+
+  <ITEM LINE="12"  COL="21" TYPE="%-1s"  NAME="#CASHCD" INPUT="SELECT" ENABLE="TRUE" FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="现金"/>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM LINE="13"  COL="21" TYPE="%17.2f" NAME="#TXAMT" INPUT="TEXT" FUNCTIONS="V(0000000000000001,0000099999999999)"/>
+  <ITEM NAME="#UTXAMT"      TYPE="%-40s"  FUNCTIONS="U(#TXAMT)"><!---大写金额--->
+	<ONLOSTFOCUS>
+	"{
+		//showmsg(#UTXAMT);
+		if(#CASHCD=='1')
+		{
+			show(#PAGETRAN,false);
+			show(#SUBMIT_1,true);
+			goitem(#SUBMIT_1,false);
+		}
+		else
+		{	  
+			show(#SUBMIT_1,false);
+			show(#PAGETRAN,true);
+			goitem(#PAGETRAN);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK>
+
+  <ITEM LINE="21" COL="49"  TYPE="%-6s"   FUNCTIONS="T(上一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+	loadpage('DEFAULT');
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"   NAME="#PAGETRAN"  FUNCTIONS="T(下一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+	loadpage('PAGE2');
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"   NAME="#SUBMIT_1"  FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </PAGE>

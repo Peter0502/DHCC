@@ -1,0 +1,280 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"subbr_deposit_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int subbr_deposit_con ( struct subbr_deposit_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct subbr_deposit_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->up_br_no);
+	zip_tail(ps->opn_br_no);
+	zip_tail(ps->draw_deposit);
+	zip_tail(ps->client_mgr);
+}
+int Subbr_deposit_Debug(struct subbr_deposit_c *ps){
+	vtcp_log("subbr_deposit_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("subbr_deposit_c.up_br_no=[%s]\n",ps->up_br_no);
+	vtcp_log("subbr_deposit_c.opn_br_no=[%s]\n",ps->opn_br_no);
+	vtcp_log("subbr_deposit_c.ex_year=[%ld]\n",ps->ex_year);
+	vtcp_log("subbr_deposit_c.ex_month=[%ld]\n",ps->ex_month);
+	vtcp_log("subbr_deposit_c.ac_id=[%ld]\n",ps->ac_id);
+	vtcp_log("subbr_deposit_c.ac_seqn=[%ld]\n",ps->ac_seqn);
+	vtcp_log("subbr_deposit_c.monthb_bal=[%f]\n",ps->monthb_bal);
+	vtcp_log("subbr_deposit_c.bal=[%f]\n",ps->bal);
+	vtcp_log("subbr_deposit_c.mon_increment=[%f]\n",ps->mon_increment);
+	vtcp_log("subbr_deposit_c.month_addbal=[%f]\n",ps->month_addbal);
+	vtcp_log("subbr_deposit_c.season_addbal=[%f]\n",ps->season_addbal);
+	vtcp_log("subbr_deposit_c.year_addbal=[%f]\n",ps->year_addbal);
+	vtcp_log("subbr_deposit_c.draw_deposit=[%s]\n",ps->draw_deposit);
+	vtcp_log("subbr_deposit_c.client_mgr=[%s]\n",ps->client_mgr);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Subbr_deposit_Sel(reply,subbr_deposit_c,fmtstr,va_alist)
+char    *reply;
+struct  subbr_deposit_c *subbr_deposit_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Subbr_deposit_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Subbr_deposit_Fet_Sel( subbr_deposit_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Subbr_deposit_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Subbr_deposit_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,subbr_deposit.* FROM subbr_deposit WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE subbr_deposit_sel FROM :comm;
+	EXEC SQL DECLARE sel_subbr_deposit CURSOR FOR subbr_deposit_sel;
+
+	EXEC SQL OPEN sel_subbr_deposit;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Subbr_deposit_Fet_Sel ( struct subbr_deposit_c *subbr_deposit_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_subbr_deposit INTO :subbr_deposit_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch subbr_deposit error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch subbr_deposit finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(subbr_deposit_c);
+
+	return 0;
+}
+
+int Subbr_deposit_Clo_Sel (){
+	EXEC SQL CLOSE sel_subbr_deposit;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Subbr_deposit_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,subbr_deposit.* FROM subbr_deposit WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE subbr_deposit_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_subbr_deposit CURSOR FOR subbr_deposit_upd;
+
+	EXEC SQL OPEN upd_subbr_deposit;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Subbr_deposit_Fet_Upd( struct subbr_deposit_c *subbr_deposit_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_subbr_deposit INTO :subbr_deposit_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH subbr_deposit finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(subbr_deposit_c);
+
+	return 0;
+}
+
+int Subbr_deposit_Upd_Upd( struct subbr_deposit_c subbr_deposit_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE subbr_deposit SET up_br_no=:subbr_deposit_c.up_br_no,
+			opn_br_no=:subbr_deposit_c.opn_br_no,
+			ex_year=:subbr_deposit_c.ex_year,
+			ex_month=:subbr_deposit_c.ex_month,
+			ac_id=:subbr_deposit_c.ac_id,
+			ac_seqn=:subbr_deposit_c.ac_seqn,
+			monthb_bal=:subbr_deposit_c.monthb_bal,
+			bal=:subbr_deposit_c.bal,
+			mon_increment=:subbr_deposit_c.mon_increment,
+			month_addbal=:subbr_deposit_c.month_addbal,
+			season_addbal=:subbr_deposit_c.season_addbal,
+			year_addbal=:subbr_deposit_c.year_addbal,
+			draw_deposit=:subbr_deposit_c.draw_deposit,
+			client_mgr=:subbr_deposit_c.client_mgr
+	WHERE rowid=:subbr_deposit_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Subbr_deposit_Del_Upd(struct subbr_deposit_c subbr_deposit_c , char * reply  ){
+
+	EXEC SQL DELETE FROM subbr_deposit WHERE rowid=:subbr_deposit_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Subbr_deposit_Clo_Upd( ){
+	EXEC SQL CLOSE upd_subbr_deposit;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Subbr_deposit_Ins( struct subbr_deposit_c subbr_deposit_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO subbr_deposit VALUES (:subbr_deposit_c.up_br_no,
+			:subbr_deposit_c.opn_br_no,
+			:subbr_deposit_c.ex_year,
+			:subbr_deposit_c.ex_month,
+			:subbr_deposit_c.ac_id,
+			:subbr_deposit_c.ac_seqn,
+			:subbr_deposit_c.monthb_bal,
+			:subbr_deposit_c.bal,
+			:subbr_deposit_c.mon_increment,
+			:subbr_deposit_c.month_addbal,
+			:subbr_deposit_c.season_addbal,
+			:subbr_deposit_c.year_addbal,
+			:subbr_deposit_c.draw_deposit,
+			:subbr_deposit_c.client_mgr);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT subbr_deposit error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="5944 自由格式查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<COMMSEND>
+"{
+  commsend_001();
+  $FD51 = #CDIND;
+  $FD44 = #BG_DATE;
+  $FD45 = #EN_DATE;
+}"
+</COMMSEND>
+
+<COMMRECV>
+"{
+  commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+"T(5944                        自由格式查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#MSGTYPE"   TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM NAME="#TXNO"      TYPE="%-4s"    FUNCTIONS="T($TXNO=5944)"/>
+<!---输入要素--->
+<ITEM LINE="8"  COL="26" TYPE="%-14s"  FUNCTIONS="T(往来标识:)"/>
+<ITEM LINE="10"  COL="26" TYPE="%-14s"  FUNCTIONS="T(起始日期:)"/>
+<ITEM LINE="12" COL="26"  TYPE="%-14s" FUNCTIONS="T(终止日期:)"/>
+
+<ITEM NAME="#CDIND"    LINE="8" COL="36" TYPE="%-1s"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)V(NB)">
+       <SELECT LINE="8" COL="42">
+              <OPTION VALUE="1"  TITLE="往账"/>   
+              <OPTION VALUE="2"  TITLE="来账"/>
+       </SELECT>
+</ITEM>
+<ITEM NAME="#BG_DATE"  LINE="10" COL="36" TYPE="%-8d"  INPUT="TEXT"   FUNCTIONS="T($HDATE)D()V(NB)"/>
+<ITEM NAME="#EN_DATE"  LINE="12" COL="36" TYPE="%-8d"  INPUT="TEXT"  	FUNCTIONS="T($HDATE)D()V(NB)">
+<ONLOSTFOCUS>
+  "{
+     if(#EN_DATE &lt; #BG_DATE)
+     {
+         showmsg('输入有误!终止日期不能小于起始日期!!!');
+         return(false);
+     }
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+<ONCLICK>"{
+  dim @tota as string;
+  commsend_001();
+  $FD51 = #CDIND;
+  $FD44 = #BG_DATE;
+  $FD45 = #EN_DATE;
+  $FD18 = 'SNB';
+
+	callagncjwy();
+	
+	if($FD12!='0000')
+  {
+    showmsg(geterror());
+    return(false);
+  }
+	
+	if($FD28=='0')
+  {
+		showmsg('没有符合查询条件的内容!');
+		return(false);
+  }
+	
+	@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+  @tota='~@发送机构|@发送日期|@报文内容|'+chr(10)+@tota;
+	autolist(@tota);
+  list_work();
+	list_del();
+  
+  }"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>

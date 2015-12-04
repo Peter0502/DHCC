@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="00111111" TITLE=" 业务名称：批量开户客户资料-神码"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<INIT>"{
+	list_init(17,78,5,1);
+	list_setcolcnt(9);
+	list_setcol(0,'代发编号',24);
+	list_setcol(2,'客户姓名',30);
+	list_setcol(3,'开户金额',17);
+	list_setcol(4,'证件号码',20);
+	list_setcol(5,'单位编号',12);
+	list_setcol(6,'证件类型',12);
+	list_setcol(7,'卡号',21);
+	list_setcol(8,'手机号码',11);
+	list_sumcol(3,16,2);
+}"
+</INIT>
+<LOAD>"{
+	@line=strfld(@fline,'|',0)+'|'+
+	      strfld(@fline,'|',1)+'|'+
+	      strfld(@fline,'|',2)+'|'+
+	      strfld(@fline,'|',3)+'|'+
+	      strfld(@fline,'|',4)+'|'+
+	      strfld(@fline,'|',5)+'|'+
+	      strfld(@fline,'|',6)+'|'+
+	      strfld(@fline,'|',7)+'|'+
+	      strfld(@fline,'|',8)+'|';
+}"
+</LOAD>
+<SHOW>"{
+	showmsg('SHOW');
+	#OPRATEFLAG='1';//操作标志
+	#DFID=strfld(@line,'|',0);
+	#BKDFID=#DFID;
+	#KHNAME=strfld(@line,'|',2);	
+	#AVBAL=val(strfld(@line,'|',3));	
+	#CIRTIFNUM=strfld(@line,'|',4);
+	#DWID11=strfld(@line,'|',5);
+	#CIRTIFTYPE=strfld(@line,'|',6);
+	#MGERNO=strfld(@line,'|',7);
+	#PHONENUM=strfld(@line,'|',8);
+	
+}"
+</SHOW>
+<UPDATE>"{
+	showmsg('UPDATE');
+	@line=#DFID+'|'+'|'+#KHNAME+'|'+itoa(#AVBAL,'%.2f')+'|'+#CIRTIFNUM+'|'+#DWID11+'|'+#CIRTIFTYPE+'|'+#MGERNO+'|'+#PHONENUM+'|';
+	//@line=#MGERNO+'|'+'|'+#CIRTIFTYPE+'|'+#CIRTIFNUM+'|'+#KHNAME+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+#PHONENUM+'|'+'|'+'|'+'|'+'|'+'|'+#DWID11+'|'+#DFID+'|'+itoa(#AVBAL,'%.2f');
+	//@line=#MGERNO+'|'+'|'+#CIRTIFTYPE+'|'+#CIRTIFNUM+'|'+#KHNAME+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+'|'+#PHONENUM+'|'+'|'+'|'+'|'+'|'+'|'+#DWID11+'|'+#DFID+'|'+itoa(#AVBAL,'%.2f');
+}"
+</UPDATE>
+<SAVE>"{
+	@fline=strfld(@line,'|',0)+'|'+
+               strfld(@line,'|',1)+'|'+
+               strfld(@line,'|',2)+'|'+
+               strfld(@line,'|',3)+'|'+
+               strfld(@line,'|',4)+'|'+
+               strfld(@line,'|',5)+'|'+
+               strfld(@line,'|',6)+'|'+
+               strfld(@line,'|',7)+'|'+
+               strfld(@line,'|',8)+'|';
+}"
+</SAVE>
+<VARIABLE>
+
+  <ITEM LINE="1"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(                      批量开户客户资料-神码)"/>
+  <ITEM LINE="5" COL="5"  TYPE="%-10s" NAME="#L1" FUNCTIONS="T(单位编号:)"/>
+  <ITEM LINE="5" COL="25" TYPE="%-10s" NAME="#L2" FUNCTIONS="T(代发编号:)"/>
+  <ITEM LINE="6" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(证件类型:!)"/>
+  <ITEM LINE="7" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(证件号码:)"/>
+  <ITEM LINE="8" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(开户金额:)"/>
+  <ITEM LINE="10" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(卡    号:)"/>
+  <ITEM LINE="11" COL="5"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(手机号码:)"/>
+  <ITEM NAME="#OPRATEFLAG" TYPE="%-2s" FUNCTIONS=""/>
+  <ITEM NAME="#BKDFID" TYPE="%-24s" FUNCTIONS=""/>
+  <!--<ITEM LINE="5" COL="15" TYPE="%-4s"  NAME="#DWID11"  DEVICE="KEYBOARD" ISKEY="TRUE" FUNCTIONS = "V(NB)T(#DWID)"/>-->
+  <ITEM LINE="5" COL="15" TYPE="%-4s"  NAME="#DWID11"  INPUT="LABEL"  DEVICE="KEYBOARD" ISKEY="TRUE" FUNCTIONS = "V(NB)T(#DWID)"/>
+  
+  <ITEM LINE="5" COL="35" TYPE="%-24s" NAME="#DFID"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+    		#TMPIDTYPE='';
+        dim @baktxno as string;
+        dim @buffer as string;
+        dim @TMID as string;
+        dim @AC_NO as string;
+        dim @count as number;
+        dim @total as number;
+        @baktxno=$TXNO;
+        $TXNO='9906';
+	    	$FD33=#DFID;
+	    	$FD92=#DWID11;
+	    	commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return(false);
+        }
+        @AC_NO=delspace($FD37);
+        if(len(@AC_NO) != 0)
+          {
+          	 showmsg('该代发编号已经使用，请重新输入');
+          	 return(false);
+          }
+        @total=list_getrowcnt();
+       	//检查已经输入的内容是否已经重复
+      	@count=0;
+      	//showmsg('@total='+itoa(@total,'%d'));
+      	while(@count &lt; @total)
+      	{
+      		@TMID=list_gettext(@count,0);
+      		//showmsg(itoa(@count,'%d')+'@TMID'+@TMID);
+      		if(#OPRATEFLAG != '1')
+      		{
+      			if(@TMID == #DFID)
+      			{
+      				showmsg('代发编号重复，请重新输入');
+      				return (false);
+      			}
+      		}else
+      		{
+      			//修改标志，如果是修改，则不必检查标志
+      			if(@TMID == #DFID and #BKDFID != #DFID)
+      			{
+      				showmsg('代发编号重复，请重新输入');
+      				return (false);
+      			}
+      		}
+      		@count=@count+1;
+      	}
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TMPIDTYPE" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#TMP" TYPE="%-21s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+    "{    	
+	    dim @txno_bak as string;
+	    dim @tota as string;
+	    @txno_bak=$TXNO;
+	    $TXNO='9799';
+	    $FD67='1';
+	    commsend_001();
+	    @tota=callserver();
+	    if($FD12 != '0000')
+	    {
+	    	showmsg(geterror());
+	    	return(false);
+	    }
+	    setsel(#CIRTIFTYPE,@tota,'o5t20o1v1o2');
+	    $TXNO=@txno_bak;
+	    #CIRTIFTYPE=#TMPIDTYPE;
+	    enable(#CIRTIFTYPE,true);
+	    //showmsg('#CIRTIFTYPE===['+#CIRTIFTYPE+']');
+     }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6" COL="15" TYPE="%-1s"   NAME="#CIRTIFTYPE"  INPUT="SELECT" FUNCTIONS="T(1)">
+   <SELECT>
+        <OPTION VALUE="1" TITLE="1.身份证"/>
+	<!--
+        <OPTION VALUE="2" TITLE="2.户口薄"/>
+        <OPTION VALUE="3" TITLE="3.护照"/>
+        <OPTION VALUE="4" TITLE="4.军人证"/>
+        <OPTION VALUE="5" TITLE="5.回乡证"/>
+	    	<OPTION VALUE="6" TITLE="6.士兵证"/>
+	   		<OPTION VALUE="7" TITLE="7.港澳居民来往通行证"/>
+        <OPTION VALUE="E" TITLE="E.临时身份证"/>
+	    	<OPTION VALUE="F" TITLE="F.外国人居留证"/>
+	    	<OPTION VALUE="G" TITLE="G.警官证"/>
+	   	 	<OPTION VALUE="H" TITLE="H.其他证件"/>
+	    	<OPTION VALUE="I" TITLE="I.台湾同胞来往通行证"/>
+	-->
+   </SELECT>
+  </ITEM>
+  
+  <ITEM LINE="7" COL="15" TYPE="%-18s"  NAME="#CIRTIFNUM"   INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  	    //新增加将全角转换为半角处理080301
+	    dim @tota as string;
+ 	    dim @txno as string;
+	    if(#CIRTIFTYPE=='1'){
+	    	if(len(delspace(#CIRTIFNUM))!=15 and len(delspace(#CIRTIFNUM))!=18){
+	    		showmsg('身份证号码位数错误,必须为15或18位!');
+	    		return(false);
+	    	}
+	    }
+	    //调用短交易查询系统是否存在改证件类型、证件号码的客户，如果有则自动弹出客户名称
+	    //检查是否该证件已经登记
+	    $FD25='';
+	    @txno=$TXNO;
+	    $TXNO='9963';
+	    $FD62=#CIRTIFNUM;
+	    $FD67=#CIRTIFTYPE;
+	    commsend_001();
+	    $TXNO=@txno;
+	    @tota=callserver();
+	    if($FD12!='0000' and $FD12!='C019'){
+	    	showmsg(geterror());
+	    	return(false);
+	    }
+	    #KHNAME=delspace($FD25);
+	    show(#KHNAME,true);
+	    enable(#KHNAME,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="8" COL="15" TYPE="%-50s"  NAME="#KHNAME"      INPUT="TEXT"   FUNCTIONS="V(NB)"/>
+  <ITEM LINE="9" COL="15" TYPE="%17.2f" NAME="#AVBAL"       INPUT="TEXT"   FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="15" TYPE="%-19s"  NAME="#MGERNO"   INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+    "{
+       if(substr(#MGERNO,0,6)!= '621223')
+	{
+		showmsg('卡号的前6位必须为621223');
+		return(false);
+	}
+	if(len(rtrim(#MGERNO))!=19)
+	{
+	   showmsg('卡号长度不正确，请重新输入!');
+	   return(false);
+	}
+}"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11" COL="15" TYPE="%-11s"  NAME="#PHONENUM"   INPUT="TEXT" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	    if(len(#PHONENUM)!=11 and len(#PHONENUM)!= 0){
+	    	showmsg('手机号码长度错误!');
+	    	return(false);
+	    }
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+
+  <ITEM LINE="15" COL="65" NAME="#RAM_NAME"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+</TRANSACTION>
+
+
+

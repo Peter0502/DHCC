@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01100000000000000000000000000000" TITLE="4616        本代他柜面取款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<USERFUN NAME="saveprint">
+"{      
+	//用于补打凭证
+	dim @file as file;
+	dim @swtraceno as string;
+	dim @traceno as string;
+	dim @line as string;
+	dim @media as string;
+	dim @txamt as string;
+	dim @bal as string;
+	dim @bal2 as string;
+	dim @txtime  as string;
+	dim @txfee as string;
+	dim @feeamt as number;
+	dim @opbankno as string;
+	@feeamt=val(substr($FD88,1,8),0.01);
+	
+	//写文件，用于补打流水
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);  	
+	@swtraceno = substr($FD52,6,6);
+	@traceno = $FD4; 
+	if(#CZFLAG=='0')
+		@media='有卡';
+	else
+		@media='有折';
+	@txamt = ltrim(comma(itoa(#TXAMT,'%15.2f'),16));
+	@txfee = ltrim(comma(itoa(@feeamt,'%8.2f'),16));
+	@bal = ltrim(comma(itoa(val(substr($FD26,8,12),0.01),'%15.2f'),16));
+	@bal2 = ltrim(comma(itoa(val(substr($FD26,28,12),0.01),'%-15.2f'),16));
+       	@opbankno=#BANKCODE;
+	@file=openfile('../dat/YYHZ_'+$HDATE+'_'+$TLRNO+'_'+@swtraceno+'.dat','ab');
+	@line = '7616';
+	writeline(@file, @line);
+	@line = @swtraceno + '|' + @traceno + '|' + #SBANKCODE + '|' + #CARDNO + '|' + @media + '|' + #CUSTNAME + '|' + @txamt + '|' + @txfee + '|' + @bal + '|' + @bal2 + '|'+ @txtime + '|'+@opbankno+'|';
+	writeline(@file, @line);
+	closefile(@file);	
+				
+}"
+</USERFUN>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4616                       本代他柜面取款)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7616)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!-- 本代他卡折取款输入项显示 -->
+  <ITEM LINE="6"   COL="15" TYPE="%-10s" FUNCTIONS="T(卡折标志:!)"/>
+  <ITEM LINE="8"  COL="15" TYPE="%-10s" FUNCTIONS="T(开户行号:)"/>
+  <ITEM LINE="10"   COL="15" TYPE="%-10s" FUNCTIONS="T(卡折号码:)"/>
+  <ITEM LINE="12"  COL="15" TYPE="%-10s" FUNCTIONS="T(客户密码:)"/>
+  <ITEM LINE="14"  COL="15" TYPE="%-10s" FUNCTIONS="T(取出金额:)"/>
+  <ITEM LINE="16"  COL="15" NAME="#LAB1" INPUT="LABEL" VISABLE="FALSE" TYPE="%-16s" FUNCTIONS="T(取款人身份证号:)"/>
+  <ITEM TYPE="%-10s"   NAME="#XXXX" FUNCTIONS=""/>
+
+<ITEM NAME="#TXNUMBER" TYPE="%-4s"  FUNCTIONS="T(4616)"/>           <!---交易代码--->
+  <ITEM NAME="#TXNAME"  TYPE="%-20s" FUNCTIONS="T(本代他柜面取款)"/>       <!---交易名称--->
+  <!-- 本代他卡折取款输入项显示结束 -->
+  <!-- 本代他卡折取款输入项输入定义 -->
+  
+  <ITEM NAME="#STEP1"  TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno_bak as string;
+	dim @tota as string;
+	initfd();
+	@txno_bak=$TXNO;
+	$TXNO='7605';
+	$FD22='08';
+	commsend_001();
+	@tota=callagn(); 
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	$TXNO=@txno_bak;
+	setsel(#BANKCODE,@tota,'o5t20o1v8o2');  
+	$MSR2='';    
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  
+  <ITEM LINE="6" COL="25" NAME="#CZFLAG" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+    <SELECT LINE="6" COL="27">
+	<OPTION VALUE="0" TITLE="有卡"/>
+	<OPTION VALUE="1" TITLE="有折"/>
+    </SELECT>
+  </ITEM>
+   
+  <ITEM LINE="8" COL="25" NAME="#BANKCODE" TYPE="%8d" DEVICE="KEYBOARD" FUNCTIONS="T(03090000)V(NB)">
+  <SELECT>
+	<OPTION VALUE="03090000" TITLE="兴业银行"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM LINE="10" COL="25"  NAME="#CARDNO1" TYPE="%-19s" DEVICE="MSR" FUNCTIONS="V(NB)M($MSR2,1)">
+  <ONLOSTFOCUS>
+  "{
+  	//showmsg(#CARDNO1);
+	dim @txno_bak as string;
+	dim @tota as string;
+	initfd();
+	@txno_bak=$TXNO;
+	$FD22='08';
+
+		if($MSR2=='')
+		{
+		  showmsg('请使用读卡器!');
+	 	  return(false); 
+		}
+		
+		$FD67=#CZFLAG;
+		$FD47=#BANKCODE;
+		$FD75=$MSR2;
+		$FD76=$MSR3;
+
+		$TXNO='7606';
+		commsend_001();
+		@tota=callagn(); 
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		
+		#CARDNO=$FD33;
+		#CARDNO1=$FD33;
+		$TXNO=@txno_bak;
+
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+ <!-- <ITEM LINE="10" COL="25" NAME="#CARDNO" TYPE="%-19s" INPUT="TEXT" FUNCTIONS=""/> -->
+  <ITEM LINE="12" COL="25" NAME="#PASSWD" TYPE="%6d" DEVICE="PINPAD" FUNCTIONS="i()V(NB)"/>
+  <ITEM LINE="14" COL="25" NAME="#TXAMT" TYPE="%13.2f" DEVICE="KEYBOARD" FUNCTIONS="V(000000000100,999999999999)"/>
+  <ITEM NAME="#XTXAMT"  TYPE="%-16s" FUNCTIONS="X(#TXAMT)"/>
+  <ITEM NAME="#SBANKCODE" TYPE="%-40s"  FUNCTIONS="S(#BANKCODE,#BANKCODE)"/> 
+  
+  <ITEM NAME="#STEP2"  TYPE="%-1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	dim @txno_bak as string;
+	dim @tota as string;
+	show(#LAB1,false);
+	enable(#CERTNUM,false);    
+	if(#TXAMT &gt; 49999.99  )
+	{
+	     //show(#LAB1,true);
+	     //enable(#CERTNUM,true);    
+	}
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM LINE="16" COL="25" NAME="#CERTNUM" VISABLE="FALSE"  TYPE="%-19s" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		dim @l as number;
+		dim @tota as string;
+		@l = len(#CERTNUM);
+		initfd();
+		commsend_001();
+		if(@l == 15 or  @l == 18)
+		{
+				//showmsg('身份证号码位数正确');
+		}
+		else
+		{
+				showmsg('身份证号码位数错误');
+				return(false);
+		}
+		
+		if(@l == 18)
+		{
+				//暂时调用sp9659.c对输入身份证进行验证080222
+				commsend_001();
+				$FD16='9659';
+				$FD62=#CERTNUM;
+				@tota=callserver();	
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+		}
+		
+		//新增加将全角转换为半角处理080301
+		$FD16='9657';
+		$FD63=#CERTNUM;
+		callserver();
+		if($FD12!='0000'){
+	    		showmsg(geterror());
+	    		return(false);
+		}
+		#CERTNUM=delspace($FD63);		
+	}"
+	</ONLOSTFOCUS>
+ </ITEM>
+<ITEM  NAME="#CUSTNAME"  TYPE="%-50s"  FUNCTIONS=""/>
+  
+ <ITEM LINE="21" COL="59" TYPE="%-6s" NAME="#SUBMIT" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+   	<ONCLICK>
+   	"{
+		dim @tota1 as string;
+		dim @txno_bak as string;
+		dim @num as number;
+		dim @nm as string;
+	
+      		//增加授权
+		$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+		$TXNO='7697';			
+		commsend_001();
+		//showmsg('授权开始!');          
+		callserver();
+		if($FD12!='0000')
+		{
+		   showmsg(geterror());
+		   //showmsg('授权失败!');               
+		   return(false); 
+		}   	 
+		//授权完成   	  
+		  
+		$TXNO='9490';
+		commsend_001();
+		$FD21='01';
+		$FD64=$TLRNO;
+		$FD22='08';
+		@tota1=callserver(); 
+		if($FD12 != '0000')
+		{
+				showmsg(geterror());
+				return(false);
+		}
+
+		$TXNO=@txno_bak;
+		@num = val($FD39,0.0001);
+		
+		if(@num &lt;  #TXAMT)
+		{
+			 showmsg('钱箱金额不足!');
+			 return(false);	
+		}
+
+		dim @tota as string;
+		initfd();
+		$TXNO='7616';
+		$FD67=#CZFLAG;
+		$FD30=#CARDNO;
+		$FD22='08';
+		$FD39=itoa(#TXAMT*100,'%012.0f');     //平台用
+		$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+		$FD47=#BANKCODE;
+		
+		   $FD75=$MSR2;
+		   $FD76=$MSR3;					  
+		 
+		$FD79 = #PASSWD;
+		commsend_001();            
+		@tota=callagn();
+		if($FD12!='0000')
+		{
+		    if(substr($FD12,0,2)=='YY' and  $FD12!='YY05')
+	        {
+	           	showmsg(geterror());
+              return(false);
+	        }
+	        else
+	        {
+	          	showmsg(geterror());
+	        }
+		}
+		#CUSTNAME=$FD25;
+		#XXXX = $FD88;  
+		saveprint();	
+		runoutput(@tota);
+		rerun();
+		return(true);
+	}"
+   	</ONCLICK>
+  </ITEM>
+  </VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="本代他取款" CHECK="$FD12=0000">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+	print( 2,27,'本代他取款成功!');
+	print( 5,10,'帐    号:[19]',#CARDNO);
+	print( 6,10,'户    名:[50]',$FD25);
+	print( 7,10,'取款金额:[50]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+	print( 8,10,'账面余额:[16]',ltrim(comma(itoa(val(substr($FD26,8,12),0.01),'%15.2f'),16)));
+	print( 9,10,'可用余额:[16]',ltrim(comma(itoa(val(substr($FD26,28,12),0.01),'%15.2f'),16)));
+	print(10,10,'平台流水:[12]',substr($FD52,6,6));
+	print(11,10,'核心流水:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="本代他取款" CHECK="$FD12?0000">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+		dim @fd4 as string;
+		if(len($FD4) &lt; 6)
+		{
+		   @fd4='无';
+		}
+		else
+		{
+		   @fd4=$FD4;
+		}
+			
+		print( 2,10,'本代他取款失败!请查询平台流水及核心流水确认交易状态');
+		print( 5,10,'帐    号:[19]',#CARDNO);
+		print( 6,10,'取款金额:[50]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+		print( 8,10,'平台流水:[12]',substr($FD52,6,6));
+		print( 9,10,'核心流水:[6]',@fd4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印储蓄取款凭证" CHECK="$FD12=0000">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+	$KINDNO='00';
+	dim @txtime  as string;
+	dim @media as string;
+	dim @feeamt as number;
+	    
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if(#CZFLAG=='0')
+	@media='有卡';
+	else
+	@media='有折';
+	@feeamt=val(substr($FD88,1,8),0.01);
+	@feeamt=val(substr(#XXXX,1,8),0.01);
+	//modified by wanglg
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}
+	print( 2, 18,'                     [4]     [2]     [2]                           4616',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+	//print( 3,30,'         [40                 ]',$BRNAME);
+	print( 4,30,'\L0银银合作本代他取款\L1');
+	print( 5, 10,'开户行名:[20]               户    名:[16]                  [20]',#SBANKCODE,$FD25,#SBANKCODE);
+	print( 6, 10,'帐    号:[20]               卡折标志:[10]                        帐    号:[20]',#CARDNO,@media,#CARDNO);
+	print( 7, 10,'取款金额:[20]               账户金额:[20]              取款金额:[20]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)),ltrim(comma(itoa(val(substr($FD26,8,12),0.01),'%15.2f'),16)),ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+	print( 8, 10,'可用金额:[20]               交易日期:[8] [8]                 可用金额:[20]',ltrim(comma(itoa(val(substr($FD26,28,12),0.01),'%15.2f'),16)),$HDATE,@txtime,ltrim(comma(itoa(val(substr($FD26,28,12),0.01),'%15.2f'),16)));
+	print( 9, 10,'平台流水:[12]                       核心流水:[12]                      账户余额:[20]',substr($FD52,6,6),$FD4,ltrim(comma(itoa(val(substr($FD26,8,12),0.01),'%15.2f'),16)));
+	print(10, 10,'行内记账手续费:[24]     柜    员:[7]                           平台流水:[12]',ltrim(comma(itoa(@feeamt,'%8.2f'),16)),$FD7,substr($FD52,6,6));
+	print(11, 10,'受 理 行:[30]     柜员流水:[7]                           柜    员:[6]',$BRNAME,substr($FD126,2,6),$FD7);	
+	print(12,97,'交易日期:[8]  [8]',$HDATE,@txtime);
+	}"
+  </PRINT>
+</RESPONSE>
+
+<!----RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="请打印专用凭证" CHECK="$FD12=0000">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}
+	print_nxywpz1();
+	printacdtl_1();
+	print_snywpz2();
+}"
+</PRINT>
+</RESPONSE------>
+
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印普通凭证" CHECK="$FD12?0000">
+  NOTHING
+  </PACKAGE>
+	<PRINT>
+	"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}
+	//print( 7,30,'[5     ][20                 ]',$KINBR,$BRNAME);
+	print_nxywpz1();
+	print( 7,10,'本代他取款失败!请查询平台流水及核心流水确认交易状态');
+	print( 8,10,'开户行名:[60]',#SBANKCODE);
+	print( 9,10,'帐    号:[19]',#CARDNO);
+	print( 10,10,'取款金额:[50]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+	print(11,10,'平台流水号:[12]       核心流水:[6] ',substr($FD52,6,6),$FD4));
+	print(12,10,'交易日期:[8]  [8]         柜员:[6]',$HDATE,@txtime,$FD7);
+	}"
+  </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

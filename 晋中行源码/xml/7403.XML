@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="7403 上存记账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<COMMSEND>"{
+        initfd();
+		commsend_001();
+		$FD16=$TXNO;
+		$FD25=#JGMC;
+		$FD39=getitems('#SCJE');
+		//showmsg($FD39);
+		$FD44=#DQRQ;
+		$FD47=#HTH;
+		$FD84=getitems(atoi('#SCLV'));
+		$FD85=getitems(atoi('#YQLV'));
+		showmsg('$FD84='+$FD84+'   $FD85='+$FD85);
+		$FD91=#SCJG;
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(7403                         上存记账  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5403)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+   <!--输入变量-->
+   <ITEM LINE="7"   COL="5" TYPE="%-18s" FUNCTIONS="T(合同号:)"/>
+   <ITEM LINE="9"   COL="5" TYPE="%-18s" FUNCTIONS="T(上存机构:)"/>
+   <ITEM LINE="11"  COL="5" TYPE="%-14s" FUNCTIONS="T(机构名称:	 )"/>
+   <ITEM LINE="13"  COL="5" TYPE="%-14s" FUNCTIONS="T(上存金额:)"/>	
+   <ITEM LINE="15"  COL="5" TYPE="%-14s" FUNCTIONS="T(上存利率: )"/>
+   <ITEM LINE="17"  COL="5" TYPE="%-14s" FUNCTIONS="T(逾期利率: )"/>
+   <ITEM LINE="15"  COL="26" TYPE="%-2s" FUNCTIONS="T(‰)"/>
+   <ITEM LINE="17"  COL="26" TYPE="%-2s" FUNCTIONS="T(‰)"/>
+   <ITEM LINE="19"  COL="5" TYPE="%-14s" FUNCTIONS="T(到期日期: )"/>
+
+  <ITEM NAME="#HTH"	 INPUT="TEXT" LINE="7" COL="17" TYPE="%-8s" 	FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#SCJG" INPUT="TEXT" LINE="9" COL="17" TYPE="%-5s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+		if($KINBR != '10001')
+		{
+			showmsg('本交易只能由清算中心来做!');
+			return(false);
+		}
+		if(#SCJG == '10001')
+		{
+			showmsg('上存机构不能是清算中心!');
+			return(false);
+		}
+		dim @txno as string;
+		@txno=$TXNO;
+		$TXNO='9802';
+		$FD91=#SCJG;
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		$TXNO=@txno;
+
+		#JGMC=$FD25;
+		show(#JGMC,true);
+ }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#JGMC" LINE="11" COL="17" TYPE="%-50s"  INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#SCJE" LINE="13" COL="17" TYPE="%17.2f" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#XSCJE" TYPE="%-21s" FUNCTIONS="X(#SCJE)"/>
+ 
+  <ITEM NAME="#SCLV" LINE="15" COL="17"  TYPE="%-10s" ENABLE="FALSE" INPUT="TEXT"	FUNCTIONS="T(1.35)/>
+
+  <ITEM NAME="#YQLV" LINE="17" COL="17" TYPE="%-10s" ENABLE="FALSE" INPUT="TEXT"	FUNCTIONS="T(0.6)/>
+<!-- 
+  <ITEM NAME="#SCLV" LINE="15" COL="17" TYPE="%4.3f" ENABLE="FALSE"  INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#YQLV" LINE="17" COL="17" TYPE="%4.3f" ENABLE="FALSE"  INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+-->
+  <ITEM NAME="#DQRQ" LINE="19" COL="17" TYPE="%8d"    INPUT="TEXT"  FUNCTIONS="T()D()V(NB)"/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+          <PRINT>
+           "{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:7403');
+        print( 5, 13,'交易:上存记账');
+
+	print(07,20,'合同号:[8]',#HTH);
+	print(08,20,'上存机构:[5]',#SCJG);
+	print(09,20,'机构名称:[50]',#JGMC);
+	print(10,20,'上存金额:[21]',#XSCJE);
+	print(11,20,'上存利率:[10]‰',#SCLV);
+	print(12,20,'逾期利率:[10]‰',#YQLV);
+	print(13,20,'到期日期:[8]',#DQRQ);
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+        }"
+        </PRINT>
+</RESPONSE>
+<!--好象没有走帐
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+          <PRINT>
+           "{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 4, 25,'[5]',$KINBR);
+	print( 4, 10,'[30]',$BRNAME);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:7403');
+        print( 5, 13,'交易:上存记账');
+        print(7, 20,'操作员号:[4]',$FD7);
+	print(8, 20,'[6]',$FD4);
+	print(9, 20,'上存记帐');
+	print(10, 20,'[8]  [8]',$HDATE,@txtime);
+	printacdtl_1();          
+        print( 24,20,'备注:');
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+   }"      
+          </PRINT>
+</RESPONSE>
+-->
+</TRANSACTION>

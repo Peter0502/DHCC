@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1853   协议管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    refresh();
+    initfd();
+    commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-62s" FUNCTIONS=
+		"T( 1853                            协议管理)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(协议管理)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s"    FUNCTIONS="T($TXNO=1219)"/>
+	<ITEM LINE="5"	COL="3"	TYPE="%-12s" FUNCTIONS="T(操作  类型：)"/>
+	<ITEM  LINE="5" COL="15" NAME="#TXTYPE" TYPE="%-2s"  INPUT="SELECT"  FUNCTIONS="T(0)">
+		<SELECT>
+			<OPTION VALUE="0"	TITLE="新增" />
+			<OPTION VALUE="1"	TITLE="撤消" />
+			<OPTION VALUE="2"	TITLE="修改" />
+		</SELECT>
+	</ITEM>
+ 	<ITEM LINE="6"	COL="3"	TYPE="%-12s" FUNCTIONS="T(协议  类型：)"/>
+ 	<ITEM NAME="#ProTp" LINE="6" COL="15" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)">
+ 	<SELECT>
+		<OPTION VALUE="0"  TITLE="0.定期借记协议" />
+		<OPTION VALUE="1"  TITLE="1.实时借记协议" />
+	</SELECT>
+ 	</ITEM>
+ 	<ITEM LINE="7"	COL="3"	TYPE="%-12s"	FUNCTIONS="T(协议  号码：)"/>
+	<ITEM NAME="#PRTL_NO_D" LINE="7" COL="15" INPUT="TEXT" DEVICE="KEYBOARD" TYPE="%-20s"  FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			if(#PRTL_NO_D !=' ' and #TXTYPE !='0')
+			{
+				initfd();
+				commsend_001();
+				dim @buf as string;
+				$FD16 ='1123';
+				$FD18 ='pbp';
+				$FD27=#PRTL_NO_D;
+				
+				callagnpbp();
+				if($FD12 !='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				
+				#ACC_NO=$FD83;    //账号
+				#ACC_NAME=$FD26;   //户名
+				#PAYEE_BANK=$FD60;//收款人行号
+				#PAYEE_ACC_NO=$FD30;//收款人账号
+				#PAYEE_NAME=$FD25;//收款人名称
+				
+				if(#PAYEE_BANK != '')
+				{
+					initfd();
+					commsend_001();
+				
+					$FD16 ='1101';
+					$FD18 ='pbp';
+					$FD59=#PAYEE_BANK;   //行号
+				
+					callagnpbp();
+					if($FD12 !='0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+					#PAYEE_BANK_NAME = $FD76;
+				}
+				if('1'==#TXTYPE)
+				{
+					enable(#ACC_NO,false);
+					enable(#ACC_NAME,false);
+					enable(#PAYEE_BANK,false);
+					enable(#PAYEE_BANK_NAME,false);
+					enable(#PAYEE_ACC_NO,false);
+					enable(#PAYEE_NAME,false);
+					goitem(#OK);
+					return(true);
+				}
+				if ('2'==#TXTYPE)
+				{
+					show(#ACC_NO,true);
+					show(#ACC_NAME,true);
+					show(#PAYEE_BANK,true);
+					show(#PAYEE_BANK_NAME,true);
+					show(#PAYEE_ACC_NO,true);
+					show(#PAYEE_NAME,true);
+					return(true);
+				}
+				refresh();
+			}
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="9"	COL="3"	TYPE="%-12s"	FUNCTIONS="T(付款  账号：)"/>
+	<ITEM NAME="#ACC_NO" LINE="9" COL="15" INPUT="TEXT"  TYPE="%-20s"  FUNCTIONS="T()"></ITEM>
+	<ITEM LINE="10"	COL="3"	TYPE="%-12s" FUNCTIONS="T(付款  户名：)"/>
+	<ITEM NAME="#ACC_NAME" LINE="10" COL="15" INPUT="TEXT"  TYPE="%-40s"  FUNCTIONS="T()"></ITEM>
+	<ITEM TYPE="%16.2f"  NAME="#TX_AMT1" FUNCTIONS=""/>
+	<ITEM LINE="13"	COL="3"	TYPE="%-12s"	FUNCTIONS="T(收款人行号：)"/>
+	<ITEM NAME="#PAYEE_BANK" LINE="13" COL="15" INPUT="TEXT"  TYPE="%-20s"  FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+				
+			$FD16 ='1101';
+			$FD18 ='pbp';
+			$FD59=#PAYEE_BANK;   //行号
+				
+			callagnpbp();
+			if($FD12 !='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#PAYEE_BANK_NAME = $FD76;
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="14"	COL="3"	TYPE="%-12s"	FUNCTIONS="T(收款人行名：)"/>
+	<ITEM NAME="#PAYEE_BANK_NAME" LINE="14" COL="15" TYPE="%-40s"/>
+
+	<ITEM LINE="15"	COL="3"	TYPE="%-12s"	FUNCTIONS="T(收款人账号：)"/>
+	<ITEM NAME="#PAYEE_ACC_NO" LINE="15" COL="15" INPUT="TEXT"  TYPE="%-20s"  FUNCTIONS="T()V(NB)"/>
+
+	<ITEM LINE="16"	COL="3"	TYPE="%-12s" FUNCTIONS="T(收款人名称：)"/>
+	<ITEM NAME="#PAYEE_NAME" LINE="16" COL="15" INPUT="TEXT"  TYPE="%-40s"  FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			goitem(#OK);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="20"	COL="66" NAME="#OK" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+			initfd();
+			commsend_001();
+			
+			$FD35=#TXTYPE;         //操作类型
+			//$FD64=#YWTYPE;         //业务种类
+			$FD83=#ACC_NO;         //付款人账号
+			$FD26=#ACC_NAME;       //付款人名称
+			$FD27=#PRTL_NO_D;      //协议号
+			$FD60=#PAYEE_BANK;     //收款人行号
+			$FD30=#PAYEE_ACC_NO;   //收款人账号
+			$FD25=#PAYEE_NAME;     //收款人名称
+			if(#ProTp=='0')
+			{
+				$FD101='TERM';	   //协议类型
+			}else{
+				$FD101='REAL';
+			}
+			
+			$FD16='1219';
+			$FD18='pbp';
+			callagnpbp();
+			if($FD12 !='0000'){
+    	
+				showmsg(geterror());
+				return(false);
+			}
+			runoutput();
+			rerun();
+			refresh()
+		}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();
+		
+		print( 3,10,'协议类型：[12]              操作类型： [6]',getseltitle(#ProTp,#ProTp),getseltitle(#TXTYPE,#TXTYPE));
+		print( 4,10,'协议号码：[60]',#PRTL_NO_D);
+		print( 5,10,'付款账号：[60]',#ACC_NO);
+		print(6,10,'付款名称：[60]',#ACC_NAME);
+		print(7,10,'接收行号：[60]',#PAYEE_BANK);
+		print(8,10,'接收行名：[60]',#PAYEE_BANK_NAME);
+		print(9,10,'收款账号：[60]',#PAYEE_ACC_NO);
+		print(10,10,'收款名称：[60]',#PAYEE_NAME);
+		
+		PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+</TRANSACTION>

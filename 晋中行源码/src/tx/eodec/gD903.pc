@@ -1,0 +1,329 @@
+/**********************************************
+*程序名称: gD903.pc
+*功    能:未登折登记簿mdm_unprt_hst的记录进行合并;
+          存款人如果长期没有补打存折，那么将对未登折信息进行合并；
+          合并要求，某个时间点之前的数据（或半年，详情参考com_parm的BDZQX-补登折期限);
+          insert into com_parm values('BDZQX','1','补登折期限','2','180');---合并当前交易日期的180天前的日期之前的记录；
+          要求：活期户该期限前的取款和存款未登折记录合并，合并后，交易日期为合并的时间点，交易柜员为批量柜员;
+                删除合并日期之前的未登折信息,注意:未登折比数等信息的变化,如mdm_ac_rel.book_bal.
+                
+          注意：需要在com_parm表中维护BDZQX (补登折期限的条件)
+          
+*作    者:CHENGBO
+*时    间:20110329   9:30
+*修改记录:
+*     1、修改人
+*     2、修改时间
+*     3、修改内容
+<ECUN2  DESC="未登折明细登记失败!" />
+<ED903  DESC="合并未登折失败!" />
+*********************************************/
+
+#define MYSQLERR if(sqlca.sqlcode ) \
+    { \
+        sprintf(acErrMsg,"数据库错误[%d][%d]",sqlca.sqlcode,__LINE__); \
+        WRITEMSG \
+        strcpy (g_pub_tx.reply, "D903"); \
+        goto ErrExit; \
+    }
+#define MYRETERR if(ret) \
+    { \
+        sprintf(acErrMsg,"RET[%d]line[%d]",ret,__LINE__); \
+        WRITEMSG \
+        goto ErrExit; \
+    }
+#include <stdio.h>  
+#include <math.h>  
+#include <stdlib.h>
+#include <string.h>
+#include <varargs.h>
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#include "public.h"
+#include "com_branch_c.h"
+#include "com_parm_c.h"
+#include "com_sys_parm_c.h"
+#include "mdm_unprt_hst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "dd_mst_c.h"
+
+
+int distinct_dec_sel();
+int mdm_unprt_hst_delete();
+char *zip_tail(char *s);
+static void zip_struct(struct gl_sub_c*);
+char *key_strcat(char *,char *);
+
+gD903()
+{
+
+    int  ret=0;
+    long bdz_date=0;
+    
+    struct    com_sys_parm_c   sCom_sys_parm;
+    struct    com_parm_c       sCom_parm;
+    
+    memset(&sCom_sys_parm,0x00,sizeof(struct com_sys_parm_c));
+    memset(&sCom_parm,0x00,sizeof(struct com_parm_c));
+    
+    /*打开事务*/
+    ret=sql_begin(); 
+    if( ret ) 
+    {
+        sprintf( acErrMsg, "打开事务失败!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+    /***初始化全局变量 ***/
+    pub_base_sysinit();
+    
+    memcpy(g_pub_tx.tx_code , "D903" , 4);/**合并未登折**/
+    
+    /** 取流水号 **/
+    if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+    {
+         sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+         WRITEMSG
+         return 1;
+    }
+    /*取得当前系统日期*/
+    ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+    MYRETERR
+    
+    /**取得系统公共参数--补登折期限-即合并当前系统日期一定天数之前的数据**/
+    ret=Com_parm_Sel(g_pub_tx.reply,&sCom_parm,"parm_code='BDZQX' and parm_seqn=1");
+    MYRETERR 
+    
+    bdz_date=atoi(sCom_parm.val);
+    
+    /*计算系统日期一定天数前的日期*/
+    bdz_date=pub_base_daynumSUB(sCom_sys_parm.sys_date,bdz_date);
+    
+    vtcp_log("sCom_parm.val=[%s],bdz_date=[%d]",sCom_parm.val,bdz_date);
+    /*检查日期的合法性*/
+    ret = pub_base_dayvalicheck(bdz_date);
+    MYRETERR
+
+    /*累存累取处理*/ 
+    ret=mdm_unprt_hst_insert(bdz_date,"tx_date <=%ld  group by ac_id,add_ind order by ac_id,add_ind desc",bdz_date);   
+    MYSQLERR
+    
+    /*删除已经压缩了的老记录*/
+    ret=mdm_unprt_hst_delete(bdz_date);
+    MYSQLERR
+    
+    /* 登记交易流水 */
+    if (pub_ins_trace_log()) 
+    {
+        sprintf(acErrMsg, "登记交易流水错误!");
+        WRITEMSG
+        goto ErrExit;
+    }
+
+
+OkExit:
+    sql_commit();    /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+    sprintf(acErrMsg,"汇总OK!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 0;
+ErrExit:
+    sql_rollback();    /*--事务回滚--*/
+    sprintf(acErrMsg,"汇总ERROR!!![%s]",g_pub_tx.reply);
+    WRITEMSG
+    if(memcmp(g_pub_tx.reply,"0000",4)==0)
+    {
+        strcpy (g_pub_tx.reply, "D903");
+    }
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 1;
+}
+
+
+int mdm_unprt_hst_insert( date,fmtstr, va_alist)
+long date;
+char *fmtstr;
+va_dcl
+{
+    int       ret=0;
+    char      wherelist[1024];
+    va_list ap;
+    
+    vtcp_log("[%s][%d]   date=%ld",__FILE__,__LINE__,date);
+    EXEC   SQL   BEGIN   DECLARE   SECTION;
+        double    dCq_amt;
+        long      iAc_id;
+        char      cAdd_ind[2];
+        char      selcomm[1024];
+    EXEC   SQL   END     DECLARE   SECTION;
+    
+    dCq_amt=0.00;
+    iAc_id=0;
+    
+    double    dBook_bal=0.00;
+    long      lComp_acid=0;        /*ac_id赋初始值*/
+    char      nAdd_ind[2];
+    struct    mdm_unprt_hst_c     mdm_unprt_hst;
+    struct    dd_mst_c            sDd_mst;
+    struct    mdm_ac_rel_c        sMdm_ac_rel;
+    
+    memset(&mdm_unprt_hst,0x00,sizeof(struct mdm_unprt_hst_c));
+    memset(&sDd_mst,0x00,sizeof(struct dd_mst_c));
+    memset(&sMdm_ac_rel,0x00,sizeof(struct mdm_ac_rel_c));
+    memset(cAdd_ind,0,sizeof(cAdd_ind));
+    memset(nAdd_ind,0,sizeof(nAdd_ind));
+    
+    memset(wherelist, 0 , sizeof(wherelist));
+    memset(selcomm , 0 , sizeof(selcomm));
+    
+    
+    
+    va_start(ap);
+    vsprintf( wherelist , fmtstr , ap );
+    va_end(ap);
+
+    sprintf ( selcomm, "select distinct ac_id,add_ind,sum(tx_amt) from mdm_unprt_hst where %s", wherelist);
+
+    sqlca.sqlcode=0;
+    EXEC SQL PREPARE Cur_Dist FROM :selcomm;
+    if (sqlca.sqlcode)
+    {
+        vtcp_log("[%s][%d] prepare error  %d %s",__FILE__,__LINE__,sqlca.sqlcode, wherelist);
+        strcpy(g_pub_tx.reply, "D101");
+        return sqlca.sqlcode;
+    }
+    EXEC SQL DECLARE cur_01 CURSOR  FOR Cur_Dist;
+
+    EXEC SQL OPEN cur_01;
+    if (sqlca.sqlcode)
+    {
+        vtcp_log("open error  [%d]", sqlca.sqlcode);
+        EXEC SQL CLOSE cur_01;
+        strcpy(g_pub_tx.reply, "D101");
+        return -1;
+    }
+    while(1)
+    {
+        iAc_id=0;
+        dCq_amt=0.00;
+        memset(cAdd_ind,0,sizeof(cAdd_ind));
+    
+        EXEC SQL fetch cur_01  into :iAc_id,:cAdd_ind,:dCq_amt;
+        
+        if( sqlca.sqlcode==1403 )
+        {
+             vtcp_log("[%s][%d] 这里跳出[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+             break;
+        }
+        else if(sqlca.sqlcode)
+        {
+            sprintf(acErrMsg,"打开数据库错误[%d][%d]",sqlca.sqlcode,__LINE__); 
+            WRITEMSG 
+            strcpy (g_pub_tx.reply, "AT03"); 
+            return 1; 
+        }
+        vtcp_log("lComp_acid=[%ld] 和 iAc_id=[%ld] ,nAdd_ind=[%s] 和 cAdd_ind=[%s]",lComp_acid,iAc_id,nAdd_ind,cAdd_ind);
+        /*当ac_id或add_ind变换时插入记录*/
+        if(lComp_acid != iAc_id || ( lComp_acid == iAc_id && strcmp(nAdd_ind,cAdd_ind) != 0 )) 
+        {
+            if(lComp_acid != iAc_id)
+            {
+                dBook_bal = 0 ;
+                memset(&sMdm_ac_rel , 0 , sizeof(sMdm_ac_rel));
+                ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_id=%ld",iAc_id);
+                if(ret)
+                {
+                     strcpy(g_pub_tx.reply,"W015");
+                     sprintf(acErrMsg,"查询活期主文件表错误![%d]",ret);
+                     WRITEMSG
+                     return 1;
+                }
+                dBook_bal = sMdm_ac_rel.book_bal;
+                vtcp_log("[%s][%d] 登记薄上的book_bal=[%f]",__FILE__,__LINE__,dBook_bal);
+            }
+            else
+            {
+                vtcp_log("[%s][%d] new 此时的book_bal=[%f]",__FILE__,__LINE__,dBook_bal);
+            }
+                            
+            mdm_unprt_hst.trace_cnt=g_pub_tx.trace_cnt;
+            strcpy(mdm_unprt_hst.tx_br_no,g_pub_tx.tx_br_no);
+            mdm_unprt_hst.ac_id=iAc_id;
+            mdm_unprt_hst.ac_seqn=1;
+            strcpy(mdm_unprt_hst.add_ind,cAdd_ind);
+            if(cAdd_ind[0]=='1')
+            {    
+                 mdm_unprt_hst.trace_no=g_pub_tx.trace_no ;
+                 mdm_unprt_hst.tx_amt=dCq_amt;
+                 strcpy(mdm_unprt_hst.brf,"累存");
+                 mdm_unprt_hst.bal=dCq_amt + dBook_bal;
+                 dBook_bal = dBook_bal + dCq_amt ;
+                 mdm_unprt_hst.hst_cnt=1;
+            }
+            else if(cAdd_ind[0]=='0')  /*减少*/
+            {
+                 mdm_unprt_hst.trace_no=g_pub_tx.trace_no + 1;
+                 mdm_unprt_hst.tx_amt=dCq_amt;
+                 strcpy(mdm_unprt_hst.brf,"累取");
+
+                 mdm_unprt_hst.bal=dBook_bal - dCq_amt;/**是否还要增加不为负数的限制？**/
+                 dBook_bal = dBook_bal  - dCq_amt;
+                 mdm_unprt_hst.hst_cnt=2;
+            }
+            mdm_unprt_hst.tx_date=date;
+            strcpy(mdm_unprt_hst.tel,g_pub_tx.tel);
+            /*作为一个特殊标志,删除时使用
+            strcpy(mdm_unprt_hst.brf_code,"lclq");
+                
+            mdm_unprt_hst.tt_no=g_pub_tx.ejfno;
+            */
+            memcpy(mdm_unprt_hst.tx_code , g_pub_tx.tx_code , sizeof(mdm_unprt_hst.tx_code)-1);
+            
+            ret=Mdm_unprt_hst_Ins(mdm_unprt_hst,g_pub_tx.reply);
+            if(ret)
+            {  
+                sprintf(acErrMsg,"插入未登折明细表失败,ret=[%d]!",ret);
+                WRITEMSG
+                strcpy( g_pub_tx.reply,"CUN2" );
+                return 1;
+            }
+            lComp_acid=iAc_id;
+            strcpy(nAdd_ind,cAdd_ind);
+            vtcp_log("[%s][%d] last ac_id =[%ld] last add_ind =[%s]",__FILE__,__LINE__,lComp_acid,nAdd_ind);
+        }
+        else
+        {
+             sprintf(acErrMsg,"取得数据错误! iAc_id=[%ld] cAdd_ind=[%s]",iAc_id,cAdd_ind);
+             WRITEMSG
+             strcpy(g_pub_tx.reply,"D903" );
+             return 1;
+        }
+    }
+    EXEC SQL close cur_01;
+    return 0;
+}
+
+
+int mdm_unprt_hst_delete(date)
+long  date;
+{
+     vtcp_log("[%s][%d]  delete->date=[%ld]",__FILE__,__LINE__,date);
+     EXEC   SQL   BEGIN   DECLARE   SECTION;
+        long      lDate;
+     EXEC   SQL   END     DECLARE   SECTION;
+     lDate=0;
+     lDate=date;
+     /*删除mdm_unprt_hst里的老记录*/
+     EXEC SQL delete from mdm_unprt_hst where  (tx_code <>'D903' and tx_date =:lDate) or tx_date < :lDate;
+     if(sqlca.sqlcode ) 
+     { 
+        sprintf(acErrMsg,"删除记录错误[%d]",sqlca.sqlcode); 
+        WRITEMSG 
+        strcpy (g_pub_tx.reply, "AT03"); 
+        return 1; 
+     }
+     vtcp_log("[%s][%d] delete mdm_unprt_hst success!!",__FILE__,__LINE__);
+     return 0;
+}

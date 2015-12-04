@@ -1,0 +1,603 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9126 查询个人存款证明"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	
+	initfd();
+	$FD83=#ACTNO;
+	if(#XZBZ == '1')
+	{
+		$FD83=#LACTNO1;
+	}
+	call_9986();
+	
+	commsend_001();
+	$FD16='8216';
+	$FD30=#LACTNO1;
+	$FD31=#LACTNO2;
+	$FD32=#LACTNO3;
+	$FD33=#LACTNO4;
+	$FD37=#LACTNO5;
+	$FD89='114';
+	$FD58=#VOCNUM;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(9126                          打印个人存款证明)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8216)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="7" COL="15">
+  <ITEM LINE="0" COL="0" TYPE="%-8s" FUNCTIONS="T(证件类型)"/>
+  <ITEM LINE="1" COL="0" TYPE="%-8s" FUNCTIONS="T(证 件 号)"/>
+  <ITEM LINE="0" COL="9" NAME="#YID_TYPE"  INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="经营许可证"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="事业法人证书"/>
+		<OPTION VALUE="C" TITLE="工商核准号"/>
+		<OPTION VALUE="D" TITLE="其他证件"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+   </ITEM>
+   <ITEM NAME="#YSID_TYPE"   TYPE="%-20s"      FUNCTIONS="S(#YID_TYPE,#YID_TYPE)"/>
+   
+   	<!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+   <ITEM LINE="1" COL="9" NAME="#YID_NO" INPUT="TEXT"   TYPE="%-19s"  FUNCTIONS="">
+   	<ONLOSTFOCUS>
+   		"{
+   			if(len(#YID_NO) == 0)
+   			{
+   						showmsg('请输入证件号码');
+							return(false);
+   			}
+   			//add 20131030 wudawei start 调用身份核查
+  		  dim @res as string;  		 
+				if(#YID_TYPE=='1' or #YID_TYPE=='2')
+				{
+				//得到户名
+				  initfd();
+  			  commsend_001();
+			    $FD16='1712';
+			    $FD68=#YID_TYPE;
+			    $FD62=#YID_NO;
+			    callserver();
+	
+					#CUSTNAME   = delspace($FD26);
+					
+					
+				}
+				//add 20131030 end				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  LINE="2" COL="0"   TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+  
+	<ITEM LINE="3"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="4"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号1: )"  />
+  <ITEM LINE="5"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号2: )"  />
+  <ITEM LINE="6"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号3: )"  />
+  <ITEM LINE="7"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号4: )"  />
+  <ITEM LINE="8"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号5: )"  />
+  <ITEM LINE="9"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="10" COL="0"   TYPE="%-10s"   FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="11" COL="0"   TYPE="%-10s"   FUNCTIONS="T(截止日期:)"/>
+  <ITEM LINE="12" COL="0"   TYPE="%-10s"   FUNCTIONS="T(拼音名称:)"/>  
+ 	<ITEM LINE="3"  COL="9" NAME="#CUSTNAME"  TYPE="%-60s" FUNCTIONS="J(#CUSTNAME30)"/>
+ 	<ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+  <ITEM LINE="4"  COL="9" NAME="#LACTNO1"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+ 	<ONLOSTFOCUS>
+	"{  	
+		dim @id as string;  
+		if(len(#LACTNO1) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO1;
+	    $FD63=#YID_NO;
+	    
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}	else
+		{
+			showmsg('至少输入1个帐号');
+			return(false);
+		}			
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="5"  COL="9" NAME="#LACTNO2"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO2) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO2;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6"  COL="9" NAME="#LACTNO3"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO3) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO3;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="9" NAME="#LACTNO4"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO4) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO4;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8"  COL="9" NAME="#LACTNO5"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO5) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO5;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="9"  COL="9" NAME="#VOCTYPE" TYPE="%-4s"  FUNCTIONS="0027">
+	<SELECT>
+		<OPTION VALUE="0114" TITLE="0.个人存款证明"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM LINE="10"  COL="9" TYPE="%16d" NAME="#VOCNUM" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		commsend_001();
+		$FD16=9782;
+		if(#VOCTYPE=='0020')
+		{
+			$FD116=#VOCTYPE+#CARDNO+space(112)+#VOCNUM;
+		}
+		else
+		{
+			$FD116=#VOCTYPE+space(131)+#VOCNUM;
+		}
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="11" COL="9" NAME="#RQ" TYPE="%-8s" INPUT="TEXT"  FUNCTIONS="T()D()"> 
+  <ONLOSTFOCUS>"{
+  	if(len(#RQ) != 8){
+  	   showmsg('请输入正确的到期日期');
+  	   return(false);
+  	}
+  }"
+	</ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="12" COL="9" NAME="#KHYWM" TYPE="%-19s" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+  	if(len(#KHYWM) == 0){
+  	   showmsg('请输入拼音名');
+  	   return(false);
+  	}
+  }"
+	</ONLOSTFOCUS>	
+	</ITEM>
+	<ITEM LINE="13" COL="0" TYPE="%-16s" FUNCTIONS="T(手续费现转标志:!)"/>
+  <ITEM NAME="#XZBZ" INPUT="SELECT" LINE="13" COL="10" TYPE="%-1s" FUNCTIONS="T(1)">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="现金"/>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+  "{
+  		if(#XZBZ == '2')
+  		{
+  			enable(#DQFS,true);
+     		show(#LDQFS,true);
+     		show(#DQFS,true);
+     		enable(#ACTNO,true); 
+  		}else
+  		{
+  			enable(#DQFS,false);
+     		show(#LDQFS,false);
+     		show(#DQFS,false);
+     		
+     		enable(#ACTNO,false);    		
+  		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#LDQFS" LINE="14"  COL="0"  TYPE="%-10s" VISABLE="FALSE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="14" COL="9" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT" VISABLE="FALSE"  FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     show(#LLACTNO6,true);
+     enable(#ACTNO_CT,false);
+     enable(#ACTNO_IC,true);
+     show(#ACTNO_IC,true);
+     show(#ACTNO_CT,false);
+     
+     show(#LDRAW_PWD,true);
+     show(#DRAW_PWD,true);
+     enable(#DRAW_PWD,true);
+     }
+     if(#DQFS=='0')
+     {
+     show(#LLACTNO6,true);
+     enable(#ACTNO_IC,false);
+     enable(#ACTNO_CT,true);
+     show(#ACTNO_CT,true);
+     show(#ACTNO_IC,false); 
+     
+     show(#LDRAW_PWD,true);
+     show(#DRAW_PWD,true);    
+     enable(#DRAW_PWD,true);
+     }
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="15"  COL="0"  TYPE="%-14s" NAME="#LLACTNO6"  VISABLE="FALSE" FUNCTIONS="T(付款帐/卡 号: )"  />
+	
+
+	 
+	<ITEM NAME="#MSR2BAK" TYPE="%-37s"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#ACTNO_CT"   DEVICE="FIXMSR" INPUT="TEXT" LINE="15"  COL="9"  VISABLE="FALSE" TYPE="%-19s"  FUNCTIONS="V(NB)M($MSR2,1)" /><!---DEVICE="FIXMSR"--->
+  <ITEM NAME="#ACTNO_IC" INPUT="TEXT" DEVICE="ICC" LINE="15"  COL="9"  VISABLE="FALSE" TYPE="%-19s"  FUNCTIONS="V(NB)M($MSR2,1)"/>
+  <ITEM NAME="#ACTNO" TYPE="%-19s"  FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	dim  @sdate1 as string;
+			dim  @sdate2 as string;
+    	dim @tota as string;
+    	if(#DQFS=='0')
+     {
+     #ACTNO=#ACTNO_CT; 
+     }
+     if(#DQFS=='1')
+     {
+     #ACTNO=#ACTNO_IC;
+     }
+     //if($MSR2 =='')
+    // {
+    // showmsg('读取二磁信息错误！');
+		// return(false);
+    // }
+     if(substr(#ACTNO,0,6) =='621780')
+			{
+			@sdate1=substr($MSR2,20,4)+'31';
+			@sdate2=substr($HDATE,2,6);
+			 if(atoi(@sdate2)>=atoi(@sdate1))
+			 {
+			 showmsg('卡已到期，不能做此交易！');
+			 return(false);
+			 }
+			}
+
+   if((substr(#ACTNO,0,6)=='621223' or substr(#ACTNO,0,6)=='621780') )
+    {
+       showmsg('刷卡错误,请重试!');
+      // return(false);
+    }
+
+	#MSR2BAK=$MSR2;
+	#MSR3BAK=$MSR3;
+	$MSR2='';
+	$MSR3='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	 
+	 
+	 
+  <ITEM LINE="16"   COL="0" TYPE="%-10s" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(输入密码:)"  NAME="#LDRAW_PWD" />
+   <ITEM NAME="#DRAW_PWD"  LINE="16"  COL="9" TYPE="%6d" VISABLE="FALSE" DEVICE="PINPAD" INPUT="TEXT" FUNCTIONS="V(NB)i()">
+  <ONLOSTFOCUS>
+ "{
+    // 直接在这里校验密码了
+    // 9317 密码检查
+    if(substr(#ACTNO,0,6)!='621223' and substr(#ACTNO,0,6)!='621780')
+    {
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9317';
+    commsend_001();
+    $FD30=#ACTNO;
+    $FD79=getitems('#DRAW_PWD');
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    }
+    else if(substr(#ACTNO,0,6) == '621223' or substr(#ACTNO,0,6)=='621780')  //add by hxc 091121
+    {
+		initfd();
+		commsend_001();
+		$FD16='7007';
+		$FD30=#ACTNO;
+		$FD68='4';   //#OPTION ='04'
+		$FD79=#DRAW_PWD;
+		callagn();
+		if( $FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+	}
+ }"
+ </ONLOSTFOCUS>
+</ITEM>
+
+  </BLOCK>
+  <!--输出变量--->
+  
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+ 	<ITEM NAME="#JINE1"  TYPE="%-17.2f" FUNCTIONS="" />
+ 	<ITEM NAME="#JINE2"  TYPE="%-17.2f" FUNCTIONS="" />
+ 	<ITEM NAME="#JINE3"  TYPE="%-17.2f" FUNCTIONS="" />
+ 	<ITEM NAME="#JINE4"  TYPE="%-17.2f" FUNCTIONS="" />
+ 	<ITEM NAME="#JINE5"  TYPE="%-17.2f" FUNCTIONS="" />
+    
+  <ITEM LINE="25" COL="58" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+  
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(7,20,'交易成功!');
+		
+		print( 9,10,'客户名称:[50]',#CUSTNAME);
+		print(10,10,'证件号码:[20]',#YID_NO);
+		print(11,10,'凭证号码:[18]',#VOCNUM);
+		print(12,10,'帐号1:[20]',#LACTNO1);
+		print(13,10,'帐号2:[20]',#LACTNO2);
+		print(14,10,'帐号3:[20]',#LACTNO3);
+		print(15,10,'帐号4:[20]',#LACTNO4);
+		print(16,10,'帐号5:[20]',#LACTNO5);
+		
+		print(17,10,'流 水 号:[ 6]',$FD4);
+
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+<!----PRINTER---->
+  <RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印存款证明">
+  NOTHING
+  </PACKAGE>
+
+  <PRINT>
+  "{
+        dim @txtime  as string;
+        dim @yyyy as string;
+        dim @mm as string;
+        dim @dd as string;
+        dim @bzje1 as string;
+        dim @bzje2 as string;
+        dim @rmb1 as string;
+        dim @rmb2 as string;
+        dim @rmb3 as string;
+        dim @rmb4 as string;
+        dim @rmb5 as string;
+        
+        dim @line1   as number;
+        dim @line2   as number;
+        dim @counter as number;
+        dim @tmpstr  as string;
+        dim @sfeeamt  as string;
+        dim @heji as string;
+        
+        
+				@txtime=substr(#RQ,6,2)+'/'+substr(#RQ,4,2)+'/'+substr(#RQ,0,4);
+
+				@heji='';
+				@yyyy=substr(#RQ,0,4);
+				@mm = substr(#RQ,4,2);
+				@dd = substr(#RQ,6,2);
+
+				if($FD21=='01')
+				{
+					@rmb1='RMB';
+				}
+				if($FD22=='01')
+				{
+					@rmb2='RMB';
+				}
+				if(rtrim($FD23)=='01')
+				{
+					@rmb3='RMB';
+				}
+				if(rtrim($FD24)=='01')
+				{
+					@rmb4='RMB';
+				}
+				if(rtrim($FD58)=='01')
+				{
+					@rmb5='RMB';
+				}
+
+				
+				#JINE1 = val($FD39,0.01);
+				#JINE2 = val($FD40,0.01);	
+				#JINE3 = val($FD41,0.01);	
+				#JINE4 = val($FD42,0.01);	
+				#JINE5 = val($FD43,0.01);	
+				
+				print( 11,80,'[6][24]',' ',$HDATE);
+				
+        print( 13,18,'[1][32][27][9][7][6]',' ',#CUSTNAME,#YID_NO,@yyyy,@mm,@dd);
+        
+        print( 16,29,'[7][24]',' ',@txtime);
+        print( 16,25,'[24]',#KHYWM);
+        
+        print( 17,11,'[1][24]',' ',#YID_NO); 
+        
+        print( 21,14,'[3][27][21][3]/[17][8] ','1',$FD30,$FD25,@rmb1,#JINE1,$FD44);
+        if(len($FD31) == 0)
+        {
+        	print( 28,14,'[50]RMB/[17] ',@heji,#JINE1);
+        }
+        if(len($FD31)!=0)
+        {
+        	print( 22,14,'[3][27][21][3]/[17][8] ','2',$FD31,$FD26,@rmb2,#JINE2,$FD45);
+        	if(len($FD32) == 0)
+        	{
+        		print( 28,14,'[50]RMB/[17] ',@heji,#JINE1+#JINE2);
+        	}
+        }
+        if(len($FD32)!=0)
+        {
+        	print( 23,14,'[3][27][21][3]/[17][8] ','3',$FD32,$FD27,@rmb3,#JINE3,$FD46);
+        	if(len($FD33) == 0)
+        	{
+        		print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3);
+        	}
+				}
+				if(len($FD33)!=0)
+        {
+        	print( 24,14,'[3][27][21][3]/[17][8] ','4',$FD33,$FD38,@rmb4,#JINE4,$FD47);
+        	if(len($FD37) == 0)
+        	{
+        		print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3+#JINE4);
+        	}
+  			}
+  			if(len($FD37)!=0)
+        {
+        	print( 25,14,'[3][27][21][3]/[17][8] ','5',$FD37,$FD62,@rmb5,#JINE5,$FD28);
+        	print( 28,15,'[50]RMB/[17] ',@heji,#JINE1+#JINE2+#JINE3+#JINE4+#JINE5);
+   			}
+       // print( 29,69,'[30]',$BRNAME);
+
+ }"
+  </PRINT>
+  </RESPONSE>
+
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 3,10,'机构名称:[30]',$BRNAME); 
+		print( 3, 2,'代码:9126'); 
+		print( 3,5,'交易:个人存款证明打印'); 
+		
+		print( 7,10,'客户名称:[50]',#CUSTNAME);
+		print(8,10,'证件号码:[20]',#YID_NO);
+		print(9,10,'凭证号码:[18]',#VOCNUM);
+		print(10,10,'帐号1:[20]',#LACTNO1);
+		print(11,10,'帐号2:[20]',#LACTNO2);
+		print(12,10,'帐号3:[20]',#LACTNO3);
+		print(13,10,'帐号4:[20]',#LACTNO4);
+		print(14,10,'帐号5:[20]',#LACTNO5);
+	  printacdtl_1();
+   // print_sq(); 
+		
+		print(23,10,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[6]',$FD7);
+		print(23,5,'流 水 号:[ 6]',$FD4);
+		print(23,10,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

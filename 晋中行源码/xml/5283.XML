@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="00000000" TITLE="5283  同城查询打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{ commsend_001();
+     $MSGTYPE='03001';
+     $FD44=#STDATE;
+     $FD45=#ENDATE;
+     $FD91=#BRNO;
+   }" 
+</COMMSEND>
+<COMMRECV>
+  "{ commrecv_001();
+     runoutput();
+   }"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+	 "T(5283                          同城查询打印)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+	 "T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4283)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="9" COL="24" TYPE="%-10s" FUNCTIONS="T(机构编码:)"/>
+	<ITEM LINE="11" COL="24" TYPE="%-10s" FUNCTIONS="T(起始日期:)"/>
+	<ITEM LINE="13" COL="24" TYPE="%-10s" FUNCTIONS="T(终止日期:)"/>
+	<ITEM NAME="#BRNO" INPUT="TEXT" LINE="9" COL="34" TYPE="%-5s" FUNCTIONS="T()"/>
+  <ITEM NAME="#STDATE" INPUT="TEXT" LINE="11" COL="34" TYPE="%8s" FUNCTIONS="T()D()"/>
+  <ITEM NAME="#ENDATE" INPUT="TEXT" LINE="13" COL="34" TYPE="%8s" FUNCTIONS="T()D()">
+   <!--<ONLOSTFOCUS>
+    "{
+      if(atoi(#STDATE,'%8d') &gt; atoi(#ENDATE,'%8d')){
+         
+         showmsg('终止日期应不小于起始日期');
+         return(false);}
+     }"
+   </ONLOSTFOCUS>-->
+   </ITEM>
+   
+  <!--------------有些变量没有用,只是为了公共脚本执行时不报错------------------>
+ <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <!--<ITEM LINE="20" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>--->
+  
+  <ITEM LINE="20" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>
+    	"{
+        dim @tota as string;
+    		dim @ch as string;
+    		dim @bool as boolean;
+    		commsend_001();
+        $FD44=#STDATE;
+        $FD45=#ENDATE;
+        $FD91=#BRNO;
+        @tota=callserver();
+      if($FD12!='0000')
+      {
+			  showmsg(geterror());
+			  return(false);
+			}
+		  else
+		  {
+		   showall();
+		   @ch=showmsg('请选择打印方式：0:退出 1:主机 2:终端 ');
+		   if(@ch == '0')
+		   { autolist(@tota);list_work();
+		     return(true);
+		   }
+		   else if(@ch == '1')
+		   {
+		   autolist(@tota);
+		   list_work();
+		   return(true);
+		  }
+		  else
+		  {
+		  autolist(@tota);
+		  list_work();
+		  list_save('../tmp/test.dat');
+		  runoutput();
+		   }
+		  }
+		}"
+		</ONCLICK>
+  </ITEM>
+  <!-- 用到的传送变量-->
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="网点汇总打印" LINESPACE="1">
+NOTHING
+</PACKAGE>
+       
+<PRINT>
+   "{
+    // $KINDNO='00';
+    //打印变量设置开始
+    dim @date as string;
+    dim @brno as string;
+    dim @soutamt as string;
+    dim @soutnum as string;
+    dim @zoutamt as string;
+    dim @zoutnum as string;
+    dim @hzoutamt as string;
+    dim @hzoutnum as string;
+    dim @sinamt as string;
+    dim @sinnum as string;
+    dim @zinamt as string;
+    dim @zinnum as string;
+    dim @hzinamt as string;
+    dim @hzinnum as string;
+    //打印变量设置完毕
+    dim @brmxprint as string;
+    dim @tota as string;
+    dim @fldcnt as number;
+    dim @stnum as number;
+    dim @row as number;
+    dim @sdatenum as number;
+    dim @colnum as number;
+    dim @datenum as number;
+    dim @tmp as number;
+       @tota=getfiletxt('../tmp/test.dat');
+       @fldcnt=strfldcnt(@tota,'|')-1;
+       @stnum=0;
+       @brno=strfld(@tota,'|',@stnum);
+       @date=strfld(@tota,'|' ,1);
+       @row=0;
+       @sdatenum=0;
+       @colnum=0;
+       @tmp=0;
+       @datenum=fund(#STDATE,#ENDATE)+1;
+      while((@sdatenum &lt; @datenum) and (@stnum &lt; @fldcnt))
+      {
+        @date =substr(@date,0,4)+'-'+substr(@date,4,2)+'-'+substr(@date,6,2);
+        print(3+@row,14,' 单位：万元                                                                                                      日期: [10      ] ',@date);
+        print(4+@row,14,'┍━━━┯━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━┯━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━┑');
+        print(5+@row,14,'│      │                 提出                 │                  │                 提入                 │                  │');
+        print(6+@row,14,'│网点号┝━━━━━━━━━┯━━━━━━━━━┥     提出 汇总    ┝━━━━━━━━━┯━━━━━━━━━┥    提入汇总      │');
+        print(7+@row,14,'│      │  手工(金额/张数) │ 自动(金额/张数)  │    (金额/张数)   │ 手工(金额/张数)  │ 自动(金额/张数)  │   (金额/张数)    │');
+        print(8+@row,14,'┝━━━┿━━━━━┯━━━┿━━━━━┯━━━┿━━━━━┯━━━┿━━━━━┯━━━┿━━━━━┯━━━┿━━━━━┯━━━┥');
+        @brmxprint='';
+        while(@colnum &lt; 14 )
+        {
+          @tmp=@stnum + @colnum;
+          @brmxprint=@brmxprint+delspace(strfld(@tota,'|',@tmp)) +'|';
+          @colnum=@colnum +1;
+        }
+        
+        @brno=#BRNO;
+        @soutamt=substr(strfld(@brmxprint,'|',2), 0, len(strfld(@brmxprint,'|',2))-4);
+        @soutnum=strfld(@brmxprint,'|',3);
+        @zoutamt=substr(strfld(@brmxprint,'|',4), 0, len(strfld(@brmxprint,'|',4))-4);
+        @zoutnum=strfld(@brmxprint,'|',5);
+        @hzoutamt=substr(strfld(@brmxprint,'|',6), 0, len(strfld(@brmxprint,'|',6))-4);
+        @hzoutnum=strfld(@brmxprint,'|',7);
+        @sinamt=substr(strfld(@brmxprint,'|',8), 0, len(strfld(@brmxprint,'|',8))-4);
+        @sinnum=strfld(@brmxprint,'|',9);
+        @zinamt=substr(strfld(@brmxprint,'|',10), 0, len(strfld(@brmxprint,'|',10))-4);
+        @zinnum=strfld(@brmxprint,'|',11);
+        @hzinamt=substr(strfld(@brmxprint,'|',12), 0, len(strfld(@brmxprint,'|',12))-4);
+        @hzinnum=strfld(@brmxprint,'|',13);
+        print( 9+@row,14,'│[5  ] │[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│',@brno,@soutamt,@soutnum,@zoutamt,@zoutnum,@hzoutamt,@hzoutnum,@sinamt,@sinnum,@zinamt,@zinnum,@hzinamt,@hzinnum);
+        print(10+@row,14,'┝━━━┿━━━━━┿━━━┿━━━━━┿━━━┿━━━━━┿━━━┿━━━━━┿━━━┿━━━━━┿━━━┿━━━━━┿━━━┥');
+        print(11+@row,14,'│汇总  │[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│[10      ]│[6   ]│',@soutamt,@soutnum,@zoutamt,@zoutnum,@hzoutamt,@hzoutnum,@sinamt,@sinnum,@zinamt,@zinnum,@hzinamt,@hzinnum);
+        print(12+@row,14,'┕━━━┷━━━━━┷━━━┷━━━━━┷━━━┷━━━━━┷━━━┷━━━━━┷━━━┷━━━━━┷━━━┷━━━━━┷━━━┙');
+        @row=@sdatenum*11+11;
+        @stnum=@stnum+28;
+        @date=strfld(@tota,'|',@stnum+1);
+        @brmxprint='';
+        @sdatenum=@sdatenum+1;
+        @colnum=0;
+      }
+    }"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3501 账户信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='2601';
+
+	$FD23=getitems('#PRDT_CODE'); // 产品名称
+	//当是内部帐户时可以修改户名 20071124
+	if(substr(#ACTNO,0,1) != '9')
+	{
+		$FD25=getitems('#OLDNAME');  // 账户名称
+	}
+	else
+	{
+		$FD25=getitems('#NCUSTNAME');  // 内部账户名称
+	}
+	$FD30=getitems('#ACTNO');     // 账号
+	$FD34=getitems('#ACTSEQN');   // 账户序号
+	$FD68=getitems('#ACT_TYPE');  // 账户类型
+	$FD67=getitems('#INTST_TYPE');  // 是否计息
+	showmsg('$FD67='+$FD67);
+	$FD71=#SFKZZH;   // 开通标志
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3501                          账户信息维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <PAGE NAME="DEFAULT">
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2601)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+
+  <ITEM LINE="6"  COL="05" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		$TXNO='9741';
+		$FD30=#ACTNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#ACTNO',$FD30);
+		setitems('#ACTSEQN',$FD34);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6"  COL="45" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>
+  <ITEM NAME="#ACTSEQN" INPUT="TEXT" LINE="6"  COL="55" TYPE="%-4s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		dim @tota    as string;
+		@baktxno=$TXNO;
+		$MSGTYPE='03001';
+
+		$TXNO='9740';
+		$FD30=#ACTNO;
+		$FD34=#ACTSEQN;
+		commsend_001();
+		@tota = callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#SFKZZH = substr($FD89,0,1);     //开通标志
+		//showmsg('SFKZZH='+#SFKZZH);
+		#ZZHFLAG = #SFKZZH;
+		setitems('#SFKZZH',substr($FD89,0,1));
+		setitems('#CUR_NO',$FD21);
+		setitems('#PRDT_CODE',$FD23);
+		setitems('#CUSTNAME',$FD25);  //新户名
+		//当是内部帐户时可以修改户名 20071124
+		if(substr(#ACTNO,0,1) != '9')
+		{
+			setitems('#OLDNAME',$FD26);  //原户名
+		}
+		else
+		{
+			setitems('#SNAME',$FD26);  //内部原户名
+		}
+		//showmsg('SNAME='+#SNAME);
+		//showmsg('ONAME='+#OLDNAME);
+		//showmsg('NAME='+#CUSTNAME);
+		setitems('#PROD_NAME',$FD27);
+		setitems('#CIF_NO',$FD28);
+		setitems('#AVBAL',$FD41);
+		setitems('#INTST_TYPE',$FD67);
+		//setitems('#ACT_TYPE',$FD68);
+		setsel(#ACT_TYPE,@tota,'o5t20o1v1o2');
+		if($FD68 == ' ')  //定期种类没有这一项
+		{
+			show(#ACT_TYPE,false);
+			enable(#ACT_TYPE,true);
+		}
+		else
+		{
+			#ACT_TYPE=$FD68;
+			show(#ACT_TYPE,true);
+			enable(#ACT_TYPE,true);
+		}
+		if(substr(#ACTNO,0,1)!='1'){	//对公帐号可以改计息标志
+			enable(#INTST_TYPE,true);
+		}
+		else{	//对公帐号可以改计息标志
+			enable(#INTST_TYPE,true);
+		}
+		//当是内部帐户时可以修改户名 20071124
+		if(substr(#ACTNO,0,1) != '9')
+		{
+			show(#OOLDNAME,true);
+			show(#OLDNAME,true);
+			enable(#OLDNAME,false);
+			show(#SCNAME,true);
+			show(#CUSTNAME,true);
+			enable(#CUSTNAME,false);
+			//show(#NOTE,true);
+
+			show(#SOLDNAME,false);
+			show(#SNAME,false);
+			enable(#SNAME,false);
+			show(#SNEWNAME,false);
+			show(#NCUSTNAME,false);
+			enable(#NCUSTNAME,false);
+		}
+		else
+		{
+			show(#SOLDNAME,true);
+			show(#SNAME,true);
+			//enable(#SNAME,false);
+			show(#SNEWNAME,true);
+			show(#NCUSTNAME,true);
+			//enable(#NCUSTNAME,true);
+
+			show(#OOLDNAME,false);
+			show(#OLDNAME,false);
+			show(#SCNAME,false);
+			show(#CUSTNAME,false);
+			//show(#NOTE,false);
+		}
+		// 内部户 账户类型和二级账户不能获得焦点
+		if(substr(#ACTNO,0,1)=='9'){
+			enable(#SFKZZH,false);
+		}
+		showblock('ACTINFO',true,true);
+
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8"     COL="5"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="8"     COL="45"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="8" COL="15" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+    <ITEM LINE="9"  COL="3"  TYPE="%-77s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+
+  <BLOCK NAME="ACTINFO" LINE="10" COL="05" VISABLE="FALSE">
+  <!----不知这个变量有什么用
+   <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+  ---->
+
+   <ITEM LINE="0"  COL="0" TYPE="%-10s" FUNCTIONS="T(产品编号:!)"/>
+   <ITEM LINE="0"  COL="10" NAME="#PRDT_CODE" INPUT="TEXT"  TYPE="%-3s"  ENABLE="FALSE"/>
+   <ITEM LINE="0"  COL="15" NAME="#PROD_NAME" INPUT="TEXT"  TYPE="%-30s" ENABLE="FALSE"/>
+
+
+   <ITEM LINE="1"  COL="0" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM NAME="#CUR_NO" LINE="1"  COL="10" TYPE="%-2s"  INPUT="SELECT" FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCUR_NO" TYPE="%-6s" FUNCTIONS="S(#CUR_NO,#CUR_NO)"/>
+
+   <ITEM LINE="2"  COL="0" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+
+  <ITEM LINE="2"  COL="10" NAME="#LAVBAL" TYPE="%-21s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>
+
+   <ITEM LINE="3" COL="0" TYPE="%-10s"  FUNCTIONS="T(计息类型:!)"/>
+   <ITEM LINE="3" COL="10" NAME="#INTST_TYPE"  TYPE="%-1s" DEVICE="KEYBOARD" >
+	 <SELECT>
+		<OPTION VALUE="0" TITLE="0.不计息"/>
+		<OPTION VALUE="1" TITLE="1.利随本清"/>
+		<OPTION VALUE="2" TITLE="2.按日计息"/>
+		<OPTION VALUE="3" TITLE="3.按月计息"/>
+		<OPTION VALUE="4" TITLE="4.按季计息"/>
+		<OPTION VALUE="5" TITLE="5.按年计息"/>
+	 </SELECT>
+   </ITEM>
+  <ITEM NAME="#SINTST_TYPE" TYPE="%-8s" FUNCTIONS="S(#INTST_TYPE,#INTST_TYPE)"/>
+
+  <ITEM LINE="4"  COL="0" TYPE="%-10s"  FUNCTIONS="T(帐户类型:!)"/>
+  <ITEM LINE="4"  COL="10" NAME="#ACT_TYPE"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="" >
+  	<ONLOSTFOCUS>
+  	"{
+  			enable(#SFKZZH,true);
+  			if(#ACT_TYPE == '6')
+		    {
+			     enable(#SFKZZH,false);
+		    }
+		}"
+	</ONLOSTFOCUS>
+   </ITEM>
+  <ITEM NAME="#SACT_TYPE"  TYPE="%-20s" FUNCTIONS="S(#ACT_TYPE,#ACT_TYPE)"/>
+ <!--
+		<OPTION VALUE="1" TITLE="1.基本户"/>
+ 		<OPTION VALUE="2" TITLE="2.一般户"/>
+		<OPTION VALUE="3" TITLE="3.专用存款户"/>
+		<OPTION VALUE="4" TITLE="4.临时存款户"/>
+		<OPTION VALUE="5" TITLE="5.个人存款户（储蓄户）"/>
+		<OPTION VALUE="6" TITLE="6.协定（理财）户"/>
+		<OPTION VALUE="7" TITLE="7.公积金活期户（个人）"/>
+-->
+  <ITEM LINE="4"  COL="35" TYPE="%-10s"  FUNCTIONS="T(二级账户:!)"/>
+  <ITEM NAME="#ZZHFLAG"  TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM LINE="4"  COL="45" NAME="#SFKZZH"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="V(NB)T(1)" >
+  <SELECT>
+   <OPTION VALUE="0" TITLE="0.不开通"/>
+   <OPTION VALUE="1" TITLE="1.开通"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+    //原来未开通二级账户的账户 若余额不为零，不可开二级账户
+    if(#ZZHFLAG == '0')
+    {
+      if(#AVBAL &gt; 0 and #SFKZZH == '1')
+      {
+        showmsg('一级账户余额非零 不可开通二级账户!');
+	return(false);
+      }
+    }
+    //判断原来账户是否有未销户的子账户
+    else if(#ZZHFLAG == '1' and #SFKZZH == '0')
+    {
+     dim @tota as string;
+     $FD123='select count(*) from sub_dd_mst where ac_no='+chr(39)+rtrim(#ACTNO)+chr(39)+' and ac_sts='+chr(39)+'1'+chr(39);
+     $FD16='9598';
+     @tota=callserver();
+     if($FD12!='0000'){
+             showmsg(geterror());
+             return(false);
+     }
+     //showmsg(@tota);
+     if(substr(@tota,0,1)!='0'){
+             showmsg('账户存在未销户的子账户 不可改为不开通!');
+             return(false);
+     }
+    }
+    if(#SFKZZH == '1' and #INTST_TYPE != '0')
+    {
+       showmsg('若开通子账户,主账户请选择不计息!');
+       return(false);
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="5"  COL="0" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="5"  COL="10" NAME="#CIF_NO" INPUT="TEXT"  TYPE="%-8s"  ENABLE="FALSE"/>
+  <!----帐户为内部帐时，可以修改户名---->
+  <ITEM LINE="6"  COL="0"  NAME="#SOLDNAME" TYPE="%-10s" FUNCTIONS="T(原 户 名:)" VISABLE="FALSE"/>
+  <ITEM LINE="6"  COL="10" NAME="#SNAME"    TYPE="%-60s" INPUT="LABEL" FUNCTIONS=""  />
+  <ITEM LINE="7"  COL="0"  NAME="#SNEWNAME" TYPE="%-10s" FUNCTIONS="T(新 户 名:)" VISABLE="FALSE"/>
+  <ITEM LINE="7"  COL="10" NAME="#NCUSTNAME" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)J(#CUSTNAME30)"  />
+
+  <ITEM LINE="6"  COL="0"  NAME="#OOLDNAME" TYPE="%-10s" FUNCTIONS="T(帐户户名:)" VISABLE="FALSE"/>
+  <ITEM LINE="6"  COL="10" NAME="#OLDNAME"  TYPE="%-60s" INPUT="TEXT" FUNCTIONS=""  />
+  <ITEM LINE="7"  COL="0"  NAME="#SCNAME"   TYPE="%-10s" FUNCTIONS="T(客户户名:)" VISABLE="FALSE"/>
+  <ITEM LINE="7"  COL="10" NAME="#CUSTNAME" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="J(#CUSTNAME30)"   />
+<!--2008/12/8 14:29 del by martin
+  <ITEM LINE="9"  COL="10" NAME="#NOTE"    TYPE="%-60s" FUNCTIONS="T(提示:此交易强制将帐户户名更改为客户户名!!!)" VISABLE="FALSE"/>
+-->
+  <ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+  </BLOCK>
+
+  </PAGE>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+
+
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+<RESPONSE>
+<!--	<PACKAGE DEVICE="SCREEN" DESC="结算户与储蓄户的互转成功">
+-->
+	<PACKAGE DEVICE="SCREEN" DESC="账户信息维护成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+//		print(8, 25,'结算户与储蓄户的互转成功！');
+		print(8, 25,'账户信息维护成功！');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3501');
+		print( 5,13,'交易:帐户信息维护');
+
+		print( 7,20,'帐    号:[20                  ]             帐户序号:[ 4]',#ACTNO,#ACTSEQN);
+		if(substr(#ACTNO,0,1) != '9')
+		{
+			print( 8,20,'客 户 号:[8       ]                         户    名:[60]',#CIF_NO,#OLDNAME);
+		}
+		else
+		{
+			print( 8,20,'户    名:[60]',#NCUSTNAME);
+		}
+		print( 9,20,'产品名称:[30                            ]   币    种:[ 8]',#PROD_NAME,#SCUR_NO);
+		print(10,20,'帐户类型:[20                  ]             计息类型:[ 8]',#SACT_TYPE,#SINTST_TYPE);
+		print(11,20,'余    额:[21                   ]',#LAVBAL)
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+
+

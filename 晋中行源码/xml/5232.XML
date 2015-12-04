@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="5232 中心提入手工打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+
+}"
+</COMMSEND>
+
+
+<COMMRECV>"{
+	commrecv_001();
+	// $PBLINE='05';
+	// $KINDNO='02';
+
+
+    	dim @rowcnt as number;              	
+      dim @tmpstr as string;	
+    	dim @tota as string;	
+
+    	dim @fldid as number; 
+    	 
+    	dim @fldcount as number;    
+    	dim @sumfld as number;  
+    	   	 	
+      dim @rows as number;    
+    	dim @cnt as number;   // 总记录数        
+    	dim @cnt1 as number;   // 提入贷方  记录数  
+    	dim @cnt2 as number;   // 提入借方  记录数     
+    	dim @cnt3 as number;   // 其他票据  记录数 
+    	
+    	dim @amt as number;   // 总金额     	
+    	dim @amt1 as number;   // 提入贷方  金额  
+    	dim @amt2 as number;   // 提入借方  金额     
+    	dim @amt3 as number;   // 其他票据  金额     	   
+    	    	
+      dim @payer_no as string;  	
+      dim @payee_no as string;
+      dim @tmp_amt as string;  
+      	
+      dim @strtxamt as string;       
+      dim @tx_type as string;       
+     //  dim @printtimes as string;                	
+
+
+      $FD91=getitems('#BR_NO');  
+      $FD67=getitems('#FIRST_FLG');  
+      $FD53=getitems('#BAT_NO'); 
+            	
+    	$FD2=$OPNBR;
+    	$FD3=$KINBR;
+    	$FD5=$HDATE;
+    	$FD7=$TLRNO;
+    	$FD10=$TTYNAME;
+    	$FD16='4232';
+    	$FD79=space(6);
+    	
+    	@tota=callserver();
+ 
+      if($FD12!='0000'){
+    		   showmsg(geterror());
+    		   return(false);
+    	}
+    	
+      #OTOTA=@tota;    
+        	        
+      if(autolist(@tota))
+      {
+            list_work();
+      }   	      
+
+	    #OTXDAY=substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+
+    	@sumfld=strfldcnt(#OTOTA,'|');      	 	
+
+    	if(@sumfld &lt; 16)
+    	{
+    	    return(false);
+    	}    
+
+    	#OUTDATA='';      
+      @cnt=0;
+      @cnt1=0;
+      @cnt2=0;
+      @cnt3=0;      
+    	@amt1=0;
+    	@amt2=0;
+    	@amt3=0;    	
+    	@rowcnt=0;   
+    	@fldid=8;  
+    	  	
+    	@tmpstr=strfld (#OTOTA,'|',@fldid); 
+
+    	@tmpstr=substr(strfld (#OTOTA,'|',@fldid),1,len(strfld (#OTOTA,'|',@fldid))-1);
+    	#BAT_NO=@tmpstr;  
+
+    // 取一行数据  8 个域   根据类型放入相应的串中  得到各类的 张数 和 金额   	 
+   	while ( (atoi(@tmpstr) == atoi(#BAT_NO)) and ( @fldid &lt; @sumfld ) )
+    	{
+    	    @fldcount=0; 	
+          switch(strfld (#OTOTA,'|',@fldid+6))
+          {
+              case '提入贷方':  
+                    while(@fldcount &lt; 8)
+                    { 
+              	         #OUTDATA=#OUTDATA + strfld (#OTOTA,'|',@fldid+@fldcount) + '|';
+              	         @fldcount = @fldcount + 1;
+              	         if (@fldcount == 5)
+              	         {
+              	           @amt1=@amt1+ atoi( strfld (#OTOTA,'|',@fldid+@fldcount) );
+              	         }
+              	    }
+                    @cnt1=@cnt1+1;
+    	              break;    	              
+              case '提入借方' :  	    
+                    while(@fldcount &lt; 8)
+                    {
+              	         #OUTDATA=#OUTDATA + strfld (#OTOTA,'|',@fldid+@fldcount) + '|';
+              	         @fldcount = @fldcount + 1;
+              	         if (@fldcount == 5)
+              	         {
+              	           @amt2=@amt2+ atoi( strfld (#OTOTA,'|',@fldid+@fldcount) );
+              	         }              	         
+              	    } 
+              	    @cnt2=@cnt2+1;
+              	    break;
+              default:	           	    
+               	    while(@fldcount &lt; 8)
+                    { 
+              	         #OUTDATA=#OUTDATA + strfld (#OTOTA,'|',@fldid+@fldcount) + '|';
+              	         @fldcount = @fldcount + 1;
+              	         if (@fldcount == 5)
+              	         {
+              	           @amt3=@amt3+ atoi( strfld (#OTOTA,'|',@fldid+@fldcount) );
+              	         }              	         
+              	    }
+              	    @cnt3=@cnt3+1;              	    
+              	    break;
+          }          
+          @fldid=@fldid+8;            
+    	    if(   @fldid &gt;= @sumfld )
+    	    {
+    	        // showmsg('Break');
+    	         break;
+    	    }     
+    	    	    
+    	    @tmpstr=strfld (#OTOTA,'|',@fldid) ;
+    	    @tmpstr=substr(@tmpstr,1,len(@tmpstr)-1); 
+     	}
+     	
+      #OUTCNT1=itoa(@cnt1);
+      #OUTCNT2=itoa(@cnt2);
+      #OUTCNT3=itoa(@cnt3);
+
+      if ( @cnt1 &gt; 0 )
+      {
+          #OUTAMT1=itoa(@amt1);              
+      }
+      else
+      {
+          #OUTCNT1='';
+          #OUTAMT1='';      
+      }
+      
+      if ( @cnt2 &gt; 0 )
+      {
+   
+          #OUTAMT2=itoa(@amt2);      
+      }
+      else
+      {
+          #OUTCNT2='';         
+          #OUTAMT2='';      
+      } 
+                   
+      if ( @cnt3 &gt; 0 )
+      {
+          #OUTAMT3=itoa(@amt3);      
+      }
+      else
+      {
+          #OUTCNT3='';      
+          #OUTAMT3='';      
+      }
+      
+      @cnt=@cnt1+@cnt2+@cnt3;
+      @amt=@amt1-@amt2+@amt3;
+      #OUTAMT=itoa(@amt);
+      #OUTCNT=itoa(@cnt);
+
+      
+      list_del();
+      	
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(5232                          中心提入手工打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+    
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9741)"/>  <!-- 改成一个不需要授权的交易 9741 ，否则要授权两次 -->
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <PAGE NAME="DEFAULT">
+
+  <ITEM LINE="9"  COL="30" TYPE="%-12s" FUNCTIONS="T(第一次打印:!)"/>  
+  <ITEM LINE="9"  COL="42"  TYPE="%-1s" NAME="#FIRST_FLG" DEVICE="KEYBOARD" FUNCTIONS="T(Y)">
+    <SELECT LINE="0" COL="0">
+        <OPTION VALUE="Y" TITLE="是"/>
+        <OPTION VALUE="N" TITLE="否"/>
+    </SELECT>
+  <ONLOSTFOCUS>"{
+     if( #FIRST_FLG == 'N' )
+     {
+            showblock('BATINFO',true,true);	   
+     }
+     else
+     {
+            showblock('BATINFO',false,true);	
+     }
+  	 
+  }"
+  </ONLOSTFOCUS>    
+  </ITEM> 
+  
+  <ITEM LINE="11"  COL="30" TYPE="%-10s" FUNCTIONS="T(网点号码:)"/>  
+  <ITEM NAME="#BR_NO" INPUT="TEXT" LINE="11"  COL="40" TYPE="%5d"  FUNCTIONS="V(NB)" />
+    
+  <BLOCK NAME="BATINFO" LINE="13" COL="0" VISABLE="FALSE" >   
+  <ITEM LINE="0"  COL="30" TYPE="%-10s" FUNCTIONS="T(批 次 号:)"/>  
+  <ITEM NAME="#BAT_NO" INPUT="TEXT" LINE="0"  COL="40" TYPE="%10d"  FUNCTIONS="V(NB)" />
+  </BLOCK>   
+
+  <ITEM LINE="16"  COL="20" NAME="#OUTAMT" TYPE="%-16s" FUNCTIONS="J(#OUTXAMT)"  /> 
+  <ITEM LINE="16"  COL="40" NAME="#UOUTAMT" TYPE="%-30s" FUNCTIONS="U(#OLTXAMT)"  /> 
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+
+  <!------------打印变量------------>
+   <ITEM NAME="#BRNAME" TYPE="%-10s" FUNCTIONS="T()"/> 
+   <ITEM NAME="#KINBR" TYPE="%-5s" FUNCTIONS="T()"/> 
+     
+   <ITEM NAME="#PRINTTIMES" TYPE="%-3s" FUNCTIONS="T()"/> 
+    
+  <ITEM NAME="#OTXCOUNT" TYPE="%-4d" FUNCTIONS="T()"/> 
+    
+  <ITEM NAME="#OTXDAY" TYPE="%-10s" FUNCTIONS="T()"/> 
+
+  <ITEM NAME="#OTOTA" TYPE="%-5000s" FUNCTIONS="T()"/>  <!-- @tota  -->
+  
+  <ITEM NAME="#TITLEDATA" TYPE="%-500s" FUNCTIONS="T()"/>  <!-- 提入贷方  -->
+  <ITEM NAME="#OUTDATA" TYPE="%-2000s" FUNCTIONS="T()"/>  <!-- 提入贷方  -->
+
+  <ITEM NAME="#OUTCNT" TYPE="%-4s" FUNCTIONS="T()"/>  <!-- 总张数 -->                                                            
+  <ITEM NAME="#OUTCNT1" TYPE="%-3s" FUNCTIONS="T()"/>  <!-- 提入贷方 提入张数 -->
+  <ITEM NAME="#OUTCNT2" TYPE="%-3s" FUNCTIONS="T()"/>  <!-- 提入借方 提入张数 -->  
+  <ITEM NAME="#OUTCNT3" TYPE="%-3s" FUNCTIONS="T()"/>  <!-- 其他票据 提入张数 -->   
+  
+  <ITEM NAME="#OUTAMT1" TYPE="%-16s" FUNCTIONS="T()"/>  <!-- 提入贷方 金额 -->
+  <ITEM NAME="#OUTAMT2" TYPE="%-16s" FUNCTIONS="T()"/>  <!-- 提入借方 金额 -->  
+  <ITEM NAME="#OUTAMT3" TYPE="%-16s" FUNCTIONS="T()"/>  <!-- 其他票据 金额 -->     
+                                                         
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+    
+ </PAGE>
+ 
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER"  DESC="同城提入清单">
+		NOTHING
+    </PACKAGE>
+	<INIT>
+	"{
+		$KINDNO='00';
+	}"
+	</INIT>
+	
+    <PRINT>"{  
+    	dim @rowcnt as number;              	
+      dim @tmpstr as string;	
+    	dim @tota as string;	
+
+    	dim @fldid as number; 
+    	 
+    	dim @fldcount as number;    
+    	dim @sumfld as number;  
+    	   	 	
+      dim @rows as number;    
+    	dim @cnt as number;   // 总记录数        
+    	dim @cnt1 as number;   // 提入贷方  记录数  
+    	dim @cnt2 as number;   // 提入借方  记录数     
+    	dim @cnt3 as number;   // 其他票据  记录数 
+    	
+    	dim @amt as number;   // 总金额     	
+    	dim @amt1 as number;   // 提入贷方  金额  
+    	dim @amt2 as number;   // 提入借方  金额     
+    	dim @amt3 as number;   // 其他票据  金额     	   
+    	    	
+      dim @payer_no as string;  	
+      dim @payee_no as string;
+      dim @tmp_amt as string;  
+      	
+      dim @strtxamt as string;       
+      dim @tx_type as string;       
+    	
+    	@rows=1;
+    	@cnt=atoi(#OUTCNT);
+    	  		    
+ if ( 0 &lt; len(#OUTDATA) )
+{       
+  print( 2,14,                   '                                同城提入清单');
+  print( 4,14,                   '      [10      ]（[5   ] ）                      [10        ]                提入批次号:  [10]   ',$BRNAME,$KINBR,#OTXDAY,itoa(atoi(#BAT_NO)) );
+  print( 5,14,                   '    ┍━━━━━━━┯━━━━━━━━━━━━┯━━━━━━━━━━━━┯━━━━━━━━━━┑');
+  print( 6,14,                   '    │  提入类型    │      付款人账号        │      收款人账号        │      金    额      │');
+  print( 7,14,                   '    ┝━━━━━━━┿━━━━━━━━━━━━┿━━━━━━━━━━━━┿━━━━━━━━━━┥');
+  
+  while ( @rows &lt;= @cnt ) 
+  {
+  @tx_type=strfld (#OUTDATA,'|', (@rows-1)*8 + 6 ) ;  
+  @payer_no=strfld (#OUTDATA,'|', (@rows-1)*8 + 3 ) ;
+  @payee_no=strfld (#OUTDATA,'|', (@rows-1)*8 + 4 ) ;
+  @tmp_amt =strfld (#OUTDATA,'|', (@rows-1)*8 + 5 ) ;
+  #PRINTTIMES = strfld (#OUTDATA,'|', (@rows-1)*8 + 7 ) ;  
+  
+  print( 7 + @rows * 2 - 1  , 14,'    │ [12        ] │   [18              ]   │   [18              ]   │   [16            ] │',@tx_type,@payer_no,@payee_no,substr(@tmp_amt,0,len(@tmp_amt)-4 ));
+
+  if(@rows+1 &lt;= @cnt  )
+  {
+  print( 7 + @rows * 2  ,14,     '    ┝━━━━━━━┿━━━━━━━━━━━━┿━━━━━━━━━━━━┿━━━━━━━━━━┥');
+  }
+  else
+  {
+  print(7 + @rows * 2 ,14,       '    ┝━━━━━━━┿━━━━┯━━━━━━━┿━━━━━━━━━━━━┷━━━━━━━━━━┥');
+  }
+  @rows = @rows + 1 ;  
+  }
+  
+  print(8+@cnt*2,14,             '    │  汇总张数    │[3]     │  汇总金额    │[16            ]                              │',#OUTCNT, #OUTAMT);
+  print(9+@cnt*2,14,             '    ┝━━━━━━━┿━━━━┷━━━━━━━┿━━━━━━━━━━━━┯━━━━━━━━━━┥');
+  print(10+@cnt*2,14,            '    │              │                        │                        │                    │');
+  print(11+@cnt*2,14,            '    ┕━━━━━━━┷━━━━━━━━━━━━┷━━━━━━━━━━━━┷━━━━━━━━━━┙');
+  print(12+@cnt*2,14,            '      第 [3] 次打印                  复核:                     操作员(签章): [4   ]',#PRINTTIMES, $TLRNO);
+
+} 
+
+    }"
+    </PRINT>
+
+</RESPONSE>
+
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="同城提入汇总凭证">
+      NOTHING
+	</PACKAGE>
+	
+	<PRINT>"{
+		$KINDNO='00';	
+	print( 4,14,'                                   同城提入汇总凭证                                               ');
+  print( 6,14,'     （[5   ] ）                 [10        ]                 提入批次号:  [10]   ',$KINBR,#OTXDAY,itoa(atoi(#BAT_NO)) );
+  print( 7,14,'  ┍━━━━━━━━┯━━━━━━━┯━━━━━━━━━━┯━━━━━━━━━━━━━━━━┑    ');
+  print( 8,14,'  │    提入种类    │   提入张数   │      金  额        │                                │    ');
+  print( 9,14,'  ┝━━━━━━━━┿━━━━━━━┿━━━━━━━━━━┥                                │    ');
+  print(10,14,'  │  提入贷方汇总  │    [3]       │  [16            ]  │                                │    ', #OUTCNT1, #OUTAMT1);
+  print(11,14,'  ┝━━━━━━━━┿━━━━━━━┿━━━━━━━━━━┥                                │    ');
+  print(12,14,'  │  提入借方汇总  │    [3]       │  [16            ]  │            网点签章            │    ', #OUTCNT2, #OUTAMT2);
+  print(13,14,'  ┝━━━━━━━━┿━━━━━━━┿━━━━━━━━━━┥                                │    ');
+  print(14,14,'  │   其他票据     │    [3]       │  [16            ]  │                                │    ', #OUTCNT3, #OUTAMT3);
+  print(15,14,'  ┝━━━━━━━━┿━━━━━━━┿━━━━━━━━━━┥                                │    ');
+  print(16,14,'  │   轧差金额     │  提入贷方    │  [16            ]  │                                │    ', #OUTAMT );
+  print(17,14,'  ┝━━━━━━━━┿━━━━━━━┷━━━━━━━━━━┷━━━━━━━━━━━━━━━━┥    ');
+  print(18,14,'  │ 合计金额(大写) │[30                          ]                  ￥ [16            ]   │    ', #UOUTAMT, #OUTAMT );
+  print(19,14,'  ┕━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙    ');
+  print(20,14,'     第 [3] 次打印                  复核:                     操作员(签章): [4   ]',#PRINTTIMES, $TLRNO);
+ 	
+	}"
+	</PRINT>	
+</RESPONSE>
+
+
+
+
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+      NOTHING
+	</PACKAGE>
+	
+	<PRINT>"{
+
+       if(autolist(#OTOTA))
+      {
+            list_work();
+         //   list_print();
+      }
+				
+	}"
+	</PRINT>	
+</RESPONSE>
+
+
+
+</TRANSACTION>
+
+
+
+

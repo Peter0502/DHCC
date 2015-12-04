@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4503 本金核销"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$TXNO='3303';
+	$FD16='3303';
+	$FD65='3303';
+	$FD79=#PASSWD;
+	$FD90=#VOCTYPE;
+	$FD107=substr($FD107,0,185)+getitems('#TXAMT')+substr($FD107,201,78);
+	$FD120=substr($FD120,0,98)+'2'+#VOCTYPE+getitems('#VOCNUM')+getitems('#TXAMT')+substr($FD120,134,24);
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4503                            本金核销)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <PAGE NAME="DEFAULT">
+
+  <!--输入变量-->
+  <ITEM LINE="06"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款账号:)"/>
+  <ITEM LINE="6"     COL="45"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="07"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款户名:)" NAME="#S_NAME" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="09"  COL="19"  TYPE="%-14s" FUNCTIONS="T(核销金额:)"/>
+  <ITEM LINE="8"     COL="45"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="11"  COL="19"  TYPE="%-14s" FUNCTIONS="T(贷款余额:)" NAME="#S_AVBAL" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="12"  COL="19"  TYPE="%-14s" FUNCTIONS="T(表内欠息:)" NAME="#S_BNINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="19"  TYPE="%-14s" FUNCTIONS="T(表外欠息:)" NAME="#S_BWINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="14"  COL="19"  TYPE="%-14s" FUNCTIONS="T(复利欠息:)" NAME="#S_FLINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="15"  COL="19"  TYPE="%-14s" FUNCTIONS="T(未结本金利息:)" NAME="#S_WJBJINT" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"  COL="19"  TYPE="%-14s" FUNCTIONS="T(未结复利利息:)" NAME="#S_WJFLINT" INPUT="LABEL" VISABLE="FALSE"/>
+
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="06"   COL="29	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		initfd();
+		commsend_001();
+        $FD65='3303';
+		$FD107=#ACTNO;
+        $FD16='9816';
+        callserver();
+        if($FD12!='0000')
+        {
+			showmsg(geterror());
+            return(false);
+        }
+    #MYAMT=val($FD39,0.01);
+		#NAME   =substr($FD107,28,60);  //户名已经改为60位
+		#AVBAL  =comma((substr($FD107,88,14)+'.'+substr($FD107,102,2)),21);
+		#BNINT  =comma((substr($FD107,104,14)+'.'+substr($FD107,118,2)),21);
+		#BWINT  =comma((substr($FD107,120,14)+'.'+substr($FD107,134,2)),21);
+		#FLINT  =comma((substr($FD107,136,14)+'.'+substr($FD107,150,2)),21);
+		#WJBJINT=comma((substr($FD107,152,14)+'.'+substr($FD107,166,2)),21);
+		#WJFLINT=comma((substr($FD107,168,14)+'.'+substr($FD107,182,2)),21);
+		show(#NAME,true);
+		show(#AVBAL,true);
+		show(#BNINT,true);
+		show(#BWINT,true);
+		show(#FLINT,true);
+		show(#WJBJINT,true);
+		show(#WJFLINT,true);
+		show(#S_NAME,true);
+		show(#S_AVBAL,true);
+		show(#S_BNINT,true);
+		show(#S_BWINT,true);
+		show(#S_FLINT,true);
+		show(#S_WJBJINT,true);
+		show(#S_WJFLINT,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#NAME" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="07"  COL="29	" TYPE="%-60s" 	FUNCTIONS=""/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+ <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="6" COL="55" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#MYAMT" TYPE="%17.2f">
+    <ONLOSTFOCUS>"{
+  		#TXAMT=#MYAMT;
+  		}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TXAMT" 	INPUT="TEXT" 	LINE="09"  COL="29	" TYPE="%17.2f" 	FUNCTIONS="">
+  	<ONLOSTFOCUS>"{
+  		if(#TXAMT !=#MYAMT){
+  		  showmsg('金额与审批不符，请检查');
+  		  return(false); 
+  		  }
+  		}"
+  	</ONLOSTFOCUS>
+  </ITEM>		
+  <ITEM NAME="#AVBAL" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="11"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#BNINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="12"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#BWINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="13"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#FLINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="14"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WJBJINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="15"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WJFLINT" 	INPUT="LABEL" 	VISABLE="FALSE" LINE="16"  COL="29	" TYPE="%-21s" 	FUNCTIONS=""/>
+  
+  </PAGE>
+  <!-- 第2页 -->
+  <ITEM LINE="21" COL="59" NAME="#SECOND_PAGE" TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON">
+	<ONCLICK>"{
+		loadpage('PAGE2');
+	}"
+	</ONCLICK>
+  </ITEM>
+
+  <PAGE NAME="PAGE2">
+  <ITEM LINE="06"  COL="05"  TYPE="%-44s" FUNCTIONS="T(                              【借方】)"/>
+  <ITEM LINE="07"  COL="10"  TYPE="%-60s" FUNCTIONS="T(─────────────────────────────────────)"/>
+  <ITEM LINE="09"  COL="15"  TYPE="%-12s" FUNCTIONS="T(131核销科目:)"/>
+  <ITEM LINE="10"  COL="19"  TYPE="%-10s" FUNCTIONS="T(户    名:)"  NAME="#S_DNAME"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="11"  COL="19"  TYPE="%-10s" FUNCTIONS="T(币    种!:)" NAME="#S_CURCD"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="12"  COL="19"  TYPE="%-10s" FUNCTIONS="T(余额方向:)"  NAME="#S_DCRDB"   INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="19"  TYPE="%-10s" FUNCTIONS="T(余    额:)"  NAME="#S_DAVBAL"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="15"  COL="19"  TYPE="%-10s" FUNCTIONS="T(凭证种类!:)" NAME="#S_VOCTYPE" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="16"  COL="19"  TYPE="%-10s" FUNCTIONS="T(凭证号码:)"  NAME="#S_VOCNUM"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="17"  COL="19"  TYPE="%-10s" FUNCTIONS="T(发 生 额:)"  NAME="#S_XTXAMT"  INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="18"  COL="19"  TYPE="%-10s" FUNCTIONS="T(用    途!:)" NAME="#S_YT"      INPUT="LABEL" VISABLE="FALSE"/>
+
+  <ITEM NAME="#DACTNO" 	INPUT="TEXT" 	LINE="09"   COL="29	" TYPE="%-19s" 	FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#CON2"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		commsend_001();
+        $FD16='9712';
+		$FD120=#DACTNO;
+        callserver();
+        if($FD12!='0000')
+        {
+			showmsg(geterror());
+            return(false);
+        }
+
+		#DNAME=substr($FD120,20,50);
+		#CURCD=substr($FD120,96,2);
+		#DCRDB=substr($FD120,156,2);
+		#DAVBAL=comma(substr($FD120,80,14)+'.'+substr($FD120,94,2),21);
+		#VOCTYPE='299';
+		#YT='12';
+		show(#DNAME,true);
+		show(#CURCD,true);
+		show(#DCRDB,true);
+		show(#DAVBAL,true);
+		show(#VOCTYPE,true);
+		show(#VOCNUM,true);
+		show(#YT,true);
+		show(#S_DNAME,true);
+		show(#S_CURCD,true);
+		show(#S_DCRDB,true);
+		show(#S_DAVBAL,true);
+		show(#S_VOCTYPE,true);
+		show(#S_VOCNUM,true);
+		show(#S_YT,true);
+		enable(#CURCD,false);
+		enable(#VOCTYPE,false);
+		enable(#YT,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#DNAME" 	INPUT="LABEL" 	LINE="10"   COL="29	" TYPE="%-60s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#CURCD" 	INPUT="SELECT" 	LINE="11"   COL="29	" TYPE="%-2s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="01" TITLE="0.人民币"/>
+        <OPTION VALUE="12" TITLE="0.英镑"/>
+        <OPTION VALUE="13" TITLE="0.港元"/>
+        <OPTION VALUE="14" TITLE="0.美元"/>
+        <OPTION VALUE="15" TITLE="0.瑞士法郎"/>
+        <OPTION VALUE="27" TITLE="0.日元"/>
+        <OPTION VALUE="28" TITLE="0.加元"/>
+        <OPTION VALUE="29" TITLE="0.澳元"/>
+        <OPTION VALUE="38" TITLE="0.欧元"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#DCRDB" 	INPUT="LABEL" 	LINE="12"   COL="29	" TYPE="%-2s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#DAVBAL" 	INPUT="LABEL" 	LINE="13"   COL="29	" TYPE="%-21s" 	FUNCTIONS="" VISABLE="FALSE"/>
+  <ITEM NAME="#VOCTYPE"	INPUT="SELECT" 	LINE="15"   COL="29	" TYPE="%-3s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="299" TITLE="其他凭证"/>
+  </SELECT>
+  </ITEM>
+  <ITEM NAME="#VOCNUM" 	INPUT="TEXT" 	LINE="16"   COL="29	" TYPE="%-16s" 	VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#XTXAMT" 	INPUT="LABEL" 	LINE="17"   COL="29	" TYPE="%-21s" 	FUNCTIONS="X(#TXAMT)" VISABLE="FALSE"/>
+  <ITEM NAME="#YT" 	    INPUT="SELECT" 	LINE="18"   COL="29	" TYPE="%-12s" 	FUNCTIONS="" VISABLE="FALSE">
+  <SELECT>
+        <OPTION VALUE="12" TITLE="核销本金"/>
+  </SELECT>
+  </ITEM>
+
+  </PAGE>
+	
+  <ITEM NAME="#PASSWD" 	    TYPE="%-6s" 	FUNCTIONS=""/>
+  <ITEM NAME="#WSSRNO"      TYPE="%-6s"     />
+  <ITEM NAME="#OTXDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OSTDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OENDAY"      TYPE="%-10s"    />
+  <ITEM NAME="#OOPAMT"      TYPE="%-21s"    />
+  <ITEM NAME="#OTXAMT"      TYPE="%-21s"    />
+  <ITEM NAME="#OAMT"        TYPE="%-21s"    />
+  <ITEM NAME="#UAMT"        TYPE="%17.2f"    FUNCTIONS="J(#OUAMT)"/>
+  <ITEM NAME="#OUAMT"       TYPE="%-40s"    FUNCTIONS="U(#UAMT)"/>
+  <ITEM NAME="#OAVBAL"      TYPE="%-21s"    />
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+</RESPONSE>
+
+<!--
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="38" DESC="请打印贷款本金核销贷方凭证">
+LNHXBJ||@actno|@jjno|@name|@lnkd|@amt|@stday|@enday|@opamt|@txamt|@avbal|@nomrate|@overrate|@acno|@tp|@wssrno
+</PACKAGE>
+<INIT>
+"{
+	#OTXDAY=substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+	#OSTDAY=substr(@stday,0,4)+'-'+substr(@stday,4,2)+'-'+substr(@stday,6,2);
+	#OENDAY=substr(@enday,0,4)+'-'+substr(@enday,4,2)+'-'+substr(@enday,6,2);
+	#OOPAMT=comma(@opamt,21);
+	#OTXAMT=comma(@txamt,21);
+	#OAMT='￥'+ltrim(comma(@amt,21));
+	#UAMT=itoa(atoi(@amt)*100,'%016.0f');
+	#OUAMT='￥'+ltrim(comma(@amt,21));
+	#OAVBAL=comma(@avbal,21);
+}"
+</INIT>
+<PRINT>"{
+print( 2,55,'\H0贷款本金核销贷方凭证\H1');
+print( 4,14,'      交易日期: [10        ]                                                 流 水 号: [5  ]',#OTXDAY,@wssrno);
+print( 5,14,'┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print( 6,14,'┃  机构名称: [60                                                          ]                    ┃',$BRNAME);
+print( 7,14,'┃  贷款账号: [19                   ]        借 据 号: [20             ]   科 目 号:[7      ]  ┃',@actno,@jjno,@acno);
+print( 8,14,'┃  户    名: [60                                                ]                              ┃',@name);
+print( 9,14,'┃  产品名称: [50                                                ]                              ┃',@lnkd);
+print(10,14,'┃--------------------------------------------------------------------------------------------┃');
+print(11,14,'┃  输入金额: 人民币[40                                     ]    [21                         ]         ┃',#OUAMT,#OAMT);
+print(12,14,'┃--------------------------------------------------------------------------------------------┃');
+print(13,14,'┃  起止日期:  [10      ]  到  [10      ]                                                     ┃',#OSTDAY,#OENDAY);
+print(14,14,'┃  贷款本金: [21                   ]   合同利率(月):[10         ]   逾期利率(月):[10        ]         ┃',#OOPAMT,@nomrate,@overrate);
+print(15,14,'┃  累计还本: [21                   ]                                                           ┃',#OTXAMT);
+print(16,14,'┃  尚欠本金: [21                   ]                                                           ┃',#OAVBAL);
+print(17,14,'┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+}"
+</PRINT>
+</RESPONSE>
+-->
+<RESPONSE>
+ <PACKAGE DEVICE="PRINTER" DESC="打印本金核销普通凭证">
+ NOTHING
+ </PACKAGE>
+ <PRINT>
+ "{
+        dim @txtime  as string;
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:4503');
+        print( 5, 13,'交易:本金核销');
+	print( 7, 20,'贷款帐号:[19]',#ACTNO);
+	print( 8, 20,'贷款户名:[60]',#NAME);
+	print( 9, 20,'核销金额:[17]',itoa(#TXAMT,'%17.2f'));
+	print( 10, 20,'贷款余额:[21]',#AVBAL);
+	printacdtl_1();
+        print_sq();
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+ }"
+ </PRINT>
+</RESPONSE>
+<!-----------<RESPONSE>
+ <PACKAGE DEVICE="PRINTER" DESC="打印本金核销专用凭证">
+ NOTHING
+ </PACKAGE>
+ <PRINT>
+ "{
+        dim @txtime  as string;
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 4, 25,'[5]',$KINBR);
+	print( 4, 10,'[20]',$BRNAME);
+	print( 4, 5,'操作员号:[4]',$FD7);
+	print( 5, 15,'[6]',$FD4);
+	print( 5, 28,'本金核销');
+	print( 5, 22,'[8]  [8]',$HDATE,@txtime);
+	printacdtl_1();
+ }"
+ </PRINT>
+</RESPONSE>
+-------------->
+</TRANSACTION>
+

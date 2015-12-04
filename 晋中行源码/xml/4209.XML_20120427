@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="4209 虚拟子帐户存取销"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD25=#SNAME;
+	$FD30=#TACCT;
+	$FD31=#SACCT;
+	$FD39=itoa(#JYAMT*100,'%016.0f');
+	$FD40=itoa(#SBAL*100,'%016.0f');
+	$FD67=#OPCODE;
+	$FD68=#CSTSIND;
+	$FD86=#SDSCPT;
+	$FD89=#DSCPT;
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+    "T(4209                                   虚拟子帐户存取销)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2213)"/>
+
+  <ITEM LINE="6"  COL="10"  TYPE="%-10s" FUNCTIONS="T(母 帐 号:)" />
+  <ITEM LINE="8"  COL="10"  TYPE="%-10s" FUNCTIONS="T(子 帐 号:)" />
+  <ITEM LINE="10" COL="10"  TYPE="%-12s" FUNCTIONS="T(子帐号户名:)" />
+  <ITEM LINE="12" COL="10"  TYPE="%-12s" FUNCTIONS="T(子帐号余额:!)" />
+  <ITEM LINE="14" COL="10"  TYPE="%-10s" FUNCTIONS="T(存取标志:!)" />
+  <ITEM LINE="16" COL="10"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)" />
+  <ITEM LINE="16" COL="35"  TYPE="%-10s" FUNCTIONS="T(摘要选项:!)" />
+  <ITEM LINE="18" COL="10"  TYPE="%-10s" FUNCTIONS="T(金    额:)" />
+
+  <ITEM LINE="6" COL="22" NAME="#TACCT" TYPE="%-24s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="" />
+  <ITEM LINE="8" COL="22" NAME="#SACCT" TYPE="%-24s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="" >
+	<ONLOSTFOCUS>
+		"{
+			dim @txnobak as string;
+			dim @tota as string;
+			@txnobak=$TXNO;
+			$TXNO='9949';
+			$FD30=#TACCT;
+			$FD31=#SACCT;
+			commsend_001();
+			$TXNO=@txnobak;
+			@tota=callserver();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+				}
+			#SNAME=$FD25;
+			#SBAL=atoi($FD40)/100;
+			setsel(#DSCPT,@tota,'o5t10o1v2o2');
+			enable(#SBAL,false);
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="10" COL="22" NAME="#SNAME" TYPE="%-50s" INPUT="LABEL" DEVICE="KEYBOARD" FUNCTIONS=""/>
+  <ITEM LINE="12" COL="22" NAME="#SBAL" TYPE="%15.2f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="" />
+  <ITEM LINE="14" COL="22" NAME="#OPCODE" TYPE="%1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)" >
+	<SELECT>
+		<OPTION VALUE="1" TITLE="存款"/>
+		<OPTION VALUE="2" TITLE="取款"/>
+		<OPTION VALUE="3" TITLE="销户"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="16" COL="22" NAME="#CSTSIND" TYPE="%1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="现金"/>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="16" COL="47" NAME="#DSCPT" TYPE="%2s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(01)">
+	<SELECT>
+	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#SDSCPT" TYPE="%-10s" FUNCTIONS="S(#DSCPT,#DSCPT)" >
+	<ONLOSTFOCUS>
+		"{
+			if(#DSCPT=='31'){
+				enable(#SDSCPT1,true);
+				show(#SDSCPT1,true);
+				}
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="16" COL="63" NAME="#SDSCPT1" TYPE="%-10s" INPUT="TEXT" VISABLE="FALSE" ENABLE="FALSE" FUNCTIONS="" >
+	<ONLOSTFOCUS>
+		"{
+			#SDSCPT=#SDSCPT1;
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="18" COL="22" NAME="#JYAMT" TYPE="%15.2f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="" />
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+<!--返回变量 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE>NOTHING</PACKAGE>
+	<PRINT>"{
+		dim @opc as string;
+		print(3,25,'虚拟子帐户存取销');
+		print(5,29,'交易成功');
+		print(6,10,'-------------------------------------------------');
+		print(7,15,'母帐号：[20]  子帐号:[20]',#TACCT,#SACCT);
+		if(#OPCODE=='1'){@opc='存款';}
+		  else if(#OPCODE=='2'){@opc='取款';}
+		  else{ @opc='销户';}
+		print(8,15,'操作:[4]',@opc);
+		print(9,15,'交易金额：[20]', ltrim(comma(itoa(#JYAMT,'%15.2f'),14)));
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

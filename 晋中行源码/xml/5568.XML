@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111111100000000000000000000" TITLE="5568 扣税明细打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+    //$FD44=#TX_DATE;
+    //$FD16=$TXNO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(5568                          扣税明细打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5666)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="10" COL="20" TYPE="%-12s" FUNCTIONS="T(交 易 机 构:)"/>
+  <ITEM LINE="11" COL="20" TYPE="%-12s" FUNCTIONS="T(接 收 日 期:)"/>
+  <ITEM LINE="11" COL="50" TYPE="%-18s" FUNCTIONS="T(一般是税务机关日期:)"/>
+  <ITEM LINE="12" COL="20" TYPE="%-12s" FUNCTIONS="T(交 易 序 号:)"/>
+  <ITEM LINE="13" COL="20" TYPE="%-12s" FUNCTIONS="T(包流水序号:)"/>
+  <ITEM LINE="14" COL="20" TYPE="%-14s" FUNCTIONS="T(征税机关代码:)"/>
+  <ITEM LINE="15" COL="20" TYPE="%-12s" FUNCTIONS="T(交 易 状 态:)"/>
+  <ITEM LINE="16" COL="20" TYPE="%-12s" FUNCTIONS="T(纳税人编码:)"/>
+  <ITEM LINE="17" COL="20" TYPE="%-12s" FUNCTIONS="T(扣税发起方:!)"/>
+
+  <!--输入变量-->
+  <ITEM NAME="#INIT" TYPE="%-1s" FUNCTIONS="">
+    <ONLOSTFOCUS>"{
+        if($KINBR=='10001'){
+	    showmsg('清算不允许做此交易!');
+	    return(false);
+        }
+    "}</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TX_BR_NO"   LINE="10" COL="32"  TYPE="%-5s"    ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#WT_DATE"    LINE="11" COL="32"  TYPE="%-8d"    INPUT="TEXT" FUNCTIONS="T($HDATE)D()V(NB)"/>
+  <ITEM NAME="#TRANO"      LINE="12" COL="32"  TYPE="%-8s"    INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM NAME="#PACKNO"     LINE="13" COL="32"  TYPE="%-8s"    INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#TAXORGCODE" LINE="14" COL="34"  TYPE="%-12s"   INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#JYSTAT"     LINE="15" COL="32"  TYPE="%-1s"    INPUT="SELECT" FUNCTIONS="">
+    <SELECT LINE="15" COL="45" >
+        <OPTION VALUE="9"     TITLE="9.全部"/>
+        <OPTION VALUE="0"     TITLE="0.正式接收"/>
+        <OPTION VALUE="1"     TITLE="1.扣税成功"/>
+        <OPTION VALUE="2"     TITLE="2.扣税失败"/>
+        <OPTION VALUE="3"     TITLE="3.被冲正或止付"/>
+    </SELECT></ITEM>
+ 
+  <ITEM NAME="#TAXPAYCODE" LINE="16" COL="32" TYPE="%-20s" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#FQF" LINE="17" COL="32" TYPE="%-4s" INPUT="SELECT" FUNCTIONS="">
+  <SELECT LINE="15" COL="45" >
+       <!-- <OPTION VALUE="1008"     TITLE="银行端缴款"/>-->
+        <OPTION VALUE="3001"     TITLE="实时扣税"/>
+        <OPTION VALUE="3102"     TITLE="批量扣税"/>
+
+    </SELECT></ITEM>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#RETSTAT" TYPE="%-4s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+        dim @tota as string;
+        initfd();
+        commsend_001();
+        $FD16=$TXNO;
+        $FD28=#TRANO;
+        $FD44=#WT_DATE;
+        $FD52=#TAXORGCODE;
+        $FD62=#TAXPAYCODE;
+        $FD67=#JYSTAT;
+        $FD78=#PACKNO;
+        $FD91=#TX_BR_NO;
+        $FD92=#FQF;               //发起方
+        @tota=calltips();    
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        savefiletxt('../tmp/'+$KINBR+$TTYNAME,@tota);
+        call('fview ../tmp/'+$KINBR+$TTYNAME);
+        
+      }"
+  </ONCLICK>
+  </ITEM>
+    
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容" >
+    NOTHING
+    </PACKAGE>
+</RESPONSE>
+</TRANSACTION>
+

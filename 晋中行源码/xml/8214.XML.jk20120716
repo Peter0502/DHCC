@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="8214 柜面通远程授权"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+    commsend_001();
+    $FD70=#FLAG;   //操作标志  20100620
+    $FD30=#ACTNO;  //账号
+    $FD44=#QKDATE; //交易日期
+    $FD40=itoa(#TXAMT*100,'%016.0f');  //交易金额
+    $FD92=#TLRNO;  //对方柜员号
+    $FD91=getitems('#BRNO');   //对方机构号
+    $FD64=$TLRNO;  //授权柜员
+    $FD65=$KINBR;  //授权机构
+}"
+</COMMSEND>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(8214                            柜面通远程授权)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8214)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"   COL="10"  TYPE="%-12s"  FUNCTIONS="T(操作标志:!)" />
+  <ITEM LINE="8"   COL="10"  TYPE="%-12s"  FUNCTIONS="T(取款账号:)" />
+  <ITEM LINE="10"  COL="10"  TYPE="%-12s"  FUNCTIONS="T(授权日期:)" />
+  <ITEM LINE="12"  COL="10"  TYPE="%-12s"  FUNCTIONS="T(交易金额:)" />
+  <ITEM LINE="14"  COL="10"  TYPE="%-12s"  FUNCTIONS="T(对方操作员:)" />
+  <ITEM LINE="16"  COL="10"  TYPE="%-12s"  FUNCTIONS="T(对方机构号:)" />
+ 
+  <!----增加登记注销标志 20100619----> 
+  <ITEM NAME="#FLAG"  INPUT="TEXT" DEVICE="KEYBOARD" LINE="6"  COL="21" TYPE="%1s" FUNCTIONS="V(NB)">
+    <SELECT LINE="6" COL="22">
+	<OPTION VALUE="0" TITLE="登记"/>
+	<OPTION VALUE="1" TITLE="注销"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#SFLAG" TYPE="%4s"   FUNCTIONS="S(#FLAG,#FLAG)"/>
+
+  <ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="KEYBOARD" LINE="8"  COL="21" TYPE="%-19s" FUNCTIONS="V(NB)">
+  </ITEM>
+  <ITEM NAME="#QKDATE"  LINE="10" COL="21" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T($HDATE)V(NB)D()">
+  <ONLOSTFOCUS>
+  "{
+      if(#QKDATE != $HDATE)
+      {
+          showmsg('授权日期必须与交易日期相符!');
+          return(false);
+      }
+  }"
+  </ONLOSTFOCUS> 
+  </ITEM>
+  <ITEM NAME="#TXAMT" LINE="12"  COL="21" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(0000000000000001,0000999999999999)">
+  </ITEM>
+  <ITEM NAME="#TLRNO" INPUT="TEXT" LINE="14" COL="21" TYPE="%4d" 	FUNCTIONS="T()V(NB)">
+   <ONLOSTFOCUS>
+   "{
+        if(#TLRNO == $TLRNO)
+        {
+	    showmsg('对方柜员不可以为自己!');
+	    return(false);
+        }
+        //不能是本机构的柜员
+        initfd();
+        commsend_001();
+        $FD16 = '9803';
+        $FD92 = #TLRNO;
+        callserver();
+        if($FD12 == '0000')
+        {
+            showmsg('对方柜员不能是本机构柜员!');
+            return(false);
+        }
+   }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BRNO" INPUT="TEXT" LINE="16" COL="21" TYPE="%-5s" 	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+       initfd();
+       commsend_001();
+       $FD16 = '9802';
+       $FD91 = #BRNO;
+       callserver();
+       if($FD12 == '0000')
+       {
+           showmsg('机构号不能是本行机构号!');
+           return(false);
+       }
+   }"
+  </ONLOSTFOCUS> 
+  </ITEM>
+   
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+    print(3,25,'柜面通远程授权');
+    print(5,6,'开户行号 :[5  ]',$FD2);
+    print(6,6,'取款账号 :[20     ]',#ACTNO);
+    print(7,6,'交易金额 :[20                                              ]',ltrim(itoa(#TXAMT,'%16.2f')));
+    print(8,6,'对方柜员 :[8     ]',#TLRNO);
+    print(9,6,'对方机构 :[8     ]',#BRNO);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime  as string;   
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,15,'机构名称:[30]',$BRNAME);
+	print( 5,5,'代码:8214');
+	print( 5,5,'交易:柜面通远程授权');
+	
+	print(07,15,'操作标志 :[4 ]',#SFLAG);
+	print(08,15,'取款账号 :[20     ]',#ACTNO);
+	print(09,15,'授权时间 :[8      ]',$HDATE);
+	print(10,15,'交易金额 :[20                                              ]',ltrim(itoa(#TXAMT,'%16.2f')));
+	print(11,15,'对方柜员 :[8     ]',#TLRNO);
+	print(12,15,'对方机构 :[8     ]',#BRNO);
+
+	print(23,15,'备注:');
+	print(23,13,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(23,4,'柜员:[6]',$FD7);
+	print(23,4,'交易流水:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

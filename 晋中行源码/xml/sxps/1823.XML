@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1823   签到签退"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<FIRSTWORK RERUN="FALSE">
+		"{
+		dim @tota as string;
+		initfd();
+		commsend_001();
+		$FD16='1001';
+		$FD18='pbp';
+		@tota=callagnpbp();
+		if(@tota == '' or @tota == '1')
+		{
+		@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		}
+		setsel(#SYSCODE,@tota,'v4o1t8o1');
+		}"
+	</FIRSTWORK>
+	<COMMSEND>
+		"{
+		refresh();
+		initfd();
+		commsend_001();
+		}"
+	</COMMSEND>
+	<COMMRECV>
+		"{
+		commrecv_001();
+		}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1823                             签到签退)"/>
+		<ITEM LINE="4" COL="4" TYPE="%-72s" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+		<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1823)"/>
+		<ITEM NAME="#TXNAME"  TYPE="%-30s"  FUNCTIONS="T(签到签退)"/>
+		<ITEM LINE="6" COL="3" TYPE="%-10s" FUNCTIONS="T(操作类型：)"/>
+		<ITEM LINE="6" COL="13" NAME="#SIGN" TYPE="%-2s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(00)">
+			<SELECT>
+				 <OPTION VALUE="00" TITLE="0.签到" />
+				 <!--OPTION VALUE="01" TITLE="1.签退" /-->
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="7" COL="3" TYPE="%-10s" FUNCTIONS="T(系统代码：)"/>
+		<ITEM LINE="7" COL="13" NAME="#SYSCODE" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+			<SELECT>
+				   <OPTION VALUE="sxps" TITLE="山西同城" />
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				     if (#SYSCODE == 'sxps')
+				      {
+				           if (#SIGN == '00')
+				           {
+				               showblock('SXPS', true, true);
+				           }
+		          }
+				      else
+				      {
+				          showblock('SXPS', false, false);
+				      }
+			 }"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<BLOCK LINE="9" COL="0" NAME="SXPS" VISABLE="FALSE">
+			<ITEM LINE="0" COL="3"  TYPE="%-10s"  FUNCTIONS="T(业务种类:)"/>
+			<ITEM LINE="0" COL="13" TYPE="%-4s" NAME="#SvcClass" INPUT="TEXT" FUNCTIONS="T(0000)V(NB)">
+				<ONGOTFOCUS>
+				"{
+					dim @liststr as string;
+					dim @selid   as number;
+					dim @idx     as number;
+					dim @flag    as string;
+					@flag = '';
+
+					list_init(11, 32, 10, 17);
+					list_setcolcnt(2);
+					list_setcol(0, '  启  用', 9);
+					list_setcol(1, '     名    称', 20);
+					list_additem('', '全选/取消', '');
+					list_additem('', '  确定', '');
+					if (substr(#SvcClass, 0, 1) == '0')
+					{
+					list_additem('', '', '人民币单位结算');
+					}
+					else
+					{
+					list_additem('', '    √', '人民币单位结算');
+					}
+					if (substr(#SvcClass, 1, 1) == '0')
+					{
+					list_additem('', '', '人民币个人结算');
+					}
+					else
+					{
+					list_additem('', '    √', '人民币个人结算');
+					}
+					if (substr(#SvcClass, 2, 1) == '0')
+					{
+					list_additem('', '', '外币结算业务');
+					}
+					else
+					{
+					list_additem('', '    √', '外币结算业务');
+					}
+					if (substr(#SvcClass, 3, 1) == '0')
+					{
+					list_additem('', '', '人民币批量借贷记');
+					}
+					else
+					{
+					list_additem('', '    √', '人民币批量借贷记');
+					}
+					while (true)
+					{
+					      @selid = list_work();
+					      if ((@selid &lt; 0) or (@selid == 1))
+					      {
+					         @idx = 2;
+					         #SvcClass = '';
+				          	while (@idx &lt; 6)
+				          	{
+					                if (list_gettext(@idx, 0) == '')
+				          	      {
+				                   	  #SvcClass = #SvcClass+'0';
+					                }
+					                else
+					                {
+					                    #SvcClass = #SvcClass+'1';
+					                }
+					                @idx = @idx + 1;
+					          }         
+					          list_del();
+					          refresh();
+					          return(true);
+				         }
+					       if (@selid == 0)
+					       {/*全选*/
+					            if (@flag == '')
+					            {
+					                @flag = '    √';
+				              }
+					            else
+					            {
+					                 @flag = '';
+					            }
+					            @idx = 2;
+					            while (@idx &lt; 6)
+					            {
+					                 list_settext(@idx, 0, @flag);
+					                 @idx = @idx + 1;
+					            }
+					       }
+					       else
+					       {
+					             if(list_gettext(@selid, 0) == '')
+					             {
+					                  list_settext(@selid, 0, '    √');
+					             }
+					             else
+					             {
+					                  list_settext(@selid, 0, '');
+					             }
+					       }
+					   }
+				}"
+				</ONGOTFOCUS>
+			</ITEM>
+		</BLOCK>
+		<ITEM LINE="11" COL="3" TYPE="%-72s" FUNCTIONS="T(----------------------------------------------------------------------)" />
+		<ITEM LINE="13" COL="3" TYPE="%-10s" FUNCTIONS="T(系统状态：)"/>
+		<ITEM LINE="13" COL="13" TYPE="%-20s" NAME="#SysSts" FUNCTIONS="T()"/>
+		<ITEM LINE="14" COL="3" TYPE="%-10s" NAME="#Login_L" FUNCTIONS="T(签到业务：)"/>
+		<ITEM LINE="14" COL="13" TYPE="%-72s" NAME="#LoginSts" FUNCTIONS=""/>
+		<ITEM LINE="15" COL="3" TYPE="%-10s" FUNCTIONS="T(工作日期：)"/>
+		<ITEM LINE="15" COL="13" TYPE="%-8s"  NAME="#WorkDate" FUNCTIONS=""/>
+		
+		<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+			<ONCLICK>
+			"{
+				   dim @cnt as number;
+				   
+				   if (#SYSCODE == 'sxps')
+				   {
+				        if (#SvcClass == '1111')
+				        {
+				             initfd();
+				             commsend_001();
+				             $FD16='1305';
+				             $FD18='pbp';
+				             $FD28='sxps';
+				             $FD23='0';
+				             $FD35=#SIGN;
+				             callagnpbp();
+				             if ($FD12 != '0000' and $FD12 != '1011') 
+				             {
+				                  showmsg(geterror());
+				                  return(false);
+				             }
+				             #LoginSts='1,人民币单位结算;'+ 
+				             '2,人民币个人结算;' + 
+				             '3,外币结算业务;' + 
+				             '4,人民币批量借贷记;';
+				            
+				             if(atoi($FD36) != 10 and $FD12 != '1011')
+				             {
+				                 
+				                 #SysSts='停止'; 
+				             }
+				             else
+				             {
+				                  #SysSts='运行';
+				             }
+				             #WorkDate=$FD44;
+				            
+				             show(#SysSts, true);
+				             show(#WorkDate, true);
+				             show(#Login_L, true);
+				             show(#LoginSts, true);
+				             
+				             showmsg('交易成功！');
+				             //closeall();
+				             //return(true);
+
+				        }
+				        else if (#SvcClass == '0000')
+				        {
+				        	showmsg('业务种类不能为0000');
+				        	return(false);
+				        }
+				        else 
+				        {    
+				             //#Login_L = '成功列表：';
+				             @cnt = 0;
+				             while (@cnt &lt; 4)
+				             {
+				                  if (substr(#SvcClass, @cnt, 1) == '1')
+				                  {
+				                       initfd();
+				                       commsend_001();
+				                       $FD16='1305';
+				                       $FD18='pbp';
+				                       $FD28='sxps';
+				                       $FD35=#SIGN;
+				                       $FD23=itoa(@cnt+1, '%1d');
+				                       //showmsg($FD23);
+				                       callagnpbp();
+				                       if ($FD12 == '0000' or $FD12 == '1011')
+				                       {
+				                             if (@cnt == 0)
+				                             {
+				                                 #LoginSts='1,人民币单位结算;';
+				                             }
+				                             else if (@cnt == 1)
+				                             {
+				                                   #LoginSts=#LoginSts+'2,人民币个人结算;';
+				                             }
+				                             else if (@cnt == 2)
+				                             {
+				                                   #LoginSts=#LoginSts+'3,外币结算业务;';
+				                             }
+				                             else if (@cnt == 3)
+				                             {
+				                                   #LoginSts=#LoginSts+'4,人民币批量借贷记;';
+				                             }
+				                       }
+				                       else
+				                       {
+				                            showmsg(geterror());
+				                            return(false);
+				                       }
+
+				                      if(atoi($FD36) != 10 and $FD12 != '1011')
+				                      {
+				                          
+				                           #SysSts='停止'; 
+				                      }
+				                      else
+				                      {
+				                           #SysSts='运行';
+				                      }
+				                      #WorkDate=$FD44;
+				                  }
+				                  @cnt = @cnt + 1;
+				              }
+				        }      
+				        show(#SysSts, true);
+				        show(#WorkDate, true);
+				        show(#Login_L, true);
+				        show(#LoginSts, true);
+				        showmsg('签到完成！');	
+				        
+				        //生成核心流水-start
+					dim @bak_fd81 as string;
+					@bak_fd81=$FD81;
+					$FD81=#TXNAME;
+					gethxtraceno();
+					$FD81=@bak_fd81;
+					//生成核心流水-end
+					
+				        runoutput();		     
+				        rerun();
+				        refresh();
+			     }
+			}"
+			</ONCLICK>
+		</ITEM>
+	</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();	
+       				print(3,3,'操作类型:[20] ','签到');
+				print(5,3,'系统类型:[20] ','山西同城');
+				print(7,3,'系统状态:[20] ', #SysSts);
+				print(9,3,'签到业务:[70] ', #LoginSts);				
+				print(11,3,'工作日期:[20]', #WorkDate);
+			
+			 
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

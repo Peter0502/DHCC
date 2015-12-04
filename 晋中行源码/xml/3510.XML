@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3510 对公积数调整"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='2610';	
+
+	$FD30=getitems('#ACTNO');     // 账号
+	$FD34=getitems('#ACTSEQN');   // 账户序号
+	$FD56=getitems('#NINTST');   // 新积数
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3510                          对公积数调整)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <PAGE NAME="DEFAULT">
+     
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2610)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+
+  <ITEM LINE="6"  COL="05" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+ 
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		initfd();
+		@baktxno=$TXNO;
+		$TXNO='9741';
+		$FD30=#ACTNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#ACTNO',$FD30);
+		setitems('#ACTSEQN',$FD34);    	
+		if(substr(#ACTNO,0,1)!='5'){
+			showmsg('只有对公活期户才可以做此业务!');
+			return(false);
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="6"  COL="50" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>  
+  <ITEM NAME="#ACTSEQN" INPUT="TEXT" LINE="6"  COL="60" TYPE="%-4s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		dim @tota    as string;
+		@baktxno=$TXNO;
+		$MSGTYPE='03001';
+
+		$TXNO='9740';
+		$FD30=#ACTNO;
+		$FD34=#ACTSEQN;
+		commsend_001();	
+		@tota = callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+
+		setitems('#CUR_NO',$FD21);
+		setitems('#PRDT_CODE',$FD23);
+		setitems('#OLDNAME',$FD26);  //原户名
+		//showmsg('ONAME='+#OLDNAME);
+		//showmsg('NAME='+#CUSTNAME);
+		setitems('#PROD_NAME',$FD27);
+		setitems('#AVBAL',$FD41);
+		setitems('#INTST_ACM',$FD56);
+		showblock('ACTINFO',true,true);
+ 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+    <ITEM LINE="8"  COL="3"  TYPE="%-75s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+   
+  <BLOCK NAME="ACTINFO" LINE="10" COL="05" VISABLE="FALSE"> 
+
+   <ITEM LINE="0"  COL="0" TYPE="%-10s" FUNCTIONS="T(产品编号:!)"/>
+   <ITEM LINE="0"  COL="10" NAME="#PRDT_CODE" INPUT="TEXT"  TYPE="%-3s"  ENABLE="FALSE"/>
+   <ITEM LINE="0"  COL="15" NAME="#PROD_NAME" INPUT="TEXT"  TYPE="%-30s" ENABLE="FALSE"/>
+
+
+   <ITEM LINE="1"  COL="0" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM NAME="#CUR_NO" LINE="1"  COL="10" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCUR_NO" FUNCTIONS="S(#CUR_NO,#CUR_NO)"/>
+   
+   <ITEM LINE="2"  COL="0" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>   
+   <ITEM LINE="3"  COL="0" TYPE="%-10s" FUNCTIONS="T(原 积 数:)"/>   
+
+  <ITEM LINE="2"  COL="10" NAME="#LAVBAL" TYPE="%-21s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>   
+  <ITEM LINE="3"  COL="10" NAME="#LINTST_ACM" TYPE="%-24s" FUNCTIONS="X(#INTST_ACM)"/>
+  <ITEM NAME="#INTST_ACM" TYPE="%20.2f" FUNCTIONS="J(#LINTST_ACM)"/>   
+
+  <ITEM LINE="4"  COL="0" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="4"  COL="10" NAME="#OLDNAME" TYPE="%-60s" FUNCTIONS="" />
+
+  <ITEM LINE="6"  COL="0" TYPE="%-10s" FUNCTIONS="T(新 积 数:)"/>
+  <ITEM LINE="6"  COL="10" NAME="#NINTST" TYPE="%20.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000000000,0009999999999999999)"/>
+  <ITEM NAME="#LNINTST" TYPE="%-24s" FUNCTIONS="X(#NINTST)"/>
+
+  </BLOCK>
+
+  </PAGE>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+
+    
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="积数调整成功">
+      NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+
+		print( 7,20,'帐    号:[20                  ]             帐户序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'户    名:[60                                                          ]',#OLDNAME);
+		print( 9,20,'产品名称:[30                            ]   ',#PROD_NAME);
+		print(11,20,'原 积 数:[24                   ]',#LINTST_ACM);
+		print(12,20,'新 积 数:[24                   ]',#LNINTST);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3510');
+		print( 5,13,'交易:对公积数调整');
+
+		print( 7,20,'帐    号:[20                  ]             帐户序号:[ 4]',#ACTNO,#ACTSEQN);
+		print( 8,20,'户    名:[60                                                          ]',#OLDNAME);
+		print( 9,20,'产品名称:[30                            ]   ',#PROD_NAME);
+		print(11,20,'原 积 数:[24                   ]',#LINTST_ACM);
+		print(12,20,'新 积 数:[24                   ]',#LNINTST);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+		
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

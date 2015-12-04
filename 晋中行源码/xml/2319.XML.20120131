@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111000000000000000000000000" TITLE="2319 账户迁移到新客户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		initfd();
+		commsend_001();
+		$FD16='5577';
+		$FD28=#CIFNO;
+		$FD30=#ACNO;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(2319                        账户迁移到新客户)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5577)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+	<ITEM LINE="6" COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(──────────────新客户信息──────────────────)"/>
+   
+	<ITEM LINE="8" COL="10" NAME="#LCIFNO" TYPE="%-10s" FUNCTIONS="T(新客户号:)" />
+	<ITEM LINE="8" COL="20" NAME="#CIFNO"  TYPE="%8d"   FUNCTIONS="T()V(NB)" INPUT="TEXT" >
+		<ONLOSTFOCUS>
+		"{
+	  	dim @tota as string;
+			//if($KINBR!='00000')
+			//if($KINBR!='19999') // 20110811
+			//{
+			//	showmsg('本网点没有做此交易的权限');
+			//	return(false);
+			//}
+	    initfd();	
+	    commsend_001();
+	 		$FD16='9755';
+			$FD28=#CIFNO;
+			@tota=callserver();	
+			callserver();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+			}
+			#CIFTYPE=delspace($FD72);
+			enable(#CIFTYPE,false);
+		  setsel(#NIDTYPE,@tota,'o5t20o1v1o2');
+			initfd();
+			commsend_001();
+			$FD16='9848';
+			$FD29=#CIFNO;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#NAME=delspace($FD25);
+			enable(#NAME,false);
+		  refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="8" COL="40" NAME="#LCIFYPE" TYPE="%-10s" FUNCTIONS="T(新客类型:)" />
+	<ITEM LINE="8" COL="50" NAME="#CIFTYPE"  TYPE="%1s"   FUNCTIONS="T()V(NB)" INPUT="SELECT" >
+		<ONSELECT>
+			<OPTION VALUE="1" TITLE="个人"/>
+			<OPTION VALUE="2" TITLE="公司"/>
+			<OPTION VALUE="3" TITLE="机构"/>
+			<OPTION VALUE="4" TITLE="同业"/>
+		</ONSELECT>
+	</ITEM>
+
+	<ITEM LINE="9" COL="10" NAME="#LNAME" TYPE="%-10s" FUNCTIONS="T(客户姓名:)" />
+	<ITEM LINE="9" COL="20" NAME="#NAME"  TYPE="%-58s" FUNCTIONS="T()" INPUT="TEXT" />
+	<ITEM LINE="10" COL="10" NAME="#LNIDTYPE" TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+	<ITEM LINE="10" COL="20" NAME="#NIDTYPE"  TYPE="%-1s" FUNCTIONS="T()" INPUT="SELECT" >
+		<ONSELECT>
+		"{
+			//证件号码
+			initfd();
+			commsend_001();
+			$FD16='9756';
+			$FD28=#CIFNO;
+			$FD68=#NIDTYPE;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#NIDNO=$FD62;
+			enable(#NIDNO,false);
+		}"
+		</ONSELECT>
+	</ITEM>
+	<ITEM LINE="11" COL="10" NAME="#LNIDNO" TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+	<ITEM LINE="11" COL="20" NAME="#NIDNO"  TYPE="%-19s" FUNCTIONS="T()" INPUT="TEXT"/>
+	<ITEM LINE="12" COL="3"  TYPE="%74s" FUNCTIONS=
+   "T(──────────────账户对应信息────────────────)"/>
+	<ITEM LINE="13" COL="10" NAME="#LACNO"  TYPE="%-10s" FUNCTIONS="T(账     号:)" />
+	<ITEM LINE="13" COL="20" NAME="#ACNO"   TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)">
+		<ONLOSTFOCUS>
+		"{
+			dim @mess as string;
+			initfd();
+			commsend_001();
+			$FD16='9646';
+			$FD30=#ACNO;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false)
+			}
+			#OIDTYPE=$FD71;
+			#OIDNO=$FD63;
+			//客户名不同不能迁移
+			initfd();
+			commsend_001();
+			$FD16='8116';
+			$FD37=#ACNO;
+			@mess=callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#ONAME=strfld(@mess,'|',12);
+			enable(#ONAME,false);
+			enable(#OIDTYPE,false);
+			enable(#OIDNO,false);
+			refresh();
+			if(#NAME!=#ONAME)
+			{
+				showmsg('客户号和账号分属不同名称的客户!')
+				return(false);
+			}
+			//客户号相同不用迁移
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="14" COL="10" NAME="#LONAME" TYPE="%-10s" FUNCTIONS="T(客户名称:)" />
+	<ITEM LINE="14" COL="20" NAME="#ONAME"  TYPE="%-58s" FUNCTIONS="T()" INPUT="TEXT" />
+	<ITEM LINE="15" COL="10" NAME="#LONIDTYPE" TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+	<ITEM LINE="15" COL="20" NAME="#OIDTYPE"  TYPE="%-1s"   FUNCTIONS="T()" INPUT="SELECT" >
+		<SELECT>
+			<OPTION VALUE="1" TITLE="0.身份证      "/>
+			<OPTION VALUE="2" TITLE="1.户口簿      "/>		
+			<OPTION VALUE="3" TITLE="2.护照        "/>		
+			<OPTION VALUE="4" TITLE="3.军人证      "/>		
+			<OPTION VALUE="5" TITLE="4.回乡证      "/>	
+			<OPTION VALUE="G" TITLE="5.警官证      "/> 
+			<OPTION VALUE="8" TITLE="7.企业代码证  "/>		
+			<OPTION VALUE="9" TITLE="8.组织机构号  "/>		
+			<OPTION VALUE="A" TITLE="9.营业执照    "/>			
+			<OPTION VALUE="B" TITLE="a.经营许可证  "/>
+			<OPTION VALUE="C" TITLE="b.事业法人证书"/>
+			<OPTION VALUE="H" TITLE="c.其他证件"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="16" COL="10" NAME="#LOIDNO" TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+	<ITEM LINE="16" COL="20" NAME="#OIDNO"  TYPE="%-19s" FUNCTIONS="T()" INPUT="TEXT"/>
+	
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印账户迁移凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @cif as string;
+		@cif=itoa(#CIFNO,'%d');
+		$KINDNO = '00';
+		print( 5,10,'机构名称:[30]',$BRNAME); 
+		print( 5, 5,'代码:[4]',$TXNO); 
+		print( 5,5,'交易:账户迁移到新客户'); 
+		print( 7,10,'客 户 号:[8]',#CIFNO);
+		print( 8,10,'客户名称:[60]',#NAME);
+		print( 9,10,'账    号:[19]',#ACNO);
+		print(20,10,'交易日期:[8]',$HDATE);
+		print(20,5,'柜员:[6]',$FD7);
+		print(20,5,'流水号:[6]',substr($FD126,2,6));
+		print(21,10,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

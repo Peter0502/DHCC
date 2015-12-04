@@ -1,0 +1,82 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="绑定及代扣状态查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(6609                        绑定及代扣状态查询)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6609)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+
+  <ITEM LINE="8" COL="6"  TYPE="%-10s" NAME="#LBIDQFS"  INPUT="LABEL"  FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="8" COL="15" TYPE="%-1s"  NAME="#BIDQFS"    INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="读取磁条方式"/>
+      <OPTION VALUE="1" TITLE="读取芯片方式"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+      if(#BIDQFS=='1')
+      {
+        enable(#ACTNO1,false);
+        enable(#ACTNO2,true);
+        show(#ACTNO1,false);
+        show(#ACTNO2,true);
+      }
+      if(#BIDQFS=='0')
+      {
+        enable(#ACTNO1,true);
+        enable(#ACTNO2,false);
+        show(#ACTNO1,true);
+        show(#ACTNO2,false);
+      }
+      refresh();
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  </ITEM NAME="#AC_NO"        TYPE="%-19s"  FUNCTIONS=""/>
+  <ITEM LINE="8" COL="35" NAME="#LBIACTNO" TYPE="%-10s"   INPUT="LABEL"  FUNCTIONS="T(账号:)" />
+
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM LINE="8" COL="44" TYPE="%-19s"  NAME="#ACTNO3" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+    <ONLOSTFOCUS>
+    "{
+	showmsg('#ACTNO1='+#ACTNO1);
+      #AC_NO=#ACTNO1;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="44" TYPE="%-19s"  NAME="#ACTNO4" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+    <ONLOSTFOCUS>
+    "{
+	showmsg('#ACTNO1='+#ACTNO1);
+      #AC_NO=#ACTNO2;
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  
+   <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+     <ONCLICK>"{
+       dim @tota as string;
+       dim @selid as number;
+       initfd();
+       commsend_001();
+	   showmsg('!!!!!!#ACNO='+#ACNO);
+       $FD16='6609';             //平台用户交易明细查询接口
+       $FD60='AGENT';            //平台交易类型
+       $FD21='1';                //柜面发起标志
+       $FD31=#AC_NO;             //账号
+
+     @tota=callagnpt();
+     if($FD12!='0000'){
+       showmsg(geterror());
+       return(false);
+     }
+     @tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+     if(@tota==''){
+       showmsg('未找到该用户记录!');
+       rerun();
+       return(false);
+     }
+     autolist(@tota);
+     @s

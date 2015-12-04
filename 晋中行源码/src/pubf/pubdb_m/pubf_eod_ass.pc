@@ -1,0 +1,180 @@
+#include "find_debug.h" 
+/*************************************************************
+* 文 件 名: pubf_eod_ass.ec
+* 功能描述：日终考核统计
+*
+* 作    者: power
+* 完成日期: 20040620
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_branch_c.h"
+EXEC SQL include "gl_mst_c.h";
+EXEC SQL include "com_item_c.h";
+EXEC SQL include "ass_gl_c.h";
+EXEC SQL include "ac_bal_view_c.h";
+/*** EXEC SQL include "opn_clo_view_c.h"; ***/
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+/*** 声明游标 ***/
+int ac_bal_view_dec_cur()
+{
+	EXEC SQL declare ac_bal_view_cur cursor for
+		select gsp_no,prdt_no from ac_bal_view
+		group by gsp_no,prdt_no
+		order by gsp_no,prdt_no;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL open ac_bal_view_cur;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+/*** 取游标 ***/
+int ac_bal_view_fet_cur( string1,string2)
+char *string1;
+char *string2;
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char tmpstr1[100];
+		char tmpstr2[100];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL fetch ac_bal_view_cur
+		into :tmpstr1,:tmpstr2;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+
+	pub_base_strpack(tmpstr1);
+	pub_base_strpack(tmpstr2);
+	strcpy(string1,tmpstr1);
+	strcpy(string2,tmpstr2);
+
+	return 0;
+}
+
+/*** 关游标 ***/
+int ac_bal_view_clo_cur( )
+{
+	EXEC SQL close ac_bal_view_cur;
+
+	return 0;
+}
+
+int Ac_bal_view_Dec ( )
+{
+	EXEC SQL DECLARE bal_view_curs CURSOR FOR SELECT * FROM ac_bal_view
+	WHERE 1=1 ORDER BY gsp_no,prdt_no,ind;
+
+	EXEC SQL OPEN bal_view_curs;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+int Ac_bal_view_Fet ( struct ac_bal_view_c *bal_view)
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	struct	ac_bal_view_c	tmp_ac_bal_view;
+EXEC	SQL	END		DECLARE	SECTION;
+
+	EXEC SQL FETCH bal_view_curs INTO :tmp_ac_bal_view;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 )
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode )
+	{
+		return sqlca.sqlcode;
+	}
+	strcpy ( bal_view->gsp_no , tmp_ac_bal_view.gsp_no );
+	strcpy ( bal_view->prdt_no , tmp_ac_bal_view.prdt_no );
+	strcpy ( bal_view->ind , tmp_ac_bal_view.ind );
+	bal_view->num=tmp_ac_bal_view.num;
+	bal_view->bal=tmp_ac_bal_view.bal;
+
+	return 0;
+}
+int Ac_bal_view_Clo()
+{
+	EXEC SQL CLOSE bal_view_curs;
+}
+int Ass_tel_Dec ( )
+{
+	EXEC SQL DECLARE ass_tel_curs CURSOR FOR SELECT distinct tel
+	FROM tel_save_inf ORDER BY tel;
+
+	EXEC SQL OPEN ass_tel_curs;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+int Ass_tel_Fet ( char *tel )
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	tmp_tel[5];
+EXEC	SQL	END		DECLARE	SECTION;
+	
+	EXEC SQL FETCH ass_tel_curs INTO :tmp_tel;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 )
+	{
+		sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode);
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"D103" );
+		return sqlca.sqlcode;
+	}
+	else if ( sqlca.sqlcode )
+	{
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+int Ass_tel_Clo()
+{
+	EXEC SQL CLOSE ass_tel_curs;
+}

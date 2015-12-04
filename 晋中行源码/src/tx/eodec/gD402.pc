@@ -1,0 +1,463 @@
+/*************************************************************
+* 文 件 名: gD401.c
+* 功能描述：汇总利息税明细
+*           从dc_log_rz中汇总每天的发生额然后插入 sum_tax中
+*           补救 gD401 程序没出对的情况
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403){\
+	sprintf(acErrMsg,"sqlerror[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	strcpy( g_pub_tx.reply,"D103" );\
+	goto ErrExit;\
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "trace_log_bk_c.h"
+#include "sum_tax_c.h"
+#include "com_branch_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+gD402()
+{
+	int ret = 0;
+	int br_type;
+
+	struct com_sys_parm_c sCom_sys_parm;
+
+	memset(&sCom_sys_parm,0x0,sizeof(sCom_sys_parm));
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &sCom_sys_parm );
+	if ( ret )
+	{
+		sprintf( acErrMsg, "取公共系统参数表错!" );
+		WRITEMSG
+		goto ErrExit;			
+	}
+
+	g_pub_tx.tx_date=sCom_sys_parm.lst_date;
+
+	vtcp_log("LSTDATE[%d]",g_pub_tx.tx_date);
+/*
+	if( sum_tax_61000() ) goto ErrExit;
+*/
+	if( sum_tax_zhihang() ) goto ErrExit;
+	/*	没这机构
+	if( sum_tax_61027() ) goto ErrExit;
+	*/
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总利息税明细!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总利息税明细!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+sum_tax_61000()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct trace_log_bk_c ls;
+		struct sum_tax_c tax;
+		long vcnt;
+		short z1,z2;
+		long vdate;
+		char vbrno[6];
+	EXEC SQL END DECLARE SECTION;
+
+	vdate=g_pub_tx.tx_date;
+	strcpy( vbrno,TOT_BR_NO );
+/*
+	EXEC SQL delete from sum_tax where "date"=:vdate
+		and br_no=:vbrno;
+	MYSQLERR
+*/
+
+	EXEC SQL declare cur_01 cursor for
+		select tx_date,add_ind,substr(ac_no,1,3) ,prdt_no,sum(amt),count(*)
+		from trace_log_bk
+		where prdt_no is not null
+		and tx_code in('2204','2203')
+		and sts='0'
+		group by tx_date,add_ind,substr(ac_no,1,3),prdt_no 
+		union 
+		select tx_date,'1' ,substr(acc_hrt,1,3),'101',sum(amt),count(*)
+		from dc_log_rz
+		where entry_code='Z03200'
+		and substr(acc_hrt,1,3) in('521','268')
+		and sts='0'
+		group by  tx_date,1,substr(acc_hrt,1,3) ,101
+		order by 1,2,3,4;
+	MYSQLERR
+
+	EXEC SQL open cur_01;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_01 
+			into :ls.tx_date,:ls.add_ind,:ls.ac_no,:ls.prdt_no,
+			:ls.amt:z1,:vcnt:z2;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+		
+		if( z1 ) ls.amt=0.00;
+		if( z2 ) vcnt=0;
+
+		vtcp_log("[%d][%s] prdt[%s][%s] [%.2lf]",ls.tx_date,vbrno,ls.prdt_no,ls.ac_no,ls.amt);
+		memset(&tax,'\0',sizeof(tax));
+		EXEC SQL select rowid,sum_tax.* into :tax from sum_tax
+			where "date"=:ls.tx_date and br_no=:vbrno and prdt_no=:ls.prdt_no;
+		if( sqlca.sqlcode==1403 )
+		{
+			memset( &tax,0,sizeof(tax) );
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax=ls.amt;
+				tax.cnt=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt=ls.amt;
+				else
+					tax.cls_amt=-ls.amt;
+			}
+			strcpy(tax.prdt_no,ls.prdt_no);
+			strcpy(tax.br_no,vbrno);
+			tax.date=ls.tx_date;
+			EXEC SQL insert into sum_tax values(:tax.date,:tax.br_no,
+						:tax.prdt_no,:tax.cls_amt,:tax.intst,:tax.tax,:tax.cnt);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax+=ls.amt;
+				tax.cnt+=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst+=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt+=ls.amt;
+				else
+					tax.cls_amt-=ls.amt;
+			}
+			strcpy(tax.br_no,vbrno);
+			EXEC SQL UPDATE sum_tax SET "date"=:tax.date,
+					br_no=:tax.br_no,
+					prdt_no=:tax.prdt_no,
+					cls_amt=:tax.cls_amt,
+					intst=:tax.intst,
+					tax=:tax.tax,
+					cnt=:tax.cnt
+				where "date"=:ls.tx_date and prdt_no=:ls.prdt_no
+				and br_no=:vbrno;
+			MYSQLERR
+		}
+	}
+	EXEC SQL close cur_01;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+sum_tax_zhihang()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct trace_log_bk_c ls;
+		struct sum_tax_c tax;
+		long vcnt;
+		short z1,z2;
+		long vdate;
+		char vbrno[6];
+		int ret=0;
+		struct com_branch_c g_com_branch;
+	EXEC SQL END DECLARE SECTION;
+
+	vdate=g_pub_tx.tx_date;
+
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply," br_no!='%s' ", TOT_BR_NO);
+	if(ret)
+	{
+		sprintf(acErrMsg,"declare cursor error[%d]!",ret);
+		strcpy(g_pub_tx.reply,"0200");
+		MYSQLERR
+	}
+	EXEC SQL declare cur_02 cursor for
+		select add_ind,substr(ac_no,1,3) ,prdt_no,sum(amt),count(*)
+		from trace_log_rz
+		where prdt_no is not null
+		and tx_code in('2204','2203')
+		and sts='0'
+     and opn_br_no=:vbrno and tx_date>=20061201 and tx_date<=20061231
+		group by add_ind,substr(ac_no,1,3),prdt_no 
+		union 
+		select '1' ,substr(acc_hrt,1,3),'101',sum(amt),count(*)
+		from dc_log_rz
+		where entry_code='Z03200'
+		and substr(acc_hrt,1,3) in('521','268')
+		and sts='0'
+	and tx_opn_br_no=:vbrno and tx_date>=20061201 and tx_date<=20061231
+		group by  1,substr(acc_hrt,1,3) ,101
+		order by 1,2,3,4;
+	MYSQLERR
+
+	while(1)
+	{
+		ret=Com_branch_Fet_Sel(&g_com_branch,g_pub_tx.reply);
+		if(ret==100)break;
+		else if(ret)
+		{
+			strcpy(g_pub_tx.reply,"0200");
+			sprintf(acErrMsg,"fetch cursor error![%d]",ret);
+			MYSQLERR
+		}
+		strcpy(vbrno,g_com_branch.br_no);
+		EXEC SQL open cur_02;
+		MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_02 
+			into :ls.add_ind,:ls.ac_no,:ls.prdt_no,
+			:ls.amt:z1,:vcnt:z2;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+		
+		if( z1 ) ls.amt=0.00;
+		if( z2 ) vcnt=0;
+
+		ls.tx_date=20061231;
+		vtcp_log("[%d][%s] prdt[%s][%s] [%.2lf]",ls.tx_date,vbrno,ls.prdt_no,ls.ac_no,ls.amt);
+		memset(&tax,'\0',sizeof(tax));
+		EXEC SQL select rowid,sum_tax.* into :tax from sum_tax
+			where  br_no=:vbrno and prdt_no=:ls.prdt_no;
+		if( sqlca.sqlcode==1403 )
+		{
+			memset( &tax,0,sizeof(tax) );
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax=ls.amt;
+				tax.cnt=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt=ls.amt;
+				else
+					tax.cls_amt=-ls.amt;
+			}
+			strcpy(tax.prdt_no,ls.prdt_no);
+			strcpy(tax.br_no,vbrno);
+			tax.date=ls.tx_date;
+			EXEC SQL insert into sum_tax values(:tax.date,:tax.br_no,
+						:tax.prdt_no,:tax.cls_amt,:tax.intst,:tax.tax,:tax.cnt);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax+=ls.amt;
+				tax.cnt+=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst+=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt+=ls.amt;
+				else
+					tax.cls_amt-=ls.amt;
+			}
+			strcpy(tax.br_no,vbrno);
+			EXEC SQL UPDATE sum_tax SET "date"=:tax.date,
+					br_no=:tax.br_no,
+					prdt_no=:tax.prdt_no,
+					cls_amt=:tax.cls_amt,
+					intst=:tax.intst,
+					tax=:tax.tax,
+					cnt=:tax.cnt
+				where prdt_no=:ls.prdt_no
+				and br_no=:vbrno;
+			MYSQLERR
+		}
+	}
+	EXEC SQL close cur_02;
+}
+   Com_branch_Clo_Sel();
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+
+
+
+
+
+sum_tax_61027()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct trace_log_bk_c ls;
+		struct sum_tax_c tax;
+		long vcnt;
+		short z1,z2;
+		long vdate;
+		char vbrno[6];
+	EXEC SQL END DECLARE SECTION;
+
+	vdate=g_pub_tx.tx_date;
+	strcpy( vbrno,"61027" );
+
+	EXEC SQL delete from sum_tax where "date"=:vdate
+		and br_no=:vbrno;
+	MYSQLERR
+
+	EXEC SQL declare cur_03 cursor for
+		select tx_date,add_ind,substr(ac_no,1,3),prdt_no,sum(amt),count(*)
+		from trace_log_bk
+		where prdt_no is not null
+		and tx_code in('2204','2203')
+		and opn_br_no=:vbrno
+		and sts='0'
+		group by tx_date,add_ind,ac_no,prdt_no 
+		union 
+		select tx_date,'1',substr(acc_hrt,1,3),'101',sum(amt),count(*)
+		from dc_log_rz
+		where entry_code='Z03200'
+		and substr(acc_hrt,1,3) in('521','268')
+		and tx_opn_br_no=:vbrno
+		and sts='0'
+		group by tx_date,'1',substr(acc_hrt,1,3),'101'
+		order by 1,2,3,4;
+	MYSQLERR
+
+	EXEC SQL open cur_03;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_03 
+			into :ls.tx_date,:ls.add_ind,:ls.ac_no,:ls.prdt_no,
+			:ls.amt:z1,:vcnt:z2;
+		if( sqlca.sqlcode==1403) break;
+		MYSQLERR
+		
+		if( z1 ) ls.amt=0.00;
+		if( z2 ) vcnt=0;
+
+		vtcp_log("[%d] prdt[%s][%s] [%.2lf]",ls.tx_date,ls.prdt_no,ls.ac_no,ls.amt);
+
+		EXEC SQL select rowid,sum_tax.* into :tax from sum_tax
+			where "date"=:ls.tx_date and br_no=:vbrno and prdt_no=:ls.prdt_no;
+		if( sqlca.sqlcode==1403 )
+		{
+			memset( &tax,0,sizeof(tax) );
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax=ls.amt;
+				tax.cnt=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt=ls.amt;
+				else
+					tax.cls_amt=-ls.amt;
+			}
+			strcpy(tax.prdt_no,ls.prdt_no);
+			strcpy(tax.br_no,vbrno);
+			tax.date=ls.tx_date;
+			EXEC SQL insert into sum_tax values(:tax.date,:tax.br_no,
+						:tax.prdt_no,:tax.cls_amt,:tax.intst,:tax.tax,:tax.cnt);
+			MYSQLERR
+		}
+		else
+		{
+			MYSQLERR
+			if( !strncmp(ls.ac_no,"268",3) )
+			{
+				tax.tax+=ls.amt;
+				tax.cnt+=vcnt;
+			}
+			else if( !strncmp(ls.ac_no,"260",3) 
+				|| !strncmp(ls.ac_no,"521",3))
+			{
+				tax.intst+=ls.amt;
+			}
+			else
+			{
+				if( ls.add_ind[0]=='0' )
+					tax.cls_amt+=ls.amt;
+				else
+					tax.cls_amt-=ls.amt;
+			}
+			strcpy(tax.br_no,vbrno);
+			EXEC SQL UPDATE sum_tax SET "date"=:tax.date,
+					br_no=:tax.br_no,
+					prdt_no=:tax.prdt_no,
+					cls_amt=:tax.cls_amt,
+					intst=:tax.intst,
+					tax=:tax.tax,
+					cnt=:tax.cnt
+				where "date"=:ls.tx_date and prdt_no=:ls.prdt_no
+				and br_no=:vbrno;
+			MYSQLERR
+		}
+	}
+	EXEC SQL close cur_03;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}

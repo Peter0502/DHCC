@@ -1,0 +1,310 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbfereturnapp_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbfereturnapp_con ( struct mbfereturnapp_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbfereturnapp_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->rtnappno);
+	zip_tail(ps->odficenter);
+	zip_tail(ps->isdficode);
+	zip_tail(ps->odficode);
+	zip_tail(ps->rdficenter);
+	zip_tail(ps->osdficode);
+	zip_tail(ps->rdficode);
+	zip_tail(ps->origtxtype);
+	zip_tail(ps->origtxssno);
+	zip_tail(ps->appuser);
+	zip_tail(ps->procstate);
+	zip_tail(ps->statetime);
+	zip_tail(ps->errcode);
+	zip_tail(ps->errdesc);
+	zip_tail(ps->rtnappsource);
+	zip_tail(ps->strinfo);
+}
+int Mbfereturnapp_Debug(struct mbfereturnapp_c *ps){
+	vtcp_log("mbfereturnapp_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbfereturnapp_c.rtnappno=[%s]\n",ps->rtnappno);
+	vtcp_log("mbfereturnapp_c.consigndate=[%ld]\n",ps->consigndate);
+	vtcp_log("mbfereturnapp_c.odficenter=[%s]\n",ps->odficenter);
+	vtcp_log("mbfereturnapp_c.isdficode=[%s]\n",ps->isdficode);
+	vtcp_log("mbfereturnapp_c.odficode=[%s]\n",ps->odficode);
+	vtcp_log("mbfereturnapp_c.rdficenter=[%s]\n",ps->rdficenter);
+	vtcp_log("mbfereturnapp_c.osdficode=[%s]\n",ps->osdficode);
+	vtcp_log("mbfereturnapp_c.rdficode=[%s]\n",ps->rdficode);
+	vtcp_log("mbfereturnapp_c.origconsigndate=[%ld]\n",ps->origconsigndate);
+	vtcp_log("mbfereturnapp_c.origtxtype=[%s]\n",ps->origtxtype);
+	vtcp_log("mbfereturnapp_c.origtxssno=[%s]\n",ps->origtxssno);
+	vtcp_log("mbfereturnapp_c.origamount=[%f]\n",ps->origamount);
+	vtcp_log("mbfereturnapp_c.appuser=[%s]\n",ps->appuser);
+	vtcp_log("mbfereturnapp_c.procstate=[%s]\n",ps->procstate);
+	vtcp_log("mbfereturnapp_c.statetime=[%s]\n",ps->statetime);
+	vtcp_log("mbfereturnapp_c.errcode=[%s]\n",ps->errcode);
+	vtcp_log("mbfereturnapp_c.errdesc=[%s]\n",ps->errdesc);
+	vtcp_log("mbfereturnapp_c.printno=[%ld]\n",ps->printno);
+	vtcp_log("mbfereturnapp_c.rtnappsource=[%s]\n",ps->rtnappsource);
+	vtcp_log("mbfereturnapp_c.strinfo=[%s]\n",ps->strinfo);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbfereturnapp_Sel(reply,mbfereturnapp_c,fmtstr,va_alist)
+char    *reply;
+struct  mbfereturnapp_c *mbfereturnapp_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbfereturnapp_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbfereturnapp_Fet_Sel( mbfereturnapp_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbfereturnapp_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbfereturnapp_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbfereturnapp.* FROM mbfereturnapp WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfereturnapp_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbfereturnapp CURSOR FOR mbfereturnapp_sel;
+
+	EXEC SQL OPEN sel_mbfereturnapp;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfereturnapp_Fet_Sel ( struct mbfereturnapp_c *mbfereturnapp_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbfereturnapp INTO :mbfereturnapp_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbfereturnapp error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbfereturnapp finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfereturnapp_c);
+
+	return 0;
+}
+
+int Mbfereturnapp_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbfereturnapp;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbfereturnapp_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbfereturnapp.* FROM mbfereturnapp WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfereturnapp_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbfereturnapp CURSOR FOR mbfereturnapp_upd;
+
+	EXEC SQL OPEN upd_mbfereturnapp;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfereturnapp_Fet_Upd( struct mbfereturnapp_c *mbfereturnapp_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbfereturnapp INTO :mbfereturnapp_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbfereturnapp finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfereturnapp_c);
+
+	return 0;
+}
+
+int Mbfereturnapp_Upd_Upd( struct mbfereturnapp_c mbfereturnapp_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbfereturnapp SET rtnappno=:mbfereturnapp_c.rtnappno,
+			consigndate=:mbfereturnapp_c.consigndate,
+			odficenter=:mbfereturnapp_c.odficenter,
+			isdficode=:mbfereturnapp_c.isdficode,
+			odficode=:mbfereturnapp_c.odficode,
+			rdficenter=:mbfereturnapp_c.rdficenter,
+			osdficode=:mbfereturnapp_c.osdficode,
+			rdficode=:mbfereturnapp_c.rdficode,
+			origconsigndate=:mbfereturnapp_c.origconsigndate,
+			origtxtype=:mbfereturnapp_c.origtxtype,
+			origtxssno=:mbfereturnapp_c.origtxssno,
+			origamount=:mbfereturnapp_c.origamount,
+			appuser=:mbfereturnapp_c.appuser,
+			procstate=:mbfereturnapp_c.procstate,
+			statetime=:mbfereturnapp_c.statetime,
+			errcode=:mbfereturnapp_c.errcode,
+			errdesc=:mbfereturnapp_c.errdesc,
+			printno=:mbfereturnapp_c.printno,
+			rtnappsource=:mbfereturnapp_c.rtnappsource,
+			strinfo=:mbfereturnapp_c.strinfo
+	WHERE rowid=:mbfereturnapp_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbfereturnapp_Del_Upd(struct mbfereturnapp_c mbfereturnapp_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbfereturnapp WHERE rowid=:mbfereturnapp_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfereturnapp_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbfereturnapp;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbfereturnapp_Ins( struct mbfereturnapp_c mbfereturnapp_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbfereturnapp VALUES (:mbfereturnapp_c.rtnappno,
+			:mbfereturnapp_c.consigndate,
+			:mbfereturnapp_c.odficenter,
+			:mbfereturnapp_c.isdficode,
+			:mbfereturnapp_c.odficode,
+			:mbfereturnapp_c.rdficenter,
+			:mbfereturnapp_c.osdficode,
+			:mbfereturnapp_c.rdficode,
+			:mbfereturnapp_c.origconsigndate,
+			:mbfereturnapp_c.origtxtype,
+			:mbfereturnapp_c.origtxssno,
+			:mbfereturnapp_c.origamount,
+			:mbfereturnapp_c.appuser,
+			:mbfereturnapp_c.procstate,
+			:mbfereturnapp_c.statetime,
+			:mbfereturnapp_c.errcode,
+			:mbfereturnapp_c.errdesc,
+			:mbfereturnapp_c.printno,
+			:mbfereturnapp_c.rtnappsource,
+			:mbfereturnapp_c.strinfo);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfereturnapp error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

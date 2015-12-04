@@ -1,0 +1,72 @@
+/******************************************************************************
+*交易名称：事后监督人情差错处理                                               *
+*函数名称：sp3638()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:  
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-12 10:23                                             *
+*修改日期：                                                                   *
+*数据库表:                                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "xdtl_main_c.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+
+EXEC SQL INCLUDE sqlca;
+int sp3638()
+{  
+	char	tlrno[7];
+	char	tlrname[21];
+	char  cTmp[11];
+	char  txday[9];
+	char  wssrno[7];
+	memset(tlrno,0x00,sizeof(tlrno));
+	memset(tlrname,0x00,sizeof(tlrname));
+	memset(txday,0x00,sizeof(txday));
+	memset(wssrno,0x00,sizeof(wssrno));
+	memset(cTmp,0,sizeof(cTmp));
+	pub_base_sysinit();
+  get_fd_data("0440",txday);
+  get_fd_data("0550",cTmp);/**注意这里以后要更改xyy**/
+  get_fd_data("0170",wssrno);
+  zip_space(cTmp);
+  memcpy(tlrno,cTmp,sizeof(tlrno)-1);
+  vtcp_log("[%s][%d]txday===[%s]",__FILE__,__LINE__,txday);
+  vtcp_log("[%s][%d]tlrno===[%s]",__FILE__,__LINE__,tlrno);
+  vtcp_log("[%s][%d]wssrno==[%s]",__FILE__,__LINE__,wssrno);
+	EXEC SQL select name INTO :tlrname from tlrctl where tlrno= :tlrno;
+	if(sqlca.sqlcode!=0)
+	{
+		    vtcp_log("[%s][%d]定义游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+        sprintf( acErrMsg,"[%s][%d]定义游标报错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+	}
+	vtcp_log("[%s][%d] tlrname==[%s]",__FILE__,__LINE__,tlrname);
+  set_zd_data("0250",tlrname);
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

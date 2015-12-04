@@ -1,0 +1,147 @@
+/******************************************************************************
+*交易名称：差错登记查询(事后)		                                              *
+*功能描述: 本模块主要功能是为了方便打印差错通知书                             *
+*编写人：  ligl                                                               *
+*编写日期：2007-1-12 11:09                                                    *
+*修改日期：                                                                   *
+*数据库表:                                                                    *
+*          sherrmsg  -  查错登记簿                                            *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "xdtl_main_c.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+
+EXEC SQL INCLUDE sqlca ;
+int sp3615()
+{
+	char		txday[9];
+	char		tb_txday[9];
+	char		bh_txday[9];
+	char		tlrno[7];
+	char		wssrno[7];
+	FILE *fp=NULL;
+	int i=0;
+  char filename[256];
+	memset(filename,0x00,sizeof(filename));
+	memset(txday,0x00,sizeof(txday));
+	memset(bh_txday,0x00,sizeof(bh_txday));
+	memset(tb_txday,0x00,sizeof(tb_txday));
+	memset(tlrno,0x00,sizeof(tlrno));
+	memset(wssrno,0x00,sizeof(wssrno));
+	pub_base_sysinit();
+  get_fd_data("0440",txday);
+  get_fd_data("0920",tlrno);
+  get_fd_data("0170",wssrno);
+	EXEC SQL select global_tbsdy,global_bhdate INTO :tb_txday,:bh_txday from global;
+	if(sqlca.sqlcode!=0)
+	{
+		vtcp_log("[%s][%d]声明游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+    sprintf( acErrMsg,"[%s][%d]声明游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+    strcpy( g_pub_tx.reply, "P015" );
+    set_zd_data(DC_GET_MSG,acErrMsg);
+    WRITEMSG
+    goto ErrExit;
+	}
+	vtcp_log("[%s][%d]txday===[%s]",__FILE__,__LINE__,txday);
+	vtcp_log("[%s][%d]tb_txday[%s]",__FILE__,__LINE__,tb_txday);
+	if(memcmp(txday,tb_txday,sizeof(txday)-1)==0)
+	{
+		memcpy(txday,bh_txday,sizeof(txday)-1);
+	}
+	EXEC SQL DECLARE cur_sherrmsg CURSOR FOR select tlrno,wssrno from sherrmsg 
+				where txday= :txday and substr(errmsg,4,1) is NULL order by tlrno;
+	vtcp_log("[%s][%d] txday==[%s]",__FILE__,__LINE__,txday);
+	EXEC SQL open cur_sherrmsg;
+	if(sqlca.sqlcode!=0)
+	{
+		vtcp_log("[%s][%d]声明游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+    sprintf( acErrMsg,"[%s][%d]声明游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+    strcpy( g_pub_tx.reply, "P015" );
+    set_zd_data(DC_GET_MSG,acErrMsg);
+    WRITEMSG
+    goto ErrExit;
+	}
+	i = 0;
+	while(1)
+	{
+		  memset(tlrno,0x00,sizeof(tlrno));
+		  memset(wssrno,0x00,sizeof(wssrno));
+		  EXEC SQL fetch cur_sherrmsg
+		  	into :tlrno,:wssrno;
+		  if(sqlca.sqlcode == 1403)
+		  {
+		  	  if( i ==0)
+		  	  {
+		  	  	    /*这里不跳出的原因是允许为1403*/
+		  	        vtcp_log("[%s][%d]未找到所要的纪录[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+                sprintf( acErrMsg,"[%s][%d]未找到所要的纪录[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+                strcpy( g_pub_tx.reply, "P015" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;    
+           }   
+           break;  
+		  }
+		  if(sqlca.sqlcode) 
+		  {
+            vtcp_log("[%s][%d]fetch游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+            sprintf( acErrMsg,"[%s][%d]fetch游标报错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+      }
+		  if(!i)
+		  {
+		  			pub_base_AllDwnFilName( filename );
+		  			fp = fopen( filename,"w" );
+		  			if( fp==NULL )
+		  			{
+		  					sprintf(acErrMsg," open file [%s] error ",filename );
+		  					WRITEMSG
+		  					strcpy( g_pub_tx.reply,"S047" );
+		  					goto ErrExit;
+		  			}
+		  			/**显示列标题**/
+		  			fprintf( fp,"~操作柜员|流水号|\n" );
+		   }		
+		  fprintf(fp,"%s|%s|\n",tlrno,wssrno);			
+		  i++;
+	}
+	EXEC SQL close cur_sherrmsg;
+	if( !i )
+	{
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1" );
+	}
+	vtcp_log("[%s][%d]已经顺利的走到了最后",__FILE__,__LINE__);
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+
+
+

@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7055 财付通一点通签约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7055                         财付通一点通签约)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7055)"/>
+
+  <ITEM LINE="5"  COL="5"  TYPE="%-10s" FUNCTIONS="T(客户类型:!)" />
+  <ITEM LINE="6"  COL="35"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+  <ITEM LINE="9"  COL="5"  TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+  <ITEM LINE="10"  COL="5"  TYPE="%-10s" FUNCTIONS="T(客户名称:)" />
+  <ITEM LINE="11"  COL="5"  TYPE="%-10s" FUNCTIONS="T(移动电话:)" />
+  <ITEM LINE="12"  COL="5"  TYPE="%-10s" FUNCTIONS="T(联系地址:)" />
+  <ITEM LINE="13"  COL="5"  TYPE="%-14s" FUNCTIONS="T(每天支付限额:)" />
+  <ITEM LINE="14"  COL="5"  TYPE="%-14s" FUNCTIONS="T(单笔支付限额:)" />
+  <ITEM LINE="15"  COL="5"  TYPE="%-12s" FUNCTIONS="T(财付通帐号:)" />
+
+
+  <ITEM LINE="5" COL="16" NAME="#KHLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)" >
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="0.普通用户" />
+			<OPTION VALUE ="2" TITLE="0.vip" />
+		</SELECT>
+  </ITEM>
+  <ITEM NAME="#SKHLX" TYPE="%-4s"  FUNCTIONS="S(#KHLX,#KHLX)"/> 
+ 
+  <ITEM NAME="#SZJLX" TYPE="%-20s"  FUNCTIONS="S(#ZJLX,#ZJLX)"/> 
+   <ITEM NAME="#LDQFS" LINE="6"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="16" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="6" COL="46" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="6"  COL="46" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	   	<ITEM  LINE="7"  COL="16"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+	    <ITEM LINE="8" COL="16" NAME="#ZJLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+	 <SELECT>
+        <OPTION VALUE="1" TITLE="身份证"/>
+        <OPTION VALUE="2" TITLE="户口薄"/>
+        <OPTION VALUE="3" TITLE="护照  "/>
+        <OPTION VALUE="4" TITLE="军官证"/>
+        <OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="9" COL="16" NAME="#ZJHM" TYPE="%-20s" DEVICE="KEYBOARD" FUNCTIONS="I()">
+	<ONLOSTFOCUS>
+	" 
+	{
+    if(#ZJLX == '1' and len(#ZJHM) != 15 and len(#ZJHM) != 18){
+		showmsg('身份证号码必须为15位或18位!');
+		return (false);
+	}
+    initfd();
+    commsend_001();
+    $FD16='1712';
+    $FD68=#ZJLX;
+    $FD62=#ZJHM;
+    callserver();
+	if($FD12 != '0000')
+	{		
+	showmsg(geterror());
+	return(false);
+	}  
+	#KHXM = delspace($FD26);
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+	
+  <ITEM LINE="10" COL="16" NAME="#KHXM" TYPE="%-60s" DEVICE="KEYBOARD" INPUT="LABEL" FUNCTIONS="V(NB)"/> 
+  <ITEM LINE="11" COL="16" NAME="#TEL"  TYPE="%-30s" DEVICE="KEYBOARD" FUNCTIONS="T()"/> 
+  <ITEM LINE="12" COL="16" NAME="#ADDR" TYPE="%-50s" DEVICE="KEYBOARD" FUNCTIONS="T()"/> 
+  <ITEM LINE="13" COL="19" NAME="#JYXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  <ITEM LINE="14" COL="19" NAME="#DBXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+	"{
+	
+	  if(#JYXE>5000)
+       {
+		showmsg('每日支付限额不能大于5000!');
+		return (false);
+	     }
+    if(#DBXE>#JYXE)
+       {
+		showmsg('单笔支付限额不能大于每日支付限额!');
+		return (false);
+	     }
+  }"
+	</ONLOSTFOCUS>
+  </ITEM>	
+  <ITEM LINE="15" COL="16" NAME="#ZFB" TYPE="%-30s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+ <ITEM  NAME="#JYQD" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<!--	 <SELECT>
+        <OPTION VALUE="0" TITLE="柜面"/>
+    </SELECT>
+  </ITEM> !-->
+	<ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+	 <ITEM  NAME="#YHLX" TYPE="%-1s" FUNCTIONS="T(0)"/>
+	 <ITEM NAME="#LS"  TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD27=#KHXM;
+		$FD26=#TEL;
+		$FD27=#KHXM;
+		$FD63=#ZJHM;
+		$FD67=#KHLX;
+		$FD68=#ZJLX;
+		$FD81=#ADDR;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD39=itoa(#JYXE,'%-17.2f');
+		$FD40=itoa(#DBXE,'%-17.2f');
+		#LS=itoa(#DBXE,'%-17.2f');
+		$FD31=#ZFB;
+		$FD34=#JYQD;
+		$FD35=#KLX;
+		$FD36=#YHLX;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//为不去核心的交易补打平台流水做准备
+		$FD4=itoa(val($FD37),'%06d');	
+		runoutput();
+		close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3,30,'财付通一点通签约');
+		print(8,34,'交易成功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:7055');
+	print( 5, 13,'交易:财付通一点通签约');
+	print( 8, 20,'卡 号:[20]',#CARD_NO);
+	//print( 8, 20,'客 户 号:[10]',#CUSID);
+	print( 9, 20,'客户类型:[4] ',#SKHLX);
+	print( 10,20,'客 户 名:[60]',#KHXM);
+	print( 11,20,'证件类型:[20]         证件号码: [20]',#SZJLX,#ZJHM);
+	print( 12,20,'联系电话:[30]',#TEL);
+	print( 13,20,'联系地址:[50]',#ADDR);
+	print( 14,20,'单日支付限额:[20]', $FD39);
+	print( 15,20,'单笔支付限额:[20]', #LS);
+	print( 16,20,'财付通帐号:[30]', #ZFB);
+	print( 19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+	print( 21,80,'客户签名:_____________________');
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

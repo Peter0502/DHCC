@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1846   清算账户信息查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <FIRSTWORK RERUN="TRUE">
+"{
+          dim @tota as string;
+          initfd();
+          commsend_001();
+          $FD16='1001';
+          $FD18='pbp';
+          @tota=callagnpbp();
+          if(@tota == '' or @tota == '1')
+	  {
+	 	@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	  }
+	  setsel(#SYSCODE,@tota,'v4o1t8o1');
+}"
+</FIRSTWORK>
+<COMMSEND>
+  "{
+	initfd();
+	commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(1846                         清算账户信息查询)"/>
+  <ITEM LINE="5"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1846)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS = "T(清算账户信息查询)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1601)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+	<ITEM LINE="6"  COL="17" TYPE="%-12s" FUNCTIONS="T(系统  类型：)"/>
+	<ITEM LINE="6"  COL="29" NAME="#SYSCODE" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(sxps)V(NB)">
+			<SELECT>
+			</SELECT>
+	</ITEM>
+	<ITEM LINE="8" COL="17" TYPE="%-12s" FUNCTIONS="T(货币  代码：)"/>
+        <ITEM LINE="8" COL="29"  TYPE="%-3s"  INPUT="SELECT" DEVICE="KEYBOARD" NAME="#CurrCode" FUNCTIONS="V(NB)T(CNY)">
+                <SELECT>
+                        <OPTION VALUE ="CNY" TITLE="1.人民币" />
+                        <OPTION VALUE ="USD" TITLE="2.美元 " />
+                        <OPTION VALUE ="HKD" TITLE="3.港币" />
+                        <OPTION VALUE ="EUR" TITLE="4.欧元" />
+                        <OPTION VALUE ="GBP" TITLE="5.英镑 " />
+                        <OPTION VALUE ="JPY" TITLE="6.日元" />
+          </SELECT>
+        </ITEM>
+
+        <ITEM LINE="10" COL="17" TYPE="%-12s" FUNCTIONS="T(钞汇  类型：)"/>
+        <ITEM LINE="10" COL="29"  TYPE="%-1s"  INPUT="SELECT" DEVICE="KEYBOARD" NAME="#CurrType" FUNCTIONS="V(NB)T(0)">
+        <SELECT>
+          <OPTION VALUE="0" TITLE="丙钞"/>
+          <OPTION VALUE="2" TITLE="甲汇"/>
+          <OPTION VALUE="3" TITLE="乙钞"/>
+          <OPTION VALUE="4" TITLE="乙汇"/>
+          <OPTION VALUE="6" TITLE="丙汇"/>
+        </SELECT>
+ 	</ITEM>
+ 	
+ 	<ITEM NAME="#bank_id"    TYPE="%-30s"  />
+  	<ITEM NAME="#bank_nm"    TYPE="%-60s"  />
+  	<ITEM NAME="#Balance"    TYPE="%-20s"  />
+  	<ITEM NAME="#UsableAmt"  TYPE="%-20s"  />
+  	<ITEM NAME="#ControlAmt" TYPE="%-20s"  />
+  
+ 
+  <ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+ 	<ONCLICK>
+ 	"{
+		initfd();
+                commsend_001();
+
+                $FD16='1601';
+                $FD18='pbp';
+                $FD28=#SYSCODE;
+		$FD48=#CurrCode;
+		$FD49=#CurrType;
+
+                callagnpbp();
+
+                if($FD12!='0000')
+                {
+                        showmsg(geterror());
+                        return(false);
+                }
+		
+		#bank_id=$FD33;
+		#bank_nm=$FD27;
+                #Balance=$FD81;
+                #UsableAmt=$FD82;
+                #ControlAmt=$FD83;
+                
+		runoutput();
+		rerun();
+ 	}"
+ 	</ONCLICK>
+ </ITEM>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+        <PRINT>
+		"{
+                                PrintTxHead();
+
+				print(5,25, '清算行行号：[12]', #bank_id)
+				print(6,25, '清算行行名：[60]', #bank_nm);
+                                print(7,25, '当前  金额：[32]', #Balance);
+				print(8,25, '可用  额度：[32]', #UsableAmt);
+				print(9,25, '控制  额度：[32]', #ControlAmt);
+
+                                PrintTxTail();
+		}"
+        </PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		//$KINDNO='00';
+		//dim @txtime as string;
+		//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		PrintTxHead();
+		//print( 3, 10,'机构名称:[30]',$BRNAME);
+		//print( 3, 0,'代码:2041');
+		//print( 3, 5,'交易:清算账户信息查询'); 
+
+		print(5,25, '清算行行号：[12]', #bank_id)
+		print(6,25, '清算行行名：[60]', #bank_nm);
+                print(7,25, '当前  金额：[32]', #Balance);
+		print(8,25, '可用  额度：[32]', #UsableAmt);
+		print(9,25, '控制  额度：[32]', #ControlAmt);
+
+                PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

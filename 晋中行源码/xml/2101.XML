@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2101 建立客户识别ID"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD25=#KHXM;
+	$FD26=#TEL;
+	$FD27=#ADDR;
+	$FD62=#ZJHM;
+	$FD67=#KHLX;
+	$FD68=#ZJLX;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	#CUSID=$FD28;
+	#SERIAL=$FD4;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(2101                            建立客户识别ID)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1101)"/>
+
+  <ITEM LINE="5"  COL="5"  TYPE="%-10s" FUNCTIONS="T(客户类型:!)" />
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(证件类型:!)" />
+  <ITEM LINE="9"  COL="5"  TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+
+
+  <ITEM LINE="11"  COL="5"  TYPE="%-10s" FUNCTIONS="T(客户名称:)" />
+  <ITEM LINE="13"  COL="5"  TYPE="%-10s" FUNCTIONS="T(联系电话:)" />
+  <ITEM LINE="15"  COL="5"  TYPE="%-10s" FUNCTIONS="T(联系地址:)" />
+
+ <!----不知道要起什么作用--20060916
+	<ITEM NAME="#AFTINIT" TYPE="%1d" >
+	<ONLOSTFOCUS>
+		"{
+			if(#ZJHM!=''){
+				enable(#KHLX, false);
+				enable(#ZJLX, false);
+				enable(#ZJHM, false);
+			}
+			enable(#AFTINIT, false);
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+---->
+  <ITEM LINE="5" COL="16" NAME="#KHLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)" >
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="0.个人" />
+			<OPTION VALUE ="2" TITLE="0.公司" />
+			<OPTION VALUE ="3" TITLE="0.机构" />
+			<OPTION VALUE ="4" TITLE="0.同业" />
+		</SELECT>
+    <ONLOSTFOCUS>
+    "{
+    
+    
+	dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$TXNO='9799';
+	$FD67=#KHLX;
+	commsend_001();
+	@tota=callserver();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+
+	$TXNO=@txno_bak;
+	setsel(#ZJLX,@tota,'o5t20o1v1o2');
+	if(#KHLX=='1'){
+			//TODO：个人添加获取填单数据脚本 20140108 
+			//getkeydata('#ZJLX','1110','credty');
+	}
+  else
+  {
+     //TODO：对公添加获取填单数据脚本 20140108 
+			//getkeydata('#ZJLX','1000','repcty');
+  }
+     }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SKHLX" TYPE="%-4s"  FUNCTIONS="S(#KHLX,#KHLX)"/> 
+  <ITEM LINE="7" COL="16" NAME="#ZJLX" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD"
+		FUNCTIONS="V(NB)">
+		<SELECT>
+			<OPTION VALUE ="1" TITLE="1.身份证" />
+		</SELECT>
+		    <ONLOSTFOCUS>
+    "{
+		//	showmsg(#ZJLX);
+	if(#KHLX=='1'){
+	   //TODO：个人添加获取填单数据脚本 20140108 
+			//getkeydata('#ZJHM','1110','credno');
+	}
+  else
+  {
+     //TODO：对公添加获取填单数据脚本 20140108 
+			//getkeydata('#ZJHM','1000','repcty');
+  }
+     }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SZJLX" TYPE="%-20s"  FUNCTIONS="S(#ZJLX,#ZJLX)"/> 
+
+  <ITEM LINE="9" COL="16" NAME="#ZJHM" TYPE="%-20s" DEVICE="KEYBOARD" FUNCTIONS="I()">
+	<ONLOSTFOCUS>
+	"{
+		dim @l as number;
+		@l = len(#ZJHM);
+		if('1' == #ZJLX){
+    		if(@l == 15 or  @l == 18){
+		}else{
+	  		showmsg('身份证号码位数错误');
+        	return(false);
+			}
+    	}
+
+	//检查是否该证件已经登记
+		dim @txno_bak as string;
+		dim @tota as string;
+		@txno_bak=$TXNO;
+		$TXNO='9797';
+		$FD62=#ZJHM;
+		$FD68=#ZJLX;
+		//9797 判断 如果是建id不加证件类型的判断 wudawei 20131011
+		$FD49='1101';
+		commsend_001();
+		$TXNO=@txno_bak;
+		@tota=callserver();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if(#KHLX=='1'){
+		//TODO：个人添加获取填单数据脚本 20140108 
+		//getkeydata('#KHXM','1110','nm');
+		//getkeydata('#TEL','1110','cal');
+		//getkeydata('#ADDR','1110','add');
+		}
+		else{
+		//TODO：对公添加获取填单数据脚本 20140108 
+		//getkeydata('#KHXM','1000','curnm');
+		//getkeydata('#TEL','1000','curcal');
+		//getkeydata('#ADDR','1000','curadd');
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+	<!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+  <ITEM LINE="11" COL="16" NAME="#KHXM" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  	"{
+  		  //add 20130926 wudawei start 调用身份核查
+  		  dim @res as string;
+				if(#ZJLX=='1' or #ZJLX=='2')
+				{
+					@res = idcheck(#ZJHM,#KHXM,'','N');
+					#HCJGBL = strfld(@res,'|',1);
+					//@res = strfld(@res,'|',0);
+					//if(@res=='02' or @res=='03' or @res=='05' or @res=='06')
+					//{
+							//showmsg('身份核查结果不通过，不能继续办理！');
+							//return(false);
+					//}
+				}
+				//add 20130926 end
+  	}"
+  </ONLOSTFOCUS>	
+  </ITEM> 
+  <ITEM LINE="13" COL="16" NAME="#TEL"  TYPE="%-30s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM LINE="15" COL="16" NAME="#ADDR" TYPE="%-50s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		//dim @rh as string;
+		//@rh=PrintBilldata();		
+		//	showmsg(@rh);
+		//if(@rh=='0')
+		//return(false);
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD25=#KHXM;
+		$FD26=#TEL;
+		$FD27=#ADDR;
+		$FD62=#ZJHM;
+		$FD67=#KHLX;
+		$FD68=#ZJLX;
+		@tota=callserver();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		else{
+			#CUSID=$FD28;
+			#SERIAL=$FD4;
+			runoutput();
+			showall();
+			if(#KHLX=='1'){ //个人客户
+				@ch=showmsg('选择要转入的交易，1-IC活期开户;2-活期开户;3-定期开户;4-继续;0-退出 ：');
+				if(@ch == '0')return(true);
+				else if(@ch == '4') open('2102.XML', '#CUSID='+#CUSID+';');
+				else if(@ch == '2') open('3101.XML', '#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';');
+				else if(@ch == '3') open('3103.XML', '#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';');
+				else if(@ch == '1') open('3701.XML', '#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';');
+
+			  } //使公司客户直接关联到对公各开户交易
+			  else if(#KHLX=='2' or #KHLX=='4' or #KHLX=='3'){ //公司、同业客户 还有机构户
+				@ch=showmsg('选择要转入的交易，1-活期开户;2-定期开户;3-贷款审批;0-退出 ：');
+				if(@ch =='1') open('4101.XML','#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';');
+				else if(@ch =='2') open('4102.XML','#ZJLX='+#ZJLX+';#ZJHM='+#ZJHM+';');
+				else if(@ch =='3') open('4405.XML','#DKNAME='+#KHXM+';');
+				else return(true);
+			  }
+			  else{ //机构客户
+				open('2111.XML','#CUSID='+#CUSID+';');
+				return(true);
+			  }
+			}
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3,25,'建立客户识别ID');
+		print(5,15,'开户行号 :[5  ]',$FD2);
+		print(6,15,'客 户 号 :[8     ]',#CUSID);
+		print(7,15,'户    名 :[50                                              ]',#KHXM);
+		print(8,15,'流 水 号 :[8     ]',#SERIAL);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:2101');
+	print( 5, 13,'交易:建立客户ID');
+	print( 8, 20,'客 户 号:[10]',#CUSID);
+	print( 9, 20,'客户类型:[4] ',#SKHLX);
+	print( 10,20,'客 户 名:[60]',#KHXM);
+	print( 11,20,'证件类型:[20]         证件号码: [20]',#SZJLX,#ZJHM);
+	print( 12,20,'联系电话:[30]',#TEL);
+	print( 13,20,'联系地址:[50]',#ADDR);
+	print( 14,20,'身份核查结果:[60] ',#HCJGBL);
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

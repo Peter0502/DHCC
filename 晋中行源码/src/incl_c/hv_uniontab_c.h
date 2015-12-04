@@ -1,0 +1,36 @@
+#ifndef __hv_uniontab_CH__
+#define __hv_uniontab_CH__
+struct hv_uniontab_c{
+	char      rowid[20];
+	char      or_br_no[13];
+	char      br_sts[2];
+	char      br_categ[3];
+	char      br_code[4];
+	char      sendco[5];
+	char      dir_br_code[13];
+	char      node_code[6];
+	char      superior[131];
+	char      pb_code[13];
+	char      city_code[5];
+	char      acct_sts[2];
+	char      acctsts_chg_dt[9];
+	char      acctsts_chg_tm[15];
+	char      br_name_f[61];
+	char      br_name_s[21];
+	char      addr[61];
+	char      phone[31];
+	char      email[31];
+	char      postcode[7];
+	char      start_date[9];
+	char      end_date[9];
+	char      chg_date[9];
+	char      fax[21];
+	char      telegraph[9];
+	char      qs_no[13];
+	char      acct_lvl[2];
+	char      obr_no_attr[2];
+	char      upd_type[2];
+	char      rec_upd_no[9];
+	char      km_actno[17];
+};
+#endif 

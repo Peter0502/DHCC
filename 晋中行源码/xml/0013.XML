@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="0013  七天通知存款解约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+  $FD30=#CARDNO;
+  $FD68=#OpType;
+  $FD62=#ZJHM;
+  $FD79=#PASSWD;
+}"
+</COMMSEND>
+<COMMRECV>"{
+  commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS= 
+  "T(0013                           七天通知存款解约)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=0013)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXNAME"  TYPE="%-24s" FUNCTIONS="T(七天通知存款解约)"/>
+
+  <!--输入变量-->
+  <ITEM NAME="#LDQFS" LINE="5"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="5" COL="13" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+    <SELECT>
+        <OPTION VALUE="0" TITLE="读取磁条方式"/>
+        <OPTION VALUE="1" TITLE="读取芯片方式"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+    show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6" COL="5" TYPE="%-9s" FUNCTIONS="T(卡 号:)"/>
+    <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="6" COL="13" TYPE="%-20s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+     <ONLOSTFOCUS>
+     "{
+        #CARDNO=#ACTNO1;
+     }"
+     </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="6"  COL="13" TYPE="%-20s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+     <ONLOSTFOCUS>
+     "{
+     	#CARDNO=#ACTNO2;
+     }"
+     </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CARDNO"   TYPE="%-20s" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    dim @buffer as string;
+    initfd();
+    commsend_001();
+    $FD16='3222';
+    $FD30=#CARDNO;
+    @buffer=callserver();
+    #KHMC=$FD25;
+    #ZHYE=itoa(val($FD40,0.01),'%-17.2f');
+    #ZJLX=$FD63;
+    #ZJHM=$FD62;
+    #YDDH=$FD83;
+    #LXDZ=$FD82;
+    #KYJE=itoa(val($FD41,0.01),'%-17.2f');
+    #BYJE=itoa(val($FD42,0.01),'%-17.2f');
+    #KYYE=itoa(val($FD43,0.01),'%-17.2f');
+    if($FD12!='0000'){
+      showmsg(geterror());
+      //return(false);
+      }
+       showblock('ACTINFO',true,true);
+
+  }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6" COL="46" TYPE="%-9s" FUNCTIONS="T(密 码:)"/>
+  <ITEM NAME="#PASSWD" INPUT="TEXT" LINE="6" COL="53"  TYPE="%-6d" DEVICE="PINPAD" FUNCTIONS="T()i()V(NB)">
+    <ONLOSTFOCUS>
+    "{
+        //验证账号的卡折密码是否正确
+        initfd();
+        commsend_001();
+        if(substr(#CARDNO,0,6)!='621223' and substr(#CARDNO,0,6)!='621780')
+        {
+            $FD30=#CARDNO;
+            $FD79=#PASSWD;
+            $FD16='9317';
+            callserver();
+            if($FD12!='0000')
+            {
+              showmsg(geterror());
+              return(false);
+            }
+        }
+        else if(substr(#CARDNO,0,6) == '621223' or substr(#CARDNO,0,6)=='621780')
+        {
+		        $FD16='7007';
+		        $FD30=#CARDNO;
+		        $FD68='4';
+		        $FD79=#PASSWD;
+		        callagn();
+		        if( $FD12 != '0000')
+		        {
+		        	showmsg(geterror());
+		        	//return(false);
+		        }
+		    }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#LACTNO"  LINE="7"  COL="5"   TYPE="%-16s"  VISABLE="FALSE"FUNCTIONS="T(【账号信息】)"/>
+  <ITEM LINE="8"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(-----------------------------------------------------------------------)"/>
+   
+    <BLOCK NAME="ACTINFO" LINE="8" COL="0" VISABLE="FALSE" >
+  <ITEM LINE="1" COL="5" TYPE="%-9s"  FUNCTIONS="T(户  名:)"/>
+  <ITEM NAME="#KHMC"   LINE="1"   COL="16" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="1" COL="46" TYPE="%-9s" FUNCTIONS="T(总余额:)"/>
+  <ITEM NAME="#ZHYE" LINE="1" COL="53" TYPE="%-20s"FUNCTIONS=""/>
+
+  <ITEM LINE="2" COL="5" TYPE="%-9s" FUNCTIONS="T(证件类型:)"/>
+  <ITEM NAME="#ZJLX" LINE="2" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+  
+  <ITEM LINE="2" COL="46" TYPE="%-9s" FUNCTIONS="T(证件号码:)"/>
+  <ITEM NAME="#ZJHM" LINE="2" COL="56" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="3" COL="5" TYPE="%-9s" FUNCTIONS="T(移动电话:)"/>
+  <ITEM NAME="#YDDH" LINE="3" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="4" COL="5" TYPE="%-9s" FUNCTIONS="T(联系地址:)"/>
+  <ITEM NAME="#LXDZ" LINE="4" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="5" COL="5" TYPE="%-9s" FUNCTIONS="T(留存金额:)"/>
+  <ITEM NAME="#KYJE" LINE="5" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="6" COL="5" TYPE="%-9s" FUNCTIONS="T(账户余额:)"/>
+  <ITEM NAME="#KYYE" LINE="6" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+  
+  <ITEM LINE="7" COL="5" TYPE="%-9s" FUNCTIONS="T(备用金额:)"/>
+  <ITEM NAME="#BYJE" LINE="7" COL="16" TYPE="%-20s" FUNCTIONS=""/>
+
+  <ITEM LINE="8" COL="5" TYPE="%-74s" FUNCTIONS=
+   "T(-----------------------------------------------------------------------)"/>
+
+  <ITEM LINE="10" COL="11" TYPE="%-9s" FUNCTIONS="T(解约类型:)"/>
+
+  <ITEM NAME="#OpType" INPUT="SELECT" LINE="10" COL="20" TYPE="%-10s" FUNCTIONS="T()V(NB)"> 
+  <SELECT>
+    <OPTION VALUE="0" TITLE="1.解 约"/>
+<!--    <OPTION VALUE="1" TITLE="2.临时解约"/>-->
+  </SELECT>
+  </ITEM>
+  </BLOCK>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <!---- 变量转化--->
+   <ITEM NAME="#SBYJE"     TYPE="%-21s"   FUNCTIONS="X(#BYJE)"/>
+   <ITEM NAME="#SKYJE"     TYPE="%-21s"   FUNCTIONS="X(#KYJE)"/>
+  <ITEM NAME="#PASSWORD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+  <PRINT>
+  "{
+    print( 5,22,'七天通知存款解约成功');
+    print( 6,22,'解约主账号: [20]',#CARDNO);
+    //print(7,22,'客 户 名 称: [20]',$FD25);
+    //print(8,22,'移 动 电 话: [20]',#YDDH);
+    //print(9,22,'联 系 地 址: [60]',#LXDZ);
+    //print(10,22,'可 用 金 额: [60]',#KYYE);
+    //print(11,22,'备 用 金 额: [60]',#BYJE);
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印七天通知存款解约凭证">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    dim @txtime as string;
+    @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print( 5, 20,'机构名称:[30]',$BRNAME);  
+		print( 5, 2,'代码:0013');
+    print( 5,13,'七天通知存款解约成功');
+    print( 9,20,'解约主账号:[20]',#CARDNO);
+    print(10,20,'客 户 名 称: [20]',#KHMC);
+    print(11,20,'移 动 电 话: [20]',#YDDH);
+    print(12,20,'联 系 地 址: [60]',#LXDZ);
+    print(13,20,'可 用 金 额: [20]',#KYYE);
+    print(14,20,'备 用 金 额: [20]',#BYJE);
+    print(15,20,'留 存 金 额: [20]',#KYJE);
+	  print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+	  print(21,80,'客户签名:_____________________');
+   	print( 24,20,'备注:');	
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4); 
+  }"
+  </PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

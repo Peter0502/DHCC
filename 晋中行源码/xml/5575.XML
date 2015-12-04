@@ -1,0 +1,366 @@
+<TRANSACTION RIGHTS="11110000"  TITLE="5575     商业银行办理支付无（有）纸凭证退款请求"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{  
+    initfd();
+    //FD52  存放财政机关代码
+    //FD53  存放国库主体代码
+    //FD59  存放代理银行行号
+    //FD67  存放支付方式
+    //FD68  存放支出凭证类型
+    //FD39  存放总金额
+    //FD44  存放委托日期
+    //FD34  存放总笔数
+    
+    $FD52=getitems('#FINORGCODE');
+    $FD53=getitems('#TRECODE');
+    $FD59=getitems('#AGENTBNKCODE');
+    $FD67=getitems('#PAYMODE');
+    $FD68=getitems('#PAYOUTVOUTYPE');
+    $FD39=getitems('#ALLAMT');
+    $FD44=getitems('#ENTRUSTDATE');
+    $FD34=getitems('#ALLNUM');
+    commsend_001();
+    
+}"
+</COMMSEND>
+
+<COMMRECV>
+"{
+commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+"T(5575            商业银行办理支付无（有）纸凭证退款请求)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5595)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM NAME="#INIT" TYPE="%1s">  
+  <ONLOSTFOCUS>
+  "{
+    if(#INIT=='')
+    {
+    list_init(7,60,15,3);
+    list_setcolcnt(10);
+    list_setcol(0,'原交易流水号',13,0);
+    list_setcol(1,'原委托日期',11,0);
+    list_setcol(2,'预算种类',9,0);
+    list_setcol(3,'原凭证编号',20,0);
+    list_setcol(4,'明细条数',9,0);
+    list_setcol(5,'金额',20,0);
+    list_setcol(6,'原付款人账号',32);
+    list_setcol(7,'原付款人名称',50);
+    list_setcol(8,'原收款人账号',32);
+    list_setcol(9,'原收款人名称',50);   
+    list_show();
+    }
+  }"
+  </ONLOSTFOCUS>
+</ITEM> 
+  <!--输入变量-->
+<ITEM LINE="5"   COL="3" TYPE="%-13s" FUNCTIONS="T(财政机关代码:)"/>
+<ITEM NAME="#FINORGCODE" INPUT="TEXT" LINE="5" COL="16" TYPE="%-12s" FUNCTIONS="V(NB)T()"/>
+<ITEM LINE="5"   COL="29" TYPE="%-13s" FUNCTIONS="T(国库主体代码:)"/>
+<ITEM NAME="#TRECODE" INPUT="TEXT" LINE="5" COL="42" TYPE="%-10s" FUNCTIONS="V(NB)T()"/>
+<ITEM LINE="5"   COL="53" TYPE="%-13s" FUNCTIONS="T(代理银行行号:)"/>
+<ITEM NAME="#AGENTBNKCODE" INPUT="TEXT" LINE="5" COL="66" TYPE="%-12s" FUNCTIONS="V(NB)T()"/>
+<ITEM LINE="6"   COL="3" TYPE="%-13s" FUNCTIONS="T(支出凭证类型:)"/>
+<ITEM NAME="#PAYOUTVOUTYPE" INPUT="SELECT" LINE="6" COL="16" TYPE="%-1d" FUNCTIONS="T(0)V(0|1)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="无纸凭证"/>
+    <OPTION VALUE="1" TITLE="有纸凭证"/>
+  </SELECT>
+</ITEM>
+<ITEM LINE="6" COL="33" TYPE="%-9s" FUNCTIONS="T(委托日期:)"/>
+<ITEM NAME="#ENTRUSTDATE" INPUT="TEXT"  LINE="6" COL="42" TYPE="%8d" FUNCTIONS="D()V(NB)"/>
+<ITEM NAME="#NUM"  TYPE="%6d" FUNCTIONS="T(0)"/>
+<ITEM LINE="6"   COL="51" TYPE="%-7s" FUNCTIONS="T(总笔数:)"/>
+<ITEM NAME="#ALLNUM" INPUT="LABEL" LINE="6" COL="58" TYPE="%-4d" FUNCTIONS="T(0)"/>
+<ITEM LINE="7"   COL="3" TYPE="%-13s" FUNCTIONS="T(支 付  方 式:)"/>
+<ITEM NAME="#PAYMODE" INPUT="SELECT" LINE="7" COL="16" TYPE="%-1d" FUNCTIONS="T(0)V(0|1)">
+  <SELECT>
+    <OPTION VALUE="0" TITLE="直接支付"/>
+    <OPTION VALUE="1" TITLE="授权支付"/>
+  </SELECT>
+</ITEM>
+<ITEM LINE="7"   COL="51" TYPE="%-7s" FUNCTIONS="T(总金额:)"/>
+<ITEM NAME="#ALLAMT2"  TYPE="%17.2f" FUNCTIONS="J(#ALLAMT)"/>
+<ITEM NAME="#ALLAMT" INPUT="LABEL" LINE="7" COL="58" TYPE="%-17.2f" FUNCTIONS="X(#ALLAMT2)"/>
+
+<ITEM LINE="8"   COL="8" TYPE="%-64s" FUNCTIONS="T(----------------------------退款信息----------------------------)"/>
+<ITEM LINE="9"   COL="3"  TYPE="%-13s" FUNCTIONS="T(原交易流水号:)"/>
+<ITEM NAME="#ORITRANO" INPUT="TEXT" LINE="9" COL="16" TYPE="%-8s" FUNCTIONS="V(NB)T()"/>
+<ITEM LINE="9"   COL="25"  TYPE="%-11s" FUNCTIONS="T(原委托日期:)"/>
+<ITEM NAME="#ORIENTRUSTDATE" INPUT="TEXT" LINE="9" COL="36" TYPE="%-8s" FUNCTIONS="V(NB)T()D()">
+<ONLOSTFOCUS>
+    "{
+       dim @baktxno as string;
+      
+       @baktxno=$TXNO;
+       $TXNO='9669';
+       initfd();
+       $FD28=#ORITRANO;
+       $FD45=#ORIENTRUSTDATE;
+       commsend_001();
+       //callserver();
+       calltips();
+       $TXNO=@baktxno;
+       if($FD12!='0000'){
+       showmsg(geterror());
+       return (false);
+       }
+       setitems('#BUDGETTYPE',$FD70);
+       setitems('#ORIVOUNO',$FD58); 
+    setitems('#STATINFNUM',$FD50);
+    setitems('#AMT2',$FD40);
+    setitems('#ORIPAYERACCT',$FD30);
+    setitems('#ORIPAYERNAME',$FD25);  
+    setitems('#ORIPAYEEACCT',$FD31);
+    setitems('#ORIPAYEENAME',$FD26);
+
+    }" 
+   </ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="9"   COL="45"  TYPE="%-9s"  FUNCTIONS="T(预算种类:)"/>
+<ITEM NAME="#BUDGETTYPE" INPUT="LABEL" LINE="9" COL="54" TYPE="%-1d">
+  <SELECT>
+    <OPTION VALUE="1" TITLE="预算内"/>
+    <OPTION VALUE="2" TITLE="预算外"/>
+  </SELECT>
+</ITEM>
+<ITEM LINE="10"   COL="3"  TYPE="%-13s" FUNCTIONS="T(  原凭证编号:)"/>
+<ITEM NAME="#ORIVOUNO" INPUT="LABEL" LINE="10" COL="16" TYPE="%-20s" />
+<ITEM LINE="10"  COL="37"  TYPE="%-9s" FUNCTIONS="T(明细条数:)"/>
+<ITEM NAME="#STATINFNUM" INPUT="LABEL" LINE="10" COL="46" TYPE="%3d" />
+<ITEM LINE="10"  COL="53"  TYPE="%-5s" FUNCTIONS="T(金额:)"/>
+<ITEM NAME="#AMT2"  TYPE="%17.2f" FUNCTIONS="J(#AMT)"/>
+<ITEM NAME="#AMT" INPUT="LABEL" LINE="10" COL="58" TYPE="%17.2f" FUNCTIONS="X(#AMT2)"/>
+<ITEM LINE="11"  COL="3"  TYPE="%-13s" FUNCTIONS="T(原付款人账号:)"/>
+<ITEM NAME="#ORIPAYERACCT" INPUT="LABEL" LINE="11" COL="16" TYPE="%-32s" />
+<ITEM LINE="12"  COL="3"  TYPE="%-13s" FUNCTIONS="T(原付款人名称:)"/>
+<ITEM NAME="#ORIPAYERNAME" INPUT="LABEL" LINE="12" COL="16" TYPE="%-60s" />
+<ITEM LINE="13"  COL="3"  TYPE="%-13s" FUNCTIONS="T(原收款人账号:)"/>
+<ITEM NAME="#ORIPAYEEACCT" INPUT="LABEL" LINE="13" COL="16" TYPE="%-32s" />
+<ITEM LINE="14"  COL="3"  TYPE="%-13s" FUNCTIONS="T(原收款人名称:)"/>
+<ITEM NAME="#ORIPAYEENAME" INPUT="LABEL" LINE="14" COL="16" TYPE="%-60s"/>
+
+<ITEM NAME="#ADDTK" LINE="16" COL="64" TYPE="%-8s" FUNCTIONS="T(添加退款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @a as number;
+    dim @allnum as number;
+    dim @cnt as number;
+    dim @amt as string;
+    dim @allamt as number;
+    //FD28  原交易流水号
+    //FD45  原委托日期
+    //FD70  预算种类
+    //FD58  原凭证编号
+    //FD40  交易金额
+    //FD30  原付款人账号
+    //FD25  原付款人名称
+    //FD31  原收款人账号
+    //FD26  原收款人名称
+    //FD54  明细条数
+    initfd();
+    $FD98='1';
+    $FD28=getitems('#ORITRANO');
+    $FD45=getitems('#ORIENTRUSTDATE');
+    $FD70=getitems('#BUDGETTYPE');
+    $FD58=getitems('#ORIVOUNO');
+    $FD50=getitems('#STATINFNUM');
+    $FD40=getitems('#AMT');
+    $FD30=getitems('#ORIPAYERACCT');
+    $FD25=getitems('#ORIPAYERNAME');
+    $FD31=getitems('#ORIPAYEEACCT');
+    $FD26=getitems('#ORIPAYEENAME');
+    commsend_001();
+    
+    @a=msgbox('是否将上述退款信息增加？','确认添加吗','ok|cancel');
+    if(@a==0){
+      //callserver();
+      calltips();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      
+  // #ALLNUM=#ALLNUM+1;
+    //#NUM=#ALLNUM;
+   
+   @amt=getitems('#AMT');
+   @allamt=getitems('#ALLAMT');
+   @allamt=@allamt+@amt;
+  //  #ALLAMT=#ALLAMT+#AMT2;
+  //  @allamt=itoa(#ALLAMT,'%17.2f');
+ // @allamt=#ALLAMT;
+ setitems('#ALLAMT','@allamt');
+    refresh();
+    
+   // showmsg('@allamt');
+    //#ALLAMT2=val(@amt);
+    @amt=itoa(#AMT2,'%17.2f');
+   // showmsg(@amt);
+    
+list_additem('',#ORITRANO,#ORIENTRUSTDATE,#BUDGETTYPE,#ORIVOUNO,#STATINFNUM,@amt,#ORIPAYERACCT,#ORIPAYERNAME,#ORIPAYEEACCT,#ORIPAYEENAME);
+   }
+   @cnt=list_getrowcnt();
+   list_work();
+   if(@cnt!=0)
+       #INIT='1';
+   }" 
+   
+  </ONCLICK>
+</ITEM> 
+<ITEM NAME="#ADDMX" LINE="17" COL="64" TYPE="%-8s" FUNCTIONS="T(输入明细)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @cnt as number;
+    dim @a as number;
+    dim @msg as string;
+    dim @id as number;
+    dim @opflag as number;
+    @id=0;
+    @cnt=list_getrowcnt();
+    @opflag=0;
+    if(@cnt!=0){
+      @msg='请选择要添加退款明细的退款';
+      showmsg(@msg,2);
+      list_work();
+      @id =list_getselid();
+
+      #ORITRANO=list_gettext(@id,0);
+      #ORIENTRUSTDATE=list_gettext(@id,1);
+
+      }
+    if(@cnt!=0){
+    open('5575_1.XML','#ORITRANO='+#ORITRANO+';#ORIENTRUSTDATE='+#ORIENTRUSTDATE+';');
+    @opflag=1;
+    
+    return(true);
+    } else {
+      showmsg('请先添加退款然后再增加退款明细');
+      goitem(#ORITRANO);
+      @opflag=0;
+      return(false);
+    }
+    @a=msgbox('是否继续增加新的退款？','继续新增加吗','ok|cancel');
+    if(@a==0){
+      goitem(#ORITRANO);
+    };
+  }"
+    
+  </ONCLICK>
+</ITEM>     
+<ITEM NAME="#NEXT" LINE="18" COL="64" TYPE="%-8s" FUNCTIONS="T(下一退款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    goitem(#ORITRANO);
+      return(true);
+    }"
+  </ONCLICK>
+</ITEM> 
+<ITEM NAME="#DELTK" LINE="19" COL="64" TYPE="%-8s" FUNCTIONS="T(删除退款)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+    dim @a as number;
+    dim @id as number;
+    dim @cnt as number;
+    dim @msg as string;
+    
+    @cnt=0;
+		@cnt=list_getrowcnt();
+		
+		if(@cnt!=0){
+		  @msg='请选择要删除的退款';
+      showmsg(@msg,2);
+		  list_work();
+			@id =list_getselid();
+			@msg='确认要删除第'+itoa(@id+1)+'条退款信息';
+			@a=msgbox(@msg,'确认删除？','ok|cancel');
+	    if(@a==0){
+	         initfd();
+		     $FD28=list_gettext(@id,0);
+		     $FD45=list_gettext(@id,1);
+         $FD98='3';
+         commsend_001();
+         //callserver();
+         calltips();
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return(false);
+        }
+
+        list_rmitem(@id);
+        
+      }
+    } else {
+      showmsg('请先添加退款然后再删除');
+      goitem(#ORITRANO);
+      return(false);
+    }
+    }"
+  </ONCLICK>
+</ITEM> 
+<ITEM NAME="#SUBMIT" LINE="21"   COL="64"  TYPE="%-8s" FUNCTIONS="T(发送申请)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+	    initfd();
+    //FD52  存放财政机关代码
+    //FD53  存放国库主体代码
+    //FD59  存放代理银行行号
+    //FD67  存放支付方式
+    //FD68  存放支出凭证类型
+    //FD39  存放总金额
+    //FD44  存放委托日期
+    //FD34  存放总笔数
+    $FD52=getitems('#FINORGCODE');
+    $FD53=getitems('#TRECODE');
+    $FD59=getitems('#AGENTBNKCODE');
+    $FD67=getitems('#PAYMODE');
+    $FD68=getitems('#PAYOUTVOUTYPE');
+    $FD39=getitems('#ALLAMT');
+    $FD44=getitems('#ENTRUSTDATE');
+    $FD34=getitems('#ALLNUM');
+      
+    commsend_001();
+		
+		$FD98='5';
+		//@msg=callserver();
+		@msg=calltips();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if(substr($FD54,5,5)=='90000')
+		showmsg('发送成功，且收到9121回执');
+			
+		else
+		{
+			showmsg('发送成功，');
+			return(false);
+		}
+		}"
+  </ONCLICK>
+</ITEM>
+		
+		
+		
+		
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="商业银行办理支付无（有）纸凭证退款请求">
+NOTHING
+</PACKAGE>
+  <PRINT>
+  "{
+  }"
+  </PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,181 @@
+/*************************************************************
+* 文 件 名: gD405.c
+* 功能描述：汇总利息税明细
+*           从dc_log_rz中汇总每天的发生额然后插入 sum_tax中
+*           由于流水表没记利息和税的记录所以只能从dc_log_rz取
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403){\
+	sprintf(acErrMsg,"sqlerror[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	strcpy( g_pub_tx.reply,"D103" );\
+	goto ErrExit;\
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+#define EXTERN
+#include "public.h"
+#include "trace_log_bk_c.h"
+#include "sum_tax_new_c.h"
+#include "com_branch_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+gD405()
+{
+	int ret = 0;
+	int br_type;
+  char br_no[6];
+  char prdt_no[4];
+  double tax=0.00;
+  double intst=0.00;
+  int cnt=0;
+  int i=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+		long sql_tx_date,sql_trace_no,sql_next_date;
+		char sql_tx_code[5],sql_prdt_no[4],sql_br_no[6];
+		struct sum_tax_new_c s_sum_tax_new;
+		double tmp_intst,tmp_20_intst,tmp_tax,tmp_20_tax,xiubu_tax,all_tax;
+		int tmp_cnt,tmp_20_cnt;
+	EXEC SQL END DECLARE SECTION;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	EXEC SQL drop table tmp_tax;
+	EXEC SQL update mo_int_tax_hst set tx_date=20070832 where substr(tx_date,5,2)!='08' or substr(tx_date,1,4)!=2007;
+	MYSQLERR
+	EXEC SQL create table tmp_tax as select * from mo_int_tax_hst;
+	MYSQLERR
+
+	EXEC SQL  update tmp_tax a set a.brf=(select distinct b.prdt_no from td_mst b where a.ac_id=b.ac_id and a.ac_seqn=b.ac_seqn) where a.ac_id||a.ac_seqn in(select ac_id||ac_seqn from td_mst);
+	MYSQLERR
+	EXEC SQL  update tmp_tax a set a.filler=(select distinct b.opn_br_no from td_mst b where a.ac_id=b.ac_id and a.ac_seqn=b.ac_seqn) where a.ac_id||a.ac_seqn in(select ac_id||ac_seqn from td_mst);
+	MYSQLERR
+
+	/* 从执行完 gDbfz5 的程序后恢复sum_tax_new*/
+	EXEC SQL truncate table sum_tax_new;
+	EXEC SQL insert into sum_tax_new select * from tmp_405_sum_tax_new;
+	MYSQLERR
+	EXEC SQL delete from sum_tax_new where "date" is null or "date"=0;
+	MYSQLERR
+	EXEC SQL insert into sum_tax_new select '',substr(filler,1,5),brf,'',sum(intst),sum(intst_tax),count(*),intst_tax_rate from tmp_tax where brf is not null group by substr(filler,1,5),brf,intst_tax_rate;
+	MYSQLERR
+
+	/* 合并sum_tax_new 表,每个机构的每个产品只有2条记录: 20%,5% */
+	EXEC SQL drop table tmp_sum_all;
+	EXEC SQL create table tmp_sum_all as select * from sum_tax_new where 1>2;
+	MYSQLERR
+	EXEC SQL insert into tmp_sum_all select 20070832,br_no,prdt_no,sum(cls_amt) ,sum(intst),sum(tax),sum(cnt) ,intst_tax_rate from sum_tax_new where br_no!='10000' group by br_no,prdt_no,intst_tax_rate;
+	MYSQLERR
+	EXEC SQL delete from sum_tax_new;
+	MYSQLERR
+	EXEC SQL insert into sum_tax_new select * from tmp_sum_all;
+	MYSQLERR
+	/* 再插一次总行的 */
+	EXEC SQL insert into sum_tax_new select 20070832,'10000',prdt_no,sum(cls_amt),sum(intst),sum(tax),sum(cnt),intst_tax_rate from tmp_sum_all group by prdt_no,intst_tax_rate;
+	MYSQLERR
+
+	/* 从 sum_tax 里取出总的利息和利息税的数 */
+	EXEC SQL drop table tmp_sum_tax;
+	EXEC SQL create table tmp_sum_tax as select br_no,prdt_no,sum(intst) intst,sum(tax) tax,sum(cnt) cnt from sum_tax where intst>0  and substr("date",5,2)='08' group by br_no,prdt_no;
+	MYSQLERR
+
+	/* 另外建立一个20％ 税的表，是为了5％的做个更新，以便总数对 */
+	EXEC SQL drop table tmp_sum_20;
+	EXEC SQL create table tmp_sum_20 as select br_no,prdt_no,sum(intst) intst,sum(tax) tax,sum(cnt) cnt from sum_tax_new where intst>0 and intst_tax_rate=0.2 group by br_no,prdt_no;
+	MYSQLERR
+
+	/*重新更新一下 sum_tax_new 里5％税率的内容,这样20％＋5％＝报表上的数了*/ 
+	ret=Sum_tax_new_Dec_Upd(g_pub_tx.reply,"intst_tax_rate=0.05 order by br_no,prdt_no ");
+	if(ret)
+	{
+		sprintf(acErrMsg,"declare cursor error[%d]!",ret);
+		strcpy(g_pub_tx.reply,"E200");
+		return 1;
+	}
+	while(1){
+		memset(&s_sum_tax_new,'\0',sizeof(s_sum_tax_new));
+		ret=Sum_tax_new_Fet_Upd(&s_sum_tax_new,g_pub_tx.reply);
+		if(ret==100){
+			break;
+		}
+		if(ret)
+			goto ErrExit;
+		tmp_intst=0;tmp_tax=0;tmp_cnt=0;tmp_20_intst=0;tmp_20_tax=0;tmp_20_cnt=0;
+		EXEC SQL select sum(intst),sum(tax),sum(cnt) into :tmp_intst,:tmp_tax,:tmp_cnt from tmp_sum_tax where br_no=:s_sum_tax_new.br_no and prdt_no=:s_sum_tax_new.prdt_no;
+		MYSQLERR
+		EXEC SQL select sum(intst),sum(tax),sum(cnt) into :tmp_20_intst,:tmp_20_tax,:tmp_20_cnt from sum_tax_new where br_no=:s_sum_tax_new.br_no and prdt_no=:s_sum_tax_new.prdt_no and intst_tax_rate=0.2;
+		MYSQLERR
+		s_sum_tax_new.intst=tmp_intst-tmp_20_intst;
+		s_sum_tax_new.tax=tmp_tax-tmp_20_tax;
+		if(s_sum_tax_new.intst<0.001 || s_sum_tax_new.tax<0.001){
+			EXEC SQL update sum_tax_new set intst=:tmp_intst-67.12,tax=intst*0.2 where intst_tax_rate=0.2 and br_no=:s_sum_tax_new.br_no and prdt_no=:s_sum_tax_new.prdt_no;
+			MYSQLERR;
+			s_sum_tax_new.intst=67.12;
+			s_sum_tax_new.tax=s_sum_tax_new.intst*0.05;
+		}
+		else{
+			s_sum_tax_new.tax=tmp_tax-tmp_20_tax;
+		}
+		/*s_sum_tax_new.cnt=fabs(tmp_cnt-tmp_20_cnt);*/
+		ret=Sum_tax_new_Upd_Upd(s_sum_tax_new,g_pub_tx.reply);
+		if(ret)
+			goto ErrExit;
+	}
+	Sum_tax_new_Clo_Upd();
+
+	EXEC SQL declare xiubu_cur cursor for select br_no,sum(tax) from sum_tax_new group by br_no;
+	EXEC SQL open xiubu_cur;
+	while(1){
+		memset(sql_br_no,'\0',sizeof(sql_br_no)); xiubu_tax=0;
+		EXEC SQL fetch xiubu_cur into :sql_br_no,:xiubu_tax;
+		if(sqlca.sqlcode==1403)
+			break;
+		all_tax=0;
+		EXEC SQL select sum(tax) into :all_tax from tmp_sum_tax where br_no=:sql_br_no;
+		if(sqlca.sqlcode){
+			vtcp_log(" sumtax err[%d]",sqlca.sqlcode);
+			goto ErrExit;
+		}
+		if(pub_base_CompDblVal(xiubu_tax,all_tax)!=0){
+			EXEC SQL update sum_tax_new set tax=:all_tax-:xiubu_tax+tax,intst=(:all_tax-:xiubu_tax+tax)/0.2 where br_no=:sql_br_no and prdt_no='204' and intst_tax_rate=0.2;
+			if(sqlca.sqlcode){
+				vtcp_log(" upd sum_tax_new err[%d]",sqlca.sqlcode);
+				goto ErrExit;
+			}
+		}
+	}
+
+	/* 更新 intst 字段,使得符合 利息*税率＝利息税 */
+	EXEC SQL update sum_tax_new set intst=tax*5 where intst_tax_rate=0.2 and prdt_no not in('211','212','213');
+		MYSQLERR
+	EXEC SQL update sum_tax_new set intst=tax*20 where intst_tax_rate=0.05 and prdt_no not in('211','212','213');
+		MYSQLERR
+
+/*
+	EXEC SQL update sum_tax_new a set a.intst=(select b.intst-c.intst from tmp_sum_20 c,tmp_sum_tax b where a.br_no=b.br_no and b.br_no=c.br_no and a.prdt_no=b.prdt_no and b.prdt_no=c.prdt_no), \
+	 a.tax=(select b.tax-c.tax from tmp_sum_20 c,tmp_sum_tax b where a.br_no=b.br_no and b.br_no=c.br_no and a.prdt_no=b.prdt_no and b.prdt_no=c.prdt_no) , \
+	 a.cnt=(select b.cnt-c.cnt from tmp_sum_20 c,tmp_sum_tax b where a.br_no=b.br_no and b.br_no=c.br_no and a.prdt_no=b.prdt_no and b.prdt_no=c.prdt_no) where a.intst_tax_rate=0.05 and a.prdt_no in(select prdt_no from tmp_sum_20) ;
+	MYSQLERR
+*/
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"补丁 mo_int_tax_hst OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"补丁 mo_int_tax_hst ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	strcpy( g_pub_tx.reply,"D103" );\
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

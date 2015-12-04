@@ -1,0 +1,141 @@
+/*************************************************************
+* 文 件 名:   gDKHWH.pc
+* 功能描述： 未维护的客户信息插入cif_inf表
+**************************************************************/
+#define ERR_DEAL   if(ret){ WRITEMSG  goto ErrExit;} 
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "trace_log_c.h"
+#include "cif_basic_inf_c.h"
+#include "dd_mst_c.h"
+#include "td_mst_c.h"
+#include "cif_inf_c.h"
+
+gDKHWH()
+{
+	int ret=0;
+	char sWherelist[512];
+	struct com_sys_parm_c	sCom_sys_parm;
+	struct cif_basic_inf_c sCif_basic_inf;
+	struct dd_mst_c sDd_mst;
+	struct td_mst_c sTd_mst;
+	struct cif_inf_c sCif_inf;
+
+	memset(sWherelist,0x00,sizeof(sWherelist));
+	memset(&sCom_sys_parm,0x00,sizeof(sCom_sys_parm));
+	memset(&sCif_basic_inf,0x00,sizeof(sCif_basic_inf));
+	memset(&sDd_mst,0x00,sizeof(sDd_mst));
+	memset(&sTd_mst,0x00,sizeof(sTd_mst));
+	memset(&sCif_inf,0x00,sizeof(sCif_inf));
+
+	pub_base_sysinit();
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if(pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret){
+		sprintf(acErrMsg,"查询公共参数表错误!");
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O005");
+		goto ErrExit;
+	}
+	sprintf(sWherelist,"1=1 and sts='1' and cif_no not in(select cif_no from cif_per_inf) ");
+	
+	ret=Cif_basic_inf_Dec_Sel(g_pub_tx.reply, sWherelist);
+	if(ret)
+	{
+		vtcp_log("[%s][%d] Cif_basic_inf生命游标错误 错误 %d",__FILE__,__LINE__,ret);
+		strcpy(g_pub_tx.reply,"D101");
+		goto ErrExit;
+	}
+	while(1)
+	{
+		memset(&sDd_mst,0x00,sizeof(sDd_mst));
+		memset(&sTd_mst,0x00,sizeof(sTd_mst));	
+		memset(&sCif_basic_inf,0x00,sizeof(sCif_basic_inf));
+		
+		ret=Cif_basic_inf_Fet_Sel(&sCif_basic_inf,g_pub_tx.reply);
+		if(ret==100)
+		{
+			break;
+		}
+		else if(ret)
+		{
+			vtcp_log("[%s][%d] Cif_basic_inf_Fet_Sel 错误 %d",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D102");
+			goto ErrExit;
+		}
+						
+		ret=Dd_mst_Sel(g_pub_tx.reply, &sDd_mst, "cif_no=%ld order by opn_date", sCif_basic_inf.cif_no);
+		if(ret==100)
+		{
+			vtcp_log("%s,%d,[%d]",__FILE__,__LINE__,sCif_basic_inf.cif_no);
+			ret=Td_mst_Sel(g_pub_tx.reply, &sTd_mst, "cif_no=%ld order by opn_date", sCif_basic_inf.cif_no);
+			if(g_reply_int==100)
+			{
+				continue;
+			}
+			else if(ret!=100 && ret)
+			{
+				vtcp_log("[%s][%d] Td_mst_Sel 错误 %d",__FILE__,__LINE__,ret);
+				strcpy(g_pub_tx.reply,"D102");
+				goto ErrExit;
+			}
+			strcpy(g_pub_tx.opn_br_no, sTd_mst.opn_br_no);
+		}
+		else if(ret!=100 && ret)
+		{
+			vtcp_log("[%s][%d] Dd_mst_Sel 错误 %d",__FILE__,__LINE__,ret);
+			strcpy(g_pub_tx.reply,"D102");
+			goto ErrExit;
+		}
+		else 
+		{
+			strcpy(g_pub_tx.opn_br_no, sDd_mst.opn_br_no);
+		}
+
+		sCif_inf.cif_no=sCif_basic_inf.cif_no;
+		strcpy(sCif_inf.name, sCif_basic_inf.name);
+		sCif_inf.crt_date=sCif_basic_inf.crt_date;
+		strcpy(sCif_inf.sts,"1"); 
+		strcpy(sCif_inf.br_no, g_pub_tx.opn_br_no);
+		
+		ret=Cif_inf_Ins(sCif_inf, g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"insert cif_inf error");
+			WRITEMSG
+			goto ErrExit;
+		}
+		
+		Cif_inf_Debug(&sCif_inf);
+	}
+	Cif_basic_inf_Clo_Sel();
+
+OkExit:
+	sql_commit();   /*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"处理成功[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+    
+ErrExit:
+	sql_rollback();/*--事务回滚--*/
+	sprintf(acErrMsg,"处理失败[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+

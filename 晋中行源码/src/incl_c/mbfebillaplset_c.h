@@ -1,0 +1,37 @@
+#ifndef __mbfebillaplset_CH__
+#define __mbfebillaplset_CH__
+struct mbfebillaplset_c{
+	char      rowid[20];
+	char      msssno[9];
+	long      consigndate;
+	char      odficode[13];
+	char      rdficode[13];
+	char      payeropenaccbkcode[13];
+	long      billdate;
+	char      billcode[9];
+	char      billofxchngseal[11];
+	double    remittanceamnt;
+	char      billsts[2];
+	char      setsts[2];
+	double    repudiationamnt;
+	double    redundantamnt;
+	char      recipientopenaccbk[13];
+	char      lastbillholderacc[33];
+	char      lastbillholdername[61];
+	long      prmptpaydate;
+	char      appuser[5];
+	char      billtype[2];
+	char      sendtime[15];
+	long      setdate;
+	long      setflowno;
+	char      settxssno[9];
+	long      los_rpt_date;
+	char      los_rpt_tel[5];
+	char      los_rpt_bookno[11];
+	long      clos_rpt_date;
+	char      clos_rpt_tel[5];
+	char      errcode[9];
+	char      errdesc[61];
+	char      strinfo[61];
+};
+#endif 

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3424 对公存单置换 "
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD30  = #CARDNO;
+	$FD116 = #MDMCODE+space(131)+#ZSS_NOTE_NO;
+	$FD45  = #CHGDATE;
+	$FD58  = #ZD_NOTE_NO;
+//验印 start 20131212 yaofuqiang
+			//验印 end 20131212 yaofuqiang
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(3424                        对公存单置换证实书)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2424)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  <ITEM LINE="7"  COL="7" TYPE="%-9s"  FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="8"  COL="7" TYPE="%-9s"  FUNCTIONS="T(姓    名:)"/>
+  <ITEM LINE="9"  COL="7" TYPE="%-9s"  FUNCTIONS="T(余    额:)"/>
+  
+  <ITEM LINE="11" COL="7" TYPE="%-9s"  FUNCTIONS="T(存单号码:)"/>
+  <ITEM LINE="12" COL="7" TYPE="%-9s"  FUNCTIONS="T(置换日期:)"/>
+  <ITEM LINE="13" COL="3" TYPE="%-13s" FUNCTIONS="T(原证实书号码:)"/>
+  
+ <ITEM NAME="#CARDNO" INPUT="TEXT" LINE="7" COL="17" TYPE="%-19s" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>
+	"{
+		dim @tota    as string;
+		dim @prdt_no as string;
+
+		//if(substr(#CARDNO,0,1) != '5')
+		//{
+		//	showmsg('请输入对公户!');
+		//	return(false);
+		//}
+		initfd();
+		commsend_001();	
+		$FD16='9740';
+		$FD30=#CARDNO;
+		$FD34='0000';		
+		@tota = callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		@prdt_no = $FD23;	
+		if(substr(@prdt_no,0,1) != '2')
+		{
+			showmsg('请输入定期户!');
+			return(false);
+		}
+		if(@prdt_no == '281' or @prdt_no == '282')
+		{
+			showmsg('本交易不支持单位通知!');
+			return(false);
+		}
+		#USERNAME = $FD25;
+		#AVL      = val($FD41,0.01);
+		
+		enable(#USERNAME,false);
+		enable(#AVL,false);
+	}"
+	</ONLOSTFOCUS>
+ </ITEM>
+
+  <ITEM NAME="#USERNAME"  INPUT="TEXT"    LINE="8"  COL="17" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#AVL"       INPUT="TEXT"    LINE="9"  COL="17" TYPE="%17.2f" FUNCTIONS="V(0000000000000000,9999999999999999)"/>
+
+  <ITEM NAME="#MDMCODE"       TYPE="%4s"      FUNCTIONS="T(0007)"/> <!----介质种类为证实书---->
+  <ITEM NAME="#ZD_NOTE_NO"    INPUT="TEXT"    LINE="11" COL="17" TYPE="%16d" FUNCTIONS="V(NB)"/><!----存单号码---->
+  <ITEM NAME="#CHGDATE"       INPUT="TEXT"    LINE="12" COL="17" TYPE="%8s"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#ZSS_NOTE_NO"   INPUT="TEXT"    LINE="13" COL="17" TYPE="%16d" FUNCTIONS="V(NB)"/><!----证实书号码---->
+  
+  <ITEM NAME="#SBAL"  TYPE="%13.2f" FUNCTIONS="J(#UPBAL)J(#XSBAL)"/>
+  <ITEM NAME="#XSBAL" TYPE="%-16s"  FUNCTIONS="X(#SBAL)"/>
+  <ITEM NAME="#UPBAL" TYPE="%-40s"  FUNCTIONS="U(#SBAL)"/>
+  <ITEM  LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/> 
+   
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,20,'           证实书置换存单成功');
+print(9,20,'    帐    号: [19    ]                ',#CARDNO);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="原存单">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	print(13,30,'\L0【 已转证实书 】\L1');
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

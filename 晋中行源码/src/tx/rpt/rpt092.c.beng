@@ -1,0 +1,274 @@
+/*************************************************************
+* 文 件 名: rpt092.c
+* 功能描述：
+*		为反洗钱准备数据
+* 作    者: 
+* 完成日期: 
+* 修改记录：
+* 日    期: 2007年10月29日
+* 修 改 人: chenhw
+* 修改内容:
+**************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include "com_sys_parm_c.h"
+
+extern char *get_env_info(char *infoname);
+
+int rpt092()
+{
+	int ret=0;
+	char	comm[1024];
+	char filename[64],path[64],dbuser[16],dbpasswd[16];
+	struct com_sys_parm_c	s_com_sys_parm;
+	memset( &s_com_sys_parm , 0x00 , sizeof(struct com_sys_parm_c));
+
+	/* 取前一天交易日期 */
+	ret = Com_sys_parm_Sel( g_pub_tx.reply , &s_com_sys_parm , "1=1" );
+	ERR_DEAL
+	 
+
+    memset(comm,0,sizeof(comm));
+    strcpy(path,getenv("BFLDIR"));
+    /*
+    strcpy(path,getenv("HOME"));
+    */
+    /****
+    strcpy(dbuser,getenv("DB_USER"));
+    strcpy(dbpasswd,getenv("DB_PASSWD"));
+    ****/
+    strcpy(dbuser,get_env_info("DB_USER"));
+    strcpy(dbpasswd,get_env_info("DB_PASSWD"));
+    
+    
+    /**sprintf(comm,"%s/%s/%de/",path,s_com_sys_parm.lst_date);**/
+    sprintf(comm,"%s/%s/",path,"fxmoneydata");
+    ret = chdir(comm);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    if ( ret )
+    {
+        sprintf(acErrMsg,"进入目录失败[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O141");
+        goto ErrExit;
+    }
+
+		
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"fxmoney.%ld",s_com_sys_parm.lst_date);
+    
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=dd_mst,td_mst,mdm_ac_rel,cif_basic_inf,cif_id_code_rel,cif_addr_inf,cif_cop_inf,cif_per_inf,com_sys_parm,mo_discnt,hv_poinfo 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=dd_mst,td_mst,mdm_ac_rel,cif_basic_inf,cif_id_code_rel,cif_addr_inf,cif_cop_inf,cif_per_inf,com_sys_parm,mo_discnt,hv_poinfo 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  	
+	  sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=dd_mst,td_mst,mdm_ac_rel,cif_basic_inf,cif_id_code_rel,cif_addr_inf,cif_cop_inf,cif_per_inf,com_sys_parm,mo_discnt,hv_poinfo  parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename);
+    
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+	/** 只需要当天数据的表 dd_mst_hst**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"dd_mst_hst.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=dd_mst_hst query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=dd_mst_hst query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=dd_mst_hst query=\\\" where tx_date \\\= %ld \\\"  parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+	/** 只需要当天数据的表 td_mst_hst**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"td_mst_hst.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=td_mst_hst query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=td_mst_hst query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=td_mst_hst query=\\\" where tx_date \\\= %ld \\\" parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+	/** 只需要当天数据的表 lv_pkgreg**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"lv_pkgreg.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=lv_pkgreg query=\\\" where in_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=lv_pkgreg query=\\\" where in_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=lv_pkgreg query=\\\" where in_date \\\= %ld \\\" parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+	/** 只需要当天数据的表 hv_zf**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"hv_zf.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=hv_zf query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=hv_zf query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=hv_zf query=\\\" where tx_date \\\= %ld \\\" parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+	/** 只需要当天数据的表 trace_log 日终后的数据所以 trace_log_bk**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"trace_log_bk.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=trace_log_bk query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=trace_log_bk query=\\\" where tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=trace_log_bk query=\\\" where tx_date \\\= %ld \\\" parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+    
+    /** 只需要当天数据的表 hv_poinfo add by hxc 091211**/
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"hv_poinfo.%ld",s_com_sys_parm.lst_date);
+    /*
+    if(getenv("DB_NAME")!=NULL){
+        sprintf(comm,"exp %s/%s@%s file=%s/%s/%s tables=hv_poinfo query=\\\" where l_tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }else{
+        sprintf(comm,"exp %s/%s file=%s/%s/%s tables=hv_poinfo query=\\\" where l_tx_date \\\= %ld \\\" 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,"fxmoneydata",filename,s_com_sys_parm.lst_date);
+    }
+    */
+    sql_execute("create or replace directory dump_dir as '%s/%s'",path,"fxmoneydata"); /*生成备份目录*/  
+    sprintf(comm,"expdp %s/%s directory=dump_dir dumpfile=%s tables=hv_poinfo query=\\\" where l_tx_date \\\= %ld \\\" parallel=4 logfile=shsj.log 1>/dev/null 2>/dev/null",dbuser,dbpasswd,filename,s_com_sys_parm.lst_date);
+    
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"为反洗钱备份数据错误[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+    /** 只需要当天数据的表 hv_poinfo end by hxc 091211**/
+
+	/* 将数据传送 */
+	/* system("sleep 60"); 先歇60秒再运行 */
+
+	/****
+	sprintf(comm,"ftp_fxmoney.sh %d 1>/dev/null 2>&1 ",s_com_sys_parm.lst_date);
+	****/
+	sprintf(comm,"ftp_fxmoney.sh %s %s %d 1>/dev/null 2>&1 ",get_env_info("FXMONEY_FTP_USER"),get_env_info("FXMONEY_FTP_PWD"),s_com_sys_parm.lst_date);
+	ret=system(comm);
+	vtcp_log("comm[%s][%d]",comm,ret);
+ /*为征信系统提取数据 begin 20120628 */
+       sprintf(comm,"ftp_to_cis.sh %s %s %s %s %d",get_env_info("CIS_USER"),get_env_info("CIS_PWD"),get_env_info("DB_USER"),get_env_info("DB_PASSWD"),s_com_sys_parm.lst_date);
+       ret=system(comm);
+       if ( ret )
+       {
+          sprintf(acErrMsg,"为征信系统提取数据错误[%d]",ret);
+          WRITEMSG
+          strcpy(g_pub_tx.reply,"AT13");
+          goto ErrExit;
+      }
+   /*为征信系统提取数据 end  20120628 */
+
+GoodExit:
+	strcpy(g_pub_tx.reply,"0000");
+	return 0;
+ErrExit:
+	return 1;
+}

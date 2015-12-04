@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7057 财付通一点通改限"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7057                         财付通一点通改限)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7057)"/>
+
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+  <ITEM LINE="13"  COL="5"  TYPE="%-14s" FUNCTIONS="T(每天支付限额:)" />
+  <ITEM LINE="14"  COL="5"  TYPE="%-14s" FUNCTIONS="T(单笔支付限额:)" />
+  <ITEM  LINE="6" COL="16"  NAME="#CARD_NO" INPUT="TEXT" DEVICE="MSR" TYPE="%-19s" FUNCTIONS="V(NB)m($MSR2,1,19)">
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223')
+						{
+							showmsg('卡号的前6位必须为621223');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+
+						commsend_001();
+						$FD16='9961';
+						$FD30=#CARD_NO;
+    					callserver();
+    					if($FD12!='0000'){
+    						showmsg(geterror());
+    						return(false);
+    					}
+						#KHM=$FD25;
+						show(#KHM,true);
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	   <ITEM LINE="7" COL="16" NAME="#KHM"  ENABLE="FALSE" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+	   	<ITEM LINE="8"  COL="16"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+	
+  <ITEM LINE="13" COL="19" NAME="#JYXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  <ITEM LINE="14" COL="19" NAME="#DBXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#LS"  TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD39=itoa(#JYXE,'%-17.2f');
+		#LS=itoa(#DBXE,'%-17.2f');
+		$FD40=itoa(#DBXE,'%-17.2f');
+		$FD35=#KLX;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		runoutput();
+		 close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3,28,'财付通一点通改限');
+		print(8,32,'交易成功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:7057');
+	print( 5, 13,'交易:财付通一点通改限');
+	print( 8, 20,'卡    号:[20]',#CARD_NO);
+	print( 9, 20,'客 户 名:[60]',#KHM);
+	print( 10,20,'单日支付限额:[20]', $FD39);
+	print( 11,20,'单笔支付限额:[20]', #LS);
+	print( 19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+	print( 21,80,'客户签名:_____________________');
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

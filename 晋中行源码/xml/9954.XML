@@ -1,0 +1,468 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="代收用户退费"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9954                      代收用户退费 )"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=3011)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="5" COL="5"  TYPE="%-12s" NAME="#LAGENTTYPE" FUNCTIONS="T(代收费类型: )"/>
+  <ITEM LINE="5" COL="15" TYPE="%-2s"  NAME="#AGENTTYPE"  INPUT="SELECT" FUNCTIONS="V(NB)T(01)">
+    <SELECT>
+    	 <OPTION VALUE="01" TITLE="晋中燃气"/>  
+      <!--<OPTION VALUE="02" TITLE="国新洁源天然气"/>-->
+	    <OPTION VALUE="03" TITLE="晋中供水"/>
+	    <OPTION VALUE="04" TITLE="瑞阳供热"/>
+	    <OPTION VALUE="07" TITLE="国网晋中供电"/>
+    </SELECT>
+  </ITEM>
+
+  <ITEM LINE="5" COL="40"   TYPE="%-14s"  VISABLE="TRUE"   NAME="#LCARDTYPE"  FUNCTIONS="T(用户介质类型:)"/>
+  <ITEM LINE="5" COL="51"  TYPE="%-2s"   VISABLE="TRUE"   NAME="#CARDTYPE"   INPUT="SELECT"  FUNCTIONS="V(NB)T(01)">
+    <SELECT>
+      <OPTION VALUE="01" TITLE="无卡普表"/>
+     <!--<OPTION VALUE="02" TITLE="IC卡"/>
+      <OPTION VALUE="03" TITLE="射频卡"/>
+      <OPTION VALUE="04" TITLE="代码表"/>-->
+    </SELECT>
+    <ONLOSTFOCUS>
+    	"{
+    		if(#AGENTTYPE=='04')
+		{
+			showmsg('用户号中字母请输入大写');
+		}
+    	}"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM TYPE="%-512s"   VISABLE="FALSE"   NAME="#CARDCONT"   FUNCTIONS="" />
+  <ITEM NAME="#AGENTTYPE_NAME"  TYPE="%-20s" FUNCTIONS="S(#AGENTTYPE,#AGENTTYPE)"/>
+  <ITEM NAME="#CARDTYPE_NAME"  TYPE="%-20s" FUNCTIONS="S(#CARDTYPE,#CARDTYPE)"/>
+
+  <ITEM LINE="7"   COL="5"  TYPE="%-14s"    FUNCTIONS="T(用 户 代 码:)"/>
+  <ITEM LINE="7"   COL="15" NAME="#USER_NO" INPUT="TEXT" TYPE="%-20s"  FUNCTIONS="V(NB)"/>
+
+  <ITEM NAME="#AGENT_TYPE_QURY"    TYPE="%-2s"  FUNCTIONS=""/>
+  <ITEM NAME="#USER_NO_QURY"    TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#TX_AMT_QURY"    TYPE="%-40s"  FUNCTIONS=""/>
+  <ITEM NAME="#TX_STAT"    TYPE="%-2s"  FUNCTIONS=""/>
+  <ITEM LINE="7"   COL="40"  TYPE="%-14s"    FUNCTIONS="T(平台流水号:)"/>
+  <ITEM LINE="7"   COL="50"  TYPE="%-12s"    NAME="#OLD_TRACENO"    INPUT="TEXT"  FUNCTIONS="V(000000000001,999999999999)"/>
+  <ITEM LINE="9"   COL ="5"  TYPE="%-14s"    FUNCTIONS="T(缴 费 日 期:)"/>
+  <ITEM LINE="9"   COL="15"  TYPE="%-8s"    NAME="#OLD_DATE"    INPUT="LABEL"  FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="9"  COL="40"   TYPE="%-14s"    FUNCTIONS="T(缴 费 金 额:)"/>
+  <ITEM LINE="9"  COL="50"  TYPE="%10.2f"   NAME="#OLD_AMT"   INPUT="TEXT"  FUNCTIONS="V(0000000001,9999999999)">
+    <ONLOSTFOCUS>
+    "{
+	//检查交易流水
+	initfd();
+	commsend_001();
+	$FD16='6607';              //平台补打业务凭条接口
+	$FD60='AGENT';             //平台交易类型
+	$FD21='01';                //柜面发起标志
+	$FD22=#AGENTTYPE;          //代收费类型
+	$FD32=#OLD_TRACENO;        //退费交易流水
+	$FD28=#OLD_DATE;           //当日日期
+	
+	dim @tota as string;
+	dim @newmsg as string;   //瑞阳写卡数据
+	
+	@tota = callagnpt();
+	//showmsg('$FD12 = '+$FD12);
+	if($FD12!='0000')
+	{
+	 	showmsg(geterror());
+	 	rerun();
+	 	return(false);
+	}
+	//showmsg('@tota = '+@tota );
+	
+	#BIAO_TYPE=strfld(@tota,'|',6);          //介质类型
+	//showmsg('后台返回的介质类型='+#BIAO_TYPE);
+	if(#BIAO_TYPE != '01')
+	{
+		if(#AGENTTYPE=='04')
+		{
+			showmsg('该用户为卡缴费，请到瑞阳公司营业大厅办理退费！');
+  			return(false);
+		}
+		else
+		{
+			showmsg('只有普表能退费，此笔交易不是普表!');
+			return(false);
+		}
+	}
+
+	#YHNAME=strfld(@tota,'|',11);            //用户姓名
+	#ADDRESS=strfld(@tota,'|',12);           //用户单位及地址
+	
+	
+	#AC_NO=strfld(@tota,'|',2);              //账号
+	#AC_NAME=strfld(@tota,'|',3);            //户名
+	
+	#JFFS=strfld(@tota,'|',8);               //缴费方式
+	#TX_CODE=strfld(@tota,'|',0);            //交易代码
+	
+	#AGENT_TYPE_QURY=delspace($FD22);        //代收类型
+	#USER_NO_QURY=strfld(@tota,'|',13);      //用户代码
+	#TX_STAT=strfld(@tota,'|',10);           //交易状态
+	#TX_AMT_QURY=delspace(itoa(strfld(@tota,'|',4),'%-10.2f'));    //交易金额
+	
+	if(#AGENTTYPE=='04')
+	{
+		#YHNO=delspace(strfld(@tota,'|',24));		//用户ID
+		#YHNAME=delspace(strfld(@tota,'|',25));	//用户名
+		#ADDRESS=delspace(strfld(@tota,'|',26));	//用户地址
+		#YEAR=delspace(strfld(@tota,'|',27));		//业务年度
+		#MONTH=delspace(strfld(@tota,'|',29));		//月数
+
+		#FWMJ=atoi(strfld(@tota,'|',28))/100;;		//房屋面积
+		#MJDJ=atoi(strfld(@tota,'|',30))/100;		//面积单价
+		#MJYS=atoi(strfld(@tota,'|',31))/100;		//面积应收
+		#JLDJ=atoi(strfld(@tota,'|',33))/100;		//计量单价
+		#JLYL=atoi(strfld(@tota,'|',32))/100;		//计量用量
+		#JLYS=atoi(strfld(@tota,'|',34))/100;		//计量应收
+		#YSBJ=atoi(strfld(@tota,'|',35))/100;		//应收本金
+		#JMJE=atoi(strfld(@tota,'|',36))/100;		//减免金额
+		#YHJE=atoi(strfld(@tota,'|',37))/100;		//优惠金额
+		#RYAMT=atoi(strfld(@tota,'|',38))/100;		//实收金额
+		
+		#BZ=delspace(strfld(@tota,'|',39));		//备注
+		#TRACE_NO=delspace(strfld(@tota,'|',40));	//缴费/退费流水
+		#JFDATE=delspace(strfld(@tota,'|',19));		//交易日期
+		#RYAC_NO=delspace(strfld(@tota,'|',42));                        //支付账号
+  		#RYAC_NAME=delspace(strfld(@tota,'|',43));                      //户名
+  		
+  		#RYCARD_TYPE=delspace(strfld(@tota,'|',54));                      //卡标志
+  		
+  		if(#RYCARD_TYPE=='1')
+		{
+			showmsg('该用户为有卡用户，请到瑞阳公司营业大厅办理退费！');
+  			return(false);
+		}
+  		
+  		
+  //		showmsg('#YEAR = '+#YEAR);
+  //		showmsg('#YEAR = '+itoa(#RYAMT));
+	}
+	
+	if((#AGENT_TYPE_QURY!=delspace(#AGENTTYPE)) or (#USER_NO_QURY!=delspace(#USER_NO)) or (#TX_AMT_QURY!=delspace(itoa(#OLD_AMT,'%-10.2f'))))
+	{
+		showmsg('输入的平台流水号与对应的代收类型/用户代码/缴费金额非同一笔交易，请核对!');
+		return(false);
+	}
+
+      //已退费交易不可退费
+      if(#TX_STAT=='T'){
+        showmsg('该笔流水已退费不可重复退费，请确认流水号！');
+        rerun();
+        return(false);
+      }
+      //非缴费交易不可退费
+      if(#TX_CODE!='6602'){
+        showmsg('非缴费流水不可进行退费交易，请确认流水号！');
+        rerun();
+        return(false);
+      }
+      //转账缴费时，需要验密
+      if(#JFFS=='2'){
+        show(#LAC_NO,true);
+        show(#AC_NO,true);
+        show(#LACNAME,true);
+        show(#AC_NAME,true);
+        show(#LMM,true);
+        show(#DRAW_PWD,true);
+      }else{
+        show(#LAC_NO,false);
+        show(#AC_NO,false);
+        show(#LACNAME,false);
+        show(#AC_NAME,false);
+        show(#LMM,false);
+        show(#DRAW_PWD,false);
+      }
+
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BIAO_TYPE" TYPE="%-2s" FUNCTIONS=""/>
+  <ITEM NAME="#SYBS" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#BYBS" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#YL" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#DJ" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#RQF" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#BXF" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#FZJ" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SYQF" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#ZNJ" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SYJY" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#DYJJK" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#YSHJ" TYPE="%-11s" FUNCTIONS=""/>
+  <ITEM NAME="#CHBY" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#PHONE" TYPE="%-11s" FUNCTIONS=""/>
+
+  <ITEM LINE="11" COL="5"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+
+  <ITEM LINE="13"  COL="5" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="13"  COL="15" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+  <ITEM LINE="14"  COL="5"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="14"  COL="15" NAME="#ADDRESS"  TYPE="%-64s"    INPUT="LABEL" FUNCTIONS="T()"/>
+
+  <ITEM LINE="16" COL="5"  NAME="#LAC_NO"  VISABLE="FALSE" INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(账    号:)" />
+  <ITEM LINE="16" COL="15" NAME="#AC_NO"   VISABLE="FALSE" INPUT="LABEL" TYPE="%-19s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="16" COL="40"  NAME="#LACNAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="16" COL="50" NAME="#AC_NAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-60s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="17" COL="5" NAME="#LMM" TYPE="%-10s" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="17" COL="15" NAME="#DRAW_PWD" TYPE="%6d" VISABLE="FALSE" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+    <ONLOSTFOCUS>
+    "{
+      if(substr(#AC_NO,0,6)!='621223' and substr(#AC_NO,0,6)!='621780')  //存折验密
+      {
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9317';
+        commsend_001();
+        $FD30=#AC_NO;
+        $FD79=getitems('#DRAW_PWD');
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return (false);
+        }
+      }
+      else if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')  //卡验密
+      {
+        initfd();
+        commsend_001();
+        $FD16='7007';         //卡验密接口
+        $FD30=#AC_NO;         //绑定卡号
+        $FD68='4';
+        $FD79=#DRAW_PWD;      //卡密码
+        callagn();
+        if( $FD12 != '0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#JFFS"        TYPE="%1s"      FUNCTIONS=""/>
+  <ITEM NAME="#TX_CODE"     TYPE="%4s"      FUNCTIONS=""/>
+  <ITEM NAME="#TRACE_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+  
+   <!--瑞阳供热打印需要字段  begin
+		地址，年度，月数，房屋面积，面积单位，面积应收，计量用量，计量单价，计量应收，
+		应收本金，减免金额，优惠金额，实收金额，备注
+	-->	
+	<ITEM  NAME="#ADDRESS"	TYPE="%-60s"	FUNCTIONS="T()"/>
+	<ITEM NAME="#YEAR"	TYPE="%-20s"	FUNCTIONS="T()"/>
+	<ITEM NAME="#MONTH"	TYPE="%-10s"	FUNCTIONS="T()"/>
+	<ITEM NAME="#FWMJ"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#MJDJ"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#MJYS"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#JLYL"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#JLDJ"	TYPE="%-16.3f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#JLYS"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>	
+	<ITEM NAME="#YSBJ"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#JMJE"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#YHJE"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#RYAMT"	TYPE="%-16.2f"	FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#URYAMT" TYPE="%-40s"  FUNCTIONS="U(#RYAMT)"/>	
+	<ITEM NAME="#BZ"	TYPE="%-60s"	FUNCTIONS="T()"/>
+	<ITEM NAME="#RYAC_NO"        TYPE="%-24s"     FUNCTIONS=""/>
+	<ITEM NAME="#RYAC_NAME"      TYPE="%-24s"     FUNCTIONS=""/> 
+	<ITEM NAME="#RYCARD_TYPE"      TYPE="%-1s"     FUNCTIONS=""/> 
+	<!--end-->
+  
+
+  <ITEM NAME="#BTN" LINE="21"  COL="61"  TYPE="%-6s"     FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>
+    "{
+      initfd();
+      commsend_001();
+      $FD16='3369';                   //退费需要授权
+      callserver();
+      if($FD12 !='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+
+       initfd();
+       commsend_001();
+       $FD16='6603';            //平台退费
+       $FD60='AGENT';           //平台交易类型
+       $FD21='01';              //柜面发起标志
+       $FD22=#AGENTTYPE;        //代收费类型
+	     $FD23=#CARDTYPE;         //介质类型
+	     $FD95=#CARDCONT;         //介质信息
+
+       $FD59=#OLD_TRACENO;      //原流水
+       $FD86=#OLD_DATE;;        //原交易日期
+
+       $FD30=#USER_NO;          //用户唯一标识
+       $FD39=#OLD_AMT;          //原交易金额
+	     $FD79=#DRAW_PWD;				    	//密码
+	     
+	if(#AGENTTYPE == '04')
+	{
+		$FD20='0';	//瑞阳供热卡标识  0 无卡 1 有卡 
+	}
+	
+       callagnpt();
+       if($FD12!='0000'){
+         showmsg(geterror());
+         return(false);
+       }
+
+     #TRACE_NO=delspace($FD32);           //平台流水号
+
+      //转账存折缴费场合，需要补登存折
+      if(#JFFS=='2' and len(delspace(#AC_NO))==13 and substr(#AC_NO,0,1)!='5')
+      {
+        showmsg('原缴费交易为转账存折方式，请凭证打印完毕后进行3407补登存折！');
+      }
+
+     runoutput();
+     rerun();
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN"  DESC="显示内容">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    print(3,27,'退费交易成功');
+    print(6,20,'用户代码：[10]                     用户姓名：[40]',#USER_NO,#YHNAME);
+    if(#AGENTTYPE != '07')
+    {
+    	print(7,20,'地    址：[64]',#ADDRESS);
+    }
+    print(8,20,'原缴费金额：[16]         退费金额：[16]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(comma(itoa(#OLD_AMT,'%.2f'))));
+    print(9,20,'原缴费流水：[12]             退费流水：[12]',delspace(#OLD_TRACENO),#TRACE_NO);
+    if(#JFFS == '2')
+    {
+      print(10,20,'退费方式：转账');
+      print(11,20,'银行卡：[19]          户名：[60]',#AC_NO,#AC_NAME);
+    }
+    else
+    {
+      print(10,20,'退费方式：现金');
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="打印专用凭证" CHECK="#AGENTTYPE?04">
+    NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(5,20,'机构名称:[30]',$BRNAME);
+    print(5,2,'代码:9954');
+    print(5,13,'交易:代收用户退费');
+
+    print(7,40,'\L0代收用户退费\L1');
+
+    if(#JFFS == '2')
+    {
+    	if(#AGENTTYPE == '07'){
+				print(9,20,'代缴类型：[12]公司        退费方式：转账',#AGENTTYPE_NAME);
+    	}else{
+				print(9,20,'代缴类型：[20]    退费方式：转账',#AGENTTYPE_NAME);
+			}
+    }
+    else
+    {
+    	if(#AGENTTYPE == '07'){
+				print(9,20,'代缴类型：[12]公司        退费方式：现金',#AGENTTYPE_NAME);
+    	}else{
+				print(9,20,'代缴类型：[20]    退费方式：现金',#AGENTTYPE_NAME);
+			}
+    }
+    print(10,20,'用户代码：[10]              用户姓名：[40]',#USER_NO,#YHNAME);
+    if(#AGENTTYPE != '07')
+    {
+    	print(11,20,'地    址：[64]',#ADDRESS);
+    }
+    if(#JFFS == '2')
+    {
+      print(12,20,'原缴费金额：[16]      支付账号：[19]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(#AC_NO));
+      print(13,20,'退费金额：  [16]      退入账号：[19]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(#AC_NO));
+      print(14,20,'原缴费平台流水：[12]      退费平台流水：[12]',delspace(#OLD_TRACENO),#TRACE_NO);
+    }
+    else
+    {
+      print(12,20,'原缴费金额：[16]      退费金额：[16]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(comma(itoa(#OLD_AMT,'%.2f'))));
+      print(13,20,'原缴费平台流水：[12]     退费平台流水：[12]',delspace(#OLD_TRACENO),#TRACE_NO);
+    }
+
+    print_sq(); 
+
+    print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+    print(19,80,'客户签名:_____________________');
+
+    print( 24,20,'备注:');
+    print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print( 24,5,'柜员:[4]',$FD7);
+    print( 24,5,'流水号:[6]',$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务专用凭证" CHECK="#AGENTTYPE=04">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print(5,20,'机构名称:[30]',$BRNAME);
+print(5,2,'代码:9954');
+print(5,13,'交易:代收用户供热退费');
+
+print(7,40,'\L0代收用户供热退费\L1');
+	if(#JFFS=='1')
+	{
+			print(9,20, '退费方式：现金                    用户地址：[40]',#ADDRESS);
+			print(10,20,'用户姓名：[24]房间编号：[24]',#YHNAME,#USER_NO_QURY);
+			print(11,20,'项    目：[4]供热费              面   积(平方米)：[15]',#YEAR,delspace(comma(itoa(#FWMJ,'%.2f')))); 
+			print(12,20,'月    数(个)：[4]                单价(元/平方米)：[10]',#MONTH,delspace(comma(itoa(#MJDJ,'%.2f')))); 
+			print(13,20,'面积应收(元)：[16]    说    明：退款',delspace(comma(itoa(#MJYS,'%.2f'))));
+			print(14,20,'优惠金额(元)：[16]    平台流水：[6]',delspace(comma(itoa(#YHJE,'%.2f'))),itoa(#TRACE_NO,'%06d'));
+			print(15,20,'退费金额(元)：[16]',delspace(comma(itoa(#RYAMT,'%.2f'))));
+			print_sq(); 
+	}
+	else
+	{
+		print(9,20, '退费方式：转账                    用户地址：[40]',#ADDRESS);
+		print(10,20,'用户姓名：[24]房间编号：[24]',#YHNAME,#USER_NO_QURY);
+		print(11,20,'退入账号：[20]    账号户名：[30]',#RYAC_NO,#RYAC_NAME);   
+		print(12,20,'项    目：[4]供热费              面   积(平方米)：[15]',#YEAR,delspace(comma(itoa(#FWMJ,'%.2f')))); 
+		print(13,20,'月    数(个)：[4]                单价(元/平方米)：[10]',#MONTH,delspace(comma(itoa(#MJDJ,'%.2f')))); 
+		print(14,20,'面积应收(元)：[16]    说    明：退款',delspace(comma(itoa(#MJYS,'%.2f'))));
+		print(15,20,'优惠金额(元)：[16]    平台流水：[6]',delspace(comma(itoa(#YHJE,'%.2f'))),itoa(#TRACE_NO,'%06d'));
+		print(16,20,'退费金额(元)：[16]',delspace(comma(itoa(#RYAMT,'%.2f'))));
+		print_sq();
+	}
+			  	  
+		  print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		  print(21,80,'客户签名:_____________________');
+
+print( 24,20,'备注:');
+print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+print( 24,5,'柜员:[4]',$FD7);
+print( 24,5,'流水号:[6]',itoa($FD4,'%06d'));
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

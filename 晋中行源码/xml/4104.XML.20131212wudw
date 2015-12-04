@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4104 收费业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD122 = getitems('#ACCT2')+space(29)+itoa(#FEEAMT*100,'%012.0f')+space(12)+getitems('#FEENO')+space(12)+getitems('#CURRID#CSTSIND#NAME2#ACCT1#NAME1');
+	$FD89=#VOCTYPE;//2010/9/6 16:54
+	$FD58=#VOCNUM;//2010/9/6 16:54
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<FIRSTWORK>"{
+	dim @tota as string;
+	$TXNO='9769';
+	commsend_001();
+	@tota=callserver();	
+	setsel(#FEENO,@tota,'o5t20o1v3o2');
+	}"
+</FIRSTWORK>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(4104                            收费业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"   TYPE="%-4s"  FUNCTIONS="T($TXNO=2108)"/>
+  <ITEM NAME="#TXCD"   TYPE="%-4s"  FUNCTIONS="T(4104)"/>    <!---交易代码--->
+  <ITEM NAME="#TXNAME" TYPE="%-10s" FUNCTIONS="T(收费业务)"/><!---交易名称--->
+
+  <ITEM LINE="5"  COL="15"  TYPE="%-10s" FUNCTIONS="T(费用编号:!)" />
+  <ITEM LINE="7"  COL="15"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)" />
+  <ITEM LINE="9"  COL="15"  TYPE="%-10s" FUNCTIONS="T(摘    要:)" />
+  <ITEM LINE="11" COL="15"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="13" COL="15"  TYPE="%-10s" FUNCTIONS="T(币    种:!)" />
+  <ITEM LINE="13" COL="46"  TYPE="%-10s" FUNCTIONS="T(收费金额:)" />
+  <ITEM LINE="15" COL="15"  NAME="#KKZH" TYPE="%-10s" FUNCTIONS="T(扣款帐号:)" VISABLE="FALSE" INPUT="LABEL"/>
+  <ITEM LINE="17" COL="15"  NAME="#ZHHM" TYPE="%-10s" FUNCTIONS="T(户    名:)" VISABLE="FALSE" INPUT="LABEL"/>
+  <ITEM LINE="18" COL="15"  NAME="#PZLX" TYPE="%-10s" FUNCTIONS="T(凭证类型:)" VISABLE="FALSE" INPUT="LABEL"/>
+  <ITEM LINE="18" COL="46"  NAME="#PZHM" TYPE="%-10s" FUNCTIONS="T(凭证号码:)" VISABLE="FALSE" INPUT="LABEL"/>
+
+  <ITEM LINE="5" COL="25" NAME="#FEENO" TYPE="%3s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(101)">
+	<SELECT>	
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="7" COL="25" NAME="#CSTSIND" TYPE="%1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="现金"/>
+		<OPTION VALUE="2" TITLE="转帐"/>
+	</SELECT>
+	<ONLOSTFOCUS>"{
+		if(#CSTSIND=='2'){
+			show(#KKZH,true);
+			show(#ZHHM,true);
+			show(#ACCT2,true);
+			show(#NAME2,true);
+			show(#PZLX,true);
+			show(#PZHM,true);
+			show(#VOCTYPE,true);
+			show(#VOCNUM,true);
+			enable(#ACCT2,true);
+			enable(#VOCNUM,true);
+			}
+		else {
+			show(#KKZH,false);
+			show(#ZHHM,false);
+			show(#ACCT2,false);
+			show(#NAME2,false);
+			show(#PZLX,false);
+			show(#PZHM,false);
+			show(#VOCTYPE,false);
+			show(#VOCNUM,false);
+			enable(#ACCT2,false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="9" COL="25" NAME="#ACCT1" TYPE="%-20s" DEVICE="KEYBOARD" FUNCTIONS=""/>
+<!--	下面的意思是对交费号码做检查,但有些业务就没建交费号码的对应
+  <ITEM LINE="9" COL="25" NAME="#ACCT1" TYPE="%-20s" DEVICE="KEYBOARD" FUNCTIONS="T()" > 
+	<ONLOSTFOCUS> "{
+		if(len(#ACCT1)!=0){
+			dim @txno_bak as string;
+			dim @tota as string;
+			initfd();
+			@txno_bak=$TXNO;
+			$TXNO='9960';
+			$FD122=space(141)+#ACCT1;
+			commsend_001();
+			$TXNO=@txno_bak;
+			@tota=callserver();	
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+				}
+			#NAME1=substr($FD122,160,50);
+			}
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>
+-->
+  <ITEM LINE="11" COL="25" NAME="#NAME1" TYPE="%-50s" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM LINE="13" COL="25" NAME="#CURRID" TYPE="%2s" INPUT="SELECT" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币" />  
+       	 	<OPTION VALUE="12" TITLE="英镑" />    
+		<OPTION VALUE="13" TITLE="港元" />    
+		<OPTION VALUE="14" TITLE="美元" />    
+		<OPTION VALUE="15" TITLE="瑞士法郎" />
+		<OPTION VALUE="27" TITLE="日元" />    
+		<OPTION VALUE="28" TITLE="加元" />    
+		<OPTION VALUE="29" TITLE="澳元" />    
+		<OPTION VALUE="38" TITLE="欧元" />    
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="13" COL="56" NAME="#FEEAMT" TYPE="%13.2f" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(000000000001,999999999999)" />
+
+  <ITEM LINE="15" COL="25" NAME="#ACCT2" TYPE="%-20s" INPUT="TEXT" FUNCTIONS="T()" VISABLE="FALSE">
+	<ONLOSTFOCUS>
+		"{
+			dim @txno_bak as string;
+			dim @tota as string;
+			initfd();
+			@txno_bak=$TXNO;
+			$TXNO='9792';
+			$FD122=#ACCT2;
+			commsend_001();
+			$TXNO=@txno_bak;
+			@tota=callserver();	
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+				}
+			#NAME2=substr($FD122,91,60);
+			#ACCT2=substr($FD122,0,19);
+			}"
+	</ONLOSTFOCUS>
+  </ITEM>	
+			
+  <ITEM LINE="17" COL="25" NAME="#NAME2" TYPE="%-50s" INPUT="LABEL" FUNCTIONS="" />
+  <!--转账时增加下客户凭证功能 2010/9/6 14:54 ADD BY ZHGF ---->
+  <ITEM LINE="18" COL="25" NAME="#VOCTYPE"  TYPE="%-3s"  VISABLE="FALSE"  INPUT="SELECT"  ENABLE="TRUE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="002" TITLE="转帐支票"/>
+		<OPTION VALUE="137" TITLE="税票"/>
+		<OPTION VALUE="187" TITLE="委托付款凭证"/>
+		<OPTION VALUE="299" TITLE="其他凭证"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="18"  COL="56" NAME="#VOCNUM" VISABLE="FALSE" TYPE="%16d" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+
+  <!--转账时增加下客户凭证功能 2010/9/6 14:54 ADD BY ZHGF ---->
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+<!--返回变量 -->
+  <ITEM NAME="#AAA" TYPE="%13.2f" FUNCTIONS="J(#UPCASE)"/>
+  <ITEM NAME="#UPCASE" TYPE="%-40s" FUNCTIONS="U(#AAA)"/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN"  DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,25,'收费交易成功');
+		}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印收费凭证">
+	SFPT|@jfzh|@jfname|@feeamt|@met|@type|@feename|@totamt|@item
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		setitems('#AAA',itoa(val(@totamt,100),'%012.0f'));  //收费金额
+		
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:4104');
+		print( 5,13,'交易:收费业务');
+		print( 7,40, '\L0收费凭证\L1');
+		print( 8,20, '-----------------------------------------------------------------------------------------');
+		print( 9,24,  '缴费方式:[4   ]                    缴费日期:[8]' ,@met,$HDATE);
+		if(#CSTSIND == '1')
+		{
+			print(10,24,  '科 目 号:[7      ]                  户    名:[50]' ,@item,#NAME1);
+		}
+		else
+		{
+			print(10,24,  '帐    号:[20                  ]     户    名:[50]' ,#ACCT2,#NAME2);
+		}
+		print(11,23,' 【业务类型】    │        【名    称】         │       【收费金额】');
+		print(12,20, '-----------------------------------------------------------------------------------------');
+		print(13,24,'[4]            [30]             ￥[18]',@type,@feename,ltrim(comma(@feeamt,18)));
+		print(14,23,'【合计金额】人民币[40]  ￥[18]',#UPCASE,ltrim(comma(@totamt,18)));
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

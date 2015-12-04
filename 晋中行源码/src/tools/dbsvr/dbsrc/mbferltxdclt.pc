@@ -1,0 +1,355 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbferltxdclt_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbferltxdclt_con ( struct mbferltxdclt_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbferltxdclt_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->bankcode);
+	zip_tail(ps->oprttype);
+	zip_tail(ps->txssno);
+	zip_tail(ps->osdficodeccpc);
+	zip_tail(ps->osdficode);
+	zip_tail(ps->payeracc);
+	zip_tail(ps->payername);
+	zip_tail(ps->payerbnk);
+	zip_tail(ps->isdficodeccpc);
+	zip_tail(ps->isdficode);
+	zip_tail(ps->recipientacc);
+	zip_tail(ps->recipientname);
+	zip_tail(ps->recipientbnk);
+	zip_tail(ps->bondcode);
+	zip_tail(ps->bondordercode);
+	zip_tail(ps->procstate);
+	zip_tail(ps->checkstate);
+	zip_tail(ps->statetime);
+	zip_tail(ps->errcode);
+	zip_tail(ps->errdesc);
+	zip_tail(ps->oprtsource);
+	zip_tail(ps->strinfo);
+}
+int Mbferltxdclt_Debug(struct mbferltxdclt_c *ps){
+	vtcp_log("mbferltxdclt_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbferltxdclt_c.consigndate=[%ld]\n",ps->consigndate);
+	vtcp_log("mbferltxdclt_c.bankcode=[%s]\n",ps->bankcode);
+	vtcp_log("mbferltxdclt_c.txsbatno=[%ld]\n",ps->txsbatno);
+	vtcp_log("mbferltxdclt_c.oprttype=[%s]\n",ps->oprttype);
+	vtcp_log("mbferltxdclt_c.txssno=[%s]\n",ps->txssno);
+	vtcp_log("mbferltxdclt_c.amount=[%f]\n",ps->amount);
+	vtcp_log("mbferltxdclt_c.osdficodeccpc=[%s]\n",ps->osdficodeccpc);
+	vtcp_log("mbferltxdclt_c.osdficode=[%s]\n",ps->osdficode);
+	vtcp_log("mbferltxdclt_c.payeracc=[%s]\n",ps->payeracc);
+	vtcp_log("mbferltxdclt_c.payername=[%s]\n",ps->payername);
+	vtcp_log("mbferltxdclt_c.payerbnk=[%s]\n",ps->payerbnk);
+	vtcp_log("mbferltxdclt_c.isdficodeccpc=[%s]\n",ps->isdficodeccpc);
+	vtcp_log("mbferltxdclt_c.isdficode=[%s]\n",ps->isdficode);
+	vtcp_log("mbferltxdclt_c.recipientacc=[%s]\n",ps->recipientacc);
+	vtcp_log("mbferltxdclt_c.recipientname=[%s]\n",ps->recipientname);
+	vtcp_log("mbferltxdclt_c.recipientbnk=[%s]\n",ps->recipientbnk);
+	vtcp_log("mbferltxdclt_c.bondcode=[%s]\n",ps->bondcode);
+	vtcp_log("mbferltxdclt_c.bondamount=[%f]\n",ps->bondamount);
+	vtcp_log("mbferltxdclt_c.setamount=[%f]\n",ps->setamount);
+	vtcp_log("mbferltxdclt_c.setdate=[%ld]\n",ps->setdate);
+	vtcp_log("mbferltxdclt_c.setrate=[%f]\n",ps->setrate);
+	vtcp_log("mbferltxdclt_c.bondordercode=[%s]\n",ps->bondordercode);
+	vtcp_log("mbferltxdclt_c.netamount=[%f]\n",ps->netamount);
+	vtcp_log("mbferltxdclt_c.bondrate=[%f]\n",ps->bondrate);
+	vtcp_log("mbferltxdclt_c.procstate=[%s]\n",ps->procstate);
+	vtcp_log("mbferltxdclt_c.checkstate=[%s]\n",ps->checkstate);
+	vtcp_log("mbferltxdclt_c.statetime=[%s]\n",ps->statetime);
+	vtcp_log("mbferltxdclt_c.printno=[%ld]\n",ps->printno);
+	vtcp_log("mbferltxdclt_c.flowno=[%ld]\n",ps->flowno);
+	vtcp_log("mbferltxdclt_c.errcode=[%s]\n",ps->errcode);
+	vtcp_log("mbferltxdclt_c.errdesc=[%s]\n",ps->errdesc);
+	vtcp_log("mbferltxdclt_c.oprtsource=[%s]\n",ps->oprtsource);
+	vtcp_log("mbferltxdclt_c.strinfo=[%s]\n",ps->strinfo);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbferltxdclt_Sel(reply,mbferltxdclt_c,fmtstr,va_alist)
+char    *reply;
+struct  mbferltxdclt_c *mbferltxdclt_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbferltxdclt_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbferltxdclt_Fet_Sel( mbferltxdclt_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbferltxdclt_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbferltxdclt_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbferltxdclt.* FROM mbferltxdclt WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbferltxdclt_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbferltxdclt CURSOR FOR mbferltxdclt_sel;
+
+	EXEC SQL OPEN sel_mbferltxdclt;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbferltxdclt_Fet_Sel ( struct mbferltxdclt_c *mbferltxdclt_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbferltxdclt INTO :mbferltxdclt_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbferltxdclt error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbferltxdclt finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbferltxdclt_c);
+
+	return 0;
+}
+
+int Mbferltxdclt_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbferltxdclt;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbferltxdclt_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbferltxdclt.* FROM mbferltxdclt WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbferltxdclt_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbferltxdclt CURSOR FOR mbferltxdclt_upd;
+
+	EXEC SQL OPEN upd_mbferltxdclt;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbferltxdclt_Fet_Upd( struct mbferltxdclt_c *mbferltxdclt_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbferltxdclt INTO :mbferltxdclt_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbferltxdclt finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbferltxdclt_c);
+
+	return 0;
+}
+
+int Mbferltxdclt_Upd_Upd( struct mbferltxdclt_c mbferltxdclt_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbferltxdclt SET consigndate=:mbferltxdclt_c.consigndate,
+			bankcode=:mbferltxdclt_c.bankcode,
+			txsbatno=:mbferltxdclt_c.txsbatno,
+			oprttype=:mbferltxdclt_c.oprttype,
+			txssno=:mbferltxdclt_c.txssno,
+			amount=:mbferltxdclt_c.amount,
+			osdficodeccpc=:mbferltxdclt_c.osdficodeccpc,
+			osdficode=:mbferltxdclt_c.osdficode,
+			payeracc=:mbferltxdclt_c.payeracc,
+			payername=:mbferltxdclt_c.payername,
+			payerbnk=:mbferltxdclt_c.payerbnk,
+			isdficodeccpc=:mbferltxdclt_c.isdficodeccpc,
+			isdficode=:mbferltxdclt_c.isdficode,
+			recipientacc=:mbferltxdclt_c.recipientacc,
+			recipientname=:mbferltxdclt_c.recipientname,
+			recipientbnk=:mbferltxdclt_c.recipientbnk,
+			bondcode=:mbferltxdclt_c.bondcode,
+			bondamount=:mbferltxdclt_c.bondamount,
+			setamount=:mbferltxdclt_c.setamount,
+			setdate=:mbferltxdclt_c.setdate,
+			setrate=:mbferltxdclt_c.setrate,
+			bondordercode=:mbferltxdclt_c.bondordercode,
+			netamount=:mbferltxdclt_c.netamount,
+			bondrate=:mbferltxdclt_c.bondrate,
+			procstate=:mbferltxdclt_c.procstate,
+			checkstate=:mbferltxdclt_c.checkstate,
+			statetime=:mbferltxdclt_c.statetime,
+			printno=:mbferltxdclt_c.printno,
+			flowno=:mbferltxdclt_c.flowno,
+			errcode=:mbferltxdclt_c.errcode,
+			errdesc=:mbferltxdclt_c.errdesc,
+			oprtsource=:mbferltxdclt_c.oprtsource,
+			strinfo=:mbferltxdclt_c.strinfo
+	WHERE rowid=:mbferltxdclt_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbferltxdclt_Del_Upd(struct mbferltxdclt_c mbferltxdclt_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbferltxdclt WHERE rowid=:mbferltxdclt_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbferltxdclt_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbferltxdclt;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbferltxdclt_Ins( struct mbferltxdclt_c mbferltxdclt_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbferltxdclt VALUES (:mbferltxdclt_c.consigndate,
+			:mbferltxdclt_c.bankcode,
+			:mbferltxdclt_c.txsbatno,
+			:mbferltxdclt_c.oprttype,
+			:mbferltxdclt_c.txssno,
+			:mbferltxdclt_c.amount,
+			:mbferltxdclt_c.osdficodeccpc,
+			:mbferltxdclt_c.osdficode,
+			:mbferltxdclt_c.payeracc,
+			:mbferltxdclt_c.payername,
+			:mbferltxdclt_c.payerbnk,
+			:mbferltxdclt_c.isdficodeccpc,
+			:mbferltxdclt_c.isdficode,
+			:mbferltxdclt_c.recipientacc,
+			:mbferltxdclt_c.recipientname,
+			:mbferltxdclt_c.recipientbnk,
+			:mbferltxdclt_c.bondcode,
+			:mbferltxdclt_c.bondamount,
+			:mbferltxdclt_c.setamount,
+			:mbferltxdclt_c.setdate,
+			:mbferltxdclt_c.setrate,
+			:mbferltxdclt_c.bondordercode,
+			:mbferltxdclt_c.netamount,
+			:mbferltxdclt_c.bondrate,
+			:mbferltxdclt_c.procstate,
+			:mbferltxdclt_c.checkstate,
+			:mbferltxdclt_c.statetime,
+			:mbferltxdclt_c.printno,
+			:mbferltxdclt_c.flowno,
+			:mbferltxdclt_c.errcode,
+			:mbferltxdclt_c.errdesc,
+			:mbferltxdclt_c.oprtsource,
+			:mbferltxdclt_c.strinfo);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbferltxdclt error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

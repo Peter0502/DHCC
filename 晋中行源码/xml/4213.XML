@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4213 维修金批量补发附件"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+    "T(4213                         维修金批量补发附件)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4213)"/>
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(4213)" />
+  <ITEM NAME="#TXNAME" TYPE="%-20s" FUNCTIONS="T(维修金批量补发附件)" />
+  <ITEM LINE="5"  COL="15"  TYPE="%-15s" FUNCTIONS="T(交易操作类型:)" />
+  <ITEM LINE="5"  COL="30" NAME="#JYCZLX" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)" >
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.处理状态查询"/>
+    <OPTION VALUE="1" TITLE="1.补发批量附件"/>
+  </SELECT>
+  </ITEM>
+  <ITEM LINE="7"  COL="15"  TYPE="%-15s" FUNCTIONS="T(原始交易类型:)" />
+  <ITEM LINE="7"  COL="30" NAME="#BFJYLX" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(0)V(NB)" >
+  <SELECT>
+    <OPTION VALUE="0" TITLE="0.批量开户"/>
+    <OPTION VALUE="1" TITLE="1.批量扣款"/>
+    <OPTION VALUE="2" TITLE="2.明细对账"/>
+    <OPTION VALUE="3" TITLE="3.结息对账"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+     "{
+      if(#BFJYLX=='2')
+       {
+         #BFJYLS='';
+         enable(#BFJYLS,false);
+         show(#BFJYLS,false);
+       }
+       else
+       {
+       enable(#BFJYLS,true);
+       show(#BFJYLS,true);
+       }
+      }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9"  COL="15"  TYPE="%-15s" FUNCTIONS="T(原始交易日期:)" />
+  <ITEM LINE="9"  COL="30" NAME="#BFJYRQ" TYPE="%8s" INPUT="TEXT" FUNCTIONS="T($HDATE)D()V(NB)" >
+  <ONLOSTFOCUS>
+     "{
+      if(#BFJYRQ &gt; $HDATE )
+       {
+         showmsg('补发日期不能大于当日日期!');
+         return (false);
+       }
+      }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11"  COL="15"  TYPE="%-15s" FUNCTIONS="T(原始交易流水:)" />
+  <ITEM LINE="11"  COL="30" NAME="#BFJYLS" TYPE="%08d" INPUT="TEXT"  FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13"  COL="15"  TYPE="%-15s" FUNCTIONS="T(原始附件名称:)" />
+  <ITEM LINE="13"  COL="30" NAME="#BFFJMC" TYPE="%-30s"  FUNCTIONS="V(NB)">
+  	<ONLOSTFOCUS>
+      "{
+      #BFJYLS=atoi(#BFJYLS);
+      if(#BFJYLX=='0')
+      {
+      #BFFJMC='PLKH_'+#BFJYRQ+'_'+#BFJYLS+'_SH.txt';
+      }
+      if(#BFJYLX=='1' or #BFJYLX=='3')
+      {
+      #BFFJMC='PLZW_'+#BFJYRQ+'_'+#BFJYLS+'_SH.txt';
+      }
+      if(#BFJYLX=='2')
+      {
+      #BFFJMC='WXJJ_AC_MX_'+#BFJYRQ+'_SH.txt';
+      }
+      //showmsg('#BFFJMC='+#BFFJMC);
+      }"
+    </ONLOSTFOCUS> 
+  </ITEM>
+  <ITEM LINE="18" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+       <ONCLICK>
+       "{
+      commsend_001();
+      $FD78=substr(#BFJYLS,2,6);
+      $FD24='fwx';
+      $FD11='1';
+      if(#JYCZLX=='1')
+      {
+         if(#BFJYLX=='0')
+         {
+         $FD16='J011';
+         }
+         if(#BFJYLX=='1')
+         {
+          $FD16='J012';
+         }
+         if(#BFJYLX=='2')
+         {
+          $FD67='1';//为了在平台区别原发和补发
+          $FD16='J021';
+         }
+         if(#BFJYLX=='3')
+         {
+					$FD67='1';//为了在平台区别原发和补发
+          $FD16='Jx12';
+         }
+      }
+      if(#JYCZLX=='0')
+      {
+         if(#BFJYLX=='3')
+         {
+					$FD68='1';//专门区别Jx12与其他接口
+         }
+          $FD16='J013';
+      }
+      $FD82=#BFFJMC;
+      $FD5=#BFJYRQ;                                  //交易日期
+      $FD41=$KINBR; 
+      callagn();
+      if($FD12 != '0000' and #JYCZLX=='0')
+      {
+        showmsg('原交易处理结果为：'+geterror());
+        showmsg('找不到文件请修改流水号，找到文件请做补发附件操作！');
+        return(false);
+      }
+      if($FD12 == '0000' and #JYCZLX=='0')
+      {
+      showmsg('原交易第三方处理成功，不流用补发附件！');
+      return(false);
+      }
+      if($FD12 != '0000' and #JYCZLX=='1')
+      {
+        showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+        return(false);
+      }
+      runoutput();
+	    rerun();
+       }"
+     </ONCLICK>
+   </ITEM>
+</VARIABLE>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="按任意键返回" LINESPACE="24">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    print(6 ,20,'维修金批量补发附件处理成功!');
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24">
+      NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print( 5,10,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'交易代码: 4213');
+    print( 5,2,'交易名称:维修金批量补发附件');
+    print(10, 20,'补发交易类型:[20                    ]',#BFJYLX);
+    print(11, 20,'补发交易日期:[20                    ]',#BFJYRQ);
+    if(#BFJYLX!='2')
+    {
+    print(12, 20,'补发交易流水:[20                    ]',#BFJYLS);
+    }
+    print(13, 20,'补发附件名称:[20                    ]',#BFFJMC);
+    print(24,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+<!--
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24" CHECK="#CLLX=1">
+      NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @file  as file;
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    @file=openfile('../tmp/tmp_4115','r');
+    dim @line  as string;
+    dim @cnt   as number;
+    dim @acno  as string;
+    dim @seqn  as string;
+    dim @name  as string;
+    dim @amt   as string;
+    dim @voctype as string;
+    dim @vocnum  as string;
+    dim @brf   as string;
+    @cnt=9;
+    print( 5,10,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'交易代码: 4115');
+    print( 5,2,'交易名称:二级账户批量开户');
+
+    print( 7,5,'    账  号          子户序号     子  户  名  称           交易金额        备       注');
+    print( 8,5,'==================================================================================================');
+    while(true)
+    {
+      @line=readline(@file);
+      if(@line=='')
+      {
+        break;
+      }
+      @acno=strfld(@line,'|',0);
+      @seqn=strfld(@line,'|',1);
+      @name=substr(strfld(@line,'|',2),0,30);
+      @amt =strfld(@line,'|',10);
+      @brf=strfld(@line,'|',19);
+      print(@cnt,5,'[20                 ] [8       ] [30                            ] [16              ] [20                  ]',@acno,@seqn,@name,@amt,@brf);
+      @cnt=@cnt+1;
+    }
+    print(@cnt+2,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+    closefile(@file);
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER" DESC="请打印业务凭证" LINESPACE="24" CHECK="#CLLX=2">
+      NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    dim @file  as file;
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    @file=openfile('../tmp/tmp_4115','r');
+    dim @line  as string;
+    dim @cnt   as number;
+    dim @acno  as string;
+    dim @seqn  as string;
+    dim @name  as string;
+    dim @amt   as string;
+    dim @voctype as string;
+    dim @vocnum  as string;
+    dim @brf   as string;
+    @cnt=9;
+    print( 5,10,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'交易代码: 4115');
+    print( 5,2,'交易名称:二级账户批量扣款');
+
+    print( 7,5,'    账  号          子户序号     子  户  名  称           交易金额        备       注');
+    print( 8,5,'==================================================================================================');
+    while(true)
+    {
+      @line=readline(@file);
+      if(@line=='')
+      {
+        break;
+      }
+      @acno=strfld(@line,'|',0);
+      @seqn=strfld(@line,'|',1);
+      @name=substr(strfld(@line,'|',2),0,30);
+      @amt =strfld(@line,'|',3);
+      @brf=strfld(@line,'|',6);
+      print(@cnt,5,'[20                 ] [8       ] [30                            ] [16              ] [20                  ]',@acno,@seqn,@name,@amt,@brf);
+      @cnt=@cnt+1;
+    }
+    print(@cnt+2,10,'交易日期:[8]  [8]     柜员:[6]     流水号:[6]     备注:',$HDATE,@txtime,$FD7,$FD4);
+    closefile(@file);
+  }"
+  </PRINT>
+</RESPONSE>-->
+</TRANSACTION>
+

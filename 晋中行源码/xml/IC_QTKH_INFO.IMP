@@ -1,0 +1,111 @@
+<BLOCK  LINE="9" COL="4" NAME="IC_QTKH_INFO" VISABLE="FALSE">
+  <ITEM LINE="2" COL="1" TYPE="%-13s"  FUNCTIONS="T(户        名:)" />
+  <ITEM LINE="2" COL="15" TYPE="%-20s" NAME="#KH_NAME" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM LINE="3" COL="1"  TYPE="%-13s"  FUNCTIONS="T(电子现金余额:)"/>
+  <ITEM LINE="3" COL="15" TYPE="%17.2f" NAME="#ICLAVBAL" INPUT="TEXT" FUNCTIONS="V(NB)" />	
+  <ITEM NAME="#L_PASSWORD" LINE="4" COL="39" TYPE="%-10s"   FUNCTIONS="T(密    码:)"/> 
+	<ITEM NAME="#PASSWORD"   LINE="4" COL="49" TYPE="%6s"    INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+		<ONLOSTFOCUS>
+		"{
+		if(len(delspace(itoa(#PASSWORD)))!=6)
+				{
+				showmsg('密码长度必须为六位!');
+				return (false);
+				}
+			initfd(); 
+			commsend_001();
+			$FD16='7007'; 
+			$FD30=rtrim(#CARD_NO);
+			$FD79=#PASSWORD;
+			$FD75=$TRACK2; //二磁
+			$FD76=$TRACK3;
+			$FD68='4';
+			<!--
+			if (isTxContinue() == false )
+		{
+			return(false);
+		}-->
+		callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			#CARD_NO_IN=#CARD_NO;
+			enable(#CARD_NO_IN,false);
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#FLAG1" LINE="6" COL="1"  TYPE="%-16s" VISABLE="FALSE" FUNCTIONS="T(【提入账户信息】)" />
+  <ITEM NAME="#FLAG2" LINE="7" COL="1"  TYPE="%-70s" VISABLE="FALSE" FUNCTIONS=
+   "T(----------------------------------------------------------------------)"/>		
+  <ITEM NAME="#lCARD_NO_IN" LINE="8" COL="1" TYPE="%-13s" VISABLE="FALSE" FUNCTIONS="T(提 入  账 号:)" />
+  <ITEM NAME="#CARD_NO_IN"  LINE="8" COL="15" TYPE="%-19s"   VISABLE="FALSE" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#TEMP"  TYPE="%-19s"   FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+    "{
+      
+         if(len(rtrim(#CARD_NO_IN))!=19)
+         {
+           showmsg('卡号长度不正确，请重新输入!');
+           return(false);
+         }
+         if(substr(#CARD_NO_IN,0,6) != #CARDBIN1 and substr(#CARD_NO_IN,0,6) != #CARDBIN2)
+         {
+           showmsg('卡号的前6位必须为'+#CARDBIN1 +'或'+#CARDBIN2);
+           return(false);
+         }
+      
+      initfd();
+      commsend_001();
+      $FD32=rtrim(#CARD_NO_IN);
+      $FD16='9405' ;
+      callserver();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      #ZR_NAME = $FD25 ;//户名
+      #AC_BAL = val(delspace($FD39),0.01);//账户余额
+      enable(#ZR_NAME,false);
+      enable(#AC_BAL,false);
+      //showmsg('#ZR_NAME='+#ZR_NAME);
+      show(#L_ZR_NAME,true);
+      show(#ZR_NAME,true);
+      show(#L_AC_BAL,true);
+      show(#AC_BAL,true);
+      show(#L_QT_AMT,true);
+      show(#QT_AMT,true);
+      show(#lCARD_NO_IN,true);
+      show(#CARD_NO_IN,true);
+      show(#FLAG1,true);
+      show(#FLAG2,true);
+      
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#L_ZR_NAME" LINE="9"  COL="1"  TYPE="%-13s"  VISABLE="FALSE" FUNCTIONS="T(圈 存  户 名:)"/>
+  <ITEM NAME="#ZR_NAME"   LINE="9"  COL="15" TYPE="%-20s"  VISABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+  <ITEM NAME="#L_AC_BAL"  LINE="10"  COL="1" TYPE="%-13s" VISABLE="FALSE" FUNCTIONS="T(账 户  余 额:)"/> 
+  <ITEM NAME="#AC_BAL"    LINE="10"  COL="15" TYPE="%17.2f"  INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+  <ITEM NAME="#L_QT_AMT" LINE="11" COL="1" TYPE="%-13s" VISABLE="FALSE" FUNCTIONS="T(圈 提  金 额:)"/> 
+  <ITEM NAME="#QT_AMT"    LINE="11" COL="15" VISABLE="FALSE" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)" >
+    <ONLOSTFOCUS>
+    "{
+      if ( #ICLAVBAL == 0)
+      {
+        showmsg('电子现金账户余额为零，不能进行圈提交易!');
+        return(false);
+      }
+      if ( (#ICLAVBAL - #QT_AMT) &lt; 0)
+      {
+        showmsg('圈提金额应小于等于电子现金余额!');
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  TYPE="%17.2f" NAME="#ICLAVBAL_PZ"   FUNCTIONS="E(#ICLAVBAL-#QT_AMT)" />
+  <ITEM  TYPE="%17.2f" NAME="#ICLAVBAL_PZ1"   FUNCTIONS="E(#AC_BAL+#QT_AMT)" />
+</BLOCK>

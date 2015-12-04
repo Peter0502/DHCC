@@ -1,0 +1,260 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"ln_mst_bk_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int ln_mst_bk_con ( struct ln_mst_bk_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct ln_mst_bk_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->opn_br_no);
+	zip_tail(ps->prdt_no);
+}
+int Ln_mst_bk_Debug(struct ln_mst_bk_c *ps){
+	vtcp_log("ln_mst_bk_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("ln_mst_bk_c.opn_br_no=[%s]\n",ps->opn_br_no);
+	vtcp_log("ln_mst_bk_c.prdt_no=[%s]\n",ps->prdt_no);
+	vtcp_log("ln_mst_bk_c.bal=[%f]\n",ps->bal);
+	vtcp_log("ln_mst_bk_c.in_lo_intst=[%f]\n",ps->in_lo_intst);
+	vtcp_log("ln_mst_bk_c.out_lo_intst=[%f]\n",ps->out_lo_intst);
+	vtcp_log("ln_mst_bk_c.cmpd_lo_intst=[%f]\n",ps->cmpd_lo_intst);
+	vtcp_log("ln_mst_bk_c.gage_amt=[%f]\n",ps->gage_amt);
+	vtcp_log("ln_mst_bk_c.cnt=[%ld]\n",ps->cnt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Ln_mst_bk_Sel(reply,ln_mst_bk_c,fmtstr,va_alist)
+char    *reply;
+struct  ln_mst_bk_c *ln_mst_bk_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Ln_mst_bk_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Ln_mst_bk_Fet_Sel( ln_mst_bk_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Ln_mst_bk_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Ln_mst_bk_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,ln_mst_bk.* FROM ln_mst_bk WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_mst_bk_sel FROM :comm;
+	EXEC SQL DECLARE sel_ln_mst_bk CURSOR FOR ln_mst_bk_sel;
+
+	EXEC SQL OPEN sel_ln_mst_bk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_mst_bk_Fet_Sel ( struct ln_mst_bk_c *ln_mst_bk_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_ln_mst_bk INTO :ln_mst_bk_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch ln_mst_bk error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch ln_mst_bk finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_mst_bk_c);
+
+	return 0;
+}
+
+int Ln_mst_bk_Clo_Sel (){
+	EXEC SQL CLOSE sel_ln_mst_bk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Ln_mst_bk_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,ln_mst_bk.* FROM ln_mst_bk WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ln_mst_bk_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_ln_mst_bk CURSOR FOR ln_mst_bk_upd;
+
+	EXEC SQL OPEN upd_ln_mst_bk;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_mst_bk_Fet_Upd( struct ln_mst_bk_c *ln_mst_bk_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_ln_mst_bk INTO :ln_mst_bk_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH ln_mst_bk finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(ln_mst_bk_c);
+
+	return 0;
+}
+
+int Ln_mst_bk_Upd_Upd( struct ln_mst_bk_c ln_mst_bk_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE ln_mst_bk SET opn_br_no=:ln_mst_bk_c.opn_br_no,
+			prdt_no=:ln_mst_bk_c.prdt_no,
+			bal=:ln_mst_bk_c.bal,
+			in_lo_intst=:ln_mst_bk_c.in_lo_intst,
+			out_lo_intst=:ln_mst_bk_c.out_lo_intst,
+			cmpd_lo_intst=:ln_mst_bk_c.cmpd_lo_intst,
+			gage_amt=:ln_mst_bk_c.gage_amt,
+			cnt=:ln_mst_bk_c.cnt
+	WHERE rowid=:ln_mst_bk_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Ln_mst_bk_Del_Upd(struct ln_mst_bk_c ln_mst_bk_c , char * reply  ){
+
+	EXEC SQL DELETE FROM ln_mst_bk WHERE rowid=:ln_mst_bk_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ln_mst_bk_Clo_Upd( ){
+	EXEC SQL CLOSE upd_ln_mst_bk;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Ln_mst_bk_Ins( struct ln_mst_bk_c ln_mst_bk_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO ln_mst_bk VALUES (:ln_mst_bk_c.opn_br_no,
+			:ln_mst_bk_c.prdt_no,
+			:ln_mst_bk_c.bal,
+			:ln_mst_bk_c.in_lo_intst,
+			:ln_mst_bk_c.out_lo_intst,
+			:ln_mst_bk_c.cmpd_lo_intst,
+			:ln_mst_bk_c.gage_amt,
+			:ln_mst_bk_c.cnt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT ln_mst_bk error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

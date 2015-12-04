@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1869       滞留交易发送)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1869                        滞留交易发送)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1869)"/>
+	<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(滞留交易发送)"/>
+	<ITEM TYPE="%-1s" NAME="#Authflag" FUNCTIONS="T(2)"/>
+	<ITEM LINE="5" COL="3" TYPE="%-11s" FUNCTIONS="T(交易  序号:)"/>
+	<ITEM NAME="#TxNo" LINE="5" COL="14" INPUT="TEXT"  TYPE="%-8s"  FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="5"  COL="43"  TYPE="%-11s"  FUNCTIONS="T(交易  日期:)" />
+	<ITEM LINE="5"  COL="54"  NAME="#TxDate" TYPE="%-8s" INPUT="LABEL" FUNCTIONS="T($HDATE)V(NB)">
+	<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+
+			dim @tota as string;
+			dim @column as string;
+			dim @where as string;
+			@column='dbtr_id,cdtr_id,snd_pty,rcv_pty,dbtr_nm,cdtr_nm,tx_amt';
+			@where = 'tx_no='+'|'+#Txno+'|'+' and ' + 'tx_date='+'|'+#Txdate+'|' +' and ' +'auth_flag='+'|'+#Authflag+'|';
+			$FD16='1114';
+			$FD18='pbp';
+			$FD28='sxps';
+			$FD96=@column;
+			$FD76=@where;
+			$FD81='pbp_payment';
+			$FD101='32|32|32|32|60|60|16';
+			callagnpbp();
+			if($FD12 !='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			
+			@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			@tota=delspace(@tota);
+			#Dbtrid=strfld(@tota,'|',0);
+			#Cdtrid =strfld(@tota,'|',1);
+			#Instgpty =strfld(@tota,'|',2);
+			#Instdpty =strfld(@tota,'|',3);
+			#Dbtrnm = strfld(@tota, '|',4);
+			#Cdtrnm = strfld(@tota, '|',5);
+			#Txamt = strfld(@tota, '|',6);
+			
+			enable(#Dbtrid, false);
+			enable(#Cdtrid, false);
+			enable(#Instgpty, false);
+			enable(#Instdpty, false);
+			enable(#Dbtrnm, false);
+			enable(#Cdtrnm, false);
+			enable(#Txamt, false);
+			
+			showall();
+			refresh();			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>	
+	
+	<ITEM LINE="7" COL="3"  TYPE="%-12s"      FUNCTIONS="T(付款人账号:)"/>
+	<ITEM LINE="7" COL="15"  NAME="#Dbtrid"    TYPE="%-32s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="8" COL="3"   TYPE="%-12s"      FUNCTIONS="T(付款人姓名:)"/>
+	<ITEM LINE="8" COL="15"  NAME="#Dbtrnm"  TYPE="%-60s"  INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="9" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人账号:)"/>
+	<ITEM LINE="9" COL="15"  NAME="#Cdtrid" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="10" COL="3"  TYPE="%-12s" FUNCTIONS="T(收款人姓名:)"/>
+	<ITEM LINE="10" COL="15"  NAME="#Cdtrnm" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="11" COL="3"  TYPE="%-12s" FUNCTIONS="T(发起行行号:)"/>
+	<ITEM LINE="11" COL="15"  NAME="#Instgpty" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="12" COL="3"  TYPE="%-12s" FUNCTIONS="T(接收行行号:)"/>
+	<ITEM LINE="12" COL="15"  NAME="#Instdpty" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="13" COL="3"  TYPE="%-12s" FUNCTIONS="T(  交易金额:)"/>
+	<ITEM LINE="13" COL="15"  NAME="#Txamt" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="15" COL="3"  TYPE="%-12s" FUNCTIONS="T(  是否发送:)"/>
+	<ITEM LINE="15" COL="15"  NAME="#Sendflag" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="发送"/>
+			<OPTION VALUE="1" TITLE="不发送"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+	"{
+		initfd();
+		commsend_001();
+			
+		$FD16='1232';
+		$FD18='pbp';
+		$FD28='sxps';
+		$FD38=#TxNo;
+		$FD61=#TxDate;
+		$FD66=#Sendflag;
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+			rerun();
+		}
+		
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81=#TXNAME;
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end
+			
+		runoutput();
+		showall();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		//dim @txtime as string;
+		//@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		PrintTxHead();
+		print( 5, 10,'付款人账号:[20]',#Dbtrid);
+	   	print( 5, 40,'付款人姓名:[60]',#Dbtrnm);
+   		print( 7, 10,'收款人账号:[20]',#Cdtrid);
+   		print( 7, 40,'收款人姓名:[60]',#Cdtrnm);
+   		print( 9, 10,'交易  金额:[20]',ltrim(itoa(#Txamt,'%.2f')));
+		print(11, 10,'交易  序号:[10]',#TxNo);
+		print(11, 40,'交易  日期:[8]',#TxDate);
+			
+		PrintTxTail();
+		
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+</TRANSACTION>

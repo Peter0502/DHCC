@@ -1,0 +1,754 @@
+/*************************************************************
+* 文 件 名: gD076.c
+* 功能描述：金融机构现金收支每日统计
+*
+* 作    者: 
+* 完成日期: 
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode); \
+	WRITEMSG \
+	strcpy( g_pub_tx.reply,"D103" ); \
+	goto ErrExit; \
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+#include "gl_prdt_dyn_c.h"
+#include "trace_log_rz_c.h"
+#include "mo_opn_cls_c.h"
+#include "mo_xjszybb_c.h"
+#include "com_sys_parm_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#include "dc_log_rz_c.h"
+#include "mo_xjszybb_c.h"
+
+struct com_sys_parm_c s_com_sys_parm;
+struct mo_xjszybb_c t_s;
+struct mo_xjszybb_c v_s;
+long date;
+
+gD076()
+{
+	int ret = 0;
+
+	ret=sql_begin(); /*打开事务*/
+	if( ret ) 
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	ret = Com_sys_parm_Sel( g_pub_tx.reply,&s_com_sys_parm, "1=1" );
+	if( ret ) 
+	{
+		sprintf( acErrMsg, "取系统参数失败!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	g_pub_tx.tx_date = s_com_sys_parm.lst_date ;
+	date=g_pub_tx.tx_date/100;
+
+	vtcp_log( "delete %d",date );
+
+	EXEC SQL delete from mo_xjszybb where tx_date=:date;
+	MYSQLERR
+		
+	if( gxjszybb( date ) )
+		goto ErrExit;
+
+	if( gxjszybb27( date ) )
+		goto ErrExit;
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+ 
+gxjszybb( long date )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct com_item_c com_item;
+		struct gl_mst_c gl_mst;
+		struct dc_log_rz_c dc_rz;
+		double mdamt,mcamt;
+		double zchj,zczj;
+		double srhj,srzj;
+		double xjsr,xjzc;
+		double xjsr1,xjzc1;
+		double qqywkc,bqywkc;
+		double gc1,gc2;
+		int z1;
+		long brq,erq;
+		long vdate;
+	EXEC SQL END DECLARE SECTION;
+
+	brq=date*100+1;
+	erq=date*100+31;
+	vdate=date;
+
+		zchj=zczj=srhj=srzj=0.00;
+		xjsr=xjzc=0.00;
+		xjsr1=xjzc1=0.00;
+
+	memset( &t_s,0,sizeof(t_s) );
+	t_s.tx_date=date;
+	strcpy( t_s.br_no,"61000" );
+	/**商品销售收入**/
+	strcpy( t_s.target_no,"121110000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and ( brf like'%货款%' or brf like'%售%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**服务业收入**/
+	strcpy( t_s.target_no,"121120000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and ( brf like'%培训费%' );
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**税款收入**/
+	strcpy( t_s.target_no,"121130000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and ( brf like'%税%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**其他单位单位工资支出**/
+	strcpy( t_s.target_no,"122114000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and ( brf like'%工资%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**农副产品支出**/
+	strcpy( t_s.target_no,"122120000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and ( brf like'%农%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**行政事业管理费支出**/
+	strcpy( t_s.target_no,"122130000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and ( brf like'%费%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+		
+	/**储蓄存款收入**/
+	strcpy( t_s.target_no,"121150000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and substr(acc_hrt,1,3) in('211','215')
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+
+	strcpy( t_s.target_no,"122150000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and substr(acc_hrt,1,3) in('211','215')
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**内部现金收入**/
+	strcpy( t_s.target_no,"121200000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='10104' 
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+
+	strcpy( t_s.target_no,"122200000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='10104' 
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**由人行发行库领取现金**/
+	strcpy( t_s.target_no,"121400000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11000' 
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122400000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11000' 
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**由银行（人行）业务库领取现金**/
+	strcpy( t_s.target_no,"121500000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11400' 
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122500000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11400' 
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**信用社（其他银行）交存现金**/
+	strcpy( t_s.target_no,"121600000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='23500' 
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122600000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='23500' 
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**前期业务库存**/
+	strcpy( t_s.target_no,"121700000" );
+		EXEC SQL select mdr_bal into :t_s.amt from gl_mst 
+			where cur_no='01' and acc_hrt='10101' ;
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		qqywkc=t_s.amt;
+	strcpy( t_s.target_no,"122700000" );
+		EXEC SQL select dr_bal,mdr_amt,mcr_amt 
+			into :t_s.amt,:mdamt,:mcamt from gl_mst 
+			where cur_no='01' and acc_hrt='10101' ;
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		bqywkc=t_s.amt;
+
+	/**工资性支出**/
+	strcpy( t_s.target_no,"122110000" );
+		EXEC SQL select sum(amt) into :t_s.amt from mo_xjszybb
+			where tx_date=:vdate and 
+				(target_no>='122111000' and target_no<='1221140000' );
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**收入总计**/
+	strcpy( t_s.target_no,"121000000" );
+		t_s.amt=mdamt+qqywkc;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**收入合计**/
+	strcpy( t_s.target_no,"121100000" );
+		t_s.amt=t_s.amt-xjsr-qqywkc;
+		gc1=t_s.amt;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**其他收入**/
+	strcpy( t_s.target_no,"1211A0000" );
+		t_s.amt=t_s.amt-xjsr1;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**支出总计**/
+	strcpy( t_s.target_no,"122000000" );
+		t_s.amt=mcamt+bqywkc;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**支出合计**/
+	strcpy( t_s.target_no,"122100000" );
+		t_s.amt=t_s.amt-xjzc-bqywkc;
+		gc2=t_s.amt;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**其他支出**/
+	strcpy( t_s.target_no,"1221A0000" );
+		t_s.amt=t_s.amt-xjzc1;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		
+	strcpy( t_s.target_no,"123100000" );
+		t_s.amt=gc2-gc1;
+vtcp_log("GCGC[%lf][%lf]",gc1,gc2);
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**代发工资***/
+	strcpy( t_s.target_no,"123200000" );
+	/*
+	EXEC SQL select sum(tram) into :t_s.amt from pay_agent 
+		where remark like "%代发工资%"
+		and tx_date>=:brq and tx_date<=:erq
+		and sata='0';
+	*/
+	EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+		where brf like "%代发工资%"
+		and add_ind='1'
+		and tx_date>=:brq and tx_date<=:erq
+		and sts='0';
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+gxjszybb27( long date )
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct com_item_c com_item;
+		struct gl_mst_c gl_mst;
+		struct dc_log_rz_c dc_rz;
+		double mdamt,mcamt;
+		double zchj,zczj;
+		double srhj,srzj;
+		double xjsr,xjzc;
+		double xjsr1,xjzc1;
+		double qqywkc,bqywkc;
+		double gc1,gc2;
+		int z1;
+		long brq,erq;
+		long vdate;
+	EXEC SQL END DECLARE SECTION;
+
+	brq=date*100+1;
+	erq=date*100+31;
+	vdate=date;
+vtcp_log(" delete from mo_xjszybb where tx_date=%d",vdate);
+
+		zchj=zczj=srhj=srzj=0.00;
+		xjsr=xjzc=0.00;
+		xjsr1=xjzc1=0.00;
+
+	memset( &t_s,0,sizeof(t_s) );
+	t_s.tx_date=date;
+	strcpy( t_s.br_no,"61027" );
+	/**商品销售收入**/
+	strcpy( t_s.target_no,"121110000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and ( brf like'%货款%' or brf like'%售%')
+			and tx_br_no='61027'
+			;
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**服务业收入**/
+	strcpy( t_s.target_no,"121120000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and tx_br_no='61027'
+			and ( brf like'%培训费%' );
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**税款收入**/
+	strcpy( t_s.target_no,"121130000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='1' and sts='0'
+			and tx_br_no='61027'
+			and ( brf like'%税%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+	/**其他单位单位工资支出**/
+	strcpy( t_s.target_no,"122114000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and tx_br_no='61027'
+			and ( brf like'%工资%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**农副产品支出**/
+	strcpy( t_s.target_no,"122120000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and tx_br_no='61027'
+			and ( brf like'%农%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**行政事业管理费支出**/
+	strcpy( t_s.target_no,"122130000" );
+		EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and (  prdt_no in (select prdt_no from dd_parm where substr(dc_code,1,3) not in('211','215') ) 
+				or prdt_no in (select prdt_no from td_parm where substr(dc_code,1,3) not in('211','215') ) ) 
+			and ct_ind='1' and add_ind='0' and sts='0'
+			and tx_br_no='61027'
+			and ( brf like'%费%');
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+		
+	/**储蓄存款收入**/
+	strcpy( t_s.target_no,"121150000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and substr(acc_hrt,1,3) in('211','215')
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr1+=t_s.amt;
+
+	strcpy( t_s.target_no,"122150000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq 
+			and substr(acc_hrt,1,3) in('211','215')
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc1+=t_s.amt;
+	/**内部现金收入**/
+	strcpy( t_s.target_no,"121200000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='10104' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+
+	strcpy( t_s.target_no,"122200000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='10104' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**由人行发行库领取现金**/
+	strcpy( t_s.target_no,"121400000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11000' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122400000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11000' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**由银行（人行）业务库领取现金**/
+	strcpy( t_s.target_no,"121500000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11400' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122500000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='11400' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**信用社（其他银行）交存现金**/
+	strcpy( t_s.target_no,"121600000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='23500' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='2' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjsr+=t_s.amt;
+	strcpy( t_s.target_no,"122600000" );
+		EXEC SQL select sum(amt) into :t_s.amt from dc_log_rz 
+			where tx_date>=:brq and tx_date<=:erq and acc_hrt='23500' 
+			and tx_tx_br_no='61027'
+			and ct_ind='1' and dc_ind='1' and sts='0';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		xjzc+=t_s.amt;
+	/**前期业务库存**/
+	strcpy( t_s.target_no,"121700000" );
+		EXEC SQL select mdr_bal into :t_s.amt from gl_sub
+			where cur_no='01' and acc_hrt='10101'  and br_no='61027';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		qqywkc=t_s.amt;
+	strcpy( t_s.target_no,"122700000" );
+		EXEC SQL select dr_bal,mdr_amt,mcr_amt 
+			into :t_s.amt,:mdamt,:mcamt from gl_sub
+			where cur_no='01' and acc_hrt='10101' and br_no='61027';
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		bqywkc=t_s.amt;
+
+	/**工资性支出**/
+	strcpy( t_s.target_no,"122110000" );
+		EXEC SQL select sum(amt) into :t_s.amt from mo_xjszybb
+			where tx_date=:vdate and 
+				(target_no>='122111000' and target_no<='1221140000' );
+		MYSQLERR
+		/**if( z1 ) t_s.amt=0.00;**/
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**收入总计**/
+	strcpy( t_s.target_no,"121000000" );
+		t_s.amt=mdamt+qqywkc;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**收入合计**/
+	strcpy( t_s.target_no,"121100000" );
+		t_s.amt=t_s.amt-xjsr-qqywkc;
+		gc1=t_s.amt;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**其他收入**/
+	strcpy( t_s.target_no,"1211A0000" );
+		t_s.amt=t_s.amt-xjsr1;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**支出总计**/
+	strcpy( t_s.target_no,"122000000" );
+		t_s.amt=mcamt+bqywkc;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**支出合计**/
+	strcpy( t_s.target_no,"122100000" );
+		t_s.amt=t_s.amt-xjzc-bqywkc;
+		gc2=t_s.amt;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**其他支出**/
+	strcpy( t_s.target_no,"1221A0000" );
+		t_s.amt=t_s.amt-xjzc1;
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+		
+	strcpy( t_s.target_no,"123100000" );
+		t_s.amt=gc2-gc1;
+vtcp_log("GCGC[%lf][%lf]",gc1,gc2);
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+	/**代发工资***/
+	strcpy( t_s.target_no,"123200000" );
+	/*
+	EXEC SQL select sum(tram) into :t_s.amt from pay_agent 
+		where remark like "%代发工资%"
+		and tx_date>=:brq and tx_date<=:erq
+		and sata='0';
+	*/
+	EXEC SQL select sum(amt) into :t_s.amt from trace_log_rz 
+		where brf like "%代发工资%"
+		and add_ind='1'
+		and tx_date>=:brq and tx_date<=:erq
+		and tx_br_no='61027'
+		and sts='0';
+		/**if( z1 ) t_s.amt=0.00;**/
+		mytt();
+		EXEC SQL insert into mo_xjszybb values(:t_s);
+		MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+mytt() 
+{
+	EXEC SQL select * into :v_s from mo_xjszybb
+			where tx_date=0 and target_no=:t_s.target_no;
+	if( sqlca.sqlcode==1403 )
+		v_s.amt=0; 
+	else { MYSQLERR } 
+
+vtcp_log("TTTTTTT [%s] [%.2lf] [%.2lf]",t_s.target_no,t_s.amt,v_s.amt);
+		t_s.amt+=v_s.amt; 
+
+	return 0;
+ErrExit:
+	return 1;
+}

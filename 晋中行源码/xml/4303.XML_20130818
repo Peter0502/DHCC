@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4303 零余额销户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+		dim @txno as string;
+		
+		@txno=$TXNO;
+		$FD12='2505';
+		$TXNO='9986';
+
+		commsend_001();
+		callserver();
+		$TXNO=@txno; 
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+
+		$FD16 = '2505';
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(4303                           零余额销户  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2505)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+   <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(4303)"/><!---交易代码--->
+   <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(零余额销户)"/><!---交易名称--->
+
+   <!--输入变量-->
+   <ITEM LINE="7"   COL="3" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+
+  <ITEM LINE="8"   COL="3" TYPE="%-70s" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+    
+    <ITEM LINE="9"     COL="3"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+   <ITEM LINE="9"     COL="35"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  
+    <ITEM LINE="11"   COL="3" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+
+    <ITEM LINE="13"   COL="3" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+
+    <ITEM LINE="15"   COL="3" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+
+
+  <ITEM NAME="#ZH"	 LINE="7" COL="13" TYPE="%-24s" INPUT="TEXT"	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+		dim @txno as string;
+
+		if(substr(#ZH,0,3)=='407' or substr(#ZH,0,3)=='416'){
+			showmsg('不可以记此科目的帐务!');
+			return(false);
+		}
+		if(substr(#ZH,0,3)=='408'){
+			if($KINBR!='10001'){
+				showmsg('不可以记此科目的帐务!');
+				return(false);
+			}
+		}
+
+		$FD30=#ZH;
+		if(substr(#ZH,0,1)=='9'){
+		  $FD34='0000';
+		}
+		else{
+		  $FD34='0001';
+		}
+		@txno=$TXNO;
+		$TXNO='9740';
+		commsend_001();
+
+		callserver();
+		$TXNO = @txno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+
+		if($FD72 == '1')
+		{
+			showmsg('代理单位代理户,未解除代理关系,不允许销户!');
+			return(false);
+		}
+		<!--修改sp9740.c内部账户从第26域取值，其他从第25域取值的问题 20121211-->
+		<!--按财务要求  全显示账户名字 不显示客户名称 wudawei 20130329-->
+		//if(substr(#ZH,0,1)=='9'){
+		  #HM=$FD26;
+		//}else{
+		//  #HM=$FD25;
+		//}
+		<!--end 20121211-->
+		#BZ=$FD21;
+		#YE=val($FD41, 0.01);
+		enable(#HM, false);
+		enable(#BZ, false);
+		enable(#YE, false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<!--added by liuyong 2009-9-15 显示图片信息 start-->
+	<ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ZH));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ZH;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-24s" FUNCTIONS="" />
+  <ITEM LINE="9" COL="13" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ZH;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9" COL="45" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ZH;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#HM"	 LINE="11" COL="13" TYPE="%-60s" INPUT="TEXT"   FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#BZ"   LINE="13" COL="13" TYPE="%-2s"  INPUT="SELECT" FUNCTIONS="T(01)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="01" TITLE="人民币 "/>
+  	</SELECT>
+	</ITEM>
+	<ITEM NAME="#SBZ" TYPE="%-8s"       FUNCTIONS="S(#BZ,#BZ)"/>
+	
+   <ITEM NAME="#YE"	 LINE="15" COL="13" TYPE="%16.2f" INPUT="TEXT"	FUNCTIONS="T()V(NB)"/>
+
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+    </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="零余额销户">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 3,30,'零余额销户');
+		print( 4,22,'帐    号: [24]',#ZH);
+		print( 5,22,'户    名: [60]',#HM);
+		print( 6,22,'销户金额: 0.00');
+		print( 7,22,'币    种: [ 8]',#SBZ);
+		print( 8,22,'流 水 号: [ 5]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		
+		print( 5,22,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:4303');
+		print( 5,13,'交易:零余额销户');
+
+		print( 9,22,'帐    号: [24]',#ZH);
+		print( 10,22,'户    名: [60]',#HM);
+		print( 11,22,'销户金额: 0.00');
+		print( 12,22,'币    种: [ 8]',#SBZ);
+		
+		print(22,22,'备注:');
+		print(22,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(22,5,'柜员:[4]',$TLRNO);
+		print(22,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+
+</OUTPUT>
+</TRANSACTION>
+   

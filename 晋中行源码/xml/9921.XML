@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="燃气费用代扣签/解约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<FIRSTWORK>
+"{
+}"
+</FIRSTWORK>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(9921                         燃气费用代扣签/解约)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5010)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="7"   COL="6" TYPE="%-12s"    FUNCTIONS="T(用户代码:)"/>
+  <ITEM LINE="7"   COL="15" NAME="#USER_NO" INPUT="TEXT" TYPE="%-6s"  FUNCTIONS="V(000001,999999)">
+    <ONLOSTFOCUS>
+    "{
+       initfd();
+       commsend_001();
+       $FD16='1010';                  //平台用户查询接口
+       $FD60='RQDS';                  //平台交易类型
+       $FD30=#USER_NO;
+       callagnpt();
+       if($FD12!='0000')
+       {
+         showmsg(geterror());
+         return(false);
+       }
+       #YHNAME=delspace($FD25);       //用户姓名
+       #ADDRESS=delspace($FD76);      //用户单位及地址
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="30" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="7"  COL="40" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+  <ITEM LINE="8"  COL="6"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="8"  COL="15" NAME="#ADDRESS"  TYPE="%-64s"    INPUT="LABEL" FUNCTIONS="T()"/>
+
+  <ITEM LINE="10" COL="6" NAME="#LYW_TYPE" TYPE="%-12s"  INPUT="LABEL" FUNCTIONS="T(批量代扣:!)"/>
+  <ITEM LINE="10" COL="15" NAME="#YW_TYPE"  TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+      <OPTION VALUE="0" TITLE="0.签约"/>
+      <OPTION VALUE="1" TITLE="1.解约"/>
+  </SELECT>
+
+  <ONLOSTFOCUS>
+  "{
+      show(#LMM,false);
+      show(#DRAW_PWD,false);
+
+      initfd();
+      commsend_001();
+      $FD16='9040';            //平台代收签约查询接口
+      $FD60='RQDS';            //平台交易类型
+      $FD30=#USER_NO;          //用户代码
+
+      callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      #AC_NO=delspace($FD31);   //签约账号
+      #AG_STS=delspace($FD70);  //代扣签约状态
+      #ITEM_NO=delspace($FD63); //个人代理编号
+
+      //核心查询已签约卡户名
+      dim @info as string;
+      dim @tmpacid as string;
+      dim @tmpnotests as string;  //介质状态
+      dim @tmpacsts as string;    //账户状态
+      dim @tmpholdsts as string;  //冻结状态
+      #AC_NAME='';
+      #OPN_BR_NO='';
+      refresh();
+
+      initfd();
+      commsend_001();
+      $FD16='9598';
+      $FD123='select ac_id, note_sts, opn_br_no from mdm_ac_rel where ac_no='+chr(39)+#AC_NO+chr(39);
+      @info=callserver();
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return(false);
+      }
+      if(@info=='')
+      {
+          showmsg('账号不存在,请核对后重新输入!!');
+          return(false);
+      }
+      @tmpacid=delspace(strfld(@info,'|',0));
+      @tmpnotests=delspace(strfld(@info,'|',1));
+      #OPN_BR_NO=delspace(strfld(@info,'|',2));
+
+      initfd();
+      commsend_001();
+      $FD16='9598';
+      @info='';
+      $FD123='select name, hold_sts, ac_sts from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+      @info=callserver();
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return(false);
+      }
+      #AC_NAME=delspace(strfld(@info,'|',0));
+      @tmpholdsts=delspace(strfld(@info,'|',1));
+      @tmpacsts=delspace(strfld(@info,'|',2));
+
+      //未签约用户进行解约操作
+      if(#AG_STS == '1' and #YW_TYPE == '1')
+      {
+        showmsg('您尚未签约燃气费用代扣业务,无法解约!!');
+        return(false);
+      }
+      //已签约用户进行签约操作
+      if(#AG_STS=='0' and #YW_TYPE=='0')
+      {
+        showmsg('您已经签约燃气费用代扣业务!!');
+        return(false);
+      }
+
+      //签约时,校验账户状态为正常的可进行;解约时,不校验账户状态
+      if((@tmpnotests != '0' or @tmpholdsts != '0' or @tmpacsts != '1') and #YW_TYPE == '0')
+      {
+        if(@tmpnotests == '1')
+        {
+          showmsg('该账户已挂失,不允许签约!!');
+        }
+        if(@tmpacsts == '*')
+        {
+          showmsg('该账户已销户,不允许签约!!');
+        }
+        if(@tmpholdsts != '0')
+        {
+          showmsg('该账户已被冻结,不允许签约!!');
+        }
+        return(false);
+      }
+
+      show(#LMM,true);
+      show(#DRAW_PWD,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="11" COL="6"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+  <ITEM LINE="13" COL="6" NAME="#LACNO" TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="13" COL="15" NAME="#AC_NO"  INPUT="LABEL" TYPE="%-19s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13" COL="41" NAME="#LACNAME" TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="13" COL="51" NAME="#AC_NAME" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="14"  COL="6"  NAME="#LCERTTYPE" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)"/>
+  <ITEM LINE="14"  COL="15" NAME="#CERTTYPE"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="V(NB)T(1)" >
+	<SELECT>
+	  <OPTION VALUE="1" TITLE="身份证"/>
+	  <OPTION VALUE="2" TITLE="户口薄"/>
+	  <OPTION VALUE="3" TITLE="护照  "/>
+	  <OPTION VALUE="4" TITLE="军官证"/>
+	  <OPTION VALUE="5" TITLE="回乡证"/>
+	  <OPTION VALUE="6" TITLE="士兵证"/>
+	  <OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+	  <OPTION VALUE="E" TITLE="临时身份证"/>
+	  <OPTION VALUE="F" TITLE="外国人居留证"/>
+	  <OPTION VALUE="G" TITLE="警官证"/>
+	  <OPTION VALUE="H" TITLE="其他证件"/>
+	  <OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+  </ITEM>
+  <!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+  <ITEM NAME="#C_CERTTYPE" TYPE="%-1s" FUNCTIONS=""/><!---账户对应证件类型--->
+  <ITEM NAME="#C_CERTNO" TYPE="%-20s" FUNCTIONS=""/><!---账户对应证件号码--->
+  <ITEM NAME="#CERTTYPE_CN" TYPE="%-20s" FUNCTIONS=""/><!---证件类型中文--->
+  <ITEM LINE="14"  COL="41" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件号码:)"  NAME="#LCERTNO" />
+  <ITEM LINE="14"  COL="51" NAME="#CERTNO"  TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    initfd();
+    commsend_001();
+    $FD16='9961';             //输入帐号，回显证件信息
+    $FD30=#AC_NO;
+    callserver();
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+    }
+    #C_CERTNO=delspace($FD62);
+    #C_CERTTYPE=delspace($FD67);
+
+    if(#C_CERTNO != delspace(#CERTNO))
+    {
+        showmsg('输入的证件号有误，与帐户开户时使用的证件号不匹配！');
+        return(false);
+    }
+    if(#C_CERTTYPE != delspace(#CERTTYPE))
+    {
+        showmsg('输入的证件类型有误，与帐户开户时使用的证件类型不匹配！');
+        return(false);
+    }
+
+    //add 20131030 wudawei start 调用身份核查
+    dim @res as string;
+    if(#CERTTYPE=='1' or #CERTTYPE=='2')
+    {
+      @res =  idcheck(#CERTNO,#AC_NAME);
+      #HCJGBL = strfld(@res,'|',1);
+      @res =  strfld(@res,'|',0);
+      if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+      {
+        showmsg('身份核查结果不通过，不能继续办理！');
+        return(false);
+      }
+    }
+    //add 20131030 end
+
+    //证件类型中文转换
+    if(#CERTTYPE == '1')
+    {
+      #CERTTYPE_CN='身份证';
+    }
+    if(#CERTTYPE == '2')
+    {
+      #CERTTYPE_CN='户口薄';
+    }
+    if(#CERTTYPE == '3')
+    {
+      #CERTTYPE_CN='护照';
+    }
+    if(#CERTTYPE == '4')
+    {
+      #CERTTYPE_CN='军官证';
+    }
+    if(#CERTTYPE == '5')
+    {
+      #CERTTYPE_CN='回乡证';
+    }
+    if(#CERTTYPE == '6')
+    {
+      #CERTTYPE_CN='士兵证';
+    }
+    if(#CERTTYPE == '7')
+    {
+      #CERTTYPE_CN='港澳居民来往通行证';
+    }
+    if(#CERTTYPE == 'E')
+    {
+      #CERTTYPE_CN='临时身份证';
+    }
+    if(#CERTTYPE == 'F')
+    {
+      #CERTTYPE_CN='外国人居留证';
+    }
+    if(#CERTTYPE == 'G')
+    {
+      #CERTTYPE_CN='警官证';
+    }
+    if(#CERTTYPE == 'H')
+    {
+      #CERTTYPE_CN='其他证件';
+    }
+    if(#CERTTYPE == 'I')
+    {
+      #CERTTYPE_CN='台湾同胞来往通行证';
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="15" COL="6" NAME="#LMM" TYPE="%-10s" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="15" COL="15" NAME="#DRAW_PWD" TYPE="%6d" VISABLE="FALSE" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+    <ONLOSTFOCUS>
+    "{
+      if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')  //卡验密
+      {
+        initfd();
+        commsend_001();
+        $FD16='7007';         //卡验密接口
+        $FD30=#AC_NO;         //签约卡号
+        $FD68='4';
+        $FD79=#DRAW_PWD;      //卡密码
+        callagn();
+        if( $FD12 != '0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+      }
+      else
+      {
+        showmsg('请使用银行卡账户进行燃气费用代扣签解约!!');
+        rerun();
+        return(false);
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#AG_STS"    TYPE="%-1s"  FUNCTIONS=""/>
+  <ITEM NAME="#ITEM_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#OPN_BR_NO"    TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#TRACE_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>
+  "{
+      initfd();
+      commsend_001();
+      $FD16='5010';             //平台燃气费用代扣签解约接口
+      $FD60='RQDS';             //平台交易类型
+      $FD20='1';                //柜面发起标志
+      $FD30=#USER_NO;           //用户代码
+      $FD31=#AC_NO;             //签约账户
+      $FD33=#AC_NAME;           //账户名称
+      $FD70=#YW_TYPE;           //业务类型
+      $FD63=#ITEM_NO;           //个人代理编号
+
+      //将用户代码对应的姓名、地址信息写入流水记录
+      $FD25=#YHNAME;            //用户姓名
+      $FD76=#ADDRESS;           //用户单位及地址
+
+      callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+
+      #TRACE_NO=delspace($FD32);      //平台流水号
+      runoutput();
+      rerun();
+    }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+  NOTHING
+  </PACKAGE>
+  <PRINT>"{
+    if(#YW_TYPE=='0')
+    {
+        print(3,25,'燃气费用代扣签约成功');
+        print(6,20,'用户代码：[6]                代扣状态：签约',#USER_NO);
+        print(7,20,'签约卡号：[19]   签约卡户名：[60]',#AC_NO,#AC_NAME);
+        print(8,20,'证件类型：[20]  证件号码：[18]',#CERTTYPE_CN,#CERTNO);
+    }else{
+        print(3,25,'燃气费用代扣解约成功');
+        print(6,20,'用户代码：[6]                代扣状态：解约',#USER_NO);
+        print(7,20,'解约卡号：[19]   解约卡户名：[60]',#AC_NO,#AC_NAME);
+        print(8,20,'证件类型：[20]  证件号码：[18]',#CERTTYPE_CN,#CERTNO);
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(5,20,'机构名称:[30]',$BRNAME);
+    print(5,2,'代码:9921');
+    print(5,13,'交易:燃气费用代扣签/解约');
+
+    print(7,27,'\L0燃气费用代扣签/解约\L1');
+    print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,$FD3);
+    if(#YW_TYPE=='0')
+    {
+      print(10,20,'业务类型：签约');
+      print(11,20,'签约账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+      print(12,20,'证件类型：[20]       证件号码：[18]',#CERTTYPE_CN,#CERTNO);
+    }else{
+      print(10,20,'业务类型：解约');
+      print(11,20,'解约账号：[19]        户    名：[60]',#AC_NO,#AC_NAME);
+      print(12,20,'证件类型：[20]       证件号码：[18]',#CERTTYPE_CN,#CERTNO);
+    }
+
+    print(13,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+    print(14,20,'地    址：[64]',#ADDRESS);
+    print(15,20,'平台流水：[8]',#TRACE_NO);
+	print(16,20,'身份核查结果:[60] ',#HCJGBL);
+
+    print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+    print(19,80,'客户签名:_____________________');
+
+    print( 23,20,'备注:');
+    print( 23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print( 23,5,'柜员:[4]',$FD7);
+    print( 23,5,'流水号:[6]',$FD4);
+  }"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

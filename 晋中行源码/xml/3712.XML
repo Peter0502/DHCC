@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="3712    IC卡销户申请"
+  xmlns="http://www.org.otd/MENU"  xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>
+	"{    
+	
+	      <!--去卡系统前查询账户冻结情况-->
+        
+        $FD31=#CARDNO;
+        $FD34='1';//1为活期账户0为定期账户
+        commsend_001();
+        $FD16='9702';
+        callserver();
+        if($FD12!='0000')
+        {
+        showmsg(geterror());
+        return(false);
+        }
+        setitems('#AVBAL#HOLD_AMT#SPACE96',$FD100);  // 余额
+        //showmsg('#HOLD_AMT='+itoa(#HOLD_AMT));
+        if(#HOLD_AMT &gt; 0)
+        {
+        showmsg('该账户有资金冻结，不能做销卡申请！');
+        return(false);
+        }
+        <!--去卡系统前查询账户冻结情况end-->
+        //return(false);
+	
+	      dim @tx as string;
+        dim @update as string;
+        dim @shuju as string;
+        dim @shuju1 as string;
+        dim @cb as string;
+        dim @kahao as string;
+        dim @tagvalue1 as string;
+        initfd();
+        @tx=$TXNO;
+        commsend_001();
+        $FD16='7118';
+        
+        $FD30=#CARDNO;
+        $FD79=#PASSWORD;
+        $FD75=#MSR2BAK;
+        $FD76=#MSR3BAK;
+       
+        $FD25=#Pinyin;
+        $FD67=#ZJLX;
+        $FD62=#ZJHM;
+        $FD95=#SQYY;
+        //$FD39=itoa(val(#LAVBAL,100),'%016.2f');  // 交易金额
+        
+        callagn();
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        //showmsg('卡系统返回成功！');
+        #CARD_TRACENO = delspace(itoa(val($FD43),'%16d'));
+        
+        <!--进核心冻结主账户-->
+       
+        initfd();
+        commsend_001();
+        $FD16='2406';
+        $FD31=#CARDNO;
+        $FD34='1';//1为活期账户0为定期账户
+        //$FD41 = itoa(val(#LAVBAL,100),'%016.2f');   //实际冻结的金额
+        $FD67='1';//处理类型，1是冻结2是解冻
+        $FD68='2';//冻结方式，此处选2只进不出方式
+        $FD81='IC卡销户申请冻结';
+        
+       
+	}"
+  </COMMSEND>
+  <COMMRECV>
+	"{ 
+	      
+        //撤销时，解决交易不成功时打印空凭证的问题
+        dim @tmpFD12 as string; 
+        @tmpFD12=$FD12;         
+        //showmsg('$FD12='+$FD12);
+	if($FD12=='0000')
+	   {
+		    commrecv_001();
+        setitems('#HOLD_SEQN_RET',$FD49);
+        //showmsg('#HOLD_SEQN_RET='+#HOLD_SEQN_RET);
+	   }
+	else
+	   {
+	       
+	       if(($FD12!='0000') and ($FD12!='Z003'))
+			   {
+			   #RESP_CODE_TRAN=$FD12;
+			   
+			   }
+			  else
+			   {
+			  #RESP_CODE_TRAN='0000';
+			  
+			   }
+	      if(($FD12 != '0000') and ($FD12 != 'Z003') and (substr(#CARDNO,0,6)=='621223' or substr(#CARDNO,0,6)=='621780'))
+	       {
+	        
+		       initfd();
+				   commsend_001();
+				   $FD16='7777';
+				   $FD12=#RESP_CODE_TRAN;
+				   $FD30=#CARDNO;
+				   //$FD39=itoa(val(#LAVBAL,100),'%016.2f');;
+				   $FD43=#CARD_TRACENO;
+				  callagn();
+				  if($FD12!='0000')
+				  {
+					showmsg('撤销销卡申请失败:['+geterror()+']');
+				  }
+				  
+	       }
+	       
+		  }
+	$FD12=@tmpFD12;
+	}"
+</COMMRECV>
+  <VARIABLE>
+    <ITEM LINE="3" COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3712                           IC卡销户申请)"/>
+    <ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(────────────────────────────────────�)"/>
+    <ITEM NAME="#TXNO"       TYPE="%-4s"   FUNCTIONS="T($TXNO=2406)"/>
+    <ITEM NAME="#MSGTYPE"    TYPE="%-5s"   FUNCTIONS="T($MSGTYPE=03001)"/>
+    <ITEM NAME="#TXCD"       TYPE="%4s"    FUNCTIONS="T(7118)"/>
+    <ITEM NAME="#TXNAME"     TYPE="%-14s"  FUNCTIONS="T(IC卡销户申请)"/>
+    <ITEM NAME="#HM"         TYPE="%-20s"  FUNCTIONS=""/>
+    <ITEM NAME="#LX"         TYPE="%-1s"   FUNCTIONS=""/>
+    <ITEM NAME="#KH_HM"      TYPE="%-10s"   FUNCTIONS=""/>
+    <ITEM NAME="#MSR2BAK"    TYPE="%-37s"  FUNCTIONS=""/>
+    <ITEM NAME="#MSR3BAK"    TYPE="%-104s" FUNCTIONS=""/>
+    <ITEM NAME="#ICJSQ"      TYPE="%-4s"   FUNCTIONS=""/><!--应用交易计数器-->
+    <ITEM NAME="#ICMW"       TYPE="%-20s"  FUNCTIONS=""/><!--应用交易密文-->
+    <ITEM NAME="#ORIG_SEQNO" TYPE="%-16s"  FUNCTIONS=""/>
+    <ITEM NAME="#RESP_CODE"  TYPE="%-6s"   FUNCTIONS=""/>
+    <ITEM NAME="#HOLD_SEQN_RET" TYPE="%-4s" FUNCTIONS="T()"/><!--冻结序号-->
+    <ITEM NAME="#CARD_TRACENO"      TYPE="%-16s"  FUNCTIONS=""/>
+    <ITEM NAME="#RESP_CODE_TRAN"    TYPE="%-4s"   FUNCTIONS=""/>
+    <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS=""/>
+    <ITEM NAME="#HOLD_AMT" TYPE="%17.2f" FUNCTIONS=""/>
+    <ITEM NAME="#SPACE96" TYPE="%-80s" FUNCTIONS=""/>
+    <ITEM LINE="6" COL="9"   TYPE="%-10s"  FUNCTIONS="T( IC 卡 号:)"/>
+    <ITEM LINE="8" COL="9"   TYPE="%-12s"  FUNCTIONS="T(【产品信息】)"/>
+    <ITEM LINE="9" COL="5"   TYPE="%70s"   FUNCTIONS=
+    "T(----------------------------------------------------------------------)"/>
+    <ITEM LINE="6" COL="19"  TYPE="%-19s"  NAME="#CARDNO"  INPUT="TEXT"    FUNCTIONS="V(NB)">
+      <ONLOSTFOCUS>
+       "{
+        dim @baktxno as string;
+        dim @tagvalue as string;
+        @baktxno=$TXNO;
+        if(substr(#CARDNO,0,6)!='621780')
+        {
+          showmsg('不是IC卡，不能用此交易做销户申请!');
+          return(false);
+        }
+        <!--@tagvalue= ictagvalue('9f79');
+        showmsg(@tagvalue);
+        if(strfld(@tagvalue,'|',0)!='9000')
+        {
+            showmsg('函数ictagvalue的返回值有误!');
+            return(false);
+        }
+        #ICLAVBAL=strfld(@tagvalue,'|',1);
+        showmsg('电子现金#ICLAVBAL='+delspace(#ICLAVBAL));
+        #ICAVBAL=val(#ICLAVBAL,0.01);
+        #MSR2BAK=$MSR2;
+        showmsg('#MSR2BAK='+#MSR2BAK);
+        #MSR3BAK=$MSR3;
+        showmsg('#MSR3BAK='+#MSR3BAK);   -->
+        $MSR2='';
+        $MSR3='';
+        initfd();
+        @baktxno=$TXNO;
+        commsend_001();
+        $FD30=#CARDNO;
+        $FD16='9961'; //输入卡号，回显证件信息
+        callserver();
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        $TXNO=@baktxno;
+        //showmsg('证件类型'+$FD67);
+        //showmsg('证件号码'+$FD62);
+        //showmsg($FD25);
+        #NAME=delspace($FD25);
+        //#Pinyin=getpinyin(#NAME);
+        #ZJLX=delspace($FD67);
+        #LX=delspace($FD67);
+        #HM=delspace($FD62);
+        show(#NAME,true);
+        show(#Pinyin,true);
+
+        @baktxno=$TXNO;
+        initfd();
+        commsend_001();
+        $FD16='9951'; //根据帐号回显账户序号及信息[储蓄存款交易]
+        $FD101=#CARDNO;
+        callserver();
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        $TXNO=@baktxno;
+        #AVBAL=val(substr($FD101,134,16),0.01);
+        //showmsg('卡余额#AVBAL='+delspace(#AVBAL));
+        enable(#NAME,false);
+        //enable(#ZJLX,false);
+        showblock('BOX',true,true);
+        
+            initfd();
+            commsend_001();
+            $FD62=rtrim(#CARDNO) ;
+            $FD16='1717' ;//查询账户信息
+            callserver();
+            if($FD12!='0000')
+            {
+                showmsg(geterror());
+                return(false);
+            }
+            #KH_HM = $FD54 ;//客户号
+            #OPEN_AC_ID = substr($FD44,3,5);//户名
+        }"
+      </ONLOSTFOCUS>
+    </ITEM>
+      <ITEM NAME="#OPEN_AC_ID"   LINE="4" COL="49" TYPE="%-5s"  VISABLE="false"  FUNCTIONS=""/>
+      <BLOCK  LINE="0" COL="0"   NAME="BOX"    VISABLE="FALSE">
+      <ITEM LINE="11" COL="9"  TYPE="%-10s"  NAME="#KHM"     FUNCTIONS="T(客户名称:)"/>
+      <ITEM LINE="12" COL="9"  TYPE="%-10s"                  FUNCTIONS="T(拼音名字:)"/>
+      <ITEM LINE="13" COL="9"  TYPE="%-10s"  NAME="#YE"      FUNCTIONS="T(卡 余 额:)"/>
+      <ITEM LINE="14" COL="9"  TYPE="%-14s"  NAME="#DZXJ"    VISABLE="FALSE" FUNCTIONS="T(电子现金余额:)"/>
+      <ITEM LINE="15" COL="9"  TYPE="%-10s"  NAME="#KLX"     FUNCTIONS="T(证件类型:!)"/>
+      <ITEM LINE="16" COL="9"  TYPE="%-10s"  NAME="#ZJH"     FUNCTIONS="T(证件号码:)"/>
+      <ITEM LINE="18" COL="9"  TYPE="%-10s"                  FUNCTIONS="T(密    码:)"/>
+      <ITEM LINE="19" COL="9"  TYPE="%-10s"  NAME="#YY"      FUNCTIONS="T(申请原因:)"/>
+      <ITEM LINE="11" COL="19" TYPE="%-30s"  NAME="#NAME"    FUNCTIONS=""/>
+      <ITEM LINE="12" COL="19" TYPE="%-30s"  NAME="#Pinyin"  INPUT="TEXT"  FUNCTIONS="V(NB)"/>
+      <ITEM LINE="13" COL="19" TYPE="%-16s"  NAME="#LAVBAL"  FUNCTIONS="X(#AVBAL)"/>
+      <ITEM                    TYPE="%17.2f" NAME="#AVBAL"   FUNCTIONS="J(#LAVBAL)"/>
+      <ITEM LINE="14" COL="23" TYPE="%17.2f" NAME="#ICAVBAL" FUNCTIONS="X(#ICLAVBAL)"/>
+      <ITEM                    TYPE="%17s"   NAME="#ICLAVBAL" FUNCTIONS="J(#ICAVBAL)"/>
+      <!--ITEM LINE="14" COL="23" TYPE="%-16s" NAME="#ICLAVBAL" FUNCTIONS="X(#ICAVBAL)"/>
+      <ITEM NAME="#ICAVBAL" TYPE="%17.2f" FUNCTIONS="J(#ICLAVBAL)"/-->
+      <ITEM LINE="15" COL="19" TYPE="%-1s"   NAME="#ZJLX"    FUNCTIONS="" INPUT="SELECT">
+        <SELECT>
+          <OPTION VALUE="1" TITLE="0.身份证      " />
+          <OPTION VALUE="2" TITLE="1.户口簿      " />
+          <OPTION VALUE="3" TITLE="2.护照        " />
+          <OPTION VALUE="4" TITLE="3.军官证      " />
+          <OPTION VALUE="5" TITLE="4.回乡证      " />
+          <OPTION VALUE="8" TITLE="7.企业代码证  " />
+          <OPTION VALUE="9" TITLE="8.组织机构号  " />
+          <OPTION VALUE="A" TITLE="9.营业执照    " />
+          <OPTION VALUE="B" TITLE="a.经营许可证  " />
+          <OPTION VALUE="C" TITLE="b.事业法人证书" />
+          <OPTION VALUE="G" TITLE="g.警官证" />
+        </SELECT>
+        <ONLOSTFOCUS>
+         "{
+          if(#ZJLX!=#LX)
+          {
+            showmsg('证件类型不符!');
+            return(false);
+          }
+         }"
+        </ONLOSTFOCUS>
+      </ITEM>
+      <ITEM LINE="16" COL="19" TYPE="%-20s" NAME="#ZJHM"   INPUT="TEXT" FUNCTIONS="">
+        <ONLOSTFOCUS>
+         "{
+          if(#ZJHM!=#HM)
+          {
+            showmsg('证件号码不符!');
+            return(false);
+          }
+         }"
+        </ONLOSTFOCUS>
+      </ITEM>
+      <ITEM LINE="18" COL="19" TYPE="%-6s" NAME="#PASSWORD" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+        <ONLOSTFOCUS>
+         "{
+          dim  @txname as string;
+          if(substr(#CARDNO,0,6) == '621780')
+          {
+            @txname=$TXNO;
+            initfd();
+            commsend_001();
+            $FD16='7007';
+            $FD30=#CARDNO;
+            $FD68='4';   //#OPTION ='04'
+            $FD79=#PASSWORD;
+            callagn();
+            if( $FD12 != '0000')
+            {
+              showmsg(geterror());
+              //return(false);
+            }
+            $TXNO=@txname;
+            //showmsg('密码校验成功！');
+          }
+         }"
+        </ONLOSTFOCUS>
+      </ITEM>
+      <ITEM LINE="19" COL="19" TYPE="%-50s" NAME="#SQYY" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+    </BLOCK>
+  <ITEM LINE="21"  COL="59"  TYPE="%-10s" INPUT="SUBMIT" FUNCTIONS="T(确   定)"/>
+  </VARIABLE>
+  <REQUEST>
+  </REQUEST>
+  <RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="IC卡销户申请">
+      NOTHING
+    </PACKAGE>
+    <PRINT>
+    "{
+        print(8,25,'操 作 成 功!');
+    }"
+    </PRINT>
+  </RESPONSE>
+  <RESPONSE>
+    <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证(IC卡销户申请)">
+      NOTHING
+    </PACKAGE>
+    <PRINT>
+     "{
+        dim @txtime  as string;
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5,  2,'代码:[4 ]','3712');
+        print( 5, 13,'交易:[20]',#TXNAME);
+        print( 7,30,'\L0销卡申请凭条\L1'); 
+        print( 9,20,'开 户 行:[5    ]                  交 易 行:[7]',#OPEN_AC_ID,$FD3);
+        print(10, 20,'账/卡 号:[20                    ]   户    名:[20                    ]',#CARDNO,#NAME);
+        print(11, 20,'存    期:[20                    ]   交易类型:[20                    ]','',#TXNAME);
+        print(12, 20,'交易金额:[21  ]  账户余额:[21                       ]','0.00',#AVBAL);
+        print(13, 20,'销户原因:[21  ]  申请序号:[21                       ]',#SQYY,#HOLD_SEQN_RET); 
+        print_sq(); 
+        print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+        print(21,80,'客户签名:_____________________');     
+        print(23,20,'备注:');
+        print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(23,5,'柜员:[4]',$FD7);
+        
+     }"
+    </PRINT>
+  </RESPONSE>
+</TRANSACTION>
+
+

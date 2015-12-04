@@ -1,0 +1,214 @@
+#include"stdio.h"
+#include"stdlib.h"
+#include <varargs.h>
+#include"global.h"
+#include"hv_zf_c.h"
+#include"od_mst_c.h"
+#include"tx_sub_rel_c.h"
+#include"errno.h"
+EXEC SQL INCLUDE sqlca;
+EXEC SQL BEGIN DECLARE SECTION;
+	varchar sql_userid[32];
+	varchar sql_passwd[32];
+EXEC SQL END DECLARE SECTION;
+char *tolower(char *s);
+char *toupper(char *s);
+char acErrMsg[256];
+int g_pub_tx;
+int g_td_mst;
+int tpalloc ;
+int _tmget_tperrno_addr;
+int tpstrerror;
+int userlog;
+int tpreturn;
+int tpsprio;
+int tpacall;
+int tpfree;
+int func;
+int user_call_back;
+int special_server;
+int tp_name;
+int Fadd32;
+int _Fget_Ferror_addr32;
+int tpsubscribe;
+int tppost;
+int user_poll_call;
+int tpunadvertise ;
+int tpunsubscribe;
+int Pre_Server_Call;
+int tpadvertise;
+int tp_backcallname;
+int tpcall;
+int Bit_Arr;
+int Pub_leng;
+int Pu_Val;
+int Pub_Buf;
+int Old_Pu_Val;
+int Old_Pub_Buf;
+int PuVal_num ;
+int Rec_Bitp ;
+
+
+int vtcp_log(fmtstr,va_alist)
+char *fmtstr;
+va_dcl
+{
+	va_list ap;
+	va_start(ap);
+	vprintf (fmtstr, ap );
+	va_end(ap);
+	printf("\n");
+	return(0);
+}
+void  db_connect(){
+	char *du_ora_id;
+	char *du_ora_pwd;
+
+
+	du_ora_id  = (char *)getenv("DB_USER");
+	du_ora_pwd = (char *)getenv("DB_PASSWD");
+	if(du_ora_id!=NULL){
+		strcpy(sql_userid.arr,du_ora_id);
+		tolower(sql_userid.arr);
+		sql_userid.len=strlen(sql_userid.arr);
+	}else{
+		strcpy(sql_userid.arr,"sc");
+		sql_userid.len=strlen(sql_userid.arr);
+	}
+	if(du_ora_pwd!=NULL){
+		strcpy(sql_passwd.arr,du_ora_pwd);
+		tolower(sql_passwd.arr);
+		sql_passwd.len=strlen(sql_passwd.arr);
+	}else{
+		strcpy(sql_passwd.arr,"sc");
+		sql_passwd.len=strlen(sql_passwd.arr);
+	}
+	EXEC SQL  connect :sql_userid identified by :sql_passwd;
+	if(sqlca.sqlcode != 0){
+		printf("\n Connect Database Error, code = %d",sqlca.sqlcode);
+        exit(1);
+	}
+	EXEC SQL alter session set optimizer_goal = all_rows;
+}
+char *tolower(char *s){
+	int len=strlen(s);
+	int i;
+	for(i=0;i<len;i++){
+		if(s[i]>='A' && s[i]<='Z'){
+			s[i]=s[i]-'A'+'a';
+		}
+	}
+	return(s);
+}
+char *toupper(char *s){
+	int len=strlen(s);
+	int i;
+	for(i=0;i<len;i++){
+		if(s[i]>='a' && s[i]<='z'){
+			s[i]=s[i]-'a'+'A';
+		}
+	}
+	return(s);
+}
+char *zip_space(char *s){
+	int i,j;
+	int len=strlen(s);
+	i=j=0;
+	while(s[i]!='\0'){
+		if(s[i]==' ' ||s[i]=='\t' ||s[i]==0x0a ||s[i]==0x0d){
+			i++;
+		}else if(s[i]=='#'){
+			break;
+		}else{
+			s[j]=s[i];
+			i++;
+			j++;
+		}
+	}
+	while(j<len){
+		s[j]='\0';
+		j++;
+	}
+	return(s);
+}
+int od_mst_con ( struct od_mst_c st, char *str){
+	memcpy(str,"111",3);
+	return(0);		
+}
+int put_mystery( char *str, char *mystery ){
+	memcpy(mystery,"111",3);
+	return(0);
+}
+int pub_reg_rec_file(char *str){
+	printf("%s,%d,%s\n",__FILE__,__LINE__,str);
+	return(0);
+}
+int dd_mst_con(){
+	return(0);
+}
+int in_mst_con(){
+	return(0);
+}
+int ln_lo_con(){
+	return(0);
+}
+int ln_mst_con(){
+	return(0);
+}
+int mdm_ac_rel_con(){
+	return(0);
+}
+int td_mst_con(){
+	return(0);
+}
+static mtest(char *tx_code,char *in_sub_tx)
+{
+	struct tx_sub_rel_c sub_rel;
+	char *data;
+	int i;
+	char RtCode[9];
+	int RespCode;
+	sqlca.sqlcode=1403;
+	RespCode=Tx_sub_rel_Dec_Sel(RtCode,
+		"tx_code='%s' and in_sub_tx='%s'",tx_code,in_sub_tx);
+	if ( RespCode )
+	{
+		vtcp_log("取子交易关系错误[%d]",RespCode);
+		return 1;
+	}
+	while(1)
+	{
+		RespCode=Tx_sub_rel_Fet_Sel(&sub_rel,RtCode);
+		if ( RespCode )
+		{
+			strcpy ( RtCode , "0000" );
+			break;
+		}
+		
+		if( sub_rel.out_ind[0]=='9' ) /**不启用**/
+			continue;
+
+		vtcp_log("[%s]--------[%s]",sub_rel.in_data,sub_rel.out_data );
+
+	}
+	return 0;
+}
+int main(){
+	struct hv_zf_c hv;
+	char buf[5];
+	memset(buf,'\0',sizeof(buf));
+	db_connect();
+	mtest("2202","SQ01");
+	mtest("2202","D003");
+	mtest("2202","D003");
+	mtest("1111","D003");
+	mtest("1111","D003");
+	mtest("1111","D003");
+	mtest("1111","D003");
+	mtest("2202","D003");
+	mtest("2202","SQ99");
+	mtest("2202","SQ01");
+	mtest("2202","D003");
+
+	return(0);
+}

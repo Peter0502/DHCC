@@ -1,0 +1,233 @@
+/*****************************************************
+* 文 件 名:  sp3610.pc
+* 功能描述： 事后监督主程序
+* 作    者:  xyy
+* 完成日期： 2007-1-15 9:31
+* 修改记录： 
+* 日    期:
+* 修 改 人:
+* 修改内容:
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+#include "shjdcode_c.h"
+#include "xdtl_main_c.h"
+#include "trace_log_c.h"
+#include "tranpara_c.h"
+#define   MAX_CNT  5
+
+extern char * pcGetWorkday();
+
+int  sp3610()
+{
+    FILE *fp=NULL;
+    int i=0;
+    char cBhday    [9];
+    char cTxcode   [5];
+    char cSubtxcode[5];
+    char cTxno     [7];
+    char cTxno1    [5];
+    char cTranname [21];
+    char cStat     [2];
+    char cTxname   [21];  /*字段名称*/
+    char cXdtl_flg [2];   /*字段类型*/
+    char cXdtl_flg1[2];   /*监督方式*/
+    char cLength   [4]; 
+    char filename  [256];
+    char cTrancode [5];
+    char cXdtlname [21];
+    /***相当于老程序的tis部分****/
+    char cTlrno[TLRLENGTH+1];
+    char cWssrno[7];
+    /***以上定义的是tis部分***/
+    
+    struct shjdcode_c wd_shjdcode;
+    struct tranpara_c wd_tranpara;
+    struct xdtl_main_c xdtl_main;
+    struct trace_log_c trace_log;
+    struct global_c global;
+
+    memset(cTxcode   ,0, sizeof(cTxcode));
+    memset(cSubtxcode,0, sizeof(cSubtxcode));
+    memset(cTlrno    ,0, sizeof(cTlrno));
+    memset(cWssrno   ,0, sizeof(cWssrno));
+    
+    memset(cTxname     , 0 , sizeof(cTxname));
+    memset(cLength     , 0 , sizeof(cLength));
+    memset(cStat       , 0 , sizeof(cStat));
+    memset(cTxno       , 0 , sizeof(cTxno));
+    memset(cTxno1      , 0 , sizeof(cTxno1));
+    memset(cBhday      , 0 , sizeof(cBhday));
+    memset(cXdtl_flg   , 0 , sizeof(cXdtl_flg));  
+    memset(cXdtl_flg1  , 0 , sizeof(cXdtl_flg1)); 
+    memset(cTranname   , 0 , sizeof(cTranname));
+    memset(filename    , 0 , sizeof(filename));
+    memset(cTrancode   , 0 , sizeof(cTrancode));
+    memset(cXdtlname   , 0 , sizeof(cXdtlname));
+    memset(&trace_log  , 0 , sizeof(trace_log));
+    memset(&xdtl_main  , 0 , sizeof(xdtl_main));
+    memset(&global     , 0 , sizeof(global));
+    memset(&wd_shjdcode, 0 , sizeof(wd_shjdcode));
+    memset(&wd_tranpara, 0 , sizeof(wd_tranpara));
+    vtcp_log("[%s][%d] dh110700开始喽\n",__FILE__,__LINE__);
+
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    
+/**  dongxy
+    get_fd_data("0080",cTlrno);
+    get_fd_data("0170",cWssrno);
+**/
+    get_zd_data("0640",cTlrno);
+    get_zd_data("0650",cWssrno);
+
+    vtcp_log("[%s][%d]cTlrno==[%s]",__FILE__,__LINE__,cTlrno);
+    vtcp_log("[%s][%d]cWssrno==[%s]",__FILE__,__LINE__,cWssrno);
+    
+    g_reply_int = Global_Sel(g_pub_tx.reply,&global,"1=1");
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查系统时间标错误[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cBhday,global.global_bhdate,sizeof(cBhday)-1);
+    vtcp_log("[%s][%d]cBhday===[%s]",__FILE__,__LINE__,cBhday);
+    
+    g_reply_int = Trace_log_Sel(g_pub_tx.reply, &trace_log,"trace_no='%s'  and txday='%s' ",cWssrno,cBhday);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]此笔流水无须监督或尚未配置[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cTxcode   ,trace_log.tx_code    ,sizeof(cTxcode)-1);
+    memcpy(cSubtxcode,trace_log.sub_tx_code,sizeof(cSubtxcode)-1);
+    memcpy(cStat     ,trace_log.stat       ,sizeof(cStat)-1);
+    zip_space(cTxno); 
+
+    vtcp_log("[%s][%d]cTxno===[%s]",__FILE__,__LINE__,cTxno);
+    vtcp_log("[%s][%d]cStat===[%s]",__FILE__,__LINE__,cStat);
+    
+    g_reply_int = Shjdcode_Sel(g_pub_tx.reply,&wd_shjdcode,"trancode='%.4s' ",cTxcode);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查事后登记簿错[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cTrancode,wd_shjdcode.trancode,sizeof(cTrancode)-1);
+    vtcp_log("[%s][%d]cTrancode===[%s]",__FILE__,__LINE__,cTrancode);
+    memcpy(cTranname,wd_shjdcode.tranname,sizeof(cTranname)-1);
+    vtcp_log("[%s][%d]cTranname===[%s]",__FILE__,__LINE__,cTranname);
+    
+    if(cStat[0] == '1')/*详细说明见XML中*/
+    {
+      sprintf( acErrMsg,"[%s][%d]此笔的状态为1",__FILE__,__LINE__);
+      strcpy( g_pub_tx.reply, "P015" );
+      set_zd_data(DC_GET_MSG,acErrMsg);
+      WRITEMSG
+      goto ErrExit;
+    }
+    if(cStat[0] == '3')
+    {
+        sprintf( acErrMsg,"[%s][%d]此笔流水不需要监督",__FILE__,__LINE__);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    
+    g_reply_int = Tranpara_Dec_Sel(g_pub_tx.reply,"trancode='%.4s' ",cTrancode);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查事后登记簿错[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while (1) 
+    {
+      g_reply_int = Tranpara_Fet_Sel (&wd_tranpara,g_pub_tx.reply);
+      if(g_reply_int)
+      {
+        if (i == 0) 
+        {
+            sprintf( acErrMsg,"[%s][%d]尚未对此交易进行要素配置[%d]",__FILE__,__LINE__,g_reply_int);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        break;
+      }
+      if(!i)
+      {
+            pub_base_AllDwnFilName( filename );
+            fp = fopen( filename,"w" );
+            if( fp==NULL )
+            {
+                sprintf(acErrMsg," open file [%s] error ",filename );
+                WRITEMSG
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                strcpy( g_pub_tx.reply,"S047" );
+                goto ErrExit;
+            }
+            /**显示列标题**/
+            fprintf( fp,"~名称|长度|字段类型|监督类型|\n" );
+      }
+      if(memcmp(cXdtlname,"text",4)==0)/*字段名是text的处理*/
+      {
+      }
+      memcpy(cTxname  ,wd_tranpara.name     ,sizeof(cTxname)-1);
+      memcpy(cLength  ,wd_tranpara.length   ,sizeof(cLength)-1);
+      cXdtl_flg[0]  = wd_tranpara.xdtl_flag[0];
+      cXdtl_flg1[0] = wd_tranpara.xdtl_flag[1];   
+      fprintf(fp,"%s|%s|%c|%c|\n",cTxname,cLength,cXdtl_flg[0],cXdtl_flg1[0]);  
+      i++;    
+      vtcp_log("[%s][%d] i===[%d] ",__FILE__,__LINE__,i);
+    }
+    Tranpara_Clo_Sel ();
+    vtcp_log("[%s][%d]关闭游标成功!",__FILE__,__LINE__);
+    if( !i )
+    {
+  	strcpy( g_pub_tx.reply,"S049" );
+  	goto ErrExit;
+    }
+    else
+   {
+  	fclose(fp);
+  	set_zd_data(DC_FILE_SND,"1" );
+    }
+    vtcp_log("[%s][%d]cTrancode==[%s]",__FILE__,__LINE__,cTrancode);
+    vtcp_log("[%s][%d]cTranname==[%s]",__FILE__,__LINE__,cTranname);
+    set_zd_data("0490",cTrancode);
+    set_zd_data("0380",cTranname);
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;    
+}

@@ -1,0 +1,269 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"tranpara_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int tranpara_con ( struct tranpara_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct tranpara_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->trancode);
+	zip_tail(ps->subtxcode);
+	zip_tail(ps->name);
+	zip_tail(ps->length);
+	zip_tail(ps->xdtl_no);
+	zip_tail(ps->xdtl_name);
+	zip_tail(ps->xdtl_flag);
+	zip_tail(ps->text);
+}
+int Tranpara_Debug(struct tranpara_c *ps){
+	vtcp_log("tranpara_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("tranpara_c.trancode=[%s]\n",ps->trancode);
+	vtcp_log("tranpara_c.subtxcode=[%s]\n",ps->subtxcode);
+	vtcp_log("tranpara_c.recno=[%ld]\n",ps->recno);
+	vtcp_log("tranpara_c.name=[%s]\n",ps->name);
+	vtcp_log("tranpara_c.length=[%s]\n",ps->length);
+	vtcp_log("tranpara_c.xdtl_no=[%s]\n",ps->xdtl_no);
+	vtcp_log("tranpara_c.xdtl_name=[%s]\n",ps->xdtl_name);
+	vtcp_log("tranpara_c.xdtl_flag=[%s]\n",ps->xdtl_flag);
+	vtcp_log("tranpara_c.text=[%s]\n",ps->text);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Tranpara_Sel(reply,tranpara_c,fmtstr,va_alist)
+char    *reply;
+struct  tranpara_c *tranpara_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Tranpara_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Tranpara_Fet_Sel( tranpara_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Tranpara_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Tranpara_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,tranpara.* FROM tranpara WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tranpara_sel FROM :comm;
+	EXEC SQL DECLARE sel_tranpara CURSOR FOR tranpara_sel;
+
+	EXEC SQL OPEN sel_tranpara;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tranpara_Fet_Sel ( struct tranpara_c *tranpara_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_tranpara INTO :tranpara_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch tranpara error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch tranpara finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(tranpara_c);
+
+	return 0;
+}
+
+int Tranpara_Clo_Sel (){
+	EXEC SQL CLOSE sel_tranpara;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Tranpara_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,tranpara.* FROM tranpara WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tranpara_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_tranpara CURSOR FOR tranpara_upd;
+
+	EXEC SQL OPEN upd_tranpara;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tranpara_Fet_Upd( struct tranpara_c *tranpara_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_tranpara INTO :tranpara_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH tranpara finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(tranpara_c);
+
+	return 0;
+}
+
+int Tranpara_Upd_Upd( struct tranpara_c tranpara_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE tranpara SET trancode=:tranpara_c.trancode,
+			subtxcode=:tranpara_c.subtxcode,
+			recno=:tranpara_c.recno,
+			name=:tranpara_c.name,
+			length=:tranpara_c.length,
+			xdtl_no=:tranpara_c.xdtl_no,
+			xdtl_name=:tranpara_c.xdtl_name,
+			xdtl_flag=:tranpara_c.xdtl_flag,
+			text=:tranpara_c.text
+	WHERE rowid=:tranpara_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Tranpara_Del_Upd(struct tranpara_c tranpara_c , char * reply  ){
+
+	EXEC SQL DELETE FROM tranpara WHERE rowid=:tranpara_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tranpara_Clo_Upd( ){
+	EXEC SQL CLOSE upd_tranpara;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Tranpara_Ins( struct tranpara_c tranpara_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO tranpara VALUES (:tranpara_c.trancode,
+			:tranpara_c.subtxcode,
+			:tranpara_c.recno,
+			:tranpara_c.name,
+			:tranpara_c.length,
+			:tranpara_c.xdtl_no,
+			:tranpara_c.xdtl_name,
+			:tranpara_c.xdtl_flag,
+			:tranpara_c.text);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT tranpara error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

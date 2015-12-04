@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111110000000000000000000000000" TITLE="9576 纸票导出"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<USERFUN NAME="get_br_name">
+"{
+	dim @br_no as string;
+	dim @tota as string;
+	dim @selid as number;
+	call('remember60 -print '+$HDATE+' '+#REG_BR_NO+'>../tmp/'+$TLRNO+'.r60');
+	@br_no=delspace(getfiletxt('../tmp/'+$TLRNO+'.r60'));
+	if(substr(@br_no,len(@br_no)-1,1)==chr(10)){
+		@br_no=substr(@br_no,0,len(@br_no)-1);
+	}
+	if(len(@br_no) &gt; 12){
+		@br_no=substr(@br_no,0,12);
+	}
+	//showmsg('---'+@br_no+'=====');
+	@selid=val(#SELID);
+	if(len(@br_no)==12){
+		@tota=@br_no;		
+	}else if(#REG_BR_NO=='107'){
+	showmsg(#REG_BR_TYPE);//补录背书次数wk
+	@tota=input('3|30|补录纸票行号数据','4|3|票号:'+list_gettext(@selid,2),
+				'5|3|背书次数:|%-12s|T('+@br_no+')');
+		@tota=strfld(@tota,'|',0);
+		list_setselid(@selid);
+	}else{
+		showmsg(#REG_BR_TYPE);
+		@tota=input('3|30|补录纸票行号数据','4|3|行名:'+#REG_BR_NO,
+				'5|3|行号:|%-12s|T('+@br_no+')');
+		@tota=strfld(@tota,'|',0);
+		list_setselid(@selid);
+	}
+	if(@tota==''){
+		return(false);
+	}
+	if(len(@tota) &gt; 12){
+		@tota=substr(@tota,0,12);
+	}
+	call('remember60 -add '+$HDATE+' '+#REG_BR_NO+' '+@tota);
+	if(substr(#REG_BR_TYPE,0,5)=='行号1'){
+		//showmsg('1,'+#REG_BR_TYPE);
+		list_settext(@selid,10,@tota);
+	}else if(substr(#REG_BR_TYPE,0,5)=='行号2'){
+		//showmsg('2,'+#REG_BR_TYPE);
+		list_settext(@selid,12,@tota);
+	}else if(substr(#REG_BR_TYPE,0,10)=='承兑行行号'){
+		//showmsg('3,'+#REG_BR_TYPE);
+		list_settext(@selid,8,@tota);
+	}else {
+	list_settext(@selid,14,@tota);//其他  背书次数wk
+	}
+	return(true);
+}"
+</USERFUN>
+<USERFUN NAME="write_to_file">
+"{
+	dim @f as file;
+	dim @selid as number;
+	@f=openfile(#FILENAME,'wb');
+	if(@f &lt; 0){
+		showmsg('写文件失败');
+		return(false);
+	}
+	@selid=0;
+	while(@selid &lt; list_getrowcnt()){
+		writeline(@f,list_gettext(@selid,0)+','+
+				list_gettext(@selid,1)+','+ list_gettext(@selid,2)+','+
+				itoa(val(list_gettext(@selid,3)),'%.2f')+','+ list_gettext(@selid,4)+','+
+				list_gettext(@selid,5)+','+ list_gettext(@selid,6)+','+
+				list_gettext(@selid,7)+','+ list_gettext(@selid,8)+','+
+				list_gettext(@selid,9)+','+ list_gettext(@selid,10)+','+
+				list_gettext(@selid,11)+','+list_gettext(@selid,12)+','+
+				list_gettext(@selid,13)+','+list_gettext(@selid,14)+','+
+				list_gettext(@selid,15)+','+list_gettext(@selid,16)+','+
+				list_gettext(@selid,17)+',');
+		@selid=@selid+1;
+	}
+	closefile(@f);
+}"
+</USERFUN>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(9576                          纸票信息导出)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+  <ITEM NAME="#REG_BR_NO" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#REG_BR_TYPE" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#FILENAME" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#SELID" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM LINE="9"  COL="5" TYPE="%-10s" FUNCTIONS="T(导出日期:)"/>
+  <ITEM NAME="#REGDATE"  INPUT="TEXT" LINE="9"  COL="15" TYPE="%-8s"  FUNCTIONS="T($HDATE)" />
+  <ITEM LINE="21" COL="45"  TYPE="%-8s" FUNCTIONS="T(提 取)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @tota as string;
+	commsend_001();
+	$FD16='9576';	
+	$FD45=#REGDATE;
+	@tota=callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}	
+	if(@tota==''){
+		showmsg('未找到指定日期的纸票交易记录');
+		return(false);
+	}
+	#FILENAME='../tmp/'+$KINBR+$TTYNAME;
+	savefiletxt(#FILENAME,@tota);
+	showmsg('提取文件成功,为了节省您的工作时间,请勿重复提取');
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="55"  TYPE="%-8s" FUNCTIONS="T(检 查)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @f as file;
+	dim @ch as string;
+	dim @line as string;
+	dim @succ as boolean;
+	dim @selid as number;
+	list_init(17,78,5,1);
+	list_setcolcnt(18);
+	list_setcol(0,'交易',5);
+	list_setcol(1,'票类',5);
+	list_setcol(2,'票据号码',31);
+	list_setcol(3,'        票据金额',17);
+	list_setcol(4,'出票日期',11);
+	list_setcol(5,'到期日期',11);
+	list_setcol(6,'交易日期',11);
+	list_setcol(7,'承兑人名称',31);
+	list_setcol(8,'承兑人行号',13);
+	list_setcol(9,'名称1',31);
+	list_setcol(10,'行号1',13)
+	list_setcol(11,'名称2',31);
+	list_setcol(12,'行号2',13);
+	list_setcol(13,'备注',31);
+	list_setcol(14,'其他',31);
+	list_setcol(15,'合同编号',31);
+	list_setcol(16,'发票号码',31);
+	list_setcol(17,'承兑协议编号',31);
+
+	@f=openfile(#FILENAME,'rb');
+	if(@f &lt; 0){
+		showmsg('打开文件失败!');
+		list_del();
+		return(false);
+	}
+	while(true){
+		@line=readline(@f);
+		if(@line==''){
+			break;
+		}
+		@line=substr(@line,0,len(@line)-1);
+		list_additem('',strfld(@line,',',0),strfld(@line,',',1),
+				strfld(@line,',',2), comma(itoa(val(strfld(@line,',',3)),'%.2f'),16),
+				strfld(@line,',',4), strfld(@line,',',5),
+				strfld(@line,',',6), strfld(@line,',',7),
+				strfld(@line,',',8), strfld(@line,',',9),
+				strfld(@line,',',10), strfld(@line,',',11),
+				strfld(@line,',',12), strfld(@line,',',13),
+				strfld(@line,',',14), strfld(@line,',',15),
+				strfld(@line,',',16), strfld(@line,',',17));
+	}
+	closefile(@f);
+	list_show();
+	showmsg('现在开始检查文件格式...',2);
+	@selid=0;
+	while(@selid &lt; list_getrowcnt()){
+		#SELID=itoa(@selid,'%08.0f');
+		#REG_BR_NO=delspace(list_gettext(@selid,0));
+		if(#REG_BR_NO=='107'){
+		//#REG_BR_NO=delspace(list_gettext(@selid,14)); 107默认为空需要前台录入wk
+		#REG_BR_TYPE='107未写背书次数,请填写-'+list_gettext(@selid,2);
+		if(not get_br_name()){
+				break;
+			}
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,8));
+		if(#REG_BR_NO==''){
+			#REG_BR_NO='未知行';
+		}
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0' ){
+			#REG_BR_TYPE='承兑行行号为空,请填写-'+list_gettext(@selid,2);
+			if(not get_br_name()){
+				break;
+			}
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,10));
+		if(#REG_BR_NO==''){
+			#REG_BR_NO='未知行';
+		}
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0' ){
+			#REG_BR_TYPE='行号1为空,请填写-'+list_gettext(@selid,2);
+			if(not get_br_name()){
+				break;
+			}
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,12));
+		if(#REG_BR_NO==''){
+			#REG_BR_NO='未知行';
+		}
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0' ){
+			#REG_BR_TYPE='行号2为空,请填写-'+list_gettext(@selid,2);
+			if(not get_br_name()){
+				break;
+			}
+		}
+		@selid=@selid+1;
+	}
+	//写回到文件
+	@f=openfile(#FILENAME,'wb');
+	if(@f &lt; 0){
+		showmsg('写文件失败');
+		list_del();
+		return(false);
+	}
+	@selid=0;
+	@succ=true;
+	while(@selid &lt; list_getrowcnt()){
+		#REG_BR_NO=delspace(list_gettext(@selid,0));
+		if(#REG_BR_NO=='107'){
+		//#REG_BR_NO=delspace(list_gettext(@selid,14));
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0'){
+			@succ=false;
+		}
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,8));
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0'){
+			@succ=false;
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,10));
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0'){
+			@succ=false;
+		}
+		#REG_BR_NO=delspace(list_gettext(@selid,12));
+		if(substr(#REG_BR_NO,0,1) &gt; '9' or substr(#REG_BR_NO,0,1) &lt; '0'){
+			@succ=false;
+		}
+		writeline(@f,list_gettext(@selid,0)+','+
+				list_gettext(@selid,1)+','+ list_gettext(@selid,2)+','+
+				itoa(val(list_gettext(@selid,3)),'%.2f')+','+ list_gettext(@selid,4)+','+
+				list_gettext(@selid,5)+','+ list_gettext(@selid,6)+','+
+				list_gettext(@selid,7)+','+ list_gettext(@selid,8)+','+
+				list_gettext(@selid,9)+','+ list_gettext(@selid,10)+','+
+				list_gettext(@selid,11)+','+list_gettext(@selid,12)+','+
+				list_gettext(@selid,13)+','+list_gettext(@selid,14)+','+
+				list_gettext(@selid,15)+','+list_gettext(@selid,16)+','+
+				list_gettext(@selid,17)+',');
+		@selid=@selid+1;
+	}
+	closefile(@f);
+	if(not @succ){
+		showmsg('格式检查未通过,有行号数据未填写');	
+	}else{
+		showmsg('格式检查通过,请手工确认无误后上传');
+		while(true){
+			if(list_work() &gt;= 0){
+				@ch=showmsg('按E进行编辑,任意键退出');
+				if(@ch=='e' or @ch=='E'){
+					list_edit();
+					write_to_file();
+				}
+				break;
+			}else{
+				break;
+			}
+		}
+	}
+	list_del();
+	showall();
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="65"  TYPE="%-8s" FUNCTIONS="T(上传)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @ret as number;
+	@ret=call('ftp_paper.sh '+#FILENAME+' '+#REGDATE);
+	if(@ret!=0){
+		showmsg('上传文件失败');
+	}else{
+		showmsg('上传文件成功');
+		rerun();
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>
+

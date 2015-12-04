@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7053 支付宝卡通改限"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+  
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(7053                         支付宝卡通改限)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=7053)"/>
+  <ITEM NAME="#CERTTYPE20" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#AMT_MRXE"   TYPE="%17.2f"  FUNCTIONS=""/>
+  <ITEM NAME="#AMT_DBXE"   TYPE="%17.2f"  FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO20"   TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#ZFBZH"   TYPE="%-50s"  FUNCTIONS=""/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(卡    号:)" />
+  <ITEM LINE="7"  COL="35"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="12"  COL="45"  TYPE="%-10s" FUNCTIONS="T(密    码:)" />
+  <ITEM LINE="13"  COL="5"  TYPE="%-14s" FUNCTIONS="T(每天支付限额:)" />
+  <ITEM LINE="14"  COL="5"  TYPE="%-14s" FUNCTIONS="T(单笔支付限额:)" />
+   <ITEM NAME="#LDQFS" LINE="6"  COL="5"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="16" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="7" COL="16" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="7"  COL="16" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+		 <ONLOSTFOCUS>
+					  "{
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						   showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+						dim @baktxno as string;
+						@baktxno=$TXNO;
+						$TXNO='9734';
+						$FD30=#CARD_NO;
+						commsend_001();
+						callserver();
+						$TXNO=@baktxno;
+						if($FD12!='0000')
+						{
+							showmsg(geterror());
+							return(false);
+						}
+						#CERTTYPE20=$FD68;
+						#CERTNO20 = $FD62;
+						showmsg(#CERTNO20);
+						showmsg(#CERTTYPE20); 
+						@baktxno=$TXNO;
+						$TXNO='9731';
+						$FD102=#CARD_NO;
+						commsend_001();
+						callserver();
+						$TXNO=@baktxno;
+						if($FD12!='0000')
+						{
+							showmsg(geterror());
+							return(false);
+						}  	
+						#HM=delspace($FD25);
+						enable(#HM,false);
+											  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+      <ITEM NAME="#HM" INPUT="TEXT" LINE="7"  COL="45" TYPE="%-20s" FUNCTIONS=""/>
+	   	<ITEM LINE="9"  COL="5"  NAME="#LCERTTYPE" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)" /> 
+   <ITEM LINE="9"  COL="16"  NAME="#CERTTYPE"  INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(1)">
+    	<SELECT>
+    	<OPTION VALUE="1" TITLE="身份证"/>
+			<OPTION VALUE="2" TITLE="户口薄"/>
+			<OPTION VALUE="3" TITLE="护照  "/>
+			<OPTION VALUE="4" TITLE="军官证"/>
+			<OPTION VALUE="5" TITLE="回乡证"/>
+			<OPTION VALUE="6" TITLE="士兵证"/>
+			<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+			<OPTION VALUE="E" TITLE="临时身份证"/>
+			<OPTION VALUE="F" TITLE="外国人居留证"/>
+			<OPTION VALUE="G" TITLE="警官证"/>
+			<OPTION VALUE="H" TITLE="其他证件"/>
+			<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>			
+    	</SELECT>
+  <ONLOSTFOCUS>"{
+		 if(#CERTTYPE!=rtrim(#CERTTYPE20))
+		 {
+		   showmsg('输入证件类型不符！');
+		   return(false);
+		 }
+	   }"
+	  </ONLOSTFOCUS>
+
+  </ITEM> 
+  
+  <ITEM LINE="9"  COL="35" NAME="#LCERTNO"  TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件号码:)" /> 
+  <!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+  <ITEM LINE="9"  COL="45" NAME="#CERTNO"   TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+     if(#CERTNO!=rtrim(#CERTNO20))
+     {
+       showmsg('输入的证件号码与原登记证件号码不同');
+       return(false);
+     }
+     //add 20131030 wudawei start 调用身份核查
+  		  dim @res as string;
+				if(#CERTTYPE=='1' or #CERTTYPE=='2')
+				{
+					@res = idcheck(#CERTNO,#HM);
+					#HCJGBL = strfld(@res,'|',1);
+					@res =  strfld(@res,'|',0);
+					if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+					{
+							showmsg('身份核查结果不通过，不能继续办理！');
+							return(false);
+					}
+				}
+				//add 20131030 end
+    
+  }"</ONLOSTFOCUS>
+  </ITEM>
+	   	<ITEM  LINE="12"  COL="56"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				 if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+	
+  <ITEM LINE="13" COL="19" NAME="#JYXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  <ITEM LINE="14" COL="19" NAME="#DBXE" TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+	"{
+	
+	  if(#JYXE>5000)
+       {
+		showmsg('每日支付限额不能大于5000!');
+		return (false);
+	     }
+    if(#DBXE>#JYXE)
+       {
+		showmsg('单笔支付限额不能大于每日支付限额!');
+		return (false);
+	     }
+  }"
+	</ONLOSTFOCUS>
+  </ITEM>	
+  <ITEM  NAME="#KLX" TYPE="%-1s" FUNCTIONS="T(D)"/>
+  <ITEM NAME="#CUSID"  TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#LS"  TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#SERIAL" TYPE="%6d"  FUNCTIONS=""/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+-->
+<!--测试callserver方式提交 -->
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  	<ONCLICK>
+		"{
+		dim @tota as string;
+		dim @ch as string;
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD35=#KLX;
+		$FD30=#CARD_NO;
+		$FD16='7054';
+		@tota=callagn();
+		$TXNO=@baktxno;	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#ZFBZH=delspace($FD31);
+		#AMT_MRXE=delspace($FD39);
+		#AMT_DBXE=delspace($FD40);
+		showmsg(#ZFBZH);
+		showmsg(atoi(#AMT_MRXE));
+		showmsg(atoi(#AMT_MRXE));
+
+		commsend_001();
+		$FD30=#CARD_NO;
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		$FD79=#PASSWORD;
+		$FD39=itoa(#JYXE,'%-17.2f');
+		#LS=itoa(#DBXE,'%-17.2f');
+		$FD40=itoa(#DBXE,'%-17.2f');
+		$FD35=#KLX;
+		@tota=callagn();	
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//为不去核心的交易补打平台流水做准备
+		$FD4=itoa(val($FD37),'%06d');	
+		runoutput();
+		 close();
+		}"
+	</ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(3,28,'支付宝卡通改限');
+		print(8,32,'交易成功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:7053');
+	print( 5, 13,'交易:支付宝卡通改限');
+	print( 8, 20,'卡    号:[20]',#CARD_NO);
+	print( 9,20,'单日支付限额:[20]', $FD39);
+	print( 10,20,'单笔支付限额:[20]', #LS);
+	print( 11,20,'身份核查结果:[60] ',#HCJGBL);
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

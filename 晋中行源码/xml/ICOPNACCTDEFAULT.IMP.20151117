@@ -1,0 +1,593 @@
+<PAGE NAME="DEFAULT">
+ <ITEM NAME="#td1" TYPE="%4s">
+	<ONLOSTFOCUS>
+		"{
+		//TODO：对公添加获取填单数据脚本 20140110 
+		//getkeydata('#ZJLX','1110','credty');
+		//getkeydata('#ZJHM','1110','credno');
+		}"
+	</ONLOSTFOCUS>
+ </ITEM>
+	<!----开户输入证件类型---->
+	<ITEM LINE="6"  COL="5"   TYPE="%-10s" FUNCTIONS="T(证件类型:!)" />
+	<ITEM LINE="6"  COL="45"  TYPE="%-10s" FUNCTIONS="T(证件号码:)"  />
+	<ITEM LINE="8"  COL="5"   TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+	<ITEM LINE="8"  COL="15"  LINES="160"  COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+	<ITEM LINE="9"  COL="4"   TYPE="%-20s" FUNCTIONS="T(【新开帐户信息】)"  />
+	<ITEM LINE="10" COL="5"   TYPE="%-70s" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+	<!--add by luolz 20090923  客户信息字段-->
+	<ITEM NAME="#KHHM"  TYPE="%-12s"  FUNCTIONS="V(NB)"/>  <!--客户号码-->
+	<ITEM NAME="#KHYWM" TYPE="%-30s"  FUNCTIONS=""/>	     <!--客户英文名-->
+	<ITEM NAME="#KHXB"  TYPE="%-1s"   FUNCTIONS="V(NB)"/>  <!--客户性别-->
+	<ITEM NAME="#JTZZ"  TYPE="%-50s"  FUNCTIONS="V(NB)"/>  <!--家庭住址-->
+	<ITEM NAME="#JTYB"  TYPE="%-6s"   FUNCTIONS="V(NB)"/>  <!--家庭邮编-->
+	<ITEM NAME="#JTDH"  TYPE="%-15s"  FUNCTIONS=""/>       <!--家庭电话-->
+	<ITEM NAME="#DWMC"  TYPE="%-60s"  FUNCTIONS=""/>       <!--单位名称-->
+	<ITEM NAME="#DWDZ"  TYPE="%-50s"  FUNCTIONS=""/>       <!--单位地址-->
+	<ITEM NAME="#DWYB"  TYPE="%-6s"   FUNCTIONS=""/>       <!--单位邮编-->
+	<ITEM NAME="#DWDH"  TYPE="%-15s"  FUNCTIONS=""/>       <!--单位电话-->
+	<ITEM NAME="#SJHM"  TYPE="%-15s"  FUNCTIONS=""/>       <!--手机号码-->
+	<ITEM NAME="#MAIL"  TYPE="%-100s" FUNCTIONS=""/>       <!--电子邮件-->
+	<ITEM NAME="#XYDJ"  TYPE="%-1s"   FUNCTIONS=""/>       <!--信誉等级-->
+	<ITEM NAME="#YSR"   TYPE="%17.2f" FUNCTIONS=""/>       <!--月收入-->
+	<ITEM NAME="#CSRQ"  TYPE="%-8s"   FUNCTIONS=""/>       <!--出生日期-->
+	<ITEM NAME="#HYZK" TYPE="%-1s"    FUNCTIONS=""/>       <!--婚姻状况-->
+	<!--add by luolz 20090923  客户信息字段-->
+	<ITEM LINE="6"  COL="15" TYPE="%-1s" NAME="#ZJLX" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(1)" INPUT="SELECT" VISABLE="TRUE">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="身份证"/>
+			<OPTION VALUE="2" TITLE="户口薄"/>
+			<OPTION VALUE="3" TITLE="护照  "/>
+			<OPTION VALUE="4" TITLE="军官证"/>
+			<OPTION VALUE="5" TITLE="回乡证"/>
+			<OPTION VALUE="6" TITLE="士兵证"/>
+			<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+			<OPTION VALUE="E" TITLE="临时身份证"/>
+			<OPTION VALUE="F" TITLE="外国人居留证"/>
+			<OPTION VALUE="G" TITLE="警官证"/>
+			<OPTION VALUE="H" TITLE="其他证件"/>
+			<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#CZJLX"      TYPE="%6s"   FUNCTIONS="S(#ZJLX,#ZJLX)"/>
+	<!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+	<ITEM LINE="6"  COL="55" TYPE="%-20s" NAME="#ZJHM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)I()" INPUT="TEXT" VISABLE="TRUE">
+		<ONLOSTFOCUS>
+		"{
+			dim @sel_buf as string;
+			dim @tota as string;
+			dim @totcnt as number;
+			dim @ti as number;
+			dim @xb as string;
+		
+		
+			//add by luolz 20090923 调用1712交易取客户详细信息
+			if(#ZJLX == '1' and len(#ZJHM) != 15 and len(#ZJHM) != 18)
+			{
+				showmsg('身份证号码必须为15位或18位!');
+				return (false);
+			}
+			#KHHM    = '';
+			#KHYWM   = '';
+			#KHXB    = '';
+			#JTZZ    = '';
+			#JTYB    = '';
+			#JTDH    = '';
+			#DWMC    = '';
+			#DWDZ    = '';
+			#DWYB    = '';
+			#DWDH    = '';
+			#SJHM    = '';
+			#MAIL    = '';
+			#XYDJ    = '';
+			#YSR     = 0.00;
+			#CSRQ    = '';
+			#HYZK    = '';
+			#CUSTNAME= '';
+			initfd();
+			commsend_001();
+			$FD16='1712';
+			$FD68=#ZJLX;
+			$FD62=#ZJHM;
+			callserver();
+			if($FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#KHHM=substr(delspace($FD54),2,8);
+			if(@xb=='M')
+			{
+				#KHXB='1';
+			}
+			else if(@xb=='F')
+			{
+				#KHXB='2';
+			}
+			else
+			{
+				#KHXB='3';
+			}
+			#JTZZ    = delspace($FD25);
+			#JTYB    = delspace($FD29);
+			#DWMC    = delspace($FD27);
+			#DWDZ    = delspace($FD74);//怀疑是错误信息
+			#DWYB    = delspace($FD84);
+			#SJHM    = delspace($FD30);
+			#MAIL    = delspace($FD82);
+			#XYDJ    = delspace($FD34);
+			//#YSR   = $FD37;
+			#CSRQ    = delspace($FD28);
+			#HYZK    = delspace($FD24);
+			#CUSTNAME= delspace($FD26);
+				//add 20131030 wudawei start 调用身份核查
+  		  //dim @res as string;
+				//if(#ZJLX=='1' or #ZJLX=='2')
+				//{
+					//@res = idcheck(#ZJHM,#CUSTNAME);
+					//#HCJGBL = strfld(@res,'|',1);
+					//@res =  strfld(@res,'|',0);
+					//if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+					//{
+							//showmsg('身份核查结果不通过，不能继续办理！');
+						//	return(false);
+					//}
+				//}
+				//add 20131030 end
+			//#Pinyin=getpinyin(#CUSTNAME);
+			//showmsg('汉字姓名为:'+#CUSTNAME);
+			//showmsg('拼音姓名为:'+#Pinyin);
+			//showmsg(itoa(#YSR,'%8.2f'));
+			initfd();
+			//add by luolz 20090923 调用1712交易取客户详细信息执行完毕
+			commsend_001();
+			$FD16=#CP_SERV;
+			commsend_116();
+			@tota=callserver();
+			//showmsg('@tota = ['+@tota+']');
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			commrecv_116();
+			//showblock('PBCERT',true,true);
+			//后面2种介质不需要，旧系统也没有，这里处理一下，以后如果需要在修改
+			//setsel(#JZZL,@tota,'o5t20o1v4o2');
+			
+			@sel_buf=substr(@tota,160,32);
+			showmsg('#JZZL = '+#JZZL);
+			if(#TX_ACT_TYPE=='1') //活期产品
+			{
+				while(substr(@tota,@ti,4)=='1161')
+				{
+					@ti=@ti+32;
+				}
+				//这里做了修改只取介质种类为金融IC卡 20120412 hzh
+				@sel_buf=substr(@tota,96,32)+substr(@tota,128,32);
+				//@sel_buf=substr(@tota,@ti,32)+@sel_buf;
+				showmsg('@sel_buf='+@sel_buf);
+				setsel(#JZZL,@sel_buf,'o5t20o1v4o2');
+				<!--对于3701这个交易，下面将介质种类写死，防止柜员误操作-->
+				//setsel(#JZZL,'|金融IC卡            |0024|','o5t20o1v4o2');
+				showmsg('#JZZL1234 = '+#JZZL);
+			}
+			else
+			{
+				@sel_buf=@tota;
+				@totcnt=0;
+				while(1)
+				{
+					@sel_buf=substr(@tota,@totcnt,32);
+					if(substr(@sel_buf,26,4)=='0020')
+					{
+						break;
+					}
+					@totcnt=@totcnt+32;
+				}
+				//下面的目的是从附件中的介质列表里，去掉卡这个类型.
+				@sel_buf=substr(@tota,0,@totcnt)+substr(@tota,@totcnt+32,len(@tota)-@totcnt-32);
+				setsel(#JZZL,@sel_buf,'o5t20o1v4o2');
+			}
+			showblock('PBCERT',true,true);
+			show(#JZZL,true);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<!--added by liuyong 2009-9-15 显示图片信息 start-->
+	<ITEM NAME="#LYIDNO"   TYPE="%-20s" FUNCTIONS="" />
+	<ITEM NAME="#LYIDTYPE" TYPE="%-1s"  FUNCTIONS="" />
+	<ITEM NAME="#SETPIC"   TYPE="%-10s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+				#LYIDNO=#ZJHM;
+				#LYIDTYPE=#ZJLX;
+				call_96681();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<!--added by liuyong 2009-9-15 显示图片信息 end-->
+	<BLOCK LINE="4"   COL="5" VISABLE="FALSE" NAME="PBCERT">
+		<ITEM  LINE="8"  COL="0"  TYPE="%-10s" FUNCTIONS="T(介质种类:!)"/>
+		<!--add by luolzh 20090923 添加卡属性-->
+		<ITEM  NAME = "#CARDATTR" LINE="9"  COL="0"   TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(卡 属 性: )" VISABLE="FALSE"/>
+		<ITEM  NAME = "#ACCOUNT"  LINE="9"  COL="37"   TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(卡    号:)" VISABLE="FALSE"/>
+		<ITEM  LINE="10" COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+		<ITEM  LINE="11" COL="0"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+		<ITEM  LINE="12" COL="0" TYPE="%-10s" FUNCTIONS="T(拼 音 名:)"/>
+		<ITEM  NAME="#A0"   LINE="13" COL="0"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(密码支取:!)"/>
+		<ITEM  NAME="#A1"   LINE="13" COL="40"  TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(支取密码:)"  VISABLE="FALSE"/>
+		<ITEM  NAME="#A2"   LINE="14" COL="0"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件支取:!)"/>
+		<ITEM  NAME="#A3"   LINE="15" COL="0"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件类型:!)" VISABLE="FALSE"/>
+		<ITEM  NAME="#A4"   LINE="16" COL="0"   TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件号码:)"  VISABLE="FALSE" />
+		<ITEM  NAME="#JZZL" LINE="8"  COL="10"  TYPE="%-4s"  INPUT="SELECT" FUNCTIONS="V(NB)T(0024)" VISABLE="FALSE" DEVICE="KEYBOARD">
+			<ONLOSTFOCUS>
+			"{
+				dim @tota  as string;
+				dim @crdno as string; //凭证号码
+				dim @days  as number;
+				dim @tmp_d as string;
+				commsend_001();
+				$FD16=#JZ_SERV;
+				$FD116 =#JZZL+space(31)+#ZJLX+#ZJHM;
+				@tota=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#PSWDCD=substr($FD115,1,1);
+				#CERTCD=substr($FD115,14,1);
+				show(#PSWDCD,true);
+				show(#CERTCD,true);
+				//showmsg('@tota='+@tota);
+				setsel(#PRODNO,@tota,'o5t20o1v3o2');
+				if(#JZZL!='0024' and #JZZL!='0027')
+				{
+					goitem(#VOCNUM);
+					#CARDNO='';
+					show(#KSX,false);
+					show(#CARDNO,false);
+					show(#CARDATTR,false);
+					show(#ACCOUNT,false);
+					show(#A2,true);    //卡没有证件支取
+					show(#CERTCD,true);
+					enable(#PSWDCD,true);
+				}
+				else
+				{
+					show(#KSX,true);
+					show(#CARDNO,true);
+					show(#CARDATTR,true);
+					show(#ACCOUNT,true);
+					show(#A2,false);    //卡没有证件支取
+					show(#CERTCD,false);
+					#CERTCD='N';
+					#PSWDCD='Y';
+					enable(#PSWDCD,false);
+					show(#A1,true);
+					show(#PASSWD,true);
+				}
+				if(#JZZL=='0027')
+				{
+					@tmp_d = substr(#ZJHM,6,8);
+					@days = func(@tmp_d,$HDATE);
+					showmsg('年龄天数:'+itoa(@days));
+					if(@days &gt; 5840)
+					{
+						showmsg('超出开卡年龄限制，开卡年龄在16岁（含）以下！');
+						return(false);
+					}
+				}
+				<!--这部分返回的凭证号并没有使用，下面程序中直接从卡号按规则截取得到了凭证号码
+				$FD12  = '2103';
+				$FD16  = #CARD_SERV;
+				$FD116 = space(4)+#CARDNO;
+				callserver();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				@crdno = substr($FD116,135,16); -->
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<!--add by luolz 20090923 添加卡属性选项-->
+		<ITEM LINE="9"  COL="10" TYPE="%-14s" NAME="#KSX"  INPUT = "SELECT" DEVICE = "KEYBOARD" FUNCTIONS="T(0)" VISABLE="FALSE">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="个人卡"/>
+				<!--OPTION VALUE="1" TITLE="单位卡"/-->
+			</SELECT>
+		</ITEM>
+		<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+		<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM NAME="#CARDNO"  TYPE="%-19s"   LINE="9"  COL="47" DEVICE="KEYBOARD"  INPUT="TEXT"  FUNCTIONS="V(NB)" VISABLE="FALSE">
+			<ONLOSTFOCUS>
+			"{
+				dim  @sdate1 as string; 
+		  	dim  @sdate2 as string;
+		  	if($MSR2 =='')
+				{
+				showmsg('读取二磁信息错误！');
+			//	return(false);
+				} 
+				if(len(rtrim(#CARDNO))!=19)
+				{
+					showmsg('卡号长度不正确，请重新输入!');
+					return(false);
+				}
+				if(substr(#CARDNO,0,6) != #CARDBIN2)
+				{
+					showmsg('卡号的前6位必须为'+#CARDBIN2);
+					return(false);
+				}
+				if(substr(#CARDNO,0,6) == #CARDBIN2)
+				{
+				@sdate1=substr($MSR2,20,4)+'31';
+				@sdate2=substr($HDATE,2,6);
+				if(atoi(@sdate2)>=atoi(@sdate1))
+					{
+					showmsg('卡已到期，不能做此交易！');
+				//	return(false);
+					}
+				}
+				//金太阳卡开户判断
+				if(substr(#CARDNO,6,2) != '10' and #JZZL == '0027')
+				{
+					showmsg('开户介质与所选介质种类不符，请更换介质！');
+					return(false);
+				}
+				#VOCNUM=space(4)+substr(#CARDNO,6,12);
+				if(len(rtrim($MSR2))!=37)
+				{
+					showmsg('刷卡错误,请重试!');
+//return(false);
+				}
+				$FD75 = $MSR2;
+				$FD76 = $MSR3;
+				#MSR2BAK=$MSR2;
+				#MSR3BAK=$MSR3;
+				$MSR2='';
+				$MSR3='';
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="10"  COL="10" TYPE="%16d" NAME="#VOCNUM" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+			<ONLOSTFOCUS>
+			"{
+				commsend_001();
+				$FD16=#PZ_SERV;
+				if(#JZZL=='0020' or #JZZL=='0024' or #JZZL=='0027')
+				{
+					$FD116=#JZZL+#CARDNO+space(112)+#VOCNUM;
+				}
+				else
+				{
+					$FD116=#JZZL+space(131)+#VOCNUM;
+				}
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+				//	return(false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="11" COL="10" TYPE="%-60s" NAME="#CUSTNAME" 	DEVICE="KEYBOARD" INPUT="LABEL" FUNCTIONS="V(NB)"/>
+		<ITEM LINE="12" COL="10" TYPE="%-60s"  NAME="#Pinyin" 	DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+			"{
+				if(checkpyname(#Pinyin)!=true)
+				{
+				showmsg('请输入大写字母！');
+				return(false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="13" COL="10" TYPE="%-1s"  NAME="#PSWDCD"	DEVICE="KEYBOARD"  VISABLE="FALSE" FUNCTIONS="T(Y)V(NB)">
+			<SELECT LINE="0" COL="0">
+				<OPTION VALUE="N" TITLE="否"/>
+				<OPTION VALUE="Y" TITLE="是"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				if(#PSWDCD=='Y')
+				{
+					show(#A1,true);
+					show(#PASSWD,true);
+				}
+				else
+				{
+					show(#A1,false);
+					show(#PASSWD,false);
+					show(#ZJHM2,false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="13" COL="50" TYPE="%-6s"  NAME="#PASSWD"	DEVICE="PINPAD" INPUT="TEXT" FUNCTIONS="V(NB)i()I()" VISABLE="FALSE">
+			<ONLOSTFOCUS>
+			"{
+				//将密码改为-6s型,以便机器控制密码是否为六位
+				if(len(#PASSWD) &lt; 6)
+				{
+					showmsg('密码长度必须为六位!');
+					return(false);
+				}
+				show(#ZJHM2,false);
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="14" COL="10" TYPE="%-1s" NAME="#CERTCD"	DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T(N)V(NB)">
+			<SELECT >
+				<OPTION VALUE="N" TITLE="否"/>
+				<OPTION VALUE="Y" TITLE="是"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				if(#CERTCD=='Y')
+				{
+					show(#A3,true);
+					show(#A4,true);
+					show(#ZJLX2,true);
+					show(#ZJHM2,true);
+				}
+				else
+				{
+					show(#A3,false);
+					show(#A4,false);
+					show(#ZJLX2,false);
+					show(#ZJHM2,false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="15"  COL="10" TYPE="%-1s" NAME="#ZJLX2" FUNCTIONS="V(NB)T(1)" INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="T(#ZJLX)">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="身份证"/>
+				<OPTION VALUE="2" TITLE="户口薄"/>
+				<OPTION VALUE="3" TITLE="护照  "/>
+				<OPTION VALUE="4" TITLE="军官证"/>
+				<OPTION VALUE="5" TITLE="回乡证"/>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="16" COL="10" TYPE="%-20s" NAME="#ZJHM2"  FUNCTIONS="T(#ZJHM)V(NB)" VISABLE="FALSE"/>
+		<!--add by lwb 加入代理标志-->
+		<ITEM LINE="14" COL="0" TYPE="%-8s" NAME="#BRBZ" INPUT="LABEL" FUNCTIONS="T(是否本人)"/>
+    <ITEM LINE="15" COL="0" TYPE="%-10s" NAME="#DLRXM"  VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(代理人姓名)"/>
+    <ITEM LINE="16" COL="0" TYPE="%-8s" NAME="#DLZJLX" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(证件类型)"/>
+	  <ITEM LINE="17" COL="0" TYPE="%-8s" NAME="#DLZJHM" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(证件号码)"/>
+	    <ITEM LINE="18" COL="0" TYPE="%-8s" NAME="#DLSJHM" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(手机号码)"/>
+
+
+		<ITEM LINE="14" COL="10" TYPE="%-1s" NAME="#SELFYN"	DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+			<SELECT >
+				<OPTION VALUE="0" TITLE="否"/>
+				<OPTION VALUE="1" TITLE="是"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				if(#SELFYN=='0')
+				{
+				show(#DLRXM,true);
+			  show(#AGENTNAME,true);
+			  show(#ATCENUM,true);
+			  show(#ATCETYPE,true);
+			  show(#ATCEPHONE,true);
+			  show(#DLZJLX,true);
+			  show(#DLZJHM,true);
+			  show(#DLSJHM,true);
+				}
+				else
+				{
+					show(#DLRXM,false);
+			  show(#AGENTNAME,false);
+			  show(#ATCENUM,false);
+			  show(#ATCETYPE,false);
+			  show(#ATCEPHONE,false);
+			  show(#DLZJLX,false);
+			  show(#DLZJHM,false);
+			  show(#DLSJHM,false);
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	
+	<ITEM LINE="15" COL="10" TYPE="%-10s" NAME="#AGENTNAME"	DEVICE="KEYBOARD"   INPUT="TEXT"  FUNCTIONS="V(NB)" VISABLE="FALSE"/>
+	<ITEM LINE="16"  COL="10" TYPE="%-1s" NAME="#ATCETYPE"  INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="T(1)">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="身份证"/>
+				<OPTION VALUE="2" TITLE="户口薄"/>
+				<OPTION VALUE="3" TITLE="护照  "/>
+				<OPTION VALUE="4" TITLE="军官证"/>
+				<OPTION VALUE="5" TITLE="回乡证"/>
+			</SELECT>
+		</ITEM>
+	<ITEM LINE="17" COL="10" TYPE="%-24s" NAME="#ATCENUM"	DEVICE="KEYBOARD" INPUT="TEXT"  VISABLE="FALSE" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>
+			"{
+					//add 20131030 wudawei start 调用身份核查
+	  		  dim @res as string;
+					if(#ATCETYPE=='1' or #ATCETYPE=='2')
+					{
+						@res = idcheck(#ATCENUM,#AGENTNAME);
+						//#HCJGBL = strfld(@res,'|',1);
+						@res =  strfld(@res,'|',0);
+						if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+						{
+								showmsg('身份核查结果不通过，不能继续办理！');
+							 	return(false);
+						}
+					}
+					//add 20131030 end
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+	<ITEM LINE="18" COL="10" TYPE="%-24s" NAME="#ATCEPHONE"	DEVICE="KEYBOARD" INPUT="TEXT"  VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+//add by lwb end 
+	</BLOCK>
+	<ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+			if(#TX_ACT_TYPE=='1') //活期产品
+			{
+				#PRODNO='101';
+				show(#PRODNO,true);
+				loadpage('PAGE3');
+			}
+			else if(#TX_ACT_TYPE=='2') //定期产品
+			{
+				if(#JZZL=='0010') //卡
+				{
+					#PRODNO='209';
+				}
+				else if(#JZZL=='0020') //卡
+				{
+					#PRODNO='201';
+				}
+				else if(#JZZL=='0011')//零整存折
+				{
+					#PRODNO='209';
+				}
+				else if(#JZZL=='0012')//贺卡定期储蓄存单
+				{
+					#PRODNO='201';
+				}
+				else if(#JZZL=='0013')//储蓄整整定期存单
+				{
+					#PRODNO='201';
+				}
+				else if(#JZZL=='0014')//储蓄存款特种存单
+				{
+					#PRODNO='201';
+				}
+				else if(#JZZL=='0015')//储蓄定活两便存单
+				{
+					#PRODNO='241';
+				}
+				else if(#JZZL=='0016')//定期一本通存折
+				{
+					#PRODNO='201';
+				}
+				else
+				{
+					#PRODNO='';
+				}
+				show(#PRODNO,true);
+				loadpage('PAGE1');
+			}
+			else
+			{
+				showmsg('产品类型选择错误，请检查前台程序!');
+				return(false);
+			}
+		}"
+		</ONCLICK>
+	</ITEM>
+</PAGE>
+<!-- 定义callserver的返回变量 -->
+<!--  完毕 -->

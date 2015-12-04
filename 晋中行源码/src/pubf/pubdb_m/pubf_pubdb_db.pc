@@ -1,0 +1,71 @@
+#include "find_debug.h" 
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+
+EXEC SQL INCLUDE SQLCA;
+extern char *get_env_info(char *infoname);
+
+int db_open()
+{
+/****Modified by SSH,20090922,支持远程连接数据库****/
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[16];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	memset(sql_username,0x00,sizeof(sql_username));
+	memset(sql_passwd,0x00,sizeof(sql_passwd));
+
+	/****修改成新加密功能  20120604
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	****/
+	strcpy(sql_username,get_env_info("DB_USER"));
+	strcpy(sql_passwd,get_env_info("DB_PASSWD"));
+	vtcp_log("[%s][%d] DB_USER==[%s] DB_PASSWD==[%s]",__FILE__,__LINE__,sql_username,sql_passwd);
+	if(getenv("DB_NAME")!=NULL){
+		strcpy(sql_dbname,getenv("DB_NAME"));
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+	}else{
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	}
+	if(sqlca.sqlcode)
+	{
+		return -1;
+	}
+	return (0);
+}
+int db_close()
+{
+	return(0);
+}
+int begin_work()
+{
+	return(0);
+}
+
+int commit_work()
+{
+	EXEC SQL COMMIT WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "保存事物错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}
+
+int rollback_work()
+{
+	EXEC SQL ROLLBACK WORK;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg, "保存事物错误");
+		WRITEMSG
+		return(-1);
+	}
+	return(0);
+}

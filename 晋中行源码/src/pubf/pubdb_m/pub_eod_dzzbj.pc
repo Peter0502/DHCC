@@ -1,0 +1,289 @@
+#include "find_debug.h" 
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include <varargs.h>
+#define EXTERN
+#include "public.h"
+#include "gl_sub_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+extern char *pub_rpt_flttomon(char *str1, char *str2);
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+int pub_eod_dzzbj()
+{
+		int ret=0;
+	  double HTOTAMT;
+		char   HBR_NO[6];
+		char jidu[3];
+		double HBADAMT;
+		double HCAMT;
+	  HTOTAMT=0.0;
+	  HBADAMT=0.0;
+	  HCAMT=0.0;
+	  long quarter=0;
+	  long HSYS_DATE=0;
+	  FILE *fp2=NULL;
+		char filename1[64];
+	  char tmp_cxamt[21],vstr[60];
+    MEMSET_DEBUG(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+    MEMSET_DEBUG(jidu,0x00,sizeof(jidu));
+    MEMSET_DEBUG(vstr,0x00,sizeof(vstr));
+    MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO)); 
+    pub_base_sysinit();
+    if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+		{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		return 1;
+		}
+		set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+		set_zd_long( DC_TRACE_CNT,1 );
+		EXEC SQL SELECT sys_date INTO:HSYS_DATE FROM com_sys_parm;
+		g_pub_tx.tx_date = HSYS_DATE;
+		quarter=pub_base_quarter_year(g_pub_tx.tx_date);
+		switch(quarter){
+		case 1:
+			strcpy(jidu,"一");
+			break;
+		case 2:
+			strcpy(jidu,"二");
+			break;
+		case 3:
+			strcpy(jidu,"三");
+			break;
+		case 4:
+			strcpy(jidu,"四");
+			break;
+	}
+		/****定义游标****/
+		EXEC SQL DECLARE CUR_GL_SUB CURSOR FOR SELECT sum(dr_bal-cr_bal), br_no FROM  gl_sub WHERE acc_hrt IN ('12000','12100','12200','12300','12400','12500','12600','12700','12800','12900','14900','13000','13600') and 
+br_no not in(select br_no from com_branch where br_type='6' or br_type='7' or brno ='19801') GROUP BY br_no ORDER BY br_no; 
+    /**end**/
+   	EXEC SQL OPEN CUR_GL_SUB;
+   	while (1) 
+   	{
+   			HTOTAMT=0.0;
+	  		HBADAMT=0.0;
+	  		HCAMT=0.0;
+	  		MEMSET_DEBUG(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+   		  MEMSET_DEBUG(vstr,0x00,sizeof(vstr));
+    		MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO));
+				EXEC SQL FETCH CUR_GL_SUB INTO
+		        	:HTOTAMT,
+		        	:HBR_NO;
+	  		if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+				{
+					sprintf(acErrMsg,"Fet gl_sub erro!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					WRITEMSG
+					return 1;
+				}
+				else if(sqlca.sqlcode ==1403)
+				{
+					break;
+				}
+				EXEC SQL select (dr_bal-cr_bal) INTO
+			     	:HBADAMT
+			     	FROM gl_sub 
+				WHERE	acc_hrt='13121' and br_no=:HBR_NO;
+				/**计算准备金调整值**/
+				HCAMT=HTOTAMT*0.01+HBADAMT;
+				if(HCAMT==0)
+				{
+					continue;
+				}
+				if(HCAMT>0)/*增加呆帐准备金*/
+				{
+					/*借方记帐*/
+				strcpy(g_pub_tx.brf,"呆帐准备金");
+				g_pub_tx.tx_amt1=HCAMT;	
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='0';/*借*/
+				MEMCPY_DEBUG(g_pub_tx.cur_no,"01",2);
+				MEMCPY_DEBUG(g_pub_tx.tx_br_no,HBR_NO,5);
+				MEMCPY_DEBUG(g_pub_tx.opn_br_no,HBR_NO,5);
+				set_zd_data("1201","53101");
+				set_zd_double("1208",g_pub_tx.tx_amt1);
+				set_zd_data("120A",g_pub_tx.brf);
+				set_zd_data("1205",g_pub_tx.ct_ind); 
+				set_zd_data("1204",g_pub_tx.cur_no);
+				set_zd_data("0152","53101");
+				ret = pubf_acct_proc("A016");/*调用登记会计流水*/
+        if(ret!=0)
+        {
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return 1;
+        }
+        /*贷方记帐*/
+				MEMCPY_DEBUG(g_pub_tx.tx_br_no,HBR_NO,5);
+		        MEMCPY_DEBUG(g_pub_tx.opn_br_no,HBR_NO,5);
+				g_pub_tx.tx_amt1=HCAMT;
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';/*贷*/
+				MEMCPY_DEBUG(g_pub_tx.cur_no,"01",2);
+				set_zd_data("1211","1310201");
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152","13121");
+				ret = pubf_acct_proc("A017");
+        if (ret != 0)
+        {
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return 1;
+       	}
+       	  MEMSET_DEBUG(filename1,0x0,sizeof(filename1));
+    			sprintf(filename1,"%s/report/%5s/gD888.txt",getenv("HOME"),HBR_NO);
+   			 	fp2 = fopen( filename1,"w" ); 
+    			if( fp2==NULL )
+    			{
+        			sprintf(acErrMsg," open file [%s] error ",filename1 );
+        			WRITEMSG
+        			strcpy( g_pub_tx.reply,"S047" );
+        			return 1;
+    			} 
+       		sprintf( tmp_cxamt, "%.2f" ,g_pub_tx.tx_amt1);
+    			pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+					numtomoney( g_pub_tx.tx_amt1, vstr);	/* 大写金额 */
+					
+       		fprintf(fp2,"              %s         调整呆帐准备金 (借方)传票\n", BANK_CNAME);                        
+					fprintf(fp2,"             ----------------------------------------------------------\n");                  
+					fprintf(fp2, "  营业机构: %s                          交易日期: %ld                 流水号: %ld\n",HBR_NO,g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp2, " ┌──────┬─────────────┬──────┬────────────┐\n");
+					fprintf(fp2, " │(借)方科目号│53101                     │对方科目(贷)│1310201                 │\n");
+					fprintf(fp2, " ├──────┬─────────────┴──────┴────────────┤\n");
+					fprintf(fp2, " │金额  (大写)│%-60s                                   ￥%-21s                   │\n",vstr,tmp_cxamt);
+					fprintf(fp2, " ├─┬────┴────────────┬──┬─────────────────┤\n");
+					fprintf(fp2, " │明│   科       目(借):5310100        │摘  │                                  │\n");
+					fprintf(fp2, " │细│                                  │    │     呆帐准备金增加               │\n");
+					fprintf(fp2, " │分│   对 方 科 目(贷):1310201        │要  │                                  │\n");
+					fprintf(fp2, " │类│                                  │    │  (清算中心              盖章)    │\n");
+					fprintf(fp2, " └─┴─────────────────┴──┴─────────────────┘\n");
+       		fprintf(fp2, "\n\n\n");
+       		fprintf(fp2,"              %s         调整呆帐准备金 (贷方)传票\n", BANK_CNAME);                        
+					fprintf(fp2,"             ----------------------------------------------------------\n");                  
+					fprintf(fp2, "  营业机构: %s                          交易日期: %ld                 流水号: %ld\n",HBR_NO,g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp2, " ┌──────┬─────────────┬──────┬────────────┐\n");
+					fprintf(fp2, " │(贷)方科目号│1310201                   │对方科目(借)│53101                   │\n");
+					fprintf(fp2, " ├──────┬─────────────┴──────┴────────────┤\n");
+					fprintf(fp2, " │金额  (大写)│%-60s                                   ￥%-21s                   │\n",vstr,tmp_cxamt);
+					fprintf(fp2, " ├─┬────┴────────────┬──┬─────────────────┤\n");
+					fprintf(fp2, " │明│   科       目(贷):1310201        │摘  │                                  │\n");
+					fprintf(fp2, " │细│                                  │    │     呆帐准备金增加               │\n");
+					fprintf(fp2, " │分│   对 方 科 目(借):53101          │要  │                                  │\n");
+					fprintf(fp2, " │类│                                  │    │  (清算中心              盖章)    │\n");
+					fprintf(fp2, " └─┴─────────────────┴──┴─────────────────┘\n");
+       		fprintf(fp2, "\n\n\n");
+       		fclose(fp2);
+			}	
+	    else       /*减少呆帐准备*/
+	    {
+	    		/*借方记帐*/
+	    		
+				strcpy(g_pub_tx.brf,"呆帐准备金");
+				g_pub_tx.tx_amt1=-HCAMT;	
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='0';/*借*/
+				MEMCPY_DEBUG(g_pub_tx.cur_no,"01",2);
+				MEMCPY_DEBUG(g_pub_tx.tx_br_no,HBR_NO,5);
+				MEMCPY_DEBUG(g_pub_tx.opn_br_no,HBR_NO,5);
+				set_zd_data("1201","1310201");
+				set_zd_double("1208",g_pub_tx.tx_amt1);
+				set_zd_data("120A",g_pub_tx.brf);
+				set_zd_data("1205",g_pub_tx.ct_ind); 
+				set_zd_data("1204",g_pub_tx.cur_no);
+				set_zd_data("0152","13121");
+				ret = pubf_acct_proc("A016");/*调用登记会计流水*/
+        if(ret!=0)
+        {
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return 1;
+        }
+        /*贷方记帐*/
+        MEMCPY_DEBUG(g_pub_tx.tx_br_no,HBR_NO,5);
+        MEMCPY_DEBUG(g_pub_tx.opn_br_no,HBR_NO,5);
+				g_pub_tx.tx_amt1=-HCAMT;
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';/*贷*/
+				MEMCPY_DEBUG(g_pub_tx.cur_no,"01",2);
+				set_zd_data("1211","53101");
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152","53101");
+				ret = pubf_acct_proc("A017");
+        if (ret != 0)
+        {
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return 1;
+       	}
+       		MEMSET_DEBUG(filename1,0x0,sizeof(filename1));
+    			sprintf(filename1,"%s/report/%5s/gD888.txt",getenv("HOME"),HBR_NO);
+   			 	fp2 = fopen( filename1,"w" ); 
+    			if( fp2==NULL )
+    			{
+        			sprintf(acErrMsg," open file [%s] error ",filename1 );
+        			WRITEMSG
+        			strcpy( g_pub_tx.reply,"S047" );
+        			return 1;
+    			} 
+       		sprintf( tmp_cxamt, "%.2f" ,g_pub_tx.tx_amt1);
+    			pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+					numtomoney( g_pub_tx.tx_amt1, vstr);	/* 大写金额 */
+					
+       		fprintf(fp2,"              %s         调整呆帐准备金 (借方)传票\n", BANK_CNAME);                        
+					fprintf(fp2,"             ----------------------------------------------------------\n");                  
+					fprintf(fp2, "  营业机构: %s                          交易日期: %ld                 流水号: %ld\n",HBR_NO,g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp2, " ┌──────┬─────────────┬──────┬────────────┐\n");
+					fprintf(fp2, " │(借)方科目号│1310201                   │对方科目(贷)│53101                   │\n");
+					fprintf(fp2, " ├──────┬─────────────┴──────┴────────────┤\n");
+					fprintf(fp2, " │金额  (大写)│%-60s                                   ￥%-21s                   │\n",vstr,tmp_cxamt);
+					fprintf(fp2, " ├─┬────┴────────────┬──┬─────────────────┤\n");
+					fprintf(fp2, " │明│   科       目(借):1310201        │摘  │                                  │\n");
+					fprintf(fp2, " │细│                                  │    │     呆帐准备金减少               │\n");
+					fprintf(fp2, " │分│   对 方 科 目(贷):53101          │要  │                                  │\n");
+					fprintf(fp2, " │类│                                  │    │  (清算中心              盖章)    │\n");
+					fprintf(fp2, " └─┴─────────────────┴──┴─────────────────┘\n");
+       		fprintf(fp2, "\n\n\n");
+       		fprintf(fp2,"              %s         调整呆帐准备金 (贷方)传票\n", BANK_CNAME);                        
+					fprintf(fp2,"             ----------------------------------------------------------\n");                  
+					fprintf(fp2, "  营业机构: %s                          交易日期: %ld                 流水号: %ld\n",HBR_NO,g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp2, " ┌──────┬─────────────┬──────┬────────────┐\n");
+					fprintf(fp2, " │(贷)方科目号│53101                     │对方科目(借)│1310201                 │\n");
+					fprintf(fp2, " ├──────┬─────────────┴──────┴────────────┤\n");
+					fprintf(fp2, " │金额  (大写)│%-60s                                   ￥%-21s                   │\n",vstr,tmp_cxamt);
+					fprintf(fp2, " ├─┬────┴────────────┬──┬─────────────────┤\n");
+					fprintf(fp2, " │明│   科       目(贷):53101          │摘  │                                  │\n");
+					fprintf(fp2, " │细│                                  │    │     呆帐准备金减少               │\n");
+					fprintf(fp2, " │分│   对 方 科 目(借):1310201        │要  │                                  │\n");
+					fprintf(fp2, " │类│                                  │    │  (清算中心              盖章)    │\n");
+					fprintf(fp2, " └─┴─────────────────┴──┴─────────────────┘\n");
+       		fprintf(fp2, "\n\n\n");
+       		fclose(fp2);       	
+	    	}
+	    	/*赋空值*/
+	    	
+      	set_zd_data("1201","");
+				set_zd_data("120A","");
+				set_zd_data("0152","");
+				set_zd_data("1204","" );
+				set_zd_data("1205","" );
+      	set_zd_double("1208",0.00 );
+				set_zd_data("1211","");
+				set_zd_data("121A","");
+				set_zd_data("0152","");
+				set_zd_data("1214","" );
+				set_zd_data("1215","" );
+      	set_zd_double("1218",0.00 );
+	  }
+	  return 0;
+}

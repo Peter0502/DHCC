@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1819       交易状态查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <FIRSTWORK RERUN="TRUE">
+"{
+	dim @tota as string;
+	initfd();
+	commsend_001();
+	$FD16='1001';
+	$FD18='pbp';
+	@tota=callagnpbp();
+	if(@tota == '' or @tota == '1')
+	{
+		@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	}
+	setsel(#SysCode,@tota,'v4o1t8o1');
+}"
+</FIRSTWORK>
+<COMMSEND>
+  "{
+	initfd();
+	commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+    "T(1819                           交易状态查询)"/>
+  	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1819)"/>
+  	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(交易状态查询)"/>
+  <!--输入变量-->
+	<ITEM LINE="6"  COL="17" TYPE="%-12s" FUNCTIONS="T(系统  类型:)"/>
+	<ITEM LINE="6"  COL="29" NAME="#SysCode" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(sxps)V(NB)">
+			<SELECT>
+			</SELECT>
+	</ITEM>
+	<ITEM LINE="8"  COL="17" TYPE="%-12s" FUNCTIONS="T(交易  类型：)"/>
+	<ITEM LINE="8"  COL="29" NAME="#TxTp" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+			<SELECT>
+				<OPTION VALUE = "0" TITLE = "0.普通业务"/>
+				<OPTION VALUE = "1" TITLE = "1.实时业务"/>
+				<OPTION VALUE = "2" TITLE = "2.定期业务"/>
+			</SELECT>
+	</ITEM>
+	<ITEM LINE="10"  COL="17" TYPE="%-12s"   FUNCTIONS="T(原交易序号：)"/>
+ 	<ITEM LINE="10"  COL="29" NAME="#txno"  TYPE="%-8s"  INPUT="TEXT"  FUNCTIONS="T()V(000000000000,999999999999)"/>
+	<ITEM LINE="12"  COL="17" TYPE="%-12s"   FUNCTIONS="T(原交易日期：)"/>
+ 	<ITEM LINE="12"  COL="29" NAME="#txdate"  TYPE="%-8s"  INPUT="TEXT"  FUNCTIONS="T()V(NB)D()"/>
+
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(交易状态查询)"/>
+	<ITEM NAME="#txsatus"      TYPE="%-8s"     FUNCTIONS="T()"/>
+  	<ITEM NAME="#txsatusdesc"  TYPE="%-20s"    FUNCTIONS="T()"/>
+  		<SELECT>
+			<OPTION VALUE = "0" TITLE = "0.清算状态未确定"/>
+			<OPTION VALUE = "1" TITLE = "1.业务处理成功，未清算"/>
+			<OPTION VALUE = "2" TITLE = "2.清算排队"/>
+			<OPTION VALUE = "3" TITLE = "3.清算状态未确定，借记业务暂时圈存，待提入行确认后更改"/>
+			<OPTION VALUE = "4" TITLE = "4.清算失败"/>
+			<OPTION VALUE = "5" TITLE = "5.清算成功"/>
+		</SELECT>
+	<ITEM NAME="#dbtrid"       TYPE="%-20s"    FUNCTIONS="T()"/>
+  	<ITEM NAME="#dbtrnm"       TYPE="%-40s"    FUNCTIONS="T()"/>   
+	<ITEM NAME="#cdtrid"       TYPE="%-20s"    FUNCTIONS="T()"/>
+  	<ITEM NAME="#cdtrnm"       TYPE="%-40s"    FUNCTIONS="T()"/>
+	<ITEM NAME="#instgpty"     TYPE="%-20s"    FUNCTIONS="T()"/>
+  	<ITEM NAME="#instdpty"     TYPE="%-20s"    FUNCTIONS="T()"/>   
+	<ITEM NAME="#txamt"        TYPE="%-20s"    FUNCTIONS="T()"/>
+  	<ITEM NAME="#biztype"      TYPE="%-12s"    FUNCTIONS="T()"/>
+ 	<ITEM NAME="#bizkind"      TYPE="%-12s"    FUNCTIONS="T()"/>
+  	<!--ITEM NAME="#txdate"       TYPE="%-8s"     FUNCTIONS="T()"/-->
+ 	<ITEM NAME="#txst"         TYPE="%-4s"     FUNCTIONS="T()"/>
+  	<ITEM NAME="#txstdesc"     TYPE="%-20s"    FUNCTIONS="T()"/>
+  	<ITEM NAME="#sysname"      TYPE="%-20s"    FUNCTIONS="S(#SysCode, #SysCode)" />
+		<!--ONLOSTFOCUS>
+		"{
+			delspace(#sysname);
+			showmsg('NAME='+#sysname);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM-->
+ 	<!--ITEM LINE="10" COL="17" NAME="#satuslabel"   INPUT="LABEL"  TYPE="%-12s"  FUNCTIONS="T(  交易状态:)"/>
+  	<ITEM LINE="10" COL="29" NAME="#txsatusdesc"  INPUT="TEXT"   TYPE="%-32s"  FUNCTIONS="T()V(NB)"/-->
+   
+  	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+ 	<ONCLICK>
+ 	"{
+ 		dim @str as string;
+		initfd();
+		commsend_001();
+		
+		$FD16='1107';
+		$FD18='pbp';
+		$FD28=#SysCode;
+		$FD32=#txno;
+		$FD46=#txdate;
+		$FD49=#TxTp;
+
+		callagnpbp();
+
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+
+		#txsatus=$FD81;
+		@str = delspace(#txsatus);
+		//showmsg(#txsatus);
+
+			if ( @str == '0')
+			{
+				#txsatusdesc = '清算状态未确定';
+			}
+			else if ( @str == '1')
+			{
+				#txsatusdesc = '业务处理成功，未清算';
+			}
+			else if ( @str == '2')
+			{
+				#txsatusdesc = '清算排队';
+			}
+			else if ( @str == '3')
+			{
+				#txsatusdesc = '清算状态未确定，借记业务暂时圈存，待提入行确认后更改';
+			}
+			else if ( @str == '9')
+			{
+				#txsatusdesc = '清算失败';
+			}
+			else if ( @str == 'C')
+			{
+				#txsatusdesc = '清算成功';
+			}	
+			else
+			{
+				#txsatusdesc = '未知状态';
+			}
+
+		#dbtrid=$FD30;
+		#dbtrnm=$FD25;
+		#cdtrid=$FD31;
+		#cdtrnm=$FD26;
+		#instgpty=$FD58;
+		#instdpty=$FD59;
+		#txamt=$FD41;
+		
+		//showmsg(#txamt);
+		#biztype=$FD33;
+		#bizkind=$FD63;
+		//#txdate=$FD46;
+		#txst=$FD48;
+		delspace(#sysname);
+		
+			if ( #txst == 'PR30')
+			{
+				#txstdesc = '已冻结';
+			}
+			else if ( #txst == 'PR31')
+			{
+				#txstdesc = '已解冻';
+			}
+			else if ( #txst == 'PR32')
+			{
+				#txstdesc = '已记账';
+			}
+			else if ( #txst == 'PR33')
+			{
+				#txstdesc = '已挂账';
+			}
+			else if ( #txst == 'PR34')
+			{
+				#txstdesc = '已入账';
+			}
+			else if ( #txst == 'PR35')
+			{
+				#txstdesc = '已冲正';
+			}
+			else if ( #txst == 'PR36')
+			{
+				#txstdesc = '未记账';
+			}
+			else if ( #txst == 'PR99')
+			{
+				#txstdesc = '默认状态';
+			}		
+			else
+			{
+				#txstdesc = '未知状态';
+			}
+
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81=#TXNAME;
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end
+
+		runoutput();
+		//rerun();
+		return(true);
+
+			
+ 	}"
+ 	</ONCLICK>
+ 	</ITEM>
+</VARIABLE>
+
+ <REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();
+			
+			print(3,3,'支付系统名称：[20]交易    序号：[20]',#sysname,#txno);
+			print(4,3,'发起行  行号：[20]接收行  行号：[20]',#instgpty,#instdpty);
+			print(5,3,'付款人  账号：[20]付款人  姓名：[40]',#dbtrid,#dbtrnm);
+   			print(6,3,'收款人  账号：[20]收款人  姓名：[40]',#cdtrid,#cdtrnm);
+   			print(7,3,'交易    日期：[20]交易    金额：[20]',#txdate,ltrim(itoa(#txamt,'%.2f')));
+   			print(8,3,'交易    状态：[60]',#txsatusdesc);
+   			print(9,3,'账务    状态：[20]',#txstdesc);
+   			
+   			PrintTxTail();
+
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

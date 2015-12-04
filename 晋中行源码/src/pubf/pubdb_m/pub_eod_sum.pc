@@ -1,0 +1,633 @@
+#include "find_debug.h" 
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include <varargs.h>
+#define EXTERN
+#include "public.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#include "gl_sub_c.h"
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+int pub_eod_sum1()
+{
+			int ret=0;
+			ret=sql_begin(); /*打开事务*/
+			if(ret) 
+			{
+				sprintf( acErrMsg, "打开事务失败!!!" );
+				WRITEMSG
+				return 1;
+			}
+      ret=sum_gl_mst2();/**汇总二级科目**/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "汇总二级科目错!!!" );
+				WRITEMSG
+				return 1;
+      }
+      sql_commit();	/*--提交事务--*/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "提交事务失败!!!" );
+				WRITEMSG
+				return 1;
+      }
+      ret=sum_gl_mst1();/**汇总一级科目**/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "汇总二级科目错!!!" );
+				WRITEMSG
+				return 1;
+      }
+      sql_commit();	/*--提交事务--*/
+}
+/******汇总二级科目*********/
+int sum_gl_mst2()
+{
+		int ret=0;
+		char   HBR_NO[6];
+		char   ACC_NO1[6];/*二级科目*/
+		char   UP_ACC_HRT1[6];/*上级科目*/
+		char   ACC_HRT1[6];
+		char   up_acc_hrt[6];
+		struct gl_mst_c g_gl_mst;
+		struct gl_mst_c t_gl_mst;
+		MEMSET_DEBUG(&g_gl_mst,0x00,sizeof(struct gl_mst_c));
+		MEMSET_DEBUG(&t_gl_mst,0x00,sizeof(struct gl_mst_c));
+    MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1)); 
+    MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1)); 
+    MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO));
+		/****定义游标****/
+		EXEC SQL DECLARE CUR1 CURSOR FOR SELECT acc_no,up_acc_hrt,acc_hrt FROM com_item WHERE acc_lvl='2' and acc_knd='0';
+    /**end**/
+   	EXEC SQL OPEN CUR1;
+   	while (1) 
+   	{
+   			MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1));  
+    		MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    		MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1));  
+				EXEC SQL FETCH CUR1 INTO  /** 得到二级科目的科目号，上级科目，科目控制字 **/
+		        	:ACC_NO1,
+		        	:UP_ACC_HRT1,
+		        	:ACC_HRT1;
+	  		if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+				{
+					sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					WRITEMSG
+					return 1;
+				}
+				else if (sqlca.sqlcode == 100)
+				{
+					strcpy(g_pub_tx.reply,"D104");
+					WRITEMSG
+					return 1;
+				}
+				/**汇总三级科目金额到二级科目根据机构号**/
+				EXEC SQL DECLARE CUR2 CURSOR FOR SELECT sum(dr_bal),sum(cr_bal),sum(ldd_bal),sum(lcd_bal),sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),sum(tddr_bal),sum(tdcr_bal),sum(tddr_cnt),sum(tdcr_cnt),sum(tddr_amt),sum(tdcr_amt),sum(mdr_bal),sum(mcr_bal),sum(mdr_cnt),sum(mcr_cnt),sum(mdr_amt),sum(mcr_amt),sum(qdr_bal),sum(qcr_bal),sum(qdr_cnt),sum(qcr_cnt),sum(qdr_amt),sum(qcr_amt),sum(ydr_bal),sum(ycr_bal),sum(ydr_cnt),sum(ycr_cnt),sum(ydr_amt),sum(ycr_amt),up_acc_hrt,br_no FROM gl_mst WHERE up_acc_hrt=:ACC_NO1 GROUP BY br_no,up_acc_hrt ORDER BY br_no;
+				EXEC SQL OPEN CUR2;
+				while(1)
+				{					  
+						 	MEMSET_DEBUG(&g_gl_mst,0x00,sizeof(struct gl_mst_c));
+						 	MEMSET_DEBUG(&t_gl_mst,0x00,sizeof(struct gl_mst_c));
+						 	EXEC SQL FETCH CUR2 INTO
+						  	:g_gl_mst.dr_bal,
+						  	:g_gl_mst.cr_bal,
+						  	:g_gl_mst.ldd_bal,
+						  	:g_gl_mst.lcd_bal,
+						  	:g_gl_mst.rdd_cnt,
+						  	:g_gl_mst.rcd_cnt,
+						  	:g_gl_mst.rdd_amt,
+						  	:g_gl_mst.rcd_amt,
+						  	:g_gl_mst.cdd_cnt,
+						  	:g_gl_mst.ccd_cnt,
+						  	:g_gl_mst.cdd_amt,
+						  	:g_gl_mst.ccd_amt,
+						  	:g_gl_mst.tddr_bal,
+						  	:g_gl_mst.tdcr_bal,
+						  	:g_gl_mst.tddr_cnt,
+						  	:g_gl_mst.tdcr_cnt,
+						  	:g_gl_mst.tddr_amt,
+						  	:g_gl_mst.tdcr_amt,
+						  	:g_gl_mst.mdr_bal,
+						  	:g_gl_mst.mcr_bal,
+						  	:g_gl_mst.mdr_cnt,
+						  	:g_gl_mst.mcr_cnt,
+						  	:g_gl_mst.mdr_amt,				
+				      	:g_gl_mst.mcr_amt,
+				      	:g_gl_mst.qdr_bal,
+				      	:g_gl_mst.qcr_bal,
+             		:g_gl_mst.qdr_cnt,
+	            	:g_gl_mst.qcr_cnt,
+              	:g_gl_mst.qdr_amt,
+              	:g_gl_mst.qcr_amt,
+              	:g_gl_mst.ydr_bal,
+              	:g_gl_mst.ycr_bal,
+              	:g_gl_mst.ydr_cnt,
+              	:g_gl_mst.ycr_cnt,
+              	:g_gl_mst.ydr_amt,
+              	:g_gl_mst.ycr_amt,
+              	:g_gl_mst.up_acc_hrt,
+              	:g_gl_mst.br_no;
+             		if(sqlca.sqlcode&&sqlca.sqlcode!=100)
+								{
+										sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+										WRITEMSG
+										strcpy (g_pub_tx.reply,"D103");
+										WRITEMSG
+										return 1;
+								}
+								else if (sqlca.sqlcode == 100)
+								{
+									strcpy(g_pub_tx.reply,"D104");
+									WRITEMSG
+									return 1;
+								} 
+								
+					 		ret=Gl_mst_Dec_Upd(g_pub_tx.reply,"up_acc_hrt='%s' and br_no='%s'",g_gl_mst.up_acc_hrt,g_gl_mst.br_no);
+					 		if ( ret )
+							{
+									sprintf( acErrMsg, "执行Gl_mst_Dec_Upd错[%d]", ret );
+									WRITEMSG
+									return 1;
+							}
+					 		ret=Gl_mst_Fet_Upd(&t_gl_mst,g_pub_tx.reply);
+					 		if( ret == 100 )
+							{
+									sprintf( acErrMsg, "总帐表不存在记录!" );
+       						WRITEMSG
+        	        return 1;
+    					}
+							else if(ret)
+    					{
+    							sprintf( acErrMsg, "Gl_mst_Fet_Upd![%d]", ret );
+       						WRITEMSG
+        					return 1;
+    					}
+					 		ret=Gl_mst_Upd_Upd(&g_gl_mst,g_pub_tx.reply);
+					 		if( ret )
+   						{
+   								sprintf( acErrMsg, "执行Gl_mst_Upd_Upd错![%d]",ret);
+       						WRITEMSG
+				       		return 1;
+   						}
+					 		ret=Gl_mst_Clo_Upd();		
+          }          
+        }
+     return 0;   
+   }
+/******汇总一级科目******/
+int sum_gl_mst1()
+{
+		int ret=0;
+		char   HBR_NO[6];
+		char   ACC_NO1[4];/*一级科目*/
+		char   UP_ACC_HRT1[6];/*上级科目*/
+		char   ACC_HRT1[6];
+		char   up_acc_hrt[6];
+		struct gl_mst_c g_gl_mst;
+		struct gl_mst_c t_gl_mst;
+		MEMSET_DEBUG(&g_gl_mst,0x00,sizeof(struct gl_mst_c));
+		MEMSET_DEBUG(&t_gl_mst,0x00,sizeof(struct gl_mst_c));
+    MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1)); 
+    MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1)); 
+    MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO));
+		/****定义游标****/
+		EXEC SQL DECLARE CUR1 CURSOR FOR SELECT acc_no,up_acc_hrt,acc_hrt FROM com_item WHERE acc_lvl='1' and acc_knd='0';
+    /**end**/
+   	EXEC SQL OPEN CUR1;
+   	while (1) 
+   	{
+   			MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1));  
+    		MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    		MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1));  
+				EXEC SQL FETCH CUR1 INTO  /** 得到二级科目的科目号，上级科目，科目控制字 **/
+		        	:ACC_NO1,
+		        	:UP_ACC_HRT1,
+		        	:ACC_HRT1;
+	  		if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+				{
+					sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					WRITEMSG
+					return 1;
+				}
+				else if (sqlca.sqlcode == 100)
+				{
+					strcpy(g_pub_tx.reply,"D104");
+					WRITEMSG
+					return 1;
+				}
+				/**汇总三级科目金额到二级科目根据机构号**/
+				EXEC SQL DECLARE CUR2 CURSOR FOR SELECT sum(dr_bal),sum(cr_bal),sum(ldd_bal),sum(lcd_bal),sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),sum(tddr_bal),sum(tdcr_bal),sum(tddr_cnt),sum(tdcr_cnt),sum(tddr_amt),sum(tdcr_amt),sum(mdr_bal),sum(mcr_bal),sum(mdr_cnt),sum(mcr_cnt),sum(mdr_amt),sum(mcr_amt),sum(qdr_bal),sum(qcr_bal),sum(qdr_cnt),sum(qcr_cnt),sum(qdr_amt),sum(qcr_amt),sum(ydr_bal),sum(ycr_bal),sum(ydr_cnt),sum(ycr_cnt),sum(ydr_amt),sum(ycr_amt),up_acc_hrt,br_no	FROM gl_mst WHERE up_acc_hrt=:UP_ACC_HRT1 GROUP BY br_no,up_acc_hrt ORDER BY br_no;
+				EXEC SQL OPEN CUR2;
+				while(1)
+				{					  
+						 	MEMSET_DEBUG(&g_gl_mst,0x00,sizeof(struct gl_mst_c));
+						 	MEMSET_DEBUG(&t_gl_mst,0x00,sizeof(struct gl_mst_c));
+						 	EXEC SQL FETCH CUR2 INTO
+						  	:g_gl_mst.dr_bal,
+						  	:g_gl_mst.cr_bal,
+						  	:g_gl_mst.ldd_bal,
+						  	:g_gl_mst.lcd_bal,
+						  	:g_gl_mst.rdd_cnt,
+						  	:g_gl_mst.rcd_cnt,
+						  	:g_gl_mst.rdd_amt,
+						  	:g_gl_mst.rcd_amt,
+						  	:g_gl_mst.cdd_cnt,
+						  	:g_gl_mst.ccd_cnt,
+						  	:g_gl_mst.cdd_amt,
+						  	:g_gl_mst.ccd_amt,
+						  	:g_gl_mst.tddr_bal,
+						  	:g_gl_mst.tdcr_bal,
+						  	:g_gl_mst.tddr_cnt,
+						  	:g_gl_mst.tdcr_cnt,
+						  	:g_gl_mst.tddr_amt,
+						  	:g_gl_mst.tdcr_amt,
+						  	:g_gl_mst.mdr_bal,
+						  	:g_gl_mst.mcr_bal,
+						  	:g_gl_mst.mdr_cnt,
+						  	:g_gl_mst.mcr_cnt,
+						  	:g_gl_mst.mdr_amt,				
+				      	:g_gl_mst.mcr_amt,
+				      	:g_gl_mst.qdr_bal,
+				      	:g_gl_mst.qcr_bal,
+             		:g_gl_mst.qdr_cnt,
+	            	:g_gl_mst.qcr_cnt,
+              	:g_gl_mst.qdr_amt,
+              	:g_gl_mst.qcr_amt,
+              	:g_gl_mst.ydr_bal,
+              	:g_gl_mst.ycr_bal,
+              	:g_gl_mst.ydr_cnt,
+              	:g_gl_mst.ycr_cnt,
+              	:g_gl_mst.ydr_amt,
+              	:g_gl_mst.ycr_amt,
+              	:g_gl_mst.up_acc_hrt,
+              	:g_gl_mst.br_no;
+             		if(sqlca.sqlcode&&sqlca.sqlcode!=100)
+								{
+										sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+										WRITEMSG
+										strcpy (g_pub_tx.reply,"D103");
+										WRITEMSG
+										return 1;
+								}
+								else if (sqlca.sqlcode == 100)
+								{
+									strcpy(g_pub_tx.reply,"D104");
+									WRITEMSG
+									return 1;
+								} 
+					 		ret=Gl_mst_Dec_Upd(g_pub_tx.reply,"up_acc_hrt='%s' and br_no='%s'",g_gl_mst.up_acc_hrt,g_gl_mst.br_no);
+					 		if ( ret )
+							{
+									sprintf( acErrMsg, "执行Gl_mst_Dec_Upd错[%d]", ret );
+									WRITEMSG
+									return 1;
+							}
+					 		ret=Gl_mst_Fet_Upd(&t_gl_mst,g_pub_tx.reply);
+					 		if( ret == 100 )
+							{
+									sprintf( acErrMsg, "总帐表不存在记录!" );
+       						WRITEMSG
+        	        return 1;
+    					}
+							else if(ret)
+    					{
+    							sprintf( acErrMsg, "Gl_mst_Fet_Upd![%d]", ret );
+       						WRITEMSG
+        					return 1;
+    					}
+					 		ret=Gl_mst_Upd_Upd(&g_gl_mst,g_pub_tx.reply);
+					 		if( ret )
+   						{
+   								sprintf( acErrMsg, "执行Gl_mst_Upd_Upd错![%d]",ret);
+       						WRITEMSG
+				       		return 1;
+   						}
+					 		ret=Gl_mst_Clo_Upd();		
+          }          
+        }
+     return 0;   
+}
+int pub_eod_sum2()
+{
+ 			int ret=0;
+ 			ret=sql_begin(); /*打开事务*/
+			if(ret) 
+			{
+				sprintf( acErrMsg, "打开事务失败!!!" );
+				WRITEMSG
+				return 1;
+			}
+      ret=sum_gl_sub2();/**汇总二级科目**/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "汇总二级科目错!!!" );
+				WRITEMSG
+				return 1;
+      }
+      sql_commit();	/*--提交事务--*/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "提交事务失败!!!" );
+				WRITEMSG
+				return 1;
+      }
+      ret=sum_gl_sub1();/**汇总一级科目**/
+      if(ret)
+      {
+      	sprintf( acErrMsg, "汇总二级科目错!!!" );
+				WRITEMSG
+				return 1;
+      }
+      sql_commit();	/*--提交事务--*/
+      
+}
+int sum_gl_sub2()
+{
+		int ret=0;
+		int ret1=0;
+		char   HBR_NO[6];
+		char   ACC_NO1[6];/*二级科目*/
+		char   UP_ACC_HRT1[6];/*上级科目*/
+		char   ACC_HRT1[6];
+		char   up_acc_hrt[6];
+		struct gl_sub_c g_gl_sub;
+		struct gl_sub_c t_gl_sub;
+		MEMSET_DEBUG(&g_gl_sub,0x00,sizeof(struct gl_sub_c));
+		MEMSET_DEBUG(&t_gl_sub,0x00,sizeof(struct gl_sub_c));
+    MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1)); 
+    MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1)); 
+    MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO));
+		/****定义游标****/
+		EXEC SQL DECLARE CUR1 CURSOR FOR SELECT acc_no,up_acc_hrt,acc_hrt FROM com_item WHERE acc_lvl='2' and acc_knd='0';
+    /**end**/
+   	EXEC SQL OPEN CUR1;
+   	while (1) 
+   	{
+   			MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1));  
+    		MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    		MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1));  
+				EXEC SQL FETCH CUR1 INTO  /** 得到二级科目的科目号，上级科目，科目控制字 **/
+		        	:ACC_NO1,
+		        	:UP_ACC_HRT1,
+		        	:ACC_HRT1;
+	  		if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+				{
+					sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					WRITEMSG
+					return 1;
+				}
+				else if (sqlca.sqlcode == 100)
+				{
+					strcpy(g_pub_tx.reply,"D104");
+					WRITEMSG
+					return 1;
+				}
+				/**汇总三级科目金额到二级科目根据机构号**/
+				EXEC SQL DECLARE CUR2 CURSOR FOR SELECT sum(dr_bal),sum(cr_bal),sum(ldd_bal),sum(lcd_bal),sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),sum(tddr_bal),sum(tdcr_bal),sum(tddr_cnt),sum(tdcr_cnt),sum(tddr_amt),sum(tdcr_amt),sum(mdr_bal),sum(mcr_bal),sum(mdr_cnt),sum(mcr_cnt),sum(mdr_amt),sum(mcr_amt),sum(qdr_bal),sum(qcr_bal),sum(qdr_cnt),sum(qcr_cnt),sum(qdr_amt),sum(qcr_amt),sum(ydr_bal),sum(ycr_bal),sum(ydr_cnt),sum(ycr_cnt),sum(ydr_amt),sum(ycr_amt),up_acc_hrt,br_no	FROM gl_sub WHERE up_acc_hrt=:ACC_NO1 GROUP BY br_no,up_acc_hrt ORDER BY br_no;
+				EXEC SQL OPEN CUR2;
+				while(1)
+				{					  
+						 	MEMSET_DEBUG(&g_gl_sub,0x00,sizeof(struct gl_sub_c));
+						 	MEMSET_DEBUG(&t_gl_sub,0x00,sizeof(struct gl_sub_c));
+						 	EXEC SQL FETCH CUR2 INTO
+						  	:g_gl_sub.dr_bal,
+						  	:g_gl_sub.cr_bal,
+						  	:g_gl_sub.ldd_bal,
+						  	:g_gl_sub.lcd_bal,
+						  	:g_gl_sub.rdd_cnt,
+						  	:g_gl_sub.rcd_cnt,
+						  	:g_gl_sub.rdd_amt,
+						  	:g_gl_sub.rcd_amt,
+						  	:g_gl_sub.cdd_cnt,
+						  	:g_gl_sub.ccd_cnt,
+						  	:g_gl_sub.cdd_amt,
+						  	:g_gl_sub.ccd_amt,
+						  	:g_gl_sub.tddr_bal,
+						  	:g_gl_sub.tdcr_bal,
+						  	:g_gl_sub.tddr_cnt,
+						  	:g_gl_sub.tdcr_cnt,
+						  	:g_gl_sub.tddr_amt,
+						  	:g_gl_sub.tdcr_amt,
+						  	:g_gl_sub.mdr_bal,
+						  	:g_gl_sub.mcr_bal,
+						  	:g_gl_sub.mdr_cnt,
+						  	:g_gl_sub.mcr_cnt,
+						  	:g_gl_sub.mdr_amt,				
+				      	:g_gl_sub.mcr_amt,
+				      	:g_gl_sub.qdr_bal,
+				      	:g_gl_sub.qcr_bal,
+             		:g_gl_sub.qdr_cnt,
+	            	:g_gl_sub.qcr_cnt,
+              	:g_gl_sub.qdr_amt,
+              	:g_gl_sub.qcr_amt,
+              	:g_gl_sub.ydr_bal,
+              	:g_gl_sub.ycr_bal,
+              	:g_gl_sub.ydr_cnt,
+              	:g_gl_sub.ycr_cnt,
+              	:g_gl_sub.ydr_amt,
+              	:g_gl_sub.ycr_amt,
+              	:g_gl_sub.up_acc_hrt,
+              	:g_gl_sub.br_no;
+             		if(sqlca.sqlcode&&sqlca.sqlcode!=100)
+								{
+										sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+										WRITEMSG
+										strcpy (g_pub_tx.reply,"D103");
+										WRITEMSG
+										return 1;
+								}
+								else if (sqlca.sqlcode == 100)
+								{
+									strcpy(g_pub_tx.reply,"D104");
+									WRITEMSG
+									return 1;
+								} 
+					 		ret=Gl_mst_Dec_Upd(g_pub_tx.reply,"up_acc_hrt='%s' and br_no='%s'",g_gl_sub.up_acc_hrt,g_gl_sub.br_no);
+					 		if ( ret )
+							{
+									sprintf( acErrMsg, "执行Gl_mst_Dec_Upd错[%d]", ret );
+									WRITEMSG
+									return 1;
+							}
+					 		ret=Gl_mst_Fet_Upd(&t_gl_sub,g_pub_tx.reply);
+					 		if( ret == 100 )
+							{
+									ret1=Gl_sub_Ins(g_gl_sub,g_pub_tx.reply);
+									if(ret1)
+									{
+										sprintf( acErrMsg, "执行Gl_sub_Ins错[%d]", ret1);
+										WRITEMSG
+										return 1;
+									}
+										
+    					}
+							else if(ret)
+    					{
+    							sprintf( acErrMsg, "Gl_mst_Fet_Upd![%d]", ret );
+       						WRITEMSG
+        					return 1;
+    					}
+					 		ret=Gl_mst_Upd_Upd(g_gl_sub,g_pub_tx.reply);
+					 		if( ret )
+   						{
+   								sprintf( acErrMsg, "执行Gl_mst_Upd_Upd错![%d]",ret);
+       						WRITEMSG
+				       		return 1;
+   						}
+					 		ret=Gl_mst_Clo_Upd();		
+          }          
+        }
+     return 0; 
+}
+int sum_gl_sub1()
+{
+		int ret=0;
+		int ret1=0;
+		char   HBR_NO[6];
+		char   ACC_NO1[4];/*二级科目*/
+		char   UP_ACC_HRT1[6];/*上级科目*/
+		char   ACC_HRT1[6];
+		char   up_acc_hrt[6];
+		struct gl_sub_c g_gl_sub;
+		struct gl_sub_c t_gl_sub;
+		MEMSET_DEBUG(&g_gl_sub,0x00,sizeof(struct gl_sub_c));
+		MEMSET_DEBUG(&t_gl_sub,0x00,sizeof(struct gl_sub_c));
+    MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1)); 
+    MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1)); 
+    MEMSET_DEBUG(HBR_NO,0x00,sizeof(HBR_NO));
+		/****定义游标****/
+		EXEC SQL DECLARE CUR1 CURSOR FOR SELECT acc_no,up_acc_hrt,acc_hrt FROM com_item WHERE acc_lvl='1' and acc_knd='0';
+    /**end**/
+   	EXEC SQL OPEN CUR1;
+   	while (1) 
+   	{
+   			MEMSET_DEBUG(ACC_NO1,0x00,sizeof(ACC_NO1));  
+    		MEMSET_DEBUG(UP_ACC_HRT1,0x00,sizeof(UP_ACC_HRT1)); 
+    		MEMSET_DEBUG(ACC_HRT1,0x00,sizeof(ACC_HRT1));  
+				EXEC SQL FETCH CUR1 INTO  /** 得到二级科目的科目号，上级科目，科目控制字 **/
+		        	:ACC_NO1,
+		        	:UP_ACC_HRT1,
+		        	:ACC_HRT1;
+	  		if (sqlca.sqlcode&&sqlca.sqlcode!=100)
+				{
+					sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					WRITEMSG
+					return 1;
+				}
+				else if (sqlca.sqlcode == 100)
+				{
+					strcpy(g_pub_tx.reply,"D104");
+					WRITEMSG
+					return 1;
+				}
+				/**汇总三级科目金额到二级科目根据机构号**/
+				EXEC SQL DECLARE CUR2 CURSOR FOR SELECT sum(dr_bal),sum(cr_bal),sum(ldd_bal),sum(lcd_bal),sum(rdd_cnt),sum(rcd_cnt),sum(rdd_amt),sum(rcd_amt),sum(cdd_cnt),sum(ccd_cnt),sum(cdd_amt),sum(ccd_amt),sum(tddr_bal),sum(tdcr_bal),sum(tddr_cnt),sum(tdcr_cnt),sum(tddr_amt),sum(tdcr_amt),sum(mdr_bal),sum(mcr_bal),sum(mdr_cnt),sum(mcr_cnt),sum(mdr_amt),sum(mcr_amt),sum(qdr_bal),sum(qcr_bal),sum(qdr_cnt),sum(qcr_cnt),sum(qdr_amt),sum(qcr_amt),sum(ydr_bal),sum(ycr_bal),sum(ydr_cnt),sum(ycr_cnt),sum(ydr_amt),sum(ycr_amt),up_acc_hrt,br_no	FROM gl_sub WHERE up_acc_hrt=:UP_ACC_HRT1 GROUP BY br_no,up_acc_hrt ORDER BY br_no;
+				EXEC SQL OPEN CUR2;
+				while(1)
+				{					  
+						 	MEMSET_DEBUG(&g_gl_sub,0x00,sizeof(struct gl_sub_c));
+						 	MEMSET_DEBUG(&t_gl_sub,0x00,sizeof(struct gl_sub_c));
+						 	EXEC SQL FETCH CUR2 INTO
+						  	:g_gl_sub.dr_bal,
+						  	:g_gl_sub.cr_bal,
+						  	:g_gl_sub.ldd_bal,
+						  	:g_gl_sub.lcd_bal,
+						  	:g_gl_sub.rdd_cnt,
+						  	:g_gl_sub.rcd_cnt,
+						  	:g_gl_sub.rdd_amt,
+						  	:g_gl_sub.rcd_amt,
+						  	:g_gl_sub.cdd_cnt,
+						  	:g_gl_sub.ccd_cnt,
+						  	:g_gl_sub.cdd_amt,
+						  	:g_gl_sub.ccd_amt,
+						  	:g_gl_sub.tddr_bal,
+						  	:g_gl_sub.tdcr_bal,
+						  	:g_gl_sub.tddr_cnt,
+						  	:g_gl_sub.tdcr_cnt,
+						  	:g_gl_sub.tddr_amt,
+						  	:g_gl_sub.tdcr_amt,
+						  	:g_gl_sub.mdr_bal,
+						  	:g_gl_sub.mcr_bal,
+						  	:g_gl_sub.mdr_cnt,
+						  	:g_gl_sub.mcr_cnt,
+						  	:g_gl_sub.mdr_amt,				
+				      	:g_gl_sub.mcr_amt,
+				      	:g_gl_sub.qdr_bal,
+				      	:g_gl_sub.qcr_bal,
+             		:g_gl_sub.qdr_cnt,
+	            	:g_gl_sub.qcr_cnt,
+              	:g_gl_sub.qdr_amt,
+              	:g_gl_sub.qcr_amt,
+              	:g_gl_sub.ydr_bal,
+              	:g_gl_sub.ycr_bal,
+              	:g_gl_sub.ydr_cnt,
+              	:g_gl_sub.ycr_cnt,
+              	:g_gl_sub.ydr_amt,
+              	:g_gl_sub.ycr_amt,
+              	:g_gl_sub.up_acc_hrt,
+              	:g_gl_sub.br_no;
+             		if(sqlca.sqlcode&&sqlca.sqlcode!=100)
+								{
+										sprintf(acErrMsg,"Fet gl_mst erro!!! %d",sqlca.sqlcode);
+										WRITEMSG
+										strcpy (g_pub_tx.reply,"D103");
+										WRITEMSG
+										return 1;
+								}
+								else if (sqlca.sqlcode == 100)
+								{
+									strcpy(g_pub_tx.reply,"D104");
+									WRITEMSG
+									return 1;
+								} 
+					 		ret=Gl_mst_Dec_Upd(g_pub_tx.reply,"up_acc_hrt='%s' and br_no='%s'",g_gl_sub.up_acc_hrt,g_gl_sub.br_no);
+					 		if ( ret )
+							{
+									sprintf( acErrMsg, "执行Gl_mst_Dec_Upd错[%d]", ret );
+									WRITEMSG
+									return 1;
+							}
+					 		ret=Gl_mst_Fet_Upd(&t_gl_sub,g_pub_tx.reply);
+					 		if( ret == 100 )
+							{
+									ret1=Gl_sub_Ins(g_gl_sub,g_pub_tx.reply);
+									if(ret1)
+									{
+										sprintf( acErrMsg, "执行Gl_sub_Ins错[%d]", ret1 );
+										WRITEMSG
+										return 1;
+									}
+    					}
+							else if(ret)
+    					{
+    							sprintf( acErrMsg, "Gl_mst_Fet_Upd![%d]", ret );
+       						WRITEMSG
+        					return 1;
+    					}
+					 		ret=Gl_mst_Upd_Upd(g_gl_sub,g_pub_tx.reply);
+					 		if( ret )
+   						{
+   								sprintf( acErrMsg, "执行Gl_mst_Upd_Upd错![%d]",ret);
+       						WRITEMSG
+				       		return 1;
+   						}
+					 		ret=Gl_mst_Clo_Upd();		
+          }          
+        }
+     return 0; 

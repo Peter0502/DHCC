@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="3904       票据删除"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();       
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS= "T(3904                        票据删除)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+   
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=3904)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<!--屏幕输入内容 --> 
+
+  <ITEM LINE="6"  COL="3"   TYPE="%-12s"   FUNCTIONS="T(删除类型：)"/>	
+	<ITEM NAME="#DBORPL" LINE="6" COL="10" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="单笔删除  "/>
+			<OPTION VALUE="1" TITLE="批量删除  "/>
+			</SELECT>
+			<ONLOSTFOCUS>
+				"{
+				if(#DBORPL=='0')
+				{
+					show(#NPJBNO,true);
+					show(#PJBNO,true);
+				}
+				else if(#DBORPL=='1')
+				{
+					show(#NPJBNO,false);
+					show(#PJBNO,false);
+				}
+				}"
+				</ONLOSTFOCUS>
+	</ITEM>
+			
+  <ITEM LINE="9"  COL=" 3"  NAME="#NPCNO" TYPE="%-12s"  FUNCTIONS="T(批次号  ：)" VISABLE="TRUE"/>
+  <ITEM LINE="9"   COL="10"  NAME="#PCNO" TYPE="%-25s"  VISABLE="TRUE"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  <ITEM LINE="9"  COL="35" NAME="#NPJBNO" TYPE="%-12s"  FUNCTIONS="T(票据编号：)" VISABLE="TRUE"/>
+  <ITEM LINE="9"   COL="42"  NAME="#PJBNO" TYPE="%-25s"  VISABLE="TRUE"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/> 
+  
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+   		    initfd();
+					commsend_001();
+					 	$FD18='CBS';
+						$FD82=#PCNO;
+						$FD38=#PJBNO;
+						$FD16='3904';
+						if(#DBORPL=='0')
+						{
+							 $FD66='1';
+						}
+						else if(#DBORPL=='1')
+						{
+							 $FD66='2';
+						}
+					 
+					
+
+					 callagn_cnaps2();
+					
+			 		if($FD12 != '0000')
+					{
+							showmsg(geterror());
+							return(false);
+					}
+					//return(true);
+					runoutput();
+					close();
+ }"
+ </ONCLICK>
+</ITEM>
+ 
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,25,'删除成功');
+		print(10,15,'批 次 号 :[30  ]',#PCNO);
+		print(11,15,'票据编号 :[30    ]',#PJBNO);
+	
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:3904');
+	print( 5, 13,'交易:票据数据删除');
+
+		print(8,20,'批 次 号 :[30  ]',#PCNO);
+		print(9,20,'票据编号 :[30    ]',#PJBNO);
+
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+	

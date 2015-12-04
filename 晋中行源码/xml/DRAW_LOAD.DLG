@@ -1,0 +1,126 @@
+<!-- create by chenchao 2011-7-31 14:56:08 委托支付用 ---->
+<TRANSACTION LINES="4" COLS="4" LINE="20" COL="20">
+<VARIABLE>
+	<ITEM LINE="8" COL="5"  TYPE="%-13s"  INPUT="LABEL" NAME="#ZQXY" FUNCTIONS="T(支取所贷款项:)"  />
+	<ITEM LINE="8" COL="19" TYPE="%1s" INPUT="SELECT" NAME="#ZQXE" FUNCTIONS="T(2)V(1|2)" >
+		<SELECT>
+			<OPTION VALUE="1" TITLE="1.否"/>
+			<OPTION VALUE="2" TITLE="2.是"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			dim @line  as string;
+			dim @selid as number;
+			dim @hy    as file;
+			dim @tmp   as string;
+			dim @pact  as string;//贷款协议
+			dim @zfbh  as string;//支付编号
+			dim @zqje  as string;//支取金额
+			dim @zzxe  as string;//自主限额
+			dim @wtxe  as string;//委托限额
+			dim @type  as string;//支取方式
+			dim @dfno  as string;//收款账号
+			if(#ZQXE=='1')
+			{
+				#ZFDBHWB='';
+				#ZQJEWB=0;
+				show(#ZFDBH,false);
+				show(#LZFBH,false);
+				close();
+			}
+			else
+			{
+				show(#ZFDBH,true);
+  				show(#LZFBH,true);
+				list_init(10,50,5,2);
+				list_setcolcnt(7);
+				list_setcol(0,'贷款协议',20);
+				list_setcol(1,'支付编号',20);
+				list_setcol(2,'支取金额',12);
+				list_setcol(3,'自主限额',12);
+				list_setcol(4,'委托限额',12);
+				list_setcol(5,'支取方式',9);
+				list_setcol(6,'对方账号',20);
+				//@hy=openfile('../tmp/'+$KINBR+$TLRNO+$HDATE+'.txt','r');
+				@hy=openfile('../tmp/'+$KINBR+$TLRNO+$HDATE+$TXNO+'.txt','r');
+				if(@hy &lt; 0){
+					showmsg('打开回传文件错误');
+					return(false);
+				}
+                	
+  				while(true)
+  				{
+  					@line=readline(@hy);
+  					if(@line=='')
+  					{
+  						break;
+  					}
+  					@pact=delspace(strfld(@line,'|',0));
+  					@zfbh=delspace(strfld(@line,'|',1));
+  					@zqje=delspace(strfld(@line,'|',2));
+  					@zzxe=delspace(strfld(@line,'|',3));
+  					@wtxe=delspace(strfld(@line,'|',4));
+  					@tmp =delspace(strfld(@line,'|',5));
+  					@dfno=delspace(strfld(@line,'|',6));
+  					if(@tmp=='1')
+  					{
+  						@type='自主支取';
+  					}
+  					else
+  					{
+  						@type='委托支取';
+  					}
+  					list_additem('',@pact,@zfbh,@zqje,@zzxe,@wtxe,@type,@dfno);
+  				}
+					closefile(@hy);
+  				@selid=list_work();
+  				if(@selid &lt; 0)
+  				{
+  					list_del();
+  					refresh();
+  					return(true);
+  				}
+				@selid=0;
+				@selid=list_getselid();
+				#ZFDBH=list_gettext(@selid,1);
+				if(#ZFDBH=='')
+				{
+					showmsg('回传的支付单编不能是空');
+					return(false);
+				}
+				enable(#ZFDBH,false);
+				#ZQJE =val(list_gettext(@selid,2)); 
+				@tmp  =list_gettext(@selid,5);
+				if(@tmp=='委托支取')
+				{
+					#CASHFLAG='2';
+					#DFNO=list_gettext(@selid,6);					
+					#ZFKZNO=list_gettext(@selid,6);
+				}
+				else
+				{
+					#ZFKZNO='';
+					enable(#CASHFLAG,true);
+					enable(#DFNO,true);
+				}
+				
+				#ZQJEWB=#ZQJE;
+				#ZFDBHWB=#ZFDBH;
+				list_del();
+				refresh();
+				return(true);
+				
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="8" COL="32" TYPE="%-10s" NAME="#LZFBH" FUNCTIONS="T(支付单号:)" INPUT="LABEL" VISABLE="FALSE" />
+	<ITEM LINE="8" COL="42" TYPE="%-24s" NAME="#ZFDBH" INPUT="TEXT" FUNCTIONS="T()V(NB)" VISABLE="FALSE" />
+	<ITEM NAME="#ZQJE" TYPE="%17.2f" FUNCTIONS="V(0000000000000000,9999999999999999)"/>
+	<ITEM LINE="10" COL="30" NAME="#FEE_OK"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>"{
+		close();
+	}"
+	</ONCLICK>
+	</VARIABLE>
+</TRANSACTION>

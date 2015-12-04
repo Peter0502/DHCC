@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3207 支行转贴现"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	// 旧协议号放在FD62域上，新的协议号放到FD63上 在途天数在FD48上
+	// 利率放到FD84上        贴现金额放到1002域   
+	// 支行输入的12901账号放到0300域中  该账户应付利息放到 FD64，
+	// 新开清算的129账户放到 0330域上（后台返回）  应收利息放到FD65
+	// 
+	// 
+	// 1 -- WNJZ 支行输入的12901账号放到0300域中 交易金额FD40=-FD1002 FD66=1
+	// 2 -- HPDF 清算产生的12902账号放到0330域中 交易金额FD40=FD1002 FD66=1
+	// 3 -- A016 支行52206 利息支出            相关数据准备在FD120
+	// 4 -- A017 清算50205 利息收入            相关数据准备在FD121
+	$FD21='01';
+	$FD48=getitems('#WAYDAYS');
+	$FD66='1';
+	$FD67='2';
+	$FD63=#NPACT_NO;
+	
+	$FD64='50205';
+	$FD65='52206';
+	$FD68='2';// 贷款本金存取
+	$TXNO='3207';  // 注意这里
+	$FD43=$FD40;
+	$FD40='-'+substr($FD40,1,15);
+	#FD1201='52206';
+	#FD1204='01';
+	#FD1205='2';
+	#FD1206=#PZTYPE;
+	#FD1207=#PZVOCNUM;
+	#FD1208=#INTRT;
+	#FD120A='支行转贴利息支出';
+
+	#FD1211='50205';
+	#FD1214='01';
+	#FD1215='2';
+	#FD1216=#PZTYPE;
+	#FD1217=#PZVOCNUM;
+	#FD1218=#INTRT;
+	#FD121A='支行转贴利息收入';
+	$FD120=getitems('#FD1201#FD1202#FD1203#FD1204#FD1205#FD1206#FD1207#FD1208#FD1209#FD120A#FD120B');
+	$FD121=getitems('#FD1211#FD1212#FD1213#FD1214#FD1215#FD1216#FD1217#FD1218#FD1219#FD121A#FD121B');
+	$FD84=getitems('#RATE');
+	commsend_001();
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3207                        支行转贴现)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=3207)"/>
+	<ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/> 
+	<ITEM NAME="#TXCD"      TYPE="%4s"   FUNCTIONS="T(3207)"/>      <!---交易代码--->
+	<ITEM NAME="#TXNAME"    TYPE="%-10s" FUNCTIONS="T(财务划转交易)"/>  <!---交易名称--->
+
+	<ITEM LINE="6" COL="3"  TYPE="%-10s" FUNCTIONS="T(贴现账号:)"/>
+	<ITEM LINE="6" COL="35" TYPE="%-10s" NAME="#OLD_XYH" INPUT="LABEL" FUNCTIONS="T(协 议 号:)"/>
+	<ITEM LINE="7" COL="3"  TYPE="%-10s" FUNCTIONS="T(新协议号:)"/>
+	<ITEM LINE="7" COL="35"  TYPE="%-10s" FUNCTIONS="T(贴现利率:)"/>
+	<ITEM LINE="8" COL="3"  TYPE="%-10s" FUNCTIONS="T(实际天数:)"/>
+	<ITEM LINE="8" COL="35"  TYPE="%-10s" FUNCTIONS="T(在途天数:)"/>
+	<ITEM LINE="9" COL="3"  TYPE="%-10s" FUNCTIONS="T(转贴金额:)"/>
+	<ITEM LINE="10" COL="3" NAME="#HPENDAY" INPUT="LABEL" TYPE="%-20s" FUNCTIONS="T(汇票到期日:)"/>
+	<ITEM LINE="10" COL="35" NAME="#HPVOC" INPUT="LABEL" TYPE="%-40s" FUNCTIONS="T(汇票号码:)"/>
+	<ITEM LINE="11" COL="3"  TYPE="%-10s" FUNCTIONS="T(转贴利息:)"/>
+	<ITEM LINE="14" COL="3"  TYPE="%-10s" FUNCTIONS="T(凭证种类:)"/> 
+	<ITEM LINE="14" COL="35" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+
+
+	<ITEM LINE="6" COL="13" NAME="#AC_NO"  TYPE="%-19s" DEVICE="KEYBOARD"  FUNCTIONS="T()">
+	<ONLOSTFOCUS>"{
+//查找输入账户对应的贴现账户
+		dim @baktxno as string;
+		dim @days as number;
+		//if($KINBR!='50701'){
+		//	showmsg('本交易只有长北支行可做');
+		//	return(false);
+		//}
+		@days=0;
+		@baktxno=$TXNO;
+		$FD62='';
+		$FD63='';
+		$TXNO='9870';
+		$FD30=#AC_NO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#HPENDAY='汇票到期日：'+$FD45; 	enable(#HPENDAY, true);
+		#HPVOC  ='汇票号码：'+$FD60;   enable(#HPVOC  , true);
+		#OLD_XYH='协 议 号：'+$FD62;   enable(#OLD_XYH, true);
+		@days=func($HDATE,$FD45);   enable(#RELDAYS, true);
+		if(@days &lt;=0) {
+			showmsg('输入的账号对应的贴现已经到期');
+			return (false);
+		} else {
+			#RELDAYS=itoa(@days);
+			enable(#RELDAYS,true);
+		}
+		#TXAMT=val(substr($FD100,16,16),0.01); enable(#TXAMT,true);
+		if($FD91!=$KINBR)
+		{
+			showmsg('该笔贴现不是本机构的');
+			return(false);
+		}
+		$FD40=getitems('#TXAMT');
+		$FD100='';
+		#PACT_NO=$FD62;enable(#PACT_NO,true);
+	}"</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#PACT_NO" LINE="6" COL="45" INPUT="TEXT" TYPE="%-20s" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+	<ITEM NAME="#NPACT_NO" LINE="7" COL="13" INPUT="TEXT" TYPE="%-20s" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+	<ITEM NAME="#RATE" LINE="7" COL="45" INPUT="TEXT" TYPE="%9.6f" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+	<ITEM NAME="#RELDAYS" LINE="8" COL="13" INPUT="TEXT" TYPE="%8d" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+	<ITEM NAME="#WAYDAYS" LINE="8" COL="45" INPUT="TEXT" TYPE="%4d" DEVICE="KEYBOARD"  FUNCTIONS="T()">
+	<ONLOSTFOCUS>"{
+		// 计算利息
+		#INTRT=#TXAMT*(atoi(#RELDAYS)+atoi(#WAYDAYS))*#RATE/30000.0;
+		$FD65=getitems('#INTRT');
+	}"</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#TXAMT"   LINE="9" COL="13" INPUT="TEXT" TYPE="%17.2f" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+	<ITEM NAME="#INTRT"   LINE="11" COL="13" INPUT="TEXT" TYPE="%17.2f" DEVICE="NONE"  FUNCTIONS="T()"/>
+	<!-- 资金管理信息录入 -->
+	<ITEM NAME="#PZTYPE"  INPUT="SELECT" LINE="14" COL="13" TYPE="%-3s" DEVICE="KEYBOARD"  FUNCTIONS="T()">
+	<SELECT>
+		<OPTION VALUE="121"  TITLE="0.特种转帐传票"/>
+		<OPTION VALUE="122"  TITLE="0.转帐借方传票"/>
+		<OPTION VALUE="123"  TITLE="0.转帐贷方传票"/>
+	</SELECT>
+	</ITEM>
+
+	<ITEM NAME="#PZVOCNUM" INPUT="TEXT"  LINE="14" COL="45" TYPE="%-16s" DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+
+<!-- 定义120 域 --->
+
+<ITEM NAME="#FD1201" TYPE="%20s"/><!-- 1内部帐号   -->
+<ITEM NAME="#FD1202" TYPE="%50s"/><!-- 2户名       -->
+<ITEM NAME="#FD1203" TYPE="%16s"/><!-- 3余额       -->
+<ITEM NAME="#FD1204" TYPE="%2s" /><!--    4币种    -->  
+<ITEM NAME="#FD1205" TYPE="%1s" /><!--    5现转标志-->  
+<ITEM NAME="#FD1206" TYPE="%3s" /><!--    6凭证种类-->  
+<ITEM NAME="#FD1207" TYPE="%16s"/><!-- 7凭证号码   -->
+<ITEM NAME="#FD1208" TYPE="%17.2f"/><!-- 8发生额     -->
+<ITEM NAME="#FD1209" TYPE="%2s" /><!--    9用途    -->  
+<ITEM NAME="#FD120A" TYPE="%20s"/><!-- A汉字用途   -->
+<ITEM NAME="#FD120B" TYPE="%2s" /><!--  B余额方向  -->
+
+<!-- 定义 121 域 -->
+<ITEM NAME="#FD1211" TYPE="%20s"/>	<!--1内部帐号  -->
+<ITEM NAME="#FD1212" TYPE="%50s"/>	<!--2户名      -->
+<ITEM NAME="#FD1213" TYPE="%16s"/>	<!--3余额      -->
+<ITEM NAME="#FD1214" TYPE="%2s"/>	  <!--4币种      -->
+<ITEM NAME="#FD1215" TYPE="%1s"/>	  <!--5现转标志  -->
+<ITEM NAME="#FD1216" TYPE="%3s"/>	  <!--6凭证种类  -->
+<ITEM NAME="#FD1217" TYPE="%16s"/>	<!--7凭证号码  -->
+<ITEM NAME="#FD1218" TYPE="%17.2f"/>	<!--8发生额    -->
+<ITEM NAME="#FD1219" TYPE="%2s"/>	  <!--9用途      -->
+<ITEM NAME="#FD121A" TYPE="%20s"/>	<!--A汉字用途  -->
+<ITEM NAME="#FD121B" TYPE="%2s"/>	  <!--B余额方向  -->
+
+
+<ITEM NAME="#PRTLABEL1" TYPE="%-10s"/>	  <!--B余额方向  -->
+<!--输出变量--->
+<ITEM NAME="#NEXTPAGE"  LINE="21" COL="65" TYPE="%6s"   INPUT="SUBMIT"  FUNCTIONS="T(确定)"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示信息">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+print(03,30,'支行转贴现');
+print(05,20,'原协议号: [20                  ]      新协议号:[20]',#PACT_NO,#NPACT_NO);
+print(06,20,'原贴现账号: [19                       ]',#AC_NO);
+print(07,20,'新贴现账号: [19                       ]',$FD33);
+print(08,20,'贴现利息: [21                       ]',comma(itoa(#INTRT,'%16.2f'),21));
+print(09,20,'贴现金额: [21                       ]',comma(itoa(#TXAMT,'%16.2f'),21));
+print(10,20,'流 水 号: [6                        ]',$FD4);
+print(11,20,'操 作 员: [4                        ]',$FD7);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+           <PRINT>
+                "{
+            $KINDNO='00';
+            dim @txtime  as string;
+            @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+            print( 5, 20,'机构名称:[30]',$BRNAME);
+            print( 5, 2,'代码:3207');
+            print( 5, 13,'交易:支行转贴现');
+            print( 7,20,'原协议号: [20                  ]      新协议号:[20]',#PACT_NO,#NPACT_NO);
+            print( 8,20,'原贴现账号: [19                       ]',#AC_NO);
+            print( 9,20,'新贴现账号: [19                       ]',$FD33);
+            print(10,20,'贴现利息: [21                       ]',comma(itoa(#INTRT,'%16.2f'),21));
+            print(11,20,'贴现金额: [21                       ]',comma(itoa(#TXAMT,'%16.2f'),21));
+            printacdtl_1();      
+            print(24,20,'备注:')
+            print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+            print(24,5,'柜员:[4]',$FD7);
+            print(24,5,'流水号:[6]',$FD4);
+            }"
+           </PRINT>
+</RESPONSE>
+
+<!------------------
+<PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="打印业务专用凭证" >
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+  $KINDNO='00';
+  dim @txtime  as string;
+  @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 	print( 4, 25,'[5]',$KINBR);
+	print( 4, 10,'[30]',$BRNAME);
+	print( 4, 5,'操作员号:[4]',$FD7);
+	print( 5, 15,'[6]',$FD4);
+	print( 5, 28,'3207财务划转交易');
+	print( 5, 5,'[8]  [8]',$HDATE,@txtime);
+	printacdtl_1();
+}"
+</PRINT>
+</RESPONSE>---------->
+<LASTWORK>
+"{
+	//showmsg('CK='+#ACT_LX_CK);
+	//showmsg(#ACT_LX);
+}"
+</LASTWORK>
+</TRANSACTION>

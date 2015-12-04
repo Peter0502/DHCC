@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="L10 实时借记[通兑]业务录入)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+  #RTXAMT=itoa(#TX_AMT*100,'%016.0f');
+  $FD101=getitems('#ACTNO24#ACTSEQ#TXAMT#VOCTYPE#VOCNUM#DESC10#NBFLAG#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#PRODNAME');
+  #OPCD='10';
+  lvsend_123();
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+        lvrecv_123();
+}"
+</COMMRECV>
+
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5312                        实时借记[通兑]业务录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5852)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <!-- 小额贷记基本信息录入 -->
+  <IMPORT>LV_SSJJ.IMP</IMPORT>
+	<ITEM NAME="#BUFFER" TYPE="%-750s" FUNCTIONS=""/>
+  	<ITEM  NAME="#XTX_AMT"    TYPE="%-21s"        FUNCTIONS="X(#TX_AMT)"/>
+
+    <ITEM NAME="#TMP" TYPE="%-750s" FUNCTIONS=""/>
+    <ITEM NAME="#TMP1" TYPE="%-750s" FUNCTIONS="">
+    <ONLOSTFOCUS>"{
+        #TMP=$BUFFER;
+    }"</ONLOSTFOCUS>
+    </ITEM>
+
+	<ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  	<ONCLICK>"{
+  		#BUFFER=$BUFFER;
+  		submit();
+ 	 	}"
+  	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+				print(3,5, '                  实时借记往帐录入');
+        print(4,5, '委 托 日 期:[8]  支付交易序号:[8]',$HDATE,#ORDERNO);
+        print(5,5, '接收行行号:[12] 业务类型:[8]',#AC_BR_NO,#QTXNUM);
+        print(6,5, '付款人帐号 :[24]',#PAY_AC_NO);
+        print(7,5, '付款人名称 :[60]',#PAY_NAME);
+        print(8,5, '交 易 金 额:[21]',#XTX_AMT);
+        print(9,5, '对方清算行号: [12]',#CASH_QS_NO);
+        print(10,5,'收款人帐号:[24]',#CASH_AC_NO);
+        print(11,5,'收款人名称:[60]',#CASH_NAME);
+        print(12,5,'包  序  号:[24]',#PACK_ID);
+        print(13,5,'包  日  期:[60]',#PACK_DATE);
+        print(14,5,'附      言:[60]',#BRF);
+        print(13,5,'流  水  号:[6]                    操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+<!--打印信息 -->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        
+        print( 5, 20,'机构名称:[30]',$BRNAME);  
+        print( 5, 2,'代码:5312');
+        print( 5, 13,'交易:实时借记[通兑]往帐录入');
+
+        print( 7,10, '支付交易序号:[8       ]                      委 托  日 期:[8       ]',#ORDERNO,$HDATE);
+        print( 8,10, '接收行 行 号:[12        ]                    业 务  类 型:[8       ]',#AC_BR_NO,#QTXNUM);
+        print( 9,10, '付款人 帐 号:[24                      ]      交 易  金 额:[21                   ]',#PAY_AC_NO,#XTX_AMT);
+        print(10,10, '付款人 名 称:[60                                                          ]',#PAY_NAME);
+        print(11,10, '收款人 帐 号:[24                      ]      对方清算行号:[12]',#CASH_AC_NO,#CASH_QS_NO);
+        print(12,10, '收款人 名 称:[60                                                          ]',#CASH_NAME);
+        print(13,10, '包   序   号:[8      ]                       包   日   期:[8      ]',#PACK_ID,#PACK_DATE);
+        print(14,10, '附        言:[60                                                          ]',#BRF);
+        
+        print( 24,20,'备注:');
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+      }"
+  </PRINT>
+</RESPONSE>
+
+<!--打印信息 -->
+</TRANSACTION>

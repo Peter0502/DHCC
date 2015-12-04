@@ -1,0 +1,175 @@
+/******************************************************************************
+*交易名称：事后操作员考勤                                                     *
+*函数名称：sp3667()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-12 9:00                                              *
+*修 改 人：  YXJ                                                              *
+*修改日期：  2007-03-19                                                       *
+*数据库表:                                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "com_tel_c.h"
+#include "shjd_tlrpoot_c.h"
+EXEC SQL INCLUDE sqlca;
+
+int sp3667()
+{
+	int ret=0,i=0;
+	struct shjd_tlrpoot_c shjd_tlrpoot;
+	struct com_tel_c wd_com_tel;
+	char tlrtype[5];
+	FILE *fp=NULL;
+	char filename[256];
+	char s_day[9];
+	char e_day[9];
+	char n_buf[10];
+	char tmp_tel[5];
+	char tmp_tel_name[21];
+	char v_buf[10];
+	int  sum_num=0;
+	char pflg='0';
+	memset(&shjd_tlrpoot,0x00,sizeof(struct shjd_tlrpoot_c));
+	memset(&wd_com_tel,0x00,sizeof(wd_com_tel));
+	memset(filename,0x00,sizeof(filename));
+	memset(tlrtype,0x00,sizeof(tlrtype));
+	memset(s_day,0x00,sizeof(s_day));
+	memset(e_day,0x00,sizeof(e_day));
+	memset(tmp_tel,0x00,sizeof(tmp_tel));
+	
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+	pub_base_sysinit();
+	get_fd_data("0440",s_day);
+	get_fd_data("0450",e_day);
+	vtcp_log("[%s][%d]s_day==[%s]",__FILE__,__LINE__,s_day);
+	vtcp_log("[%s][%d]e_day==[%s]",__FILE__,__LINE__,e_day);
+	if(memcmp(s_day,e_day,sizeof(s_day)-1)==0)
+		pflg='0';
+	else	pflg='1';
+  	ret=Shjd_tlrpoot_Dec_Sel(g_pub_tx.reply,"txday<='%s' and txday>='%s' order by tlrno,txday",e_day,s_day);
+	ERR_DEAL 
+	i = 0;
+	while(1){
+		memset(&shjd_tlrpoot,0,sizeof(shjd_tlrpoot));
+     		g_reply_int =Shjd_tlrpoot_Fet_Sel(&shjd_tlrpoot,g_pub_tx.reply);			
+		if( g_reply_int ==100 ) {
+			if(i==0){
+				sprintf(acErrMsg,"[%s][%d] 没有符合的记录[%d]",__FILE__,__LINE__,g_reply_int);
+				WRITEMSG
+				set_zd_data(DC_GET_MSG,acErrMsg);
+				goto ErrExit;
+			}
+			else{
+				fprintf(fp,"-|-|-|-|总笔数:|%08d|\n",sum_num);	
+			}
+			break;
+		}
+		if( g_reply_int ){
+	 		vtcp_log("[%s][%d]errcode==[%d]",__FILE__,__LINE__,g_reply_int);
+			sprintf(acErrMsg,"[%s][%d] Fet数据库出错[%d]",__FILE__,__LINE__,g_reply_int);
+			set_zd_data(DC_GET_MSG,acErrMsg);
+		     	goto ErrExit;
+		}
+	    	memset(&wd_com_tel,0x00,sizeof(wd_com_tel));
+	    	memset(tlrtype,0x00,sizeof(tlrtype));
+		pub_base_strpack_all(shjd_tlrpoot.downtime);	
+/*********************
+		if(strlen(shjd_tlrpoot.downtime)==6)
+			memcpy(tlrtype,"签退",sizeof(tlrtype)-1); 
+		else
+			memcpy(tlrtype,"签到",sizeof(tlrtype)-1); 
+*********************/
+		memset(n_buf,'\0',sizeof(n_buf));
+		memcpy(n_buf,shjd_tlrpoot.text,sizeof(n_buf)-1);
+		ret=Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s'",shjd_tlrpoot.tlrno);
+		if(ret){
+			vtcp_log("查操作员表com_tel出错[%s][%d]",__FILE__,__LINE__);
+			sprintf(acErrMsg,"查操作员表com_tel出错[%s][%d]",__FILE__,__LINE__);
+			set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			goto ErrExit;
+		}
+		if(wd_com_tel.csts[0]=='4'){/**此柜员已删除**/
+			continue;
+		}
+		if(!i){
+			pub_base_AllDwnFilName( filename );
+			fp = fopen( filename,"w" );
+			if( fp==NULL ){
+				sprintf(acErrMsg," open file [%s] error ",filename );
+				set_zd_data(DC_GET_MSG,acErrMsg);
+				WRITEMSG
+				goto ErrExit;
+			}
+			/**显示列标题
+			fprintf( fp,"~交易日期|操作柜员|柜员名称|签到时间|签退时间|状    态|\n" );
+			**/
+			memset(tmp_tel,'\0',sizeof(tmp_tel));
+			memset(tmp_tel_name,'\0',sizeof(tmp_tel_name));
+			memcpy(tmp_tel,shjd_tlrpoot.tlrno,sizeof(tmp_tel)-1);
+			memcpy(tmp_tel_name,wd_com_tel.name,sizeof(tmp_tel_name)-1);
+		}
+		pub_base_strpack_all(tmp_tel);	
+vtcp_log(">>>>>>>>>>>>>tmp_tel[%s] shjd_tlrpoot.tlrno[%s]",tmp_tel,shjd_tlrpoot.tlrno);
+		if(memcmp(tmp_tel,shjd_tlrpoot.tlrno,sizeof(tmp_tel)-1)==0 || pflg=='0'){
+			sum_num+=atoi(n_buf);
+			fprintf(fp,"%s|%s|%s|%s|%s|%s|\n",shjd_tlrpoot.txday,shjd_tlrpoot.tlrno,wd_com_tel.name,shjd_tlrpoot.poottime,shjd_tlrpoot.downtime,n_buf);	
+		}
+		else{
+		/*
+			fprintf(fp,"监督总笔数|%s|%s|-|监督总量|%08d|\n",tmp_tel,tmp_tel_name,sum_num);	
+		*/
+			/*****写上个操作员的总笔数****/
+			fprintf(fp,"-|-|-|-|总笔数:|%08d|\n",sum_num);	
+			fprintf(fp,"--------|--------|--------|--------|--------|--------|\n");	
+			sum_num=0;
+			memset(tmp_tel,'\0',sizeof(tmp_tel));
+			memset(tmp_tel_name,'\0',sizeof(tmp_tel_name));
+			memcpy(tmp_tel,shjd_tlrpoot.tlrno,sizeof(tmp_tel)-1);
+			memcpy(tmp_tel_name,wd_com_tel.name,sizeof(tmp_tel_name)-1);
+			/*********打印当前操作员**********/
+			fprintf(fp,"%s|%s|%s|%s|%s|%s|\n",shjd_tlrpoot.txday,shjd_tlrpoot.tlrno,wd_com_tel.name,shjd_tlrpoot.poottime,shjd_tlrpoot.downtime,n_buf);	
+			sum_num+=atoi(n_buf);
+		}
+		i++;
+	}
+   	ret=Shjd_tlrpoot_Clo_Sel();
+	ERR_DEAL
+	if( !i ){
+		strcpy( g_pub_tx.reply,"S049" );
+	 	goto ErrExit;
+	}
+	else{
+		fclose(fp);
+	 	set_zd_data(DC_FILE_SND,"1" );
+	}
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	if(memcmp(g_pub_tx.reply,"0000",4)==0){
+              memcpy(g_pub_tx.reply,"T063",4);
+       	}
+       	sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       	WRITEMSG
+       	set_zd_data(DC_REPLY,g_pub_tx.reply);
+
+}

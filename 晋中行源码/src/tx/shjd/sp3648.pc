@@ -1,0 +1,57 @@
+/***************************************************************************************
+*交易名称: 事后监督流程配置
+*文件名称: sp3648.pc
+*
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070125
+*
+***************************************************************************************/
+#define ERR_DEAL if(ret) { \
+		 	sprintf(acErrMsg,"sql error.[%d]  [%s]--[%d]",ret,__FILE__,__LINE__);\
+			WRITEMSG  \
+			goto ErrExit; \
+			}
+#define EXTERN
+#include "public.h"
+#include "tranpara_c.h"
+
+int sp3648()
+{
+	int ret=0;
+	struct tranpara_c tranpara;
+	char jycode[5];
+        char zjycode[5];	
+        char ysname[21];
+
+	memset(&tranpara,0x00,sizeof(struct tranpara_c));
+	memset(jycode,0x00,sizeof(jycode));
+	memset(zjycode,0x00,sizeof(zjycode));
+        memset(ysname,0x00,sizeof(ysname));
+
+	pub_base_sysinit();
+
+	get_zd_data("0340",jycode);
+        get_zd_data("0350",zjycode);
+	get_zd_data("0250",ysname);
+	ret=Tranpara_Sel(g_pub_tx.reply,&tranpara,"trancode='%s' and subtxcode='%s' and name='%s'",jycode,zjycode,ysname);
+	ERR_DEAL
+
+	set_zd_data("0210",tranpara.length);	
+	set_zd_data("0870",tranpara.xdtl_name);	
+	set_zd_data("0670",&tranpara.xdtl_flag[0]);	
+vtcp_log("length=[%s],xdtl_name=[%s],xdtl_flag=[%c]",tranpara.length,tranpara.xdtl_name,tranpara.xdtl_flag[0]);
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

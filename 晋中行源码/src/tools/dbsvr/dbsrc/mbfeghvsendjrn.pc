@@ -1,0 +1,263 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mbfeghvsendjrn_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mbfeghvsendjrn_con ( struct mbfeghvsendjrn_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mbfeghvsendjrn_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->tx_br_no);
+	zip_tail(ps->tx_code);
+	zip_tail(ps->procstate);
+	zip_tail(ps->payeracc);
+	zip_tail(ps->payername);
+}
+int Mbfeghvsendjrn_Debug(struct mbfeghvsendjrn_c *ps){
+	vtcp_log("mbfeghvsendjrn_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mbfeghvsendjrn_c.tx_br_no=[%s]\n",ps->tx_br_no);
+	vtcp_log("mbfeghvsendjrn_c.tx_code=[%s]\n",ps->tx_code);
+	vtcp_log("mbfeghvsendjrn_c.consigndate=[%ld]\n",ps->consigndate);
+	vtcp_log("mbfeghvsendjrn_c.trace_no=[%ld]\n",ps->trace_no);
+	vtcp_log("mbfeghvsendjrn_c.procstate=[%s]\n",ps->procstate);
+	vtcp_log("mbfeghvsendjrn_c.payeracc=[%s]\n",ps->payeracc);
+	vtcp_log("mbfeghvsendjrn_c.amount=[%f]\n",ps->amount);
+	vtcp_log("mbfeghvsendjrn_c.payername=[%s]\n",ps->payername);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mbfeghvsendjrn_Sel(reply,mbfeghvsendjrn_c,fmtstr,va_alist)
+char    *reply;
+struct  mbfeghvsendjrn_c *mbfeghvsendjrn_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mbfeghvsendjrn_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mbfeghvsendjrn_Fet_Sel( mbfeghvsendjrn_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mbfeghvsendjrn_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mbfeghvsendjrn_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mbfeghvsendjrn.* FROM mbfeghvsendjrn WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfeghvsendjrn_sel FROM :comm;
+	EXEC SQL DECLARE sel_mbfeghvsendjrn CURSOR FOR mbfeghvsendjrn_sel;
+
+	EXEC SQL OPEN sel_mbfeghvsendjrn;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfeghvsendjrn_Fet_Sel ( struct mbfeghvsendjrn_c *mbfeghvsendjrn_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mbfeghvsendjrn INTO :mbfeghvsendjrn_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mbfeghvsendjrn error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mbfeghvsendjrn finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfeghvsendjrn_c);
+
+	return 0;
+}
+
+int Mbfeghvsendjrn_Clo_Sel (){
+	EXEC SQL CLOSE sel_mbfeghvsendjrn;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mbfeghvsendjrn_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mbfeghvsendjrn.* FROM mbfeghvsendjrn WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mbfeghvsendjrn_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mbfeghvsendjrn CURSOR FOR mbfeghvsendjrn_upd;
+
+	EXEC SQL OPEN upd_mbfeghvsendjrn;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfeghvsendjrn_Fet_Upd( struct mbfeghvsendjrn_c *mbfeghvsendjrn_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mbfeghvsendjrn INTO :mbfeghvsendjrn_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mbfeghvsendjrn finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mbfeghvsendjrn_c);
+
+	return 0;
+}
+
+int Mbfeghvsendjrn_Upd_Upd( struct mbfeghvsendjrn_c mbfeghvsendjrn_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mbfeghvsendjrn SET tx_br_no=:mbfeghvsendjrn_c.tx_br_no,
+			tx_code=:mbfeghvsendjrn_c.tx_code,
+			consigndate=:mbfeghvsendjrn_c.consigndate,
+			trace_no=:mbfeghvsendjrn_c.trace_no,
+			procstate=:mbfeghvsendjrn_c.procstate,
+			payeracc=:mbfeghvsendjrn_c.payeracc,
+			amount=:mbfeghvsendjrn_c.amount,
+			payername=:mbfeghvsendjrn_c.payername
+	WHERE rowid=:mbfeghvsendjrn_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mbfeghvsendjrn_Del_Upd(struct mbfeghvsendjrn_c mbfeghvsendjrn_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mbfeghvsendjrn WHERE rowid=:mbfeghvsendjrn_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mbfeghvsendjrn_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mbfeghvsendjrn;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mbfeghvsendjrn_Ins( struct mbfeghvsendjrn_c mbfeghvsendjrn_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mbfeghvsendjrn VALUES (:mbfeghvsendjrn_c.tx_br_no,
+			:mbfeghvsendjrn_c.tx_code,
+			:mbfeghvsendjrn_c.consigndate,
+			:mbfeghvsendjrn_c.trace_no,
+			:mbfeghvsendjrn_c.procstate,
+			:mbfeghvsendjrn_c.payeracc,
+			:mbfeghvsendjrn_c.amount,
+			:mbfeghvsendjrn_c.payername);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mbfeghvsendjrn error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

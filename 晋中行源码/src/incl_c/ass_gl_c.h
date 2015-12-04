@@ -1,0 +1,33 @@
+#ifndef __ass_gl_CH__
+#define __ass_gl_CH__
+struct ass_gl_c{
+	char      rowid[20];
+	char      br_no[6];
+	char      ass_code[6];
+	double    in_bal;
+	double    out_bal;
+	double    in_intst_bal;
+	double    out_intst_bal;
+	char      sts[2];
+	double    ldd_bal;
+	double    lcd_bal;
+	double    rdd_amt;
+	double    rcd_amt;
+	double    tddr_bal;
+	double    tdcr_bal;
+	double    tddr_amt;
+	double    tdcr_amt;
+	double    mdr_bal;
+	double    mcr_bal;
+	double    mdr_amt;
+	double    mcr_amt;
+	double    qdr_bal;
+	double    qcr_bal;
+	double    qdr_amt;
+	double    qcr_amt;
+	double    ydr_bal;
+	double    ycr_bal;
+	double    ydr_amt;
+	double    ycr_amt;
+};
+#endif 

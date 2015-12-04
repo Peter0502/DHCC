@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="8609      批量开户补打存折"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>"{
+  	dim @selid as number;
+  	dim @prtflg as string;
+  	dim @cnt as number;
+  	dim @cmtnobak as string;
+  	dim @tota as string;  	
+  	@prtflg='';	
+  	if(#DOLIST!='')
+  	{ 
+	    if(list_getrowcnt() &lt;=0){
+		list_del();
+	    }
+
+
+  		while(true)
+  		{
+  			@selid=list_getselid();
+  			if(@selid &lt; 0)
+  			{
+  				break;
+  			}	
+  	@selid=list_getselid();
+	  #AC_NO=delspace(list_gettext(@selid,2));
+ 	  list_show();
+	  while(true)
+	  {
+	  		@prtflg=delspace(list_gettext(@selid,10));
+	  		if(@prtflg=='已打印')
+	  		{
+	  		    	if(msgbox('此户存折已打印!确定重新打印吗!'+chr(10)+
+	  			'    账    号:'+#AC_NO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        		   break;
+	       	}
+	  		}
+	  		else if(#AC_NO=='') 
+			{
+				break;
+			}
+			else
+	  		{
+						if(msgbox('打印此户存折吗?'+chr(10)+
+	  			'    账    号:'+#AC_NO+chr(10)+
+	  			'─────────────'
+	  			,'提示','yes|no')!=0)
+	  			{
+	        			break;
+	       	}
+	  		}
+	      		initfd();
+	       		commsend_001();
+	       	 	$FD37=#AC_NO;
+	        	$FD58=delspace(list_gettext(@selid,3));
+	        	$FD116='0010';
+						$FD92=delspace(list_gettext(@selid,0));
+	        	$FD16='6606';
+						@tota=callserver();
+						if($FD12!='0000')
+						{
+							showmsg(geterror());
+							goitem('#DOLIST',false);
+							return(true);			
+						}
+	        	runoutput(@tota);
+	        	list_rmitem(@selid);      		        	        
+	        	list_show();
+	      		@selid=list_getselid();
+	      		@cnt=list_getrowcnt();
+  	        	open('3414.XML', '#ACTNO='+#AC_NO+';#FLAG8609='+#FLAG8609+';');
+	      		if(@cnt==0)
+	      		{
+	        		msgbox('    批量开户存折完毕    '+chr(10)+'─────────────');
+	        		break;
+	        	}
+	  			  #AC_NO=delspace(list_gettext(@selid,2));
+	    	} 
+	    list_del();
+	  	#DOLIST='0';
+	  	return(true);
+	  	}
+  		}
+  		//list_del();
+  		#DOLIST='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+<!----
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+ <ONLOSTFOCUS>"{
+ 	showall();
+  }"
+ </ONLOSTFOCUS>
+ </ITEM>
+---->
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(8609                     批量开户补打存折（多笔）)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6606)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="7"    COL="10"   TYPE="%-13s" FUNCTIONS="T(单位    编号:)"/>
+  <ITEM LINE="8"    COL="10"   TYPE="%-13s" FUNCTIONS="T(单位    户名:)"/> 
+  <!-------------新增个人编号------------------------------------------->
+  <ITEM LINE="9"    COL="10"   TYPE="-13s"  FUNCTIONS="T(个人    编号:)"/>
+  <ITEM LINE="9"    COL="44"   TYPE="%-2S"	FUNCTIONS="T(→)"/>
+  <ITEM LINE="10"   COL="10"   TYPE="%-13s" FUNCTIONS="T(批量开户日期:)"/>
+  <ITEM LINE="10"   COL="40"   TYPE="%-14s" FUNCTIONS="T(打印    标志:!)" />
+  <ITEM LINE="7"   COL="24"  NAME="#DWID"        TYPE="%-4s"        INPUT="TEXT"    FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+		"{
+		    dim @txno_bak as string;
+                @txno_bak=$TXNO;
+		    $TXNO='9841';
+		    $FD92=#DWID;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txno_bak;
+		    #DWNAME=delspace($FD25);
+		    enable(#DWNAME,false);
+		   
+		}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="8"    COL="24"  NAME="#DWNAME"        TYPE="%-50s"        INPUT="TEXT"    FUNCTIONS=""/>  
+  <!------------添加个人编号起始号和终止号-------->
+  <ITEM LINE="9"    COL="23"  NAME="#PER_ID"        TYPE="%20d"         INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="9"    COL="48"  NAME="#PER_ID1"       TYPE="%20d"         INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="10"   COL="24"  NAME="#OPNDATE"      TYPE="%8d"          INPUT="TEXT"    FUNCTIONS="D()"/>
+  <ITEM LINE="10"   COL="55"  NAME="#PRTFLAG"       TYPE="%-1s"         INPUT="TEXT"    FUNCTIONS="T(0)V(0,2)">
+       <SELECT>
+            <OPTION VALUE="0 未打印"  TITLE="未打印"/>
+      <!---
+            <OPTION VALUE="1 已打印"  TITLE="1 已打印"/>
+            <OPTION VALUE="2 全  部 " TITLE="2 全  部"/>
+       --->
+       </SELECT>
+  </ITEM>   
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD"   TYPE="%-6s"    FUNCTIONS="T()"/>
+  <ITEM NAME="#AC_NO"    TYPE="%-20s"   FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#FLAG8609" TYPE="%-1s" FUNCTIONS="T(1)"/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+  "{
+        dim @pkgcnt  as number;
+        dim @recdcnt as number;
+        dim @step   as number;
+        dim @tota   as string;
+        dim @relapos as number;
+        dim @pkgcntpos as number; 
+        dim @tmptxamt as string;
+        dim @txamt as string;
+        list_init(18,78,4,1);
+        list_setcolcnt(11);
+        list_setcol(0, '单位编号',8);
+        list_setcol(1, '个人编号',8);
+        list_setcol(2, '个人账号',20);
+        list_setcol(3, '凭证号码',20);
+        list_setcol(4, '凭证种类',8);
+        list_setcol(5, '用户姓名',8);
+        list_setcol(6, '证件类型',8);
+        list_setcol(7, '证件号码',8);
+        list_setcol(8, '开户日期',8);
+        list_setcol(9, '操作柜员',8);
+        list_setcol(10, '打印标志',8);
+        initfd();
+        commsend_001();
+        $FD16='6661';
+			$FD92=#DWID;
+     		$FD44=#OPNDATE;
+     		$FD67=#PRTFLAG;
+			/********添加个人编号初始号和终止号*******/
+			$FD62=#PER_ID;
+            $FD63=#PER_ID1;
+     		@tota=callserver();
+     		if($FD12!='0000')
+    	 {
+					showmsg(geterror());
+					return(false);
+    	 }
+    	 
+    	 if(autolist(@tota))
+    	 {
+	    	list_work();
+	 }
+         #DOLIST='1';
+  }"
+ 	</ONCLICK>  
+  </ITEM>
+  
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="批量开户补打存折"> 
+ CZFY|@ac_no|@name|@cif_no|@sttl_type|@opn_date|@draw_type|@title|@brf|@tx_amt|@tel|@br_tele|@bal|
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+print(4 ,20,'账 /卡号:  [24                       ]',@ac_no);
+print(5 ,20,'客户名称:  [24                       ]',@name);
+print(6 ,20,'客 户 号:  [24                       ]',@cif_no);
+print(7 ,20,'结算类型:  [24                       ]',@sttl_type);
+print(8 ,20,'开户日期:  [24                       ]',@opn_date);
+print(9 ,20,'支取方式:  [24                       ]',@draw_type);
+print(10,20,'产品描述:  [24                       ]',@title);
+print(11,20,'交易金额:  [24                       ]',@tx_amt);
+print(12,20,'操 作 员:  [24                       ]',@tel);
+print(13,20,'电话号码:  [24                       ]',@br_tele);
+print(14,20,'账户余额:  [24                       ]',@bal);
+
+
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE><!----开户时增加打印大额行号 20071120---->
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="请打印存折首页"> 
+CZFY|@ac_no|@name|@cif_no|@sttl_type|@opn_date|@draw_type|@title|@brf|@tx_amt|@tel|@br_tele|@bal|@cur_name|@rate|@br_name|@mbfebkno
+</PACKAGE>
+<INIT>
+"{
+	$KINDNO = '00';
+}"
+</INIT>
+<PRINT>
+"{
+dim @txamt  as string;
+dim @avbal  as string; //余额
+dim @mtxamt as string; //月存金额
+dim @tctd   as string; //通存通兑标志
+//不用￥符号
+@txamt=ltrim(comma(substr(@tx_amt,0,len(@tx_amt)-4),16));
+@avbal=ltrim(comma(substr(@bal,0,len(@bal)-4),16));
+if(len(@txamt)&lt;21)
+{
+	@txamt=space(21-len(@txamt))+@txamt;
+}
+if(@draw_type == '凭密支取' or @draw_type =='密码兼证件支取')
+{
+	@tctd = '通存通兑';
+}
+else
+{
+	@tctd = '        ';
+}
+
+@title = '活期'; //储种为活期
+
+print( 0, 3,'\L0[8]    [13           ]\L1',@title,@ac_no);
+print( 3,10,'\L0[20]\L1',@name);
+print( 6,1,'支付行号:[12]',@mbfebkno);
+print( 8,10,'[10]',@cif_no);
+print( 9,10,'[30                            ]                [8]',@br_name,@opn_date);
+print(10,10,'[30                            ]                [8]',$BRNAME,$HDATE);
+print(11,10,'[20 ]',@draw_type);
+print(23,10,'[10]',@cif_no);
+print(24,10,'[30                            ]                [8]',@br_name,@opn_date);
+print(25,10,'[30                            ]                [8]',$BRNAME,$HDATE);
+print(26,10,'[20]',@draw_type);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="13" DESC="请翻页(储蓄存折第一笔)"> 
+CZFY|@ac_no|@name|@cif_no|@sttl_type|@opn_date|@draw_type|@title|@brf|@tx_amt|@tel|@br_tele|@bal|@cur_name|@rate|@br_name|@mbfebkno
+</PACKAGE>
+<INIT>
+"{
+	$KINDNO = '00';
+}"
+</INIT>
+<PRINT>
+"{
+dim @txamt  as string;
+dim @avbal  as string; //余额
+dim @mtxamt as string; //月存金额
+dim @tctd   as string; //通存通兑标志
+//不用￥符号
+@txamt=ltrim(comma(substr(@tx_amt,0,len(@tx_amt)-4),16));
+@avbal=ltrim(comma(substr(@bal,0,len(@bal)-4),16));
+if(len(@txamt)&lt;21)
+{
+	@txamt=space(21-len(@txamt))+@txamt;
+}
+
+print(6, 0,'[10        ] [4   ]                   [15             ][15            ] [4   ]',substr(@opn_date,0,4)+'/'+substr(@opn_date,4,2)+'/'+substr(@opn_date,6,2),@brf,substr(@txamt,6,15),substr(@txamt,6,15),@tel);
+}"
+</PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+	showmsg('请按任意键刷存折...');
+	writemsr(#ACTNO,'');
+}"
+</LASTWORK>
+
+</TRANSACTION>

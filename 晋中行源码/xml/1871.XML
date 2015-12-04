@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1871      滞留金额设置)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+     "{
+      }"
+</FIRSTWORK>
+<VARIABLE>
+        <ITEM LINE="3" COL="35" TYPE="%-30s" FUNCTIONS="T(1871            滞留金额设置)"/>
+        <ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+        <ITEM NAME="#TXNAME"    TYPE="%-30s"  FUNCTIONS="T(滞留金额设置)"/>
+         <ITEM NAME="#TXCODE"    TYPE="%-30s"  FUNCTIONS="T(2322)"/>
+	<ITEM LINE="7" COL="25" TYPE="%-10s" FUNCTIONS="T(模式判断:)"/>
+	<ITEM LINE="7" COL="35" TYPE="%-1s" DEVICE="KEYBOARD" NAME="#Mode" FUNCTIONS="T()V(NB)">
+		<SELECT>
+			<OPTION VALUE="1"     TITLE="0.设置"/>
+			<OPTION VALUE="2"     TITLE="1.查询"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+			"{
+				if (#Mode == '1')
+				{
+					showblock('block_set',true,true);
+				}
+				else
+				{
+					showblock('block_set',false,false);
+				}
+			}"	
+		</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="block_set" LINE="9"  COL="25" VISABLE="FALSE">
+		<ITEM LINE="0" COL="0" TYPE="%-10s" FUNCTIONS="T(滞留金额:)"/>
+		<ITEM LINE="0" COL="10" NAME="#Txamt" INPUT="TEXT"  TYPE="%16.2f"  FUNCTIONS="T()V(0000000000000001,9999999999999999)" />
+	</BLOCK>
+	
+	
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+                initfd();
+                commsend_001();
+                $FD18 = 'pbp';
+                $FD28 = 'sxps';
+                $FD66 = #Mode;
+               	$FD39=itoa(#Txamt*100, '%16.0f');
+                $FD16 = '2322';
+                callagnpbp();
+                if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		if (#Mode == '2')
+		{
+			#Txamt = $FD43;
+		}
+		runoutput();
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+	
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		PrintTxHead();
+		if (#Mode == '2')
+		{	 
+   			print(10,30,'滞留金额当前额度:[60]',ltrim(itoa(#Txamt,'%.2f')));
+		}
+		else
+		{
+			print(8,30,'滞留金额设置成功');
+			print(10,30,'滞留金额当前额度:[60]',ltrim(itoa(#Txamt,'%.2f')));
+		}	
+		PrintTxTail();	
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

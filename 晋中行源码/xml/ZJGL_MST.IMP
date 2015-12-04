@@ -1,0 +1,149 @@
+<ITEM LINE="06" COL="03" TYPE="%-10s" FUNCTIONS="T(科 目 号:)"/>
+<ITEM LINE="06" COL="27" TYPE="%-10s" FUNCTIONS="T(币    种:)"/>
+<ITEM LINE="06" COL="55" TYPE="%-10s" FUNCTIONS="T(支 行 号:)"/>
+<ITEM LINE="07" COL="03" TYPE="%-10s" FUNCTIONS="T(科目名称:)"/>
+<ITEM LINE="08" COL="03" TYPE="%-10s" FUNCTIONS="T(开户日期:)"/>
+<ITEM LINE="08" COL="27" TYPE="%-10s" FUNCTIONS="T(起息日期:)"/>
+<ITEM LINE="08" COL="55" TYPE="%-10s" FUNCTIONS="T(计息类型:)"/>
+<ITEM LINE="09" COL="03" TYPE="%-10s" FUNCTIONS="T(限额周期:)"/>
+<ITEM LINE="09" COL="27" TYPE="%-10s" FUNCTIONS="T(限额开始日)"/>
+<ITEM LINE="09" COL="55" TYPE="%-10s" FUNCTIONS="T(限额结束日)"/>
+<ITEM LINE="10" COL="03" TYPE="%-10s" FUNCTIONS="T(借方余额:)"/>
+<ITEM LINE="11" COL="03" TYPE="%-10s" FUNCTIONS="T(贷方余额:)"/>
+<ITEM LINE="12" COL="03" TYPE="%-10s" FUNCTIONS="T(交易限额:)"/>
+<ITEM LINE="12" COL="35" TYPE="%-10s" FUNCTIONS="T(累计交易额)"/>
+
+
+<ITEM NAME="#SHOWDRDINUM" TYPE="%19d"/>
+<ITEM NAME="#SHOWCRDINUM" TYPE="%19d"/>
+<ITEM LINE="06" COL="13" NAME="#SHOWACCNO" TYPE="%-7s"    INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$TXNO='9580';
+		$FD64=#SHOWACCNO;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		//showmsg($FD81);
+		if(substr($FD81,13,1)=='0')
+		{
+			showmsg('该科目不可以扣划');
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="06" COL="36" NAME="#SHOWCURNO"   TYPE="%2d"  DEVICE="KEYBOARD" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="1 人民币"/>
+	</SELECT>
+</ITEM>
+
+<ITEM LINE="06" COL="65" NAME="#SHOWBRNO"  TYPE="%-7s"   INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+    dim @baktxno as string;
+    dim @ins_ind as string;
+		$FD21=#SHOWCURNO;
+		$FD91=#SHOWBRNO;
+		$FD64=#SHOWACCNO;
+		@baktxno=$TXNO;
+    $TXNO='9581';
+    commsend_001();
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+    	showmsg(geterror());
+    	return(false);
+    }
+    setitems('#SHOWDRBAL#SHOWCRBAL#SHOWTXLIM#SHOWTOTAMT#SHOWRATE#SHOWCURNO#SHOWTERM#FD1008#FD1009#FD100A',$FD100);
+    //showmsg('CRBAL='+itoa(#SHOWCRBAL,'%17.2f'));
+    //showmsg('TXLIM='+itoa(#SHOWTXLIM,'%17.2f'));
+    #SHOWOPDATE=$FD44;
+		#SHOWICDATE=$FD45;
+		@ins_ind=$FD73;
+		if(@ins_ind=='0'){
+			#SHOWINT_IND='不计息';
+		} else if(@ins_ind=='1'){
+			#SHOWINT_IND='利随本清';
+		}else if(@ins_ind=='2'){
+			#SHOWINT_IND='按日计息';
+		}else if(@ins_ind=='3'){
+			#SHOWINT_IND='按月结息';
+		}else if(@ins_ind=='4'){
+			#SHOWINT_IND='按季结息';
+		}else if(@ins_ind=='5'){
+			#SHOWINT_IND='按年计息';
+		} else {
+			#SHOWINT_IND='利息变动计息';
+		}
+		#SHOWDRDINUM=$FD56;
+		#SHOWCRDINUM=$FD57;
+		#SHOWACNAME=$FD25;
+		#SHOWBEGDATE=$FD46;
+		#SHOWENDDATE=$FD47;
+
+		@baktxno=$TXNO;
+    $TXNO='9775';
+    commsend_001();
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+    	showmsg(geterror());
+    	return(false);
+    }
+		if(substr($FD82,0,1)=='*'){
+			showmsg('输入的机构已撤销');
+			return(false);
+		}
+		$FD83=delspace($FD83);
+		$BRNAME=delspace($BRNAME);
+		if($FD83==$BRNAME)
+		{
+			showmsg('不可以输入自己的机构号');
+			return(false);
+		}
+		if(#SHOWBRNO=='10001'){
+			showmsg('对方机构不可以输入清算中心');
+			return(false);
+		}
+		enable(#SHOWACNAME ,false);
+		enable(#SHOWOPDATE ,false);
+		enable(#SHOWICDATE ,false);
+		enable(#SHOWINT_IND,false);
+		enable(#SHOWTERM   ,false);
+		enable(#SHOWBEGDATE,false);
+		enable(#SHOWENDDATE,false);
+		enable(#SHOWDRBAL  ,false);
+		enable(#SHOWCRBAL  ,false);
+		enable(#SHOWTXLIM  ,false);
+		enable(#SHOWTOTAMT ,false);
+  }"
+  </ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#SHOWRATE"    TYPE="%9.5f"  FUNCTIONS=""/>
+<ITEM LINE="07" COL="13" NAME="#SHOWACNAME"  TYPE="%-50s"   INPUT="TEXT" FUNCTIONS=""/>                   
+<ITEM LINE="08" COL="13" NAME="#SHOWOPDATE"  TYPE="%-8s"    INPUT="TEXT" FUNCTIONS=""/>               
+<ITEM LINE="08" COL="37" NAME="#SHOWICDATE"  TYPE="%-8s"    INPUT="TEXT" FUNCTIONS=""/>               
+<ITEM LINE="08" COL="65" NAME="#SHOWINT_IND" TYPE="%-12s"   INPUT="TEXT" FUNCTIONS=""/>               
+<ITEM LINE="09" COL="13" NAME="#SHOWTERM"    TYPE="%-2s"    INPUT="TEXT" FUNCTIONS=""/>                 
+<ITEM LINE="09" COL="37" NAME="#SHOWBEGDATE" TYPE="%-8s"    INPUT="TEXT" FUNCTIONS=""/>
+<ITEM LINE="09" COL="65" NAME="#SHOWENDDATE" TYPE="%-8s"    INPUT="TEXT" FUNCTIONS=""/>
+<ITEM LINE="10" COL="13" NAME="#SHOWDRBAL"   TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/>
+<ITEM LINE="11" COL="13" NAME="#SHOWCRBAL"   TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/>
+<ITEM LINE="12" COL="13" NAME="#SHOWTXLIM"   TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/>
+<ITEM LINE="12" COL="45" NAME="#SHOWTOTAMT"  TYPE="%17.2f"  INPUT="TEXT" FUNCTIONS=""/>
+
+<ITEM NAME="#FD1008"  TYPE="%10s" FUNCTIONS=""/>
+<ITEM NAME="#FD1009"  TYPE="%10s" FUNCTIONS=""/>
+<ITEM NAME="#FD100A"  TYPE="%16s" FUNCTIONS=""/>
+<!--
+<ITEM LINE="10" COL="35" TYPE="%-10s" FUNCTIONS="T(借方基数:)"/>
+<ITEM LINE="11" COL="35" TYPE="%-10s" FUNCTIONS="T(贷方基数:)"/>
+-->

@@ -1,0 +1,245 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"ctl_accountreg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int ctl_accountreg_con ( struct ctl_accountreg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct ctl_accountreg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->seqno);
+	zip_tail(ps->brf);
+}
+int Ctl_accountreg_Debug(struct ctl_accountreg_c *ps){
+	vtcp_log("ctl_accountreg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("ctl_accountreg_c.seqno=[%s]\n",ps->seqno);
+	vtcp_log("ctl_accountreg_c.amt=[%f]\n",ps->amt);
+	vtcp_log("ctl_accountreg_c.brf=[%s]\n",ps->brf);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Ctl_accountreg_Sel(reply,ctl_accountreg_c,fmtstr,va_alist)
+char    *reply;
+struct  ctl_accountreg_c *ctl_accountreg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Ctl_accountreg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Ctl_accountreg_Fet_Sel( ctl_accountreg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Ctl_accountreg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Ctl_accountreg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,ctl_accountreg.* FROM ctl_accountreg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ctl_accountreg_sel FROM :comm;
+	EXEC SQL DECLARE sel_ctl_accountreg CURSOR FOR ctl_accountreg_sel;
+
+	EXEC SQL OPEN sel_ctl_accountreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ctl_accountreg_Fet_Sel ( struct ctl_accountreg_c *ctl_accountreg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_ctl_accountreg INTO :ctl_accountreg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch ctl_accountreg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch ctl_accountreg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(ctl_accountreg_c);
+
+	return 0;
+}
+
+int Ctl_accountreg_Clo_Sel (){
+	EXEC SQL CLOSE sel_ctl_accountreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Ctl_accountreg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,ctl_accountreg.* FROM ctl_accountreg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ctl_accountreg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_ctl_accountreg CURSOR FOR ctl_accountreg_upd;
+
+	EXEC SQL OPEN upd_ctl_accountreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ctl_accountreg_Fet_Upd( struct ctl_accountreg_c *ctl_accountreg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_ctl_accountreg INTO :ctl_accountreg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH ctl_accountreg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(ctl_accountreg_c);
+
+	return 0;
+}
+
+int Ctl_accountreg_Upd_Upd( struct ctl_accountreg_c ctl_accountreg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE ctl_accountreg SET seqno=:ctl_accountreg_c.seqno,
+			amt=:ctl_accountreg_c.amt,
+			brf=:ctl_accountreg_c.brf
+	WHERE rowid=:ctl_accountreg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Ctl_accountreg_Del_Upd(struct ctl_accountreg_c ctl_accountreg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM ctl_accountreg WHERE rowid=:ctl_accountreg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Ctl_accountreg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_ctl_accountreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Ctl_accountreg_Ins( struct ctl_accountreg_c ctl_accountreg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO ctl_accountreg VALUES (:ctl_accountreg_c.seqno,
+			:ctl_accountreg_c.amt,
+			:ctl_accountreg_c.brf);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT ctl_accountreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

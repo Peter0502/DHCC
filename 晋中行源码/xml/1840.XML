@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1840        批量账户信息查询"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3"  TYPE="%-60s"  FUNCTIONS=
+	"T(1840                         批量账户信息查询)"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s"  FUNCTIONS="T(--------------------------------------------------------------------------)"/>	
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1840)"/>
+	<ITEM NAME="#TXNAME"    TYPE="%-30s"  FUNCTIONS="T(批量账户信息查询)"/>
+		<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			if(#DOLIST=='1')
+			{
+				@selid=list_work();     
+				if(@selid &lt; 0)       
+				{                     
+					list_del();            
+					rerun();               
+					return(true);          
+				}           
+				@selid=list_getselid();
+				if(@selid &lt; 0)
+				{
+					list_del();
+					rerun();
+					return(true);
+				}
+				runoutput();
+				showall();
+				rerun();
+				refresh();
+			}
+			#DOLIST='';
+			list_del();
+
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6" COL="15" TYPE="%-10s"  FUNCTIONS="T(录入方式：)"/>
+	<ITEM LINE="6" COL="25" TYPE="%-1s"   NAME="#EntryWay"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="手工"/>
+			<OPTION VALUE="1" TITLE="导盘"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+				if(#EntryWay !='0')
+				{
+					showblock('FILEIN', true, true);
+				}
+				else
+				{
+					showblock('FILEIN', false, false);							
+				}
+				refresh();
+		}"
+		</ONLOSTFOCUS>		
+	</ITEM>
+	<BLOCK NAME="FILEIN" LINE="0" COL="0" VISABLE="FALSE">
+		<ITEM LINE="8" COL="15" TYPE="%-10s" FUNCTIONS="T(文 件 名：)"/>
+		<ITEM LINE="8" COL="25" TYPE="%-42s" NAME="#FileName"      INPUT="TEXT" FUNCTIONS="T()"/>
+	</BLOCK>
+	<ITEM NAME="#SUB_UI"  TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @filename1 as string;
+			dim @filename2 as string;
+			dim @tota as string;
+			dim @f as file;
+			dim @line as string;
+			dim @amt as number;
+			dim @tot_amt as number;
+			if(#FileName !='')
+			{
+				@filename1 =#FileName;
+			}
+			else
+			{
+				dim @f1 as file;
+				dim @line1 as string;
+				@f1 = openfile('../tmp/'+$KINBR+$TTYNAME,'w');
+				writestr(@f1,'');
+				closefile(@f1); //清空文件@f1
+				//@filename1 ='../tmp/'+$KINBR+'_'+$TLRNO+'1840';
+				@filename1 ='../tmp/'+$KINBR+$TTYNAME;
+			}
+			
+			editfile('../xml/1840.DLG',@filename1);
+			
+			setvfile(true,false);
+			
+			list_init(17,75,5,1);
+			list_setcolcnt(4);
+			list_setcol(0,'开户行号',20);
+			list_setcol(1,'账号',20);
+			list_setcol(2,'帐户名称',20);
+			
+			list_load(@filename1);
+			
+			@filename2 ='../tmp/'+$KINBR+$TTYNAME;
+			list_save(@filename2);
+			@f=openfile(@filename2,'r');
+			if(@f &lt; 0)
+			{
+				showmsg('打开回传文件错误');
+				return(false);
+			}
+			@tota = getfiletxt(@filename1);
+			//if(@tota == '')
+			//{
+			//	showmsg('找不到文件');
+			//	return(false);
+			//}
+			showmsg(@tota);
+
+			closefile(@f);
+			list_del();
+
+			goitem(#OK,true);
+			//return(true);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @rcvbuffer as string;
+		initfd();
+		commsend_001();
+		$FD3 =$KINBR;
+		$FD10 =$TTYNAME;
+		$FD11 ='1';
+		$FD16 ='2043';
+		$FD18 ='pbp';
+		callagnpbp();
+		if($FD12 !='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//call('rm -rf '+'../tmp/'+$KINBR+'_'+$TLRNO+'1840');
+		//call('rm -rf '+'../tmp/'+$KINBR+$TTYNAME);
+		@rcvbuffer = getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+		dim @filename1 as string;
+		dim @ret as number;
+			
+		@filename1 = '../tmp/'+$KINBR+$TLRNO+$HDATE;
+		
+		@ret = savefiletxt(@filename1, @rcvbuffer);
+		if(@ret &lt; 0)
+		{
+			showmsg('账户文件导出失败！');
+			return(false);
+		}
+		
+		autolist('~'+@rcvbuffer);
+		#DOLIST='1';
+		goitem('#DOLIST');		
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();	
+	 
+	 		print(7, 25,'查询  日期：[8]',$FD5); 
+			print(9, 25,'查询流水号：[20]',itoa(atoi($FD56)));
+			print(12,25,'账户文件导出完成，请下载');
+			print(14,25,'账户文件:[30]',$KINBR+$TLRNO+$HDATE); 
+	
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

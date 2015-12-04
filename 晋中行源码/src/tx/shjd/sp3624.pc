@@ -1,0 +1,179 @@
+/*****************************************************
+* 文 件 名:  sp3624.pc
+* 功能描述： 事后监督未督查询     (前台:2021.XML)
+* 作    者:  刘杨  (开封写) 
+* 完成日期： 2004/09/21
+* 修 改 人:  xyy
+* 修改记录： 改造成适应新系统的事后监督未督查询
+* 日    期:  2007-1-17 13:16
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include "public.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "trace_log_c.h"
+
+int  sp3624()
+{
+	  FILE *fp=NULL;
+    int    i,j;   
+    int    cnt;
+    char   cBrno     [6];  
+    char   cShtlrno  [5];
+    char   cTxday    [9];
+    char   cKinbr    [6];
+    char   cCrdb     [3];
+    char   filename  [256];
+    char   wherelist  [512];
+    struct shjd_tlrvsbrn_c  shjd_tlrvsbrn;
+    struct trace_log_c trace_log;
+    int ret=0;
+
+    memset(&trace_log,0x00,sizeof(struct trace_log_c)); 
+    memset(cBrno    , 0x00 , sizeof(cBrno));
+    memset(cShtlrno , 0x00 , sizeof(cShtlrno));
+    memset(cTxday   , 0x0 , sizeof(cTxday));
+    memset(cCrdb    , 0x00 , sizeof(cCrdb));
+    memset(filename , 0x00 , sizeof(filename));
+    memset(wherelist, 0x00 , sizeof(wherelist));
+    memset(&shjd_tlrvsbrn, 0x00 , sizeof(shjd_tlrvsbrn));
+    
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    get_fd_data("0910",cBrno);
+	/*
+    get_fd_data("0920",cShtlrno);
+	*/
+	memcpy(cShtlrno,g_pub_tx.tel,sizeof(cShtlrno)-1);
+    vtcp_log("[%s][%d] cBrno==[%s]",__FILE__,__LINE__,cBrno);
+    vtcp_log("[%s][%d] cShtlrno==[%s]",__FILE__,__LINE__,cShtlrno);
+zip_space(cBrno);
+    if(strlen(cBrno)==0)
+    {
+    	  sprintf(wherelist,"tlrno = '%s'",cShtlrno);
+    }
+    else
+    {
+    	  sprintf(wherelist,"tlrno = '%s' and brno = '%s' ",cShtlrno,cBrno);
+    }
+    
+    vtcp_log("[%s][%d] wherelist==[%s]",__FILE__,__LINE__,wherelist);
+    g_reply_int = Shjd_tlrvsbrn_Dec_Sel(g_pub_tx.reply,wherelist);
+    if(g_reply_int)
+    {
+        sprintf( acErrMsg,"[%s][%d]查shjd_tlrvsbrn表错误[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    j = 0;
+    i = 0;
+    cnt = 0;
+    while(1)
+    {
+        memset(cKinbr,'\0',sizeof(cKinbr));
+        g_reply_int = Shjd_tlrvsbrn_Fet_Sel(&shjd_tlrvsbrn,g_pub_tx.reply);
+        vtcp_log("[%s][%d]++g_reply_int====[%d]",__FILE__,__LINE__,g_reply_int);
+        if(g_reply_int == 100)
+        {
+            if(cnt == 0)
+            {
+                 sprintf( acErrMsg,"[%s][%d]未找到所要的纪录[%d]",__FILE__,__LINE__,g_reply_int);
+                 strcpy( g_pub_tx.reply, "P015" );
+                 set_zd_data(DC_GET_MSG,acErrMsg);
+                 WRITEMSG
+                 goto ErrExit;
+            }
+            break;
+        }
+        memcpy(cKinbr,shjd_tlrvsbrn.brno,sizeof(cKinbr)-1);
+        cnt++;
+        vtcp_log("[%s][%d]++++++++cKinbr[%s]\n",__FILE__,__LINE__,cKinbr);
+        
+	ret=Trace_log_Dec_Sel(g_pub_tx.reply,"stat='0' and tx_br_no='%s' order by trace_no",shjd_tlrvsbrn.brno); 
+        if(ret)
+        {
+            sprintf( acErrMsg,"[%s][%d]查询trace_log错误[%d]",__FILE__,__LINE__,ret);
+            WRITEMSG
+            goto ErrExit;
+        }
+        while(1)
+        {
+            memset(cCrdb  ,'\0',sizeof(cCrdb));
+    	    memset(&trace_log,0x00,sizeof(struct trace_log_c)); 
+       	    
+	    ret=Trace_log_Fet_Sel(&trace_log,g_pub_tx.reply); 
+            if(ret == 100)
+            {
+                break; 
+            }
+            else if(ret)
+            {
+                sprintf( acErrMsg,"[%s][%d]FETCH trace_log错误[%d]",__FILE__,__LINE__,ret);
+                WRITEMSG
+                goto ErrExit;
+            }
+            if(!i)
+            {
+                  pub_base_AllDwnFilName( filename );
+                  fp = fopen( filename,"w" );
+                  if( fp==NULL )
+                  {
+                      sprintf(acErrMsg," open file [%s] error ",filename );
+                      strcpy( g_pub_tx.reply,"S047" );
+                      set_zd_data(DC_GET_MSG,acErrMsg);
+                      WRITEMSG
+                      goto ErrExit;
+                  }
+                  /**显示列标题**/
+                  fprintf( fp,"~交易日期|交易机构|操作员|流水号|交易金额|增减标志|帐号|\n" );
+            }
+            i++;
+            if(trace_log.add_ind[0]=='0')
+            {
+	  	memcpy(cCrdb,"借",sizeof(cCrdb)-1);
+            }
+	  else
+	  {
+	  	memcpy(cCrdb,"贷",sizeof(cCrdb)-1);
+	  }	
+            fprintf(fp,"%ld|%s|%s|%ld|%.2lf|%s|%s|\n",trace_log.tx_date,trace_log.tx_br_no,trace_log.tel,trace_log.trace_no,trace_log.amt,cCrdb,trace_log.ac_no); 
+        }
+	Trace_log_Clo_Sel();
+        j++;
+    }
+    Shjd_tlrvsbrn_Clo_Sel ();
+  if( !i )
+  {
+  	strcpy( g_pub_tx.reply,"S049" );
+  	goto ErrExit;
+  }
+  else
+  {
+      set_zd_data(DC_FILE_SND,"1" );
+          fclose(fp);
+   }  
+    vtcp_log("[%s][%d]关闭游标成功!",__FILE__,__LINE__);
+    
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;    
+}

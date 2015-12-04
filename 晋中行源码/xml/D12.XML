@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="GBK" ?>
+
+<TRANSACTION RIGHTS="11111111" TITLE="D12 用户登录"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+<COMMSEND>"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-40s" FUNCTIONS=
+    "T(D12                             用户登录)"/>
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+  <ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+  <ITEM NAME="#FORUPDATE" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+         BankUpdateWin();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+ 
+  <ITEM LINE="8"  COL="7" TYPE="%-30s" FUNCTIONS="T(┌─────────────┐)"/>
+  <ITEM LINE="9"  COL="7" TYPE="%-30s" FUNCTIONS="T(│                          │)"/>
+  <ITEM LINE="10" COL="7" TYPE="%-30s" FUNCTIONS="T(│  请输入柜员号: 12        │)"/>
+  <ITEM LINE="11" COL="7" TYPE="%-30s" FUNCTIONS="T(│                          │)"/>
+  <ITEM LINE="12" COL="7" TYPE="%-30s" FUNCTIONS="T(│                          │)"/>
+  <ITEM LINE="13" COL="7" TYPE="%-30s" FUNCTIONS="T(│  请输入密  码: 123456    │)"/>
+  <ITEM LINE="14" COL="7" TYPE="%-30s" FUNCTIONS="T(│                          │)"/>
+  <ITEM LINE="15" COL="7" TYPE="%-30s" FUNCTIONS="T(└─────────────┘)"/>
+  <!--add 20131106 start-->
+  <ITEM LINE="16" COL="7" NAME="#LOGMSG" TYPE="%-30s" INPUT="LABEL" VISABLE="TRUE" FUNCTIONS="T(│  ★ 操 作 员 登 录 ★    │)"/>
+  <ITEM LINE="16" COL="7" NAME="#PWDLB" TYPE="%-30s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(│  请输入新密码: 123456    │)"/>
+  <ITEM LINE="17" COL="7" TYPE="%-30s" FUNCTIONS="T(└─────────────┘)"/>
+  <!--add 20131106 end-->
+
+  <ITEM NAME="#TXNO"   TYPE="%4d"  FUNCTIONS="T($TXNO=9988)"/>
+  <ITEM NAME="#MINAMT2" TYPE="%-1s" FUNCTIONS="T($MINAMT2=999999999999)"/>
+  <ITEM NAME="#MINAMT1" TYPE="%-1s" FUNCTIONS="T($MINAMT1=100)"/>
+  <ITEM NAME="#APTYPE" TYPE="%-1s" FUNCTIONS="T(D)"/>
+  <ITEM NAME="#ACTNO"  TYPE="%18d" FUNCTIONS="T(000000000000000000)"/>
+  <ITEM NAME="#MAXAMT1" TYPE="%1s" FUNCTIONS="T($MAXAMT1=500000)"/>
+
+  <ITEM NAME="#KINBR"  TYPE="%-7s" FUNCTIONS=""/>
+  <ITEM NAME="#OPNBR"  TYPE="%-7s" FUNCTIONS=""/>
+  <ITEM NAME="#SUPERFLG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM LINE="10" COL="25" NAME="#TLRNO"  TYPE="%4d" DEVICE="KEYBOARD" FUNCTIONS="V(0000,9999)m($MSR2,1,4)F()">
+  <ONLOSTFOCUS>"{
+	dim @superpwd as string;
+	/////////////////////
+	dim @baktxno as string;
+	dim @filename as string;
+	dim @to_tel as string;
+	dim @tel_name as string;
+	dim @sts as string;
+	dim @tota as string;
+	dim @f as file;
+	dim @line as string;
+	dim @selid as number;
+	dim @to_lvl as string;
+	////////////////////
+	
+	
+	enable(#TLRNO,false);
+	$TLRNO=#TLRNO;		
+	commsend_001();
+	$FD16='9998';
+	callserver();
+	if($FD12!='0000'){
+		showmsg('FD12='+$FD12);
+		showmsg(geterror());
+		return(false);
+	}
+	$RIGHTS=$FD13;
+	//showmsg($RIGHTS);
+	$BRNAME=$FD25;
+	$KINBR=$FD3;
+	$OPNBR=$FD2;
+	$HDATE=$FD47;
+	$TLRLVL=$FD68;
+	settitle($HDATE,$BRNAME,$TLRNO+'  ');
+	////////////////////////////////////////
+	@filename='../tmp/D12_'+#TLRNO+'.txt';
+	commsend_001();	  
+	$FD16='9630';
+	$TLRNO=#TLRNO;
+	@tota=callserver();
+	len(@tota);
+	savefiletxt(@filename,@tota);
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if(len(@tota) &gt; 0)
+	{
+		@f=openfile(@filename,'r');
+		if(@f &lt; 0)
+		{
+			showmsg('打开回传文件错误就');
+			return(false);
+		}
+		list_init(7,20,8,36);
+		list_setcolcnt(1);
+		list_setcol(0,' 角  色',10);
+		list_additem($RIGHTS,#TLRNO);
+		while(true)
+		{
+			@line=readline(@f);
+			if(@line!='')
+			{
+				@to_tel=strfld(@line,'|',0);
+				@to_lvl=strfld(@line,'|',1);
+				list_additem(@to_lvl,@to_tel);
+			}
+			else
+			{
+				break;
+			}
+		}
+		closefile(@f);
+		while(1){
+			@selid=list_work();
+			if(@selid &gt;= 0){
+				break;
+			}
+		}
+		if(@selid &lt; 0)
+		{
+			list_del();
+			refresh();
+		}else{ 
+			@selid=0;
+			@selid=list_getselid();
+			$TLRNO=list_gettext(@selid,0);
+			$FD13=list_getaction(@selid);
+			list_del();
+			refresh();
+		}
+		$RIGHTS=$FD13;
+		settitle($HDATE,$BRNAME,$TLRNO+'  ');
+	}
+	$FD92=#TLRNO;
+	//调用sp9630.c将柜员可转换角色显示出来便于用什么角色登陆
+	/////////////////////////////////////////////////////
+	$TXNO='9988';
+	if($FD31!='' and substr($FD31,0,1)!=' '){
+		showmsg('密码到期了,请更换密码,上次更改时间'+$FD31);
+		//add 20131106 start
+		show(#LOGMSG, false);
+    show(#PWDLB, true);
+    show(#NPASSWD, true);
+		//add 20131106 end
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="13" COL="25" NAME="#PASSWD" TYPE="%6s"  DEVICE="KEYBOARD" FUNCTIONS="i()"/>
+  
+  <!--add 20131106 按财务要求 如果密码过期 必须修改密码后 才能登录 start-->
+  <ITEM LINE="16" COL="25" NAME="#NPASSWD" TYPE="%6s"  INPUT="TEXT" DEVICE="KEYBOARD" VISABLE="FALSE"  FUNCTIONS="i()I()">
+  <ONLOSTFOCUS>
+  "{
+    if(#PASSWD == #NPASSWD){
+      showmsg('两次输入密码不能相同');
+      return(false);
+    }
+    commsend_001();
+    $FD79=#PASSWD;
+    $FD80=#NPASSWD;
+		$FD16='5505';
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//#TLPASS= $XPASS;
+		#PASSWD = #NPASSWD;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TLPASS" TYPE="%-8s"   FUNCTIONS="T($XPASS)"/>
+  <!--add 20131106 end-->
+  <ITEM NAME="#SUBMIT" TYPE="%-1s" FUNCTIONS=""/>
+  </VARIABLE>
+
+<REQUEST>
+<PACKAGE SERVICE="oper" >
+</PACKAGE>
+</REQUEST>
+
+<RESPONSE></RESPONSE>
+
+<OUTPUT></OUTPUT>
+
+</TRANSACTION>
+

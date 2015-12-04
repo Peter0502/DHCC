@@ -1,0 +1,779 @@
+/*************************************************************
+* 文 件 名: rpt297.c
+* 功能描述：存款保险投保机构账户统计表
+*
+* 作    者: WYW
+* 完成日期: 2015年6月12日
+*
+* 注：
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <com_parm_c.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#define  FEE_RATE   0.00016
+long  lTot_num[18]={0};
+double dTot_amt[18]={0};
+long  lMin50_num[18]={0};
+double  dMin50_bal[18]={0};
+long  lMax50_num[18]={0};
+double  dMax50_bal[18]={0};	
+double  fee_rate;
+char  sTmp_str[3][30];
+char  sTot_num[18][9];
+char  sMin50_num[18][9];
+char  sMax50_num[18][9];
+struct com_parm_c sComParm;
+static struct com_sys_parm_c sComSysParm;
+static struct com_branch_c com_branch_c;
+EXEC SQL INCLUDE SQLCA;
+rpt297()
+{
+		int ret=0,i=0;
+		char comm[1024];
+		char fname[20];
+		char m_br_no[6];
+		FILE *fp=NULL;
+		EXEC    SQL BEGIN   DECLARE SECTION;
+			char ex_type[2];
+			double ex_type_amt=0.00;
+			long   ex_tot_count=0;
+			double ex_tot_bal=0.00;
+			long	lDate=0;
+		EXEC    SQL END     DECLARE SECTION;		
+		g_reply_int = sql_begin(); /*打开事务*/
+		if( g_reply_int != 0 )
+		{
+		    sprintf( acErrMsg, "BEGIN WORK error!!!" );
+		    WRITEMSG
+		    goto ErrExit;
+		}
+		
+		/**------- 初始化全局变量 --------**/
+		pub_base_sysinit();
+		
+		strcpy( fname, "RPT297");
+		g_reply_int = pub_rpt_rmfile_all( fname );
+		if ( g_reply_int != 0)
+		{
+			sprintf(acErrMsg,"删除定期储蓄存款分析月报表错误!!");
+			WRITEMSG
+			goto ErrExit;
+		}
+		/*增加从参数表获取存款保险率  by DYP*/
+		memset( &sComParm, 0x00, sizeof( struct com_parm_c ) );
+		ret = Com_parm_Sel( g_pub_tx.reply , &sComParm , "parm_code='CKBXL' and parm_seqn='1'" );
+		if( ret ) 
+		{ 
+			vtcp_log("%s,%d,查询存款保险率失败!",__FILE__,__LINE__);
+			goto ErrExit; 
+		}
+		fee_rate=atof(sComParm.val);
+		memset( &sComSysParm, 0x00, sizeof( struct com_sys_parm_c ) );
+                memset( m_br_no,0x00,sizeof(m_br_no) );
+		g_reply_int = Com_sys_parm_Sel( g_pub_tx.reply , &sComSysParm , "sys_date=%ld" , g_pub_tx.tx_date );
+		if( g_reply_int ) 
+		{ 
+			sprintf(acErrMsg, "SUM com_sys_parm error![%d]", g_reply_int ); 
+			WRITEMSG 
+			goto ErrExit; 
+		}
+		ret=Com_branch_Sel(g_pub_tx.reply,&com_branch_c,"br_type='4'");
+		if(ret)
+		{
+			vtcp_log("%s,%d,查询机构表失败!",__FILE__,__LINE__);
+			goto ErrExit;
+		}
+                strcpy( m_br_no , com_branch_c.br_no);
+			/*打印下一个机构开始*/
+			g_reply_int = pub_rpt_openfile( &fp, m_br_no , fname );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT OPEN FILE [%s]error![%d]", fname, g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			sprintf(comm,"select debx_type,case when bal+intst>500000 then 1000000 else 500000 end ,count(distinct cif_no),sum(bal+intst)	from cif_payable_intst_reg a,prdt_parm b,debx_acc_rel c where a.prdt_no=b.prdt_no and b.acc_hrt =c.acc_hrt and end_date=%ld group by debx_type,case when bal+intst>500000 then 1000000 else 500000 end  order by debx_type",g_pub_tx.tx_date);
+
+			vtcp_log("%s,%d,SQL[%s]",__FILE__,__LINE__,comm);
+			EXEC SQL PREPARE sigl_data_sel FROM :comm;
+			EXEC SQL DECLARE sel_sigl_data CURSOR FOR sigl_data_sel;
+        	EXEC SQL OPEN sel_sigl_data;
+        	if (sqlca.sqlcode)
+        	{
+			sprintf(acErrMsg,"OPEN sel_sigl_data error %d",sqlca.sqlcode);
+			WRITEMSG
+			strcpy ( g_pub_tx.reply , "D102" );
+			goto ErrExit;
+        	}
+        	while(1)
+        	{
+        		memset(ex_type,0x00,sizeof(ex_type));
+				ex_type_amt=0.00;
+				ex_tot_count=0;
+				ex_tot_bal=0.00;
+				EXEC SQL FETCH   sel_sigl_data into :ex_type,:ex_type_amt,:ex_tot_count,:ex_tot_bal;
+				if(sqlca.sqlcode == 1403)
+				{
+					break;
+				}else if (sqlca.sqlcode)
+        			{
+					sprintf(acErrMsg,"Fetch ac_ac_rel error!!! %d",sqlca.sqlcode);
+					WRITEMSG
+					strcpy (g_pub_tx.reply,"D103");
+					goto ErrExit;
+        			}     		
+				if(ex_type[0]=='1')
+				{
+					/*个人存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[1]=ex_tot_count;
+						dMin50_bal[1]=ex_tot_bal;
+					}else{
+						lMax50_num[1]=ex_tot_count;
+						dMax50_bal[1]=ex_tot_bal;						
+					}
+					lTot_num[1]=lMin50_num[1]+lMax50_num[1];
+					dTot_amt[1]=dMin50_bal[1]+dMax50_bal[1];
+				}else if(ex_type[0]=='2')
+				{
+					/* 对公存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[2]=ex_tot_count;
+						dMin50_bal[2]=ex_tot_bal;
+					}else{
+						lMax50_num[2]=ex_tot_count;
+						dMax50_bal[2]=ex_tot_bal;						
+					}
+					lTot_num[2]=lMin50_num[2]+lMax50_num[2];
+					dTot_amt[2]=dMin50_bal[2]+dMax50_bal[2];
+				}else if(ex_type[0]=='3')
+				{
+					/* 财政性存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[5]=ex_tot_count;
+						dMin50_bal[5]=ex_tot_bal;
+					}else{
+						lMax50_num[5]=ex_tot_count;
+						dMax50_bal[5]=ex_tot_bal;						
+					}
+					lTot_num[5]=lMin50_num[5]+lMax50_num[5];
+					dTot_amt[5]=dMin50_bal[5]+dMax50_bal[5];
+				}else if(ex_type[0]=='4')
+				{
+					/* 非存款类金融机构存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[8]=ex_tot_count;
+						dMin50_bal[8]=ex_tot_bal;
+					}else{
+						lMax50_num[8]=ex_tot_count;
+						dMax50_bal[8]=ex_tot_bal;						
+					}
+					lTot_num[8]=lMin50_num[8]+lMax50_num[8];
+					dTot_amt[8]=dMin50_bal[8]+dMax50_bal[8];
+				}else if(ex_type[0]=='5')
+				{
+					/* 住房公积金存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[3]=ex_tot_count;
+						dMin50_bal[3]=ex_tot_bal;
+					}else{
+						lMax50_num[3]=ex_tot_count;
+						dMax50_bal[3]=ex_tot_bal;						
+					}
+					lTot_num[3]=lMin50_num[3]+lMax50_num[3];
+					dTot_amt[3]=dMin50_bal[3]+dMax50_bal[3];
+				}else if(ex_type[0]=='6')
+				{
+					/* 社保基金存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[4]=ex_tot_count;
+						dMin50_bal[4]=ex_tot_bal;
+					}else{
+						lMax50_num[4]=ex_tot_count;
+						dMax50_bal[4]=ex_tot_bal;						
+					}
+					lTot_num[4]=lMin50_num[4]+lMax50_num[4];
+					dTot_amt[4]=dMin50_bal[4]+dMax50_bal[4];
+				}else if(ex_type[0]=='7')
+				{
+					/* 境外同业存放 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[12]=ex_tot_count;
+						dMin50_bal[12]=ex_tot_bal;
+					}else{
+						lMax50_num[12]=ex_tot_count;
+						dMax50_bal[12]=ex_tot_bal;
+					}
+					lTot_num[12]=lMin50_num[12]+lMax50_num[12];
+					dTot_amt[12]=dMin50_bal[12]+dMax50_bal[12];
+				}
+        	}
+        	EXEC SQL CLOSE sel_sigl_data;
+			sprintf(comm,"select substr(a.prdt_no,1,1),case when bal+intst>500000 then 1000000 else 500000 end ,count(distinct cif_no),sum(bal+intst)from cif_payable_intst_reg a,prdt_parm b,debx_acc_rel c where a.prdt_no=b.prdt_no and b.acc_hrt =c.acc_hrt and debx_type='3' and a.end_date=%ld group by substr(a.prdt_no,1,1),case when bal+intst>500000 then 1000000 else 500000 end ",sComSysParm.sys_date);
+			vtcp_log("%s,%d,SQL[%s]",__FILE__,__LINE__,comm);
+			EXEC SQL PREPARE sigl_data_sel1 FROM :comm;	
+			EXEC SQL DECLARE sel1_sigl_data CURSOR FOR sigl_data_sel1;
+        	EXEC SQL OPEN sel1_sigl_data;
+        	if (sqlca.sqlcode)
+        	{
+			sprintf(acErrMsg,"OPEN sel_sigl_data error %d",sqlca.sqlcode);
+			WRITEMSG
+			strcpy ( g_pub_tx.reply , "D102" );
+			goto ErrExit;
+        	}
+        	while(1)
+        	{
+        		memset(ex_type,0x00,sizeof(ex_type));
+				ex_type_amt=0.00;
+				ex_tot_count=0;
+				ex_tot_bal=0.00;
+				EXEC SQL FETCH   sel1_sigl_data into :ex_type,:ex_type_amt,:ex_tot_count,:ex_tot_bal;
+				if(sqlca.sqlcode == 1403)
+				{
+					break;
+				}else if (sqlca.sqlcode)
+        		{
+                	sprintf(acErrMsg,"Fetch ac_ac_rel error!!! %d",sqlca.sqlcode);
+                	WRITEMSG
+                	strcpy (g_pub_tx.reply,"D103");
+               		goto ErrExit;
+        		}     		
+				if(ex_type[0]=='1')
+				{
+					/*代理财政性存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[6]=ex_tot_count;
+						dMin50_bal[6]=ex_tot_bal;
+					}else{
+						lMax50_num[6]=ex_tot_count;
+						dMax50_bal[6]=ex_tot_bal;						
+					}
+					lTot_num[6]=lMin50_num[6]+lMax50_num[6];
+					dTot_amt[6]=dMin50_bal[6]+dMax50_bal[6];
+				}else if(ex_type[0]=='2')
+				{
+					/* 国库定期存款 */
+					if(pub_base_CompDblVal(ex_type_amt,500000.00)==0)
+					{
+						lMin50_num[7]=ex_tot_count;
+						dMin50_bal[7]=ex_tot_bal;
+					}else{
+						lMax50_num[7]=ex_tot_count;
+						dMax50_bal[7]=ex_tot_bal;						
+					}
+					lTot_num[7]=lMin50_num[7]+lMax50_num[7];
+					dTot_amt[7]=dMin50_bal[7]+dMax50_bal[7];
+				}else{
+					vtcp_log("产品类型错误![%s]",__FILE__,__LINE__,ex_type);
+					goto ErrExit;
+				}
+        	}
+        	EXEC SQL CLOSE sel1_sigl_data;
+        	/* 境内存款 */
+			lMin50_num[0]=lMin50_num[1]+lMin50_num[2]+lMin50_num[5]+lMin50_num[8];
+			dMin50_bal[0]=dMin50_bal[1]+dMin50_bal[2]+dMin50_bal[5]+dMin50_bal[8];  
+			lMax50_num[0]=lMax50_num[1]+lMax50_num[2]+lMax50_num[5]+lMax50_num[8];
+			dMax50_bal[0]=dMax50_bal[1]+dMax50_bal[2]+dMax50_bal[5]+dMax50_bal[8];
+			lTot_num[0]=lTot_num[1]+lTot_num[2]+lTot_num[5]+lTot_num[8];	
+			dTot_amt[0]=dTot_amt[1]+dTot_amt[2]+dTot_amt[5]+dTot_amt[8];
+			/* 境外存款 */        	
+			lMin50_num[9]=lMin50_num[10]+lMin50_num[11]+lMin50_num[12];
+			dMin50_bal[9]=dMin50_bal[10]+dMin50_bal[11]+dMin50_bal[12];  
+			lMax50_num[9]=lMax50_num[10]+lMax50_num[11]+lMax50_num[12];
+			dMax50_bal[9]=dMax50_bal[10]+dMax50_bal[11]+dMax50_bal[12];
+			lTot_num[9]=lTot_num[10]+lTot_num[11]+lTot_num[12];
+			dTot_amt[9]=dTot_amt[10]+dTot_amt[11]+dTot_amt[12];
+			/*高级管理人员存款 20150706 BY WYW */
+			ex_tot_count=0;
+			ex_tot_bal=0.00;
+			lDate=g_pub_tx.tx_date;
+			/*
+			EXEC SQL select sum(bal+intst) ,count(distinct cif_no) into :ex_tot_bal,:ex_tot_count from cif_payable_intst_reg where end_date=:lDate and opn_br_no='32001'
+ and ac_id in ('100000991','100000992','100000994','100000999','100000993','100000995','100000997','100000996','100000998','100015898','100006809','100001000') and bal<=500000.00;
+			*/
+			/*将获取高管的方式改造为根据客户号查询*/
+			EXEC SQL select sum(bal+intst) ,count(distinct cif_no) into :ex_tot_bal,:ex_tot_count from cif_payable_intst_reg where end_date=:lDate and cif_no in(select to_number(val) from com_parm where parm_code='GGID') and bal<=500000.00;
+			if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+			{
+				vtcp_log("%s,%d,统计高管金额错误![%ld]",__FILE__,__LINE__,sqlca.sqlcode);
+				goto ErrExit;
+			}
+			lMin50_num[13]=ex_tot_count;
+			dMin50_bal[13]=ex_tot_bal;
+			ex_tot_count=0;
+			ex_tot_bal=0.00;
+			EXEC SQL select sum(bal+intst) ,count(distinct cif_no) into :ex_tot_bal,:ex_tot_count from cif_payable_intst_reg where end_date=:lDate and cif_no in(select to_number(val) from com_parm where parm_code='GGID') and bal>500000.00;
+			if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+			{
+				vtcp_log("%s,%d,统计高管金额错误![%ld]",__FILE__,__LINE__,sqlca.sqlcode);
+				goto ErrExit;
+			}
+			lMax50_num[13]=ex_tot_count;
+			dMax50_bal[13]=ex_tot_bal;
+			lTot_num[13]=lMin50_num[13]+lMax50_num[13];
+			dTot_amt[13]=dMin50_bal[13]+dMax50_bal[13];
+			/* 被保险存款 */
+			dTot_amt[14]=dTot_amt[0]+dTot_amt[9]-dTot_amt[8]-dTot_amt[12]-dTot_amt[13];	
+			/* 其中：受保存款 */
+			dTot_amt[15]=dMin50_bal[0]+dMin50_bal[9]-dMin50_bal[8]-dMin50_bal[12]-dMin50_bal[13]+500000*(lMax50_num[0]+lMax50_num[9]-lMax50_num[8]-lMax50_num[12]-lMax50_num[13]);
+			vtcp_log("%s,%ld,被保险额度[%lf][%lf][%lf][%lf]",__FILE__,__LINE__,dTot_amt[15],dTot_amt[0],dTot_amt[9],dTot_amt[8],dTot_amt[12]);			
+			/* 应交纳保费金额 20150707每次按36分之一计算*/
+			dTot_amt[16]=dTot_amt[14]* fee_rate/36;
+			fprintf(fp,"								投保机构存款账户统计表\n");
+			fprintf(fp,"	填表单位：%-60.60s					数据日期:%ld	\n\n",com_branch_c.br_name,sComSysParm.lst_date);
+			fprintf(fp,"	┌──────────────┬──────────────—┬───────────────┬─────────────——┐\n");
+			fprintf(fp,"	│                            │         合      计           │        金额≤50万元          │          金额>50万元         │\n");  
+			fprintf(fp,"	├──────────────┼────┬────────——┼────┬──────────┼────┬─—————————┤\n");
+			fprintf(fp,"	│         项    目           │  户  数│      金额(元)      │ 户  数 │      金额(元)      │ 户  数 │      金额(元)      │\n");  
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			memset(&sMax50_num,0x00,sizeof(sMax50_num));
+			memset(&sMin50_num,0x00,sizeof(sMin50_num));
+			memset(&sTot_num,0x00,sizeof(sTot_num));
+
+			for(i=0;i<18;i++)
+			{
+				if(lTot_num[i]==0)
+				{
+					memset(sTot_num[i],' ',8);
+				}else{
+					sprintf(sTot_num[i],"%ld",lTot_num[i]);
+				}
+				if(lMax50_num[i]==0)
+				{
+					memset(sMax50_num[i],' ',8);
+				}else{
+					sprintf(sMax50_num[i],"%ld",lMax50_num[i]);
+				}
+				if(lMin50_num[i]==0)
+				{
+					memset(sMin50_num[i],' ',8);
+				}else{
+					sprintf(sMin50_num[i],"%ld",lMin50_num[i]);
+				}								
+			}
+			if(pub_base_CompDblVal(dTot_amt[0],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[0]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[0],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[0]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[0],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[0]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}
+			fprintf(fp,"	│一、境内存款                │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[0],sTmp_str[0],sMin50_num[0],sTmp_str[1],sMax50_num[0],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 个人存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[1],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[1]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[1],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[1]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[1],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[1]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}							
+			fprintf(fp,"	│（一）个人存款              │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[1],sTmp_str[0],sMin50_num[1],sTmp_str[1],sMax50_num[1],sTmp_str[2]);
+      fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");			
+      /* 对公存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[2],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[2]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[2],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[2]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[2],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[2]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│（二）单位存款              │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[2],sTmp_str[0],sMin50_num[2],sTmp_str[1],sMax50_num[2],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[3],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[3]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[3],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[3]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[3],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[3]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│      其中：住房公积金存款  │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[3],sTmp_str[0],sMin50_num[3],sTmp_str[1],sMax50_num[3],sTmp_str[2]);	
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 其中：社保基金存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[4],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[4]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[4],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[4]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[4],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[4]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│            社保基金存款    │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[4],sTmp_str[0],sMin50_num[4],sTmp_str[1],sMax50_num[4],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* （三）财政性存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[5],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[5]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[5],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[5]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[5],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[5]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│（三）财政性存款            │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[5],sTmp_str[0],sMin50_num[5],sTmp_str[1],sMax50_num[5],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 1.国库定期存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[6],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[6]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[6],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[6]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[6],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[6]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│     1.国库定期存款         │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[6],sTmp_str[0],sMin50_num[6],sTmp_str[1],sMax50_num[6],sTmp_str[2]);	
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 2.代理财政性存款 */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[7],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[7]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[7],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[7]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[7],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[7]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│     2.代理财政性存款       │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[7],sTmp_str[0],sMin50_num[7],sTmp_str[1],sMax50_num[7],sTmp_str[2]);	
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 	（四）非存款类金融机构存款  */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[8],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[8]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[8],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[8]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[8],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[8]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│（四）非存款类金融机构存款  │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[8],sTmp_str[0],sMin50_num[8],sTmp_str[1],sMax50_num[8],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 		│二、境外存款                │  */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[9],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[9]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[9],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[9]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[9],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[9]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│二、境外存款                │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[9],sTmp_str[0],sMin50_num[9],sTmp_str[1],sMax50_num[9],sTmp_str[2]);
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/* 	│（一）个人存款              │*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[10],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[10]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[10],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[10]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[10],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[10]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│（一）个人存款              │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[10],sTmp_str[0],sMin50_num[10],sTmp_str[1],sMax50_num[10],sTmp_str[2]);	
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/*	│（二）单位存款              │*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[11],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[11]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[11],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[11]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[11],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[11]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}
+			fprintf(fp,"	│（二）单位存款              │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[11],sTmp_str[0],sMin50_num[11],sTmp_str[1],sMax50_num[11],sTmp_str[2]);	
+			fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/*	│（三）境外同业存放  */
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[12],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[12]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[12],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[12]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[12],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[12]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}			
+			fprintf(fp,"	│（三）境外同业存放          │%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[12],sTmp_str[0],sMin50_num[12],sTmp_str[1],sMax50_num[12],sTmp_str[2]);
+      fprintf(fp,"	├──────────────┼────┼─────────—┼────┼──────────┼────┼────────——┤\n");
+			/*	│三、高级管理人员在本机构存款│*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[13],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[13]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			if(pub_base_CompDblVal(dMin50_bal[13],0.00))
+			{
+				sprintf(sTmp_str[1],"%.2lf",dMin50_bal[13]);
+				pub_rpt_flttomon( sTmp_str[1],sTmp_str[1] );
+			}else{
+				strcpy(sTmp_str[1]," ");
+			}
+			if(pub_base_CompDblVal(dMax50_bal[13],0.00))
+			{
+				sprintf(sTmp_str[2],"%.2lf",dMax50_bal[13]);
+				pub_rpt_flttomon( sTmp_str[2],sTmp_str[2] );
+			}else{
+				strcpy(sTmp_str[2]," ");
+			}
+			fprintf(fp,"	│三、高级管理人员在本机构存款│%8.8s│%20.20s│%8.8s│%20.20s│%8.8s│%20.20s│\n",sTot_num[13],sTmp_str[0],sMin50_num[13],sTmp_str[1],sMax50_num[13],sTmp_str[2]);	
+      fprintf(fp,"	├──────────────┼────┴─────────—┴────┴──────────┴────┴────────——┤\n");
+			fprintf(fp,"	│        附     报           │                                    金额（元）                                                │ \n"); 
+			fprintf(fp,"	├──────────────┼───────────────────────────────────────────────┤\n");					
+			/*	│一、被保险存款*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[14],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[14]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}		
+			fprintf(fp,"	│一、被保险存款              │                                    %20.20s                                      │\n",sTmp_str[0]);	
+			fprintf(fp,"	├──────────────┼───────────────────────────────────────────────┤\n");					
+
+			/*		│      其中：受保存款        │*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[15],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[15]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}
+			fprintf(fp,"	│      其中：受保存款        │                                    %20.20s                                      │\n",sTmp_str[0]);	
+			fprintf(fp,"	├──────────────┼───────────────────────────────────────────────┤\n");					
+
+			/*		│     二、应交纳保费金额         │*/
+			memset(&sTmp_str,0x00,sizeof(sTmp_str));
+			if(pub_base_CompDblVal(dTot_amt[16],0.00))
+			{
+				sprintf(sTmp_str[0],"%.2lf",dTot_amt[16]);
+				pub_rpt_flttomon( sTmp_str[0],sTmp_str[0] );
+			}else{
+				strcpy(sTmp_str[0]," ");
+			}		
+			fprintf(fp,"	│      二、应交纳保费金额    │                                    %20.20s                                      │\n",sTmp_str[0]);	
+			fprintf(fp,"	└──────────────┴───────────────────────────────────────———————─┘\n");
+			fclose(fp);
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成存款投保机构账户信息成功![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	if(fp != NULL)
+		fclose(fp);
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成存款投保机构账户信息表失败![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

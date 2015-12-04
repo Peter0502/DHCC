@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111111100000000000000000000" TITLE="5537  批量扣税交易税种税目明细查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+        commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5537                   批量扣税交易税种税目明细查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+    if(#DOLIST!=''){
+        dim  @tota as string;
+        dim  @selid as number;
+        dim  @taxorgcode as string;
+        dim  @wtdate as string;
+        dim  @tranno  as string;
+        dim  @filename  as string;
+        dim  @flag  as number;
+        @selid=list_work();
+        @selid=list_getselid();
+        if(@selid &lt; 0){
+            return(false);
+        }
+        @tranno=list_gettext(@selid,0);
+        @taxorgcode=list_gettext(@selid,2);
+        @wtdate=list_gettext(@selid,1);
+        //showmsg(@tranno);
+        //showmsg(#CFX_NO);
+        //showmsg(#TAX_ORG_CODE);
+        //@filename='CFX_SZDTL.XML';
+        //@flag=msgbox('是否查询税种?','提示','yes|no');
+        //if(@flag==0){
+         //   open(@filename,'#TXBRNO='+#TX_BR_NO+';#ENTRUSTDATE='+@wtdate+';#TAXORGCODE='+@taxorgcode+';#TRANO='+@tranno+';#CFXNO='+#CFX_NO+';');
+          //  return(true);
+        if(@flag==1){
+            list_del();
+            rerun();
+            return(true);
+        }else{
+            return(false);
+        }
+    }
+    list_del();
+    #DOLIST='';
+    return(true);
+  }"</ONLOSTFOCUS></ITEM>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9422)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="8"  COL="25" TYPE="%-14s" FUNCTIONS="T(交 易  机 构:)"/>
+  <ITEM LINE="9"  COL="25" TYPE="%-14s" FUNCTIONS="T(接 收  日 期:)"/>
+  <ITEM LINE="10" COL="25" TYPE="%-14s" FUNCTIONS="T(征税机关代码:)"/>
+  <ITEM LINE="11" COL="25" TYPE="%-14s" FUNCTIONS="T(交 易  类 型:!)"/>
+  <ITEM LINE="12" COL="25" TYPE="%-14s" FUNCTIONS="T(交 易  状 态:!)"/>
+
+  <!--输入变量-->
+  <ITEM NAME="#INIT" TYPE="%-1s" FUNCTIONS="">
+        <ONLOSTFOCUS>"{
+                if($KINBR=='50001')
+                {
+                   enable(#TX_BR_NO,true);
+                }
+        "}</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TX_BR_NO" LINE="8" COL="39" TYPE="%-5s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#ENTRUST_DATE" LINE="9" COL="39" TYPE="%8d"   INPUT="TEXT" FUNCTIONS="T($HDATE)D()V(NB)"/>
+  <ITEM NAME="#TAX_ORG_CODE" LINE="10" COL="39" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="T()"/>
+  <ITEM NAME="#CFX_NO" LINE="11" COL="39" TYPE="%-4s" INPUT="SELECT" FUNCTIONS="T(3001)">
+    <SELECT LINE="11" COL="40">
+    <OPTION VALUE="3001"  TITLE="3001.实时扣税交易"/>    
+    <OPTION VALUE="3102"  TITLE="3102.批量扣税交易"/>    
+    <OPTION VALUE="1008"  TITLE="1008.银行自缴款交易"/>    
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#KSSTAT" LINE="12" COL="39" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)">
+     <SELECT LINE="12"   COL="40" >
+    <OPTION VALUE="0"    TITLE="0.正式接收"/>
+    <OPTION VALUE="1"    TITLE="1.扣税成功"/>
+    <OPTION VALUE="2"    TITLE="2.扣税失败"/>
+    <OPTION VALUE="3"    TITLE="3.被冲正或止付"/> 
+    </SELECT>
+  </ITEM>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#RETSTAT" TYPE="%-4s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+    dim @tota as string;
+    initfd();
+    commsend_001();
+    $FD44=#ENTRUST_DATE;
+    $FD61=#TAX_ORG_CODE;
+    $FD36=#CFX_NO;
+    $FD98=#KSSTAT;
+    $FD91=#TX_BR_NO;
+    $FD16=$TXNO;
+    @tota=calltips();    
+    if($FD12 != '0000')
+    {
+       showmsg(geterror());
+       return(false);
+    }
+    if(autolist(@tota))
+    {
+    }
+    #DOLIST='1';
+  }"
+ </ONCLICK></ITEM>
+    
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容" >
+    NOTHING
+    </PACKAGE>
+</RESPONSE>
+</TRANSACTION>

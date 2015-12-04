@@ -1,0 +1,103 @@
+/***************************************************************************************
+*交易名称: bctl--->com_branch的过渡
+*文件名称: sp3701.pc
+*
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070118
+*
+***************************************************************************************/
+#define ERR_DEAL if(ret) { \
+		 	sprintf(acErrMsg,"sql error.[%d]  [%s]--[%d]",ret,__FILE__,__LINE__);\
+			WRITEMSG  \
+			goto ErrExit; \
+			}
+#define EXTERN
+#include "public.h"
+#include "bctl_c.h"
+#include "com_branch_c.h"
+
+int sp3701()
+{
+	int ret=0;
+	int cnt=0;
+	int count=0;
+	int brnum=50000;
+	char tmp[6];
+	struct bctl_c sBctl;
+	struct com_branch_c sCom_branch;
+
+	memset(&sBctl,0x00,sizeof(struct bctl_c));
+	memset(&sCom_branch,0x00,sizeof(struct com_branch_c));
+
+	pub_base_sysinit();
+
+	count=sql_count("bctl"," 1=1");
+	ret=Bctl_Dec_Sel(g_pub_tx.reply," order by brno");	
+	ERR_DEAL
+	while(1)
+	{/*1 while*/
+		memset(&sBctl,0x00,sizeof(struct bctl_c));
+		ret=Bctl_Fet_Sel(&sBctl,g_pub_tx.reply);
+		ERR_DEAL
+		/*初始化com_branch*/
+		sCom_branch.wrk_sts[0]='2';
+		sCom_branch.ipaddr[0]='#';
+		sCom_branch.ind[0]='0';
+		sCom_branch.city_no=0;
+		memcpy(sCom_branch.spe_ind,"0000000000",10);
+		memcpy(sCom_branch.up_br_no,"50000",sizeof(sCom_branch.up_br_no));	
+		sCom_branch.tx_type=0;
+		memcpy(sCom_branch.br_name,sBctl.brname,sizeof(sBctl.brname));
+
+		if(sBctl.ficode[0] == '1')
+		{
+			memcpy(sCom_branch.br_no,"50000",5);
+			sCom_branch.br_type[0]='6';
+		}
+		else if(sBctl.ficode[0] == '2')
+		{
+			memcpy(sCom_branch.br_no,"50001",5);
+			sCom_branch.br_type[0]='1';
+		}
+		else if(sBctl.ficode[0] == '3')
+		{
+			brnum+=100;
+			sprintf(tmp,"%d",brnum);	
+			memcpy(sCom_branch.br_no,tmp,sizeof(sCom_branch.br_no));
+			sCom_branch.br_type[0]='4';
+		}	
+		ret=Com_branch_Ins(sCom_branch,g_pub_tx.reply);
+		ERR_DEAL
+		cnt++;
+		memset(&sCom_branch,0x00,sizeof(struct com_branch_c));
+	}/*2 while*/
+	ret=Bctl_Clo_Sel();
+	ERR_DEAL
+	cnt++;
+		sCom_branch.wrk_sts[0]='2';
+		sCom_branch.ipaddr[0]='#';
+		sCom_branch.ind[0]='0';
+		sCom_branch.city_no=0;
+		memcpy(sCom_branch.spe_ind,"0000000000",10);
+		memcpy(sCom_branch.up_br_no,"50000",sizeof(sCom_branch.up_br_no));	
+		sCom_branch.tx_type=0;
+		memcpy(sCom_branch.br_name,"科技科",6);
+		memcpy(sCom_branch.br_no,"59999",5);
+		sCom_branch.br_type[0]='0';
+	vtcp_log("共有[%d]条记录[%s]--[%d]",count,__FILE__,__LINE__);	
+	vtcp_log("插入[%d]条记录.[%s]--[%d]",cnt,__FILE__,__LINE__);	
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

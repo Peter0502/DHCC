@@ -1,0 +1,227 @@
+<TRANSACTION RIGHTS="11110000" TITLE="5330 支付拼包交易)"
+ xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='5870';
+	$FD67=#PACKCD;
+	$FD23=#PKGNO;
+	$FD53=#PACKID;
+	$FD44=#WTDAY;
+	$FD50=#HZDATE;
+	$FD62=#TMPBUFF;
+	$FD54=#ORDERNO1;
+	$FD55=#ORDERNO2;
+	$FD68=#ORDERSEL;
+	$FD69=#PACKEND;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+ 	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5330                            普通业务拼包交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <item NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5870)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"   COL="15"  TYPE="%-13s"  FUNCTIONS="T(拼 包  方 式:!)"/>
+  <ITEM LINE="7"   COL="15"  TYPE="%-13s"  FUNCTIONS="T(包   类   型:!)"/>
+  <ITEM LINE="11"  COL="15"  TYPE="%-13s" FUNCTIONS="T(接收清算行号:)"/>
+  <ITEM LINE="15"  COL="15"  TYPE="%-13s" FUNCTIONS="T(交易序号范围:!)"/>
+  <ITEM LINE="16"  COL="15"  TYPE="%-13s" NAME="#SHOWSNO"  FUNCTIONS="T(起 始  序 号:)"/>
+  <ITEM LINE="17"  COL="15"  TYPE="%-13s" NAME="#SHOWENO"  FUNCTIONS="T(结 束  序 号:)"/>
+  <ITEM LINE="19"  COL="15"  TYPE="%-14s" FUNCTIONS="T(拼包结束标志:)"/>
+
+
+  <ITEM NAME="#TOTAL_AMT" TYPE="%16.2f" FUNCTIONS=""/>
+  <ITEM NAME="#PACKCD_DES"	TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM LINE="6" COL="28" NAME="#PACKCD" TYPE="%1d"  DEVICE="KAYBOARD" FUNCTIONS="T(0)V(NB)">
+	<SELECT LINE="6" COL="28">
+		<OPTION VALUE="0" TITLE="0.生成新包"/>
+		<OPTION VALUE="1" TITLE="0.添加到原有包"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		if(#PACKCD=='0')
+		{
+			show(#LPACKID,false);
+			show(#PACKID,false);
+			show(#LWTDAY,false);
+			show(#WTDAY,false);
+			#PACKCD_DES = '生成新包';
+		}
+		else
+		{
+			show(#LPACKID,true);
+			show(#PACKID,true);
+			show(#LWTDAY,true);
+			show(#WTDAY,true);
+			#PACKCD_DES = '添加到原有包';
+		}
+	}"
+     </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7" COL="28" NAME="#PKGNO" TYPE="%3d"  DEVICE="KAYBOARD" FUNCTIONS="T(001)V(NB)">
+	<SELECT LINE="7" COL="28">
+		<OPTION VALUE="001" TITLE="0.普通贷记业务"/>
+		<OPTION VALUE="002" TITLE="0.普通借记业务"/>
+		<OPTION VALUE="005" TITLE="0.定期贷记业务"/>
+		<OPTION VALUE="006" TITLE="0.定期借记业务"/>
+		<OPTION VALUE="007" TITLE="0.贷记退汇业务"/>
+		<OPTION VALUE="012" TITLE="0.通用信息业务"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+ "{
+      if(#PKGNO=='002' and #PACKCD=='0' or #PKGNO=='006' and #PACKCD=='0'){
+		   show(#LHZDATE,true);
+		   show(#LHZDATE2,true);
+		   show(#HZDATE,true);
+	  }
+	  else{
+	       show(#LHZDATE,false);
+	       show(#LHZDATE2,false);
+           show(#HZDATE,false);
+	  }
+ }"
+     </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#PKGNO_DES" TYPE="%-20s"  FUNCTIONS="j(#PKGNO=001,T{普通贷记业务})j(#PKGNO=002,T{普通借记业务})j(#PKGNO=005,T{定期贷记业务})j(#PKGNO=006,T{定期借记业务})j(#PKGNO=007,T{贷记退汇业务})j(#PKGNO=012,T{通用信息业务})"/>
+
+  
+  <ITEM LINE="9"   COL="15"  TYPE="%-13s" NAME="#LPACKID" VISABLE="FALSE" INPUT = "LABEL" FUNCTIONS="T(拼 包  序 号:)"/>
+  <ITEM LINE="10"  COL="15"  TYPE="%-13s" NAME="#LWTDAY" VISABLE="FALSE" INPUT = "LABEL" FUNCTIONS="T(拼 包  日 期:)"/>
+  <ITEM LINE="9" COL="28" NAME="#PACKID"  DEVICE="KEYBOARD" TYPE="%8d" VISABLE="FALSE"  INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="28" NAME="#WTDAY"  DEVICE="KEYBOARD" TYPE="%8d" VISABLE="FALSE"  INPUT="TEXT" FUNCTIONS="D()V(NB)"/>
+  <ITEM NAME="#TXCNT" TYPE="%4s"  FUNCTIONS=""/>
+  <ITEM NAME="#TOTAMT" TYPE="%13.2f"  FUNCTIONS="J(#TOTAMT1)"/>
+  <ITEM NAME="#TOTAMT1" TYPE="%16s"  FUNCTIONS="X(#TOTAMT)"/>
+  <ITEM NAME="#PACKDAY" TYPE="%8d"  FUNCTIONS=""/>
+   <ITEM NAME="#OPERLEVEL"  TYPE="%1d"  FUNCTIONS="T(0)"/>
+   <ITEM NAME="#AAA" TYPE="%1d"  FUNCTIONS="T(0)j(#PKGNO=002,T{1})j(#PKGNO=006,T{1})">
+   <ONLOSTFOCUS>
+  "{
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CASHQSACTNO" LINE="11" COL="28" DEVICE="KEYBOARD" TYPE="%12s"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+   	   dim @baktxno as string;
+	   @baktxno=$TXNO;
+	   $TXNO='9553';
+	   $FD32=#CASHQSACTNO;
+	   commsend_001();
+	   callserver();
+	   $TXNO=@baktxno;
+	   if($FD12!='0000'){
+	  		showmsg(geterror());
+	   		return(false);
+	   }
+	   showhelp(3,70,13,3,'支付系统行名信息',substr($FD96,0,60));
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TMPBUFF" TYPE="%20s"  FUNCTIONS="T(#CASHQSACTNO)"/>
+  <ITEM NAME="#JUMP1" TYPE="%1d"  FUNCTIONS="T(0)j(#AAA=1,T{1}{0})G(0,#ORDERSEL)">
+   <ONLOSTFOCUS>
+  "{
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="13"  COL="15"  TYPE="%-13s" NAME="#LHZDATE" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(回 执  期 限:)"/>
+  <ITEM LINE="13"  COL="30"  TYPE="%-2s"  NAME="#LHZDATE2" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(天)"/>
+  <ITEM LINE="13" COL="28" NAME="#HZDATE"  DEVICE="KEYBOARD" TYPE="%2d"  VISABLE="FALSE" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="15" COL="29" NAME="#ORDERSEL" TYPE="%1d"  DEVICE="KAYBOARD" FUNCTIONS="T(1)V(NB)">
+	<SELECT LINE="14" COL="30">
+		<OPTION VALUE="1" TITLE="0.区间"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+      if(#ORDERSEL=='0'){
+	       show(#SHOWSNO,false);
+           show(#SHOWENO,false);
+		   show(#ORDERNO1,false);
+		   show(#ORDERNO2,false);
+		   }
+		   else{
+		   show(#SHOWSNO,true);
+		   show(#SHOWENO,true);
+		   show(#ORDERNO1,true);
+		   show(#ORDERNO2,true);
+		   }
+	  }"
+     </ONLOSTFOCUS>
+		   
+  </ITEM>
+
+  <ITEM NAME="#GO2" TYPE="%1d"  FUNCTIONS="G(#ORDERSEL=0,#PACKEND)"/>
+
+
+  <ITEM NAME="#ORDERNO1" LINE="16" COL="28" DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#ORDERNO2" LINE="17" COL="28" DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#PACKEND" TYPE="%1d" LINE="19" COL="29" DEVICE="KAYBOARD" FUNCTIONS="T(1)V(NB)">
+	<SELECT LINE="16" COL="29">
+		<OPTION VALUE="0" TITLE="0.拼包未结束"/>
+		<OPTION VALUE="1" TITLE="0.拼包已结束"/>
+	</SELECT>
+  </ITEM>
+
+
+  <!--输入项定义到这里结束-->
+
+<ITEM NAME="#MSG" TYPE="%-4s" FUNCTIONS="j($HCODE=0,T{}T{取消})"/>
+<ITEM LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="普通业务拼包交易成功">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(05,25,'普通业务拼包交易');
+		print(07,20,'接收清算行:[12]',#CASHQSACTNO);
+		print(08,20,'拼包  日期:[08]',$HDATE);
+		print(09,20,'拼包  序号:[12]',substr($FD53,2,8));
+		print(10,20,'包类  型号:[20]',#PKGNO_DES);
+		print(11,20,'起始  序号:[8]--[8]',#ORDERNO1,#ORDERNO2);
+		print(12,20,'拼包  笔数:[8]    包 金 额:[20]',$FD29,itoa(val($FD33,1),'%.2f'));
+		print(13,20,'交易  流水:[6]操作员:[4]',$FD4,$FD7);
+	}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证(普通业务拼包)">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+$KINDNO='00';
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:5330');
+	print( 5, 13,'交易:普通业务拼包交易');
+
+	print(07,20, '拼包  序号:[12         ]                     委托日期:[8       ]',substr($FD53,2,8),$HDATE);
+	print(08,20, '拼包  日期:[08      ]                        包类型号:[20]',$HDATE,#PKGNO_DES);
+	print(09,20, '接收清算行:[12         ]',#CASHQSACTNO);
+	print(10,20, '起始  序号:[8]--[8]',#ORDERNO1,#ORDERNO2);
+	print(11,20, '拼包  笔数:[8       ]                        包 金 额:[20]',$FD29,itoa(val($FD33,1),'%.2f'));
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+        }"
+</PRINT>
+</RESPONSE>
+
+
+</TRANSACTION>

@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4404   贷款放款交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+        $FD16 = '3104';
+        $MSGTYPE='03001';
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4404                      贷款放款交易 )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <PAGE NAME="DEFAULT">
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=3104)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  
+  <ITEM LINE="7"  COL="15" TYPE="%-12s"  FUNCTIONS="T(贷款帐号:)"/>
+  <ITEM LINE="9"     COL="15"  NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="9"     COL="45"  NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="10"  COL="15" TYPE="%-50s" FUNCTIONS="T(----------------------------------------------)"/>
+
+  <ITEM LINE="11" COL="15" TYPE="%-12s" FUNCTIONS="T(户      名:)"/>
+  <ITEM LINE="12" COL="15" TYPE="%-12s" FUNCTIONS="T(贷款现余额:)"/>
+  <ITEM LINE="13" COL="15" TYPE="%-12s" FUNCTIONS="T(计划放款额:)"/>
+  <ITEM LINE="14" COL="15" TYPE="%-12s" FUNCTIONS="T(累计放款额:)"/>
+  <ITEM LINE="17" COL="15" TYPE="%-12s" FUNCTIONS="T(本次发放额:)"/>
+
+  
+  <ITEM NAME="#CARDNO" INPUT="TEXT" LINE="7" COL="27" TYPE="%-20s" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @baktxno as string;
+	@baktxno=$TXNO;
+	$TXNO='9807';
+	$FD37 = #CARDNO;
+	$FD65 = '3104';
+	commsend_001();
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (false);
+	}
+	#CD34=$FD34;
+//	showmsg('#CD34=['+#CD34+']');
+	#AVL1 = ltrim(itoa(val($FD42,0.01),'%.2f'));
+	#AVL2 = ltrim(itoa(val($FD40,0.01),'%.2f'));
+	#AVL3 = ltrim(itoa(val($FD41,0.01),'%.2f'));
+
+	#PRVDAMT = (val($FD40,0.01)-val($FD41,0.01));
+	#USERNAME = $FD25 ;
+	#ACTNO = $FD106;
+	#PACT_NO = $FD63;
+	#TRUST_NO =$FD37;
+	show(#USERNAME,true);
+	show(#PRVDAMT,true);
+	show(#AVL1,true);
+	show(#AVL2,true);
+	show(#AVL3,true);
+
+	//给返回但界面没有用到得变量赋值
+	#CD50 = $FD50;
+	#CD66 = $FD66;
+	#CD81 = $FD81;
+	#CD109 = $FD109;
+	
+	#LYFD67 = $FD67;
+	#LYCD67 = #CD67;
+	if('3' == $FD67 and #CD67 != '3')
+	{
+		dim @tota as string;
+		dim @i as number;
+		commsend_001();
+		$FD16='9598';
+		$FD123='select count(*) from ln_gage_reg where ac_id in (select ac_id from mdm_ac_rel where ac_no='+chr(39)+#CARDNO+chr(39)+') and sts='+chr(39)+'X'+chr(39)+''; 
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@i=atoi(strfld(@tota,'|',0));
+		if(@i > 0)
+		{
+			showmsg('该帐号抵质押品还没入库');
+			open('4542.XML','#ACTNO='+#CARDNO+';');
+			#CD67 = '3';
+		}		
+	}
+	if('7' == $FD67 and #CD67 != '7')
+	{
+		dim @j as number;
+		@baktxno=$TXNO;
+		$TXNO='8994';
+		$FD31 = #CARDNO;/*帐号*/
+		$FD63 = #TRUST_NO;/*借据号*/
+		$FD86 =$OPNBR;
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		@j=atoi($FD84);
+		if(@j == 0)
+		{
+			showmsg('该帐号没有进行委托协议关联');
+			open('4507.XML','#WTBH='+#TRUST_NO+';');
+			#CD67 = '7';
+		}
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#CARDNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #CARDNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-20s" FUNCTIONS="" />
+  <ITEM LINE="9" COL="27" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#CARDNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#CARDNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM TYPE="%-20s" NAME="#PACT_NO" 	FUNCTIONS=""/>
+  <ITEM TYPE="%-20s" NAME="#TRUST_NO" FUNCTIONS=""/>
+  <ITEM LINE="11" COL="27" TYPE="%-60s" NAME="#USERNAME" INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="12" COL="27" TYPE="%-16s" NAME="#AVL1" INPUT="TEXT"  ENABLE="FALSE"  FUNCTIONS=""/>
+  <ITEM LINE="13" COL="27" TYPE="%-16s" NAME="#AVL2" INPUT="TEXT"  ENABLE="FALSE"  FUNCTIONS=""/>
+  <ITEM LINE="14" COL="27" TYPE="%-16s" NAME="#AVL3" INPUT="TEXT"  ENABLE="FALSE"  FUNCTIONS=""/>
+
+  <!---本次发放额---->
+  <ITEM NAME="#LYFD67" TYPE="%-1s" FUNCTIONS="" />
+  <ITEM NAME="#LYCD67" TYPE="%-1s" FUNCTIONS="" />
+  <!--modified by liuyong 2010-1-24 start-->
+  <!--添加抵质押入库和委托协议关联验证-->
+ <ITEM LINE="17" COL="27" TYPE="%17.2f" NAME="#PRVDAMT"   INPUT="TEXT" FUNCTIONS="V(0000000000000001,0009999999999999)J(#XPRVDAMT)">
+    <ONLOSTFOCUS>
+  "{
+      if('3' == #LYFD67)
+      {
+		dim @tota as string;
+		dim @baktxno as string;
+		dim @i as number;
+		commsend_001();
+		$FD16='9598';
+		$FD123='select count(*) from ln_gage_reg where ac_id in (select ac_id from mdm_ac_rel where ac_no='+chr(39)+#CARDNO+chr(39)+') and sts='+chr(39)+'X'+chr(39)+''; 
+		@tota=callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@i=atoi(strfld(@tota,'|',0));
+		if(@i > 0)
+		{
+			showmsg('该帐号抵质押品还没入库');
+			return(false);
+		}		
+	}
+      
+		if('7' == #LYFD67)
+		{
+		  dim @j as number;
+			@baktxno=$TXNO;
+			$TXNO='8994';
+			$FD31 = #CARDNO;/*帐号*/
+			$FD63 = #TRUST_NO;/*借据号*/
+			$FD86 =$OPNBR;
+			commsend_001();
+			callserver();
+			$TXNO=@baktxno;
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			@j=atoi($FD84);
+			if(@j == 0)
+			{
+	   	 	showmsg('该帐号没有进行委托协议关联');
+	    	return(false);
+	   }
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--modified by liuyong 2010-1-24 end-->
+  <ITEM TYPE="%-16s" NAME="#XPRVDAMT" FUNCTIONS="X(#PRVDAMT)"/>
+
+  
+  <ITEM LINE="21" COL="49"  TYPE="%-6s" FUNCTIONS="T(下一页)" INPUT="BUTTON">
+    <ONCLICK>"{
+        loadpage('PAGE2');
+    }"
+    </ONCLICK>
+  </ITEM>
+  </PAGE>
+  
+
+  <PAGE NAME="PAGE2">
+  <BLOCK NAME="44041_PGE2" LINE="6" COL="5" VISABLE="FALSE">
+	<IMPORT>44041.IMP</IMPORT>
+  </BLOCK>
+
+  <ITEM LINE="21" COL="49"  TYPE="%-6s" FUNCTIONS="T(上一页)" INPUT="BUTTON">
+    <ONCLICK>"{
+        loadpage('DEFAULT');
+        }"
+    </ONCLICK>
+  </ITEM>
+  </PAGE>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s"   FUNCTIONS=""/>
+  <ITEM NAME="#CD50"   TYPE="%-3s"   FUNCTIONS=""/>
+    <ITEM NAME="#CD34"   TYPE="%-4s"   FUNCTIONS=""/>
+
+  <ITEM NAME="#CD66"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#CD67"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#CD81"   TYPE="%-50s"  FUNCTIONS=""/>
+  <ITEM NAME="#CD109"  TYPE="%-270s" FUNCTIONS=""/>
+  <ITEM NAME="#FD119_4" TYPE="%-16s" FUNCTIONS="T(0000000000000000)"/>
+
+  <ITEM NAME="#YEAR" TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)">
+	<ONLOSTFOCUS>
+	"{
+        dim @baktxno as string;
+        commsend_001();
+        $MSGTYPE='03001';
+        @baktxno=$TXNO;
+        //$TXNO = '9986';
+        $FD12 = '3104';
+        $FD21 = #BIZHONG;
+        $FD25 = #USERNAME;
+				//不清楚是什么值？？
+			 	$FD34 = #FD101_14;
+				//$FD34 = '0200';
+        $FD37 = #CARDNO;
+        $FD39 = space(16);
+        $FD40 = itoa(val(#AVL2,100),'%016d'); 	//计划放款额
+        $FD41 = itoa(val(#AVL3,100),'%016d'); 	//累计放款额
+        $FD42 = itoa(val(#AVL1,100),'%016d'); 	//贷款现余额
+        $FD43 = itoa(val(#XPRVDAMT,100),'%016d'); 	//本次发放额
+        $FD50 = #CD50;
+        $FD58 = #FD101_5;	//凭证号
+        $FD65 = '3104';
+        $FD66 = #CD66;
+        $FD81 = #CD81;
+        $FD89 = #VOCTYPE;	//凭证种类
+        #FD101_11='2';//转帐
+ 				$FD101 = getitems('#FD101_1#FD101_2#PRVDAMT#VOCTYPE#FD101_5#FD101_6#FD101_7#FD101_8#FD101_9#FD101_10#FD101_11#FD101_12#FD101_13#FD101_14#FD101_15');
+				//$FD101 = getitems('#FD101_1#FD101_2#FD101_3#PRVDAMT#FD101_5#FD101_6#FD101_7#FD101_8#FD101_9#FD101_10#FD101_11#FD101_12#FD101_13#FD101_14#FD101_15');
+        $FD106 = #ACTNO;
+        $FD109 = #CD109;
+        $FD119 = getitems('#BIZHONG#VOCTYPE#FD101_5#FD119_4');
+        commsend_001();
+        //callserver();
+        //$TXNO=@baktxno;
+        //if($FD12!='0000')
+        //{
+        //    showmsg(geterror());
+        //    return(false);
+        //}
+
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+
+  <ITEM NAME="#CONFIRM"  LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+
+
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER"  LINESPACE="20" DESC="打印放款凭证">
+		LNFFJF|@type|@actno|@jjhm|@custname|@protname|@txamt|@opdate|@endate|@avbal|@llfk||@rate|@overate|@fxrate|@fkactno|@hkactno|@acno|@wssrno
+    </PACKAGE>
+    <PRINT>
+"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print( 5,20,'	                                     贷款放款借方凭证 ');
+print( 6,20,'           交易日期: [10          ] [8]                                  流 水 号: [6      ]', $FD5,@txtime, $FD4);
+print( 7,20,'┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+print( 8,20,'┃  机构名称: [30                            ]                                                  ┃', $BRNAME);
+print( 9,20,'┃  贷款账号: [20                  ]                        借 据 号: [20                  ]      ┃', @actno, @jjhm);
+print(10,20,'┃  户    名: [60                                                          ]                    ┃', @custname);
+print(11,20,'┃  产品名称: [40                                      ]    科 目 号: [8        ]                  ┃', @protname, @acno);
+print(12,20,'┃--------------------------------------------------------------------------------------------┃');
+print(13,20,'┃  交易金额: ￥[16                ]                                                              ┃',ltrim(comma(@txamt,16)));
+print(14,20,'┃--------------------------------------------------------------------------------------------┃');
+print(15,20,'┃  起止日期:  [8         ]   到   [8        ]                                                       ┃',@opdate,@endate);
+print(16,20,'┃  合同利率(月): [11          ]  逾期利率(月): [11         ]  罚息利率(月): [11         ]           ┃', @rate, @overate, @fxrate);
+print(17,20,'┃  贷款余额：[16              ]                                                                ┃', ltrim(comma(@avbal,16)));
+print(18,20,'┃  累计发放额：[16              ]                                                              ┃', ltrim(comma(@llfk,16)));
+print(19,20,'┃  放款账号：[21                   ]                       还款账号: [21                   ]     ┃', @fkactno,@hkactno);
+print(20,20,'┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+print(21,20,'             会    计:                    复    核:                      记    帐:  [4      ]', $FD7);
+ }"
+</PRINT>
+</RESPONSE>    
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+		LNFFCK|@actno|@custname|@type|@txamt
+    </PACKAGE>
+    <PRINT>"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:4404');
+        print( 5, 13,'交易:贷款放款交易');
+        print( 7, 20,'存款帐号: [19]',@actno);
+        print( 8, 20,'户    名: [60]',@custname);
+        print( 9, 20,'[8]: [16]',@type,ltrim(comma(@txamt,16)));
+        printacdtl_1();
+        print_sq();
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+       }"
+    </PRINT>
+</RESPONSE>
+<LASTWORK>"{
+}"
+</LASTWORK>
+</TRANSACTION>

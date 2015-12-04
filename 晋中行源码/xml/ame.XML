@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3502 支取密码维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD30=getitems('#ACTNO24');  // 账号
+	$FD62=getitems('#CERTNO');   // 证件号码
+	$FD67=getitems('#OLDPWDFLAG');   // 密码标志
+	$FD68=getitems('#CERTTYPE');   // 证件类型
+	$FD79=getitems('#OLD_DRAW_PWD');   // 原支取密码
+	$FD102=space(49)+getitems('#NEW_DRAW_PWD')+space(323);	 
+	 // FD1027:新支取密码 (注：后台为1027，实际应为8583中的FD1028)
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3502                          支取密码维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2602)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM NAME="#CERTNO20"   TYPE="%-20s"  DEVICE="KEYBOARD"  FUNCTIONS=""/> 
+  <ITEM LINE="6"  COL="25" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="35" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+    	$TXNO='9734';
+    	$FD30=#ACTNO;
+    	commsend_001();
+    	callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	setitems('#ACTNO24',$FD30);
+    	setitems('#OLDPWDFLAG',$FD67);    	
+    	setitems('#OLDPWDCHANGEFLAG',$FD70);  
+        #CERTTYPE = $FD68;
+        #CERTNO20 = $FD62;
+    	showblock('CERTINFO1',true,true); 
+    	showblock('PWDINFO',true,true);	 
+        showblock('NEWPWDINFO',false,false);
+        
+     	if(#OLDPWDFLAG=='Y')
+    	{
+    		 show(#LOLD_DRAW_PWD,true);
+    		 show(#OLD_DRAW_PWD,true);
+    	}
+    	else
+    	{
+    		 show(#LOLD_DRAW_PWD,false);
+    		 show(#OLD_DRAW_PWD,false);
+    	}
+    	 if (#CERTTYPE == ' ')
+        {
+          #CERTTYPE='1';
+        } 
+	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+   <ITEM NAME="#ACTNO24"            TYPE="%-24s" FUNCTIONS=""/>
+   <ITEM NAME="#OLDPWDCHANGEFLAG"   TYPE="%-1s"  FUNCTIONS=""/>
+       
+   <BLOCK NAME="CERTINFO1" LINE="8" COL="0" VISABLE="FALSE">  
+   <ITEM LINE="0"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(---------------------------【检验申请信息】-------------------------------)"/>
+   <ITEM LINE="2"  COL="15"  NAME="#LCERTTYPE" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)" /> 
+   <ITEM LINE="2"  COL="25"  NAME="#CERTTYPE"  INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="">
+    	<SELECT>
+    		<OPTION VALUE="1" TITLE="身份证"/>
+    		<OPTION VALUE="2" TITLE="户口簿"/>		
+    		<OPTION VALUE="3" TITLE="护照"/>		
+    		<OPTION VALUE="4" TITLE="军官证"/>		
+    		<OPTION VALUE="5" TITLE="回乡证"/>	
+    		<OPTION VALUE="6" TITLE="居住证"/>
+    		<OPTION VALUE="7" TITLE="驾照"/>		
+    		<OPTION VALUE="8" TITLE="企业代码证"/>		
+    		<OPTION VALUE="9" TITLE="组织机构号"/>		
+    		<OPTION VALUE="A" TITLE="营业执照"/>			
+    		<OPTION VALUE="B" TITLE="经营许可证"/>
+    		<OPTION VALUE="C" TITLE="事业法人证书"/>				
+    	</SELECT>
+  </ITEM> 
+  
+  <ITEM LINE="2"  COL="45" NAME="#LCERTNO"  TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件号码:)" /> 
+  <ITEM LINE="2"  COL="55" NAME="#CERTNO"   TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+     if(#CERTNO!=rtrim(#CERTNO20)){
+       showmsg('输入的证件号码与原登记证件号码不同');
+       return(false);
+     }
+  }"</ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK> 
+ 
+  <ITEM LINE="12"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(-----------------------------------------------------------------------)"/>
+  <BLOCK NAME="PWDINFO" LINE="14" COL="25" VISABLE="FALSE"> 
+      <ITEM  LINE="0"  COL="0" NAME="#LOLDPWDFLAG" TYPE="%-10s"  FUNCTIONS="T(密码支取:!)"/> 
+      <ITEM  NAME="#OLDPWDFLAG" LINE="0"  COL="10"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="">
+    	<SELECT>
+      		<OPTION VALUE="Y" TITLE="0.是"/>	
+      		<OPTION VALUE="N" TITLE="1.否"/>		
+    	</SELECT>
+    	<ONLOSTFOCUS>"{
+    	    if(#OLDPWDFLAG=='Y')
+         	{
+         	    if(#OLDPWDCHANGEFLAG=='2')
+         	    {
+         	        showblock('NEWPWDINFO',true,true);
+         	        showblock('CERTINFO',true,true);         	        
+         	    }	 
+        	 }
+        	 else
+        	 {
+          	      showblock('NEWPWDINFO',false,false); 
+         	        showblock('CERTINFO',false,false);          	        	 
+        	 }
+      }"
+      </ONLOSTFOCUS>
+      </ITEM>  	   
+
+      <ITEM  LINE="2"  COL="0" NAME="#LOLD_DRAW_PWD" TYPE="%-10s"  FUNCTIONS="T(原 密 码: )"  />	   
+      <ITEM  LINE="2"  COL="9" NAME="#OLD_DRAW_PWD"  TYPE="%6d"  DEVICE="PINPAD" INPUT="TEXT"  FUNCTIONS="V(NB)i()" > 
+      <ONLOSTFOCUS>"{
+         	dim @baktxno as string;
+
+        	@baktxno=$TXNO;
+        	
+        	commsend_001();        	
+        	$FD16='9735';
+        	$FD30=#ACTNO24;
+        	$FD79=#OLD_DRAW_PWD;     
+     	   	
+        	callserver();
+        	$TXNO=@baktxno;
+        	if($FD12!='0000'){
+        		showmsg(geterror());
+        		return(false);
+        	}
+        	
+       	  if(#OLDPWDFLAG=='Y')
+         	{      
+         	        showblock('NEWPWDINFO',true,true);  
+         	}         	
+         }"
+      </ONLOSTFOCUS>
+       </ITEM> 
+  </BLOCK>
+
+  <BLOCK NAME="NEWPWDINFO" LINE="18" COL="25" VISABLE="FALSE">
+      <ITEM  LINE="0"  COL="0" NAME="#LNEW_DRAW_PWD" TYPE="%-15s"  FUNCTIONS="T(请输入新的密码:)"/> 
+      <ITEM  LINE="0"  COL="15" NAME="#NEW_DRAW_PWD"  TYPE="%6d"  DEVICE="PINPAD" INPUT="TEXT"  FUNCTIONS="V(NB)I()i()">
+	  <ONLOSTFOCUS>
+	  "{
+		if(#NEW_DRAW_PWD == #OLD_DRAW_PWD)
+		{
+			showmsg('您没做任何改动!');
+			return(false);
+		}
+	  }"
+	  </ONLOSTFOCUS>
+	  </ITEM>
+  </BLOCK>
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="支取密码维护成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print(8, 25,'支 取 密 码 维 护 成 功 ！');
+		print(14,15,'操 作 员:[4]',$FD7);
+	  print(14,15,'流 水 号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+	dim @mima as string;
+	if(#OLDPWDFLAG=='Y')
+	{
+	   @mima='更改';
+	}
+	else
+	{
+	  @mima='撤销';
+	}
+		print(3, 30,'[7]       [30]',$KINBR,$BRNAME);
+		print(4, 30,'密 码 维 护');
+		print(5, 15,'帐    号:[20]',#ACTNO);
+		print(6, 15,'密码状态:[20]',@mima);
+		print(8, 40,'客户签字:');
+		print(14,15,'操 作 员:[4]',$FD7);
+	  print(14,15,'流 水 号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+</TRANSACTION>
+

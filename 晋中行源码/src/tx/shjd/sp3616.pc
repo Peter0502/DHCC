@@ -1,0 +1,135 @@
+/******************************************************************************
+*交易名称：事后监督差错管理                                                   *
+*函数名称：sp3616()   vvv                                                    *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：      2007-1-16 9:36                                               *
+*修改日期：                                                                   *
+*数据库表:        sherrmsg                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "sherrmsg_c.h"
+EXEC SQL INCLUDE sqlca;
+
+
+int sp3616()
+{
+  int ret=0,i=0,epu=0;
+	struct sherrmsg_c sherrmsg;
+	char txday[9];
+	char cErrmsq[9];
+	char    message[2];
+	char		errmsg[13];
+	char		getmoneyday[9];
+	char    cErrmsg[101];
+  FILE *fp=NULL;
+  char filename[256];
+	memset(&sherrmsg,0x00,sizeof(struct sherrmsg_c));
+  memset(txday,0x00,sizeof(txday));
+  memset(cErrmsq,0x00,sizeof(cErrmsq));
+  memset(message,0x00,sizeof(message));
+  memset(errmsg,0x00,sizeof(errmsg));
+  memset(getmoneyday,0x00,sizeof(getmoneyday));
+  memset(filename,0x00,sizeof(filename));
+  memset(cErrmsg ,0 , sizeof(cErrmsg));
+  
+  pub_base_sysinit();
+  get_fd_data("0440",txday);
+  vtcp_log("[%s][%d]txday==[%s]",__FILE__,__LINE__,txday);
+  ret=Sherrmsg_Dec_Sel(g_pub_tx.reply,"txday='%s' order by tlrno,wssrno",txday);
+  ERR_DEAL
+  vtcp_log("[%s][%d]",__FILE__,__LINE__);
+	i = 0;
+	while(1)
+	{
+		  memset(cErrmsg,0,sizeof(cErrmsg));
+		ret=Sherrmsg_Fet_Sel(&sherrmsg,g_pub_tx.reply);	
+    		if(ret==100) break;
+    		ERR_DEAL
+	      if(!i)
+		{
+			pub_base_AllDwnFilName( filename );
+			fp = fopen( filename,"w" );
+			if( fp==NULL )
+			{
+			  vtcp_log("[%s][%d]",__FILE__,__LINE__);
+			sprintf(acErrMsg," open file [%s] error ",filename );
+			WRITEMSG
+			strcpy( g_pub_tx.reply,"S047" );
+			goto ErrExit;
+			}
+			/**显示列标题**/
+			fprintf( fp,"~交易日期|交易机构|操作柜员|交易流水|交易名称|差错级别|差错信息|差错日期|\n" );
+		  }
+		epu = atoi(sherrmsg.errseq);
+		switch(epu)
+		{
+			case 0:
+				memcpy(cErrmsq,"暂无级别",sizeof(cErrmsq)-1);
+				break;
+			case 1:
+				memcpy(cErrmsq,"一级错误",sizeof(cErrmsq)-1);
+				break;
+			case 2:
+				memcpy(cErrmsq,"二级错误",sizeof(cErrmsq)-1);
+				break;
+			case 3:
+				memcpy(cErrmsq,"三级错误",sizeof(cErrmsq)-1);
+				break;
+			case 4:
+				memcpy(cErrmsq,"查询查复",sizeof(cErrmsq)-1);
+				break;
+			default:
+				goto ErrExit;
+		}
+		 memcpy(cErrmsg,sherrmsg.errmsg,sizeof(cErrmsg)-1);
+      memset(message,0x00,sizeof(message));
+	memcpy(message,cErrmsg+4,sizeof(message)-1);
+	vtcp_log("[%s][%d]message======[%s]\n",__FILE__,__LINE__,message);
+	if(message[0] == '1')
+	{
+          memset(errmsg,0x00,sizeof(errmsg));
+          memcpy(errmsg,"已发差错通知",sizeof(errmsg)-1);
+      }
+      memset(getmoneyday,0x00,sizeof(getmoneyday));
+      vtcp_log("[%s][%d]errmsg==[%s]",__FILE__,__LINE__,errmsg);
+	memcpy(getmoneyday,cErrmsg+1,sizeof(getmoneyday)-1);
+	vtcp_log("[%s][%d]getmoneyday==[%s]",__FILE__,__LINE__,getmoneyday);
+    fprintf(fp,"%s|%s|%s|%s|%s|%s|%s|%s|\n",txday,sherrmsg.kinbr,sherrmsg.tlrno,sherrmsg.wssrno,sherrmsg.tranname,cErrmsq,errmsg,getmoneyday);	
+	i++;
+	}
+	 ret=Sherrmsg_Clo_Sel();
+	 ERR_DEAL
+	 if( !i )
+	{
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1" );
+	}
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

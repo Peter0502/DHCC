@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4201 对公存款业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	$FD39='                ';
+	commsend_001();
+	commsend_101();
+}"
+</COMMSEND>
+<COMMRECV>"{
+//	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(1113                    压力测试)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  
+  <ITEM LINE="10"   COL="15" TYPE="%-14s" FUNCTIONS="T(打开进程数:)"/>
+  <ITEM LINE="10"  COL="29" NAME="#PCOUNT" TYPE="%6d" INPUT="TEXT"  FUNCTIONS="T()"/>
+  <ITEM LINE="12"   COL="15" TYPE="%-14s" FUNCTIONS="T(单进程交易数:)"/>
+  <ITEM LINE="12"  COL="29" NAME="#PDO" TYPE="%6d" INPUT="TEXT"  FUNCTIONS="T()"/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @time1 as string;
+	dim @time2 as string;
+	dim @ans as string;
+	@time1=time();
+	@time1=substr(@time1,0,2)+':'+substr(@time1,2,2)+':'+substr(@time1,4,2);
+	commsend_001();
+	//下面组测试报文
+	$FD12='0000';
+	//$FD40='0000000000754118';
+	$FD16='9998';
+	//////////////////
+	callserver_tclt(val(#PCOUNT),val(#PDO));
+	showmsg('请稍候...',2);
+	sleep(5);
+	showmsg('按任意键停止跟踪',2);
+	while(true ){
+		if(list_tclt()){
+			list_show();
+			if(getchar(100)!=''){
+				showfooter();
+				list_work();
+				@ans=showmsg('q.退出跟踪 x.查看错误 其他继续');
+				if(@ans=='q'){
+					break;
+				}else if(@ans=='x'){
+					call('fview ../tmp/testerror');
+					continue;
+				}else{
+					showmsg('按任意键停止跟踪',2);
+					continue;
+				}
+			}	
+		}
+	}
+	@time2=time();
+	@time2=substr(@time2,0,2)+':'+substr(@time2,2,2)+':'+substr(@time2,4,2);
+	showmsg('测试结束,开始时间:'+@time1+',结束时间:'+@time2);
+  }"
+  </ONCLICK>
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>
+

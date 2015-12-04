@@ -1,0 +1,1341 @@
+#include "find_debug.h" 
+/*
+ *	交易代码		:
+ *	交易名称		:日终撤并所
+ *	源文件名		:gD093.ec
+ *	作    者		:power
+ *	日    期		:2004/08/29
+ *	功能描述		:
+ *					1.取入口参数，初始化处理
+ *					2.获取网点信息，汇总行信息
+ *					3.检查撤并所条件
+ *					4.如果变换帐号，产生新旧帐号对照表
+ *					5.处理各种登记簿
+ *					6.处理各种分户帐和流水
+ *					7.为并所后新网点接收数据做准备 
+ *	修 改 人		:
+ *	修改日期		:
+ *	修改内容		:
+ */
+
+#define EXTERN
+#include <stdio.h>  
+#include "public.h"
+
+EXEC SQL INCLUDE sqlca;
+EXEC SQL INCLUDE "com_branch.h";
+EXEC SQL INCLUDE "com_sys_parm.h";
+EXEC SQL INCLUDE "ass_gl.h";
+
+#define ERR_DEAL {WRITEMSG goto ErrExit;}
+#define ERRSQL(x) if(sqlca.sqlcode) { \
+				  sprintf(acErrMsg,"SQL %s code=%d ERROR",x,sqlca.sqlcode); \
+				  strcpy(g_pub_tx.reply,"0232"); \
+				  ERR_DEAL }
+
+EXEC SQL BEGIN DECLARE SECTION;
+	static struct com_sys_parm pubxtcs;
+	static struct com_branch old_branch;						/*撤所所号*/
+	static struct com_branch new_branch;						/*并所所号*/
+	static struct com_branch old_up_branch;						/*撤所汇总所号*/
+	static struct com_branch new_up_branch;						/*并所汇总所号*/
+	static int    num;
+	static char   old_ass_br_no[10];
+	static char   new_ass_br_no[10];
+	static struct ass_gl ass_old;
+	static struct ass_gl ass_new;
+	static char   opn_br_no[6];
+	static char   tx_br_no[6];
+	static double tx_amt1;
+	static int    flag;
+EXEC SQL  END  DECLARE SECTION;
+
+pubf_m_cbs()
+{
+	char filename[100];
+
+	/*** 系统初始化 ***/
+
+TRACE;
+vtcp_log("执行第一步");
+
+	/* 1.取入口参数，初始化处理 */
+	if ( cbs_init() ) ERR_DEAL
+TRACE;
+vtcp_log("执行第二步");
+
+	/* 2.获取网点信息，上级行信息 */
+	if ( cbs_get_info() ) ERR_DEAL
+TRACE;
+vtcp_log("执行第三步");
+
+	/* 3.检查撤并所条件 */
+	if ( cbs_chk_condition() ) ERR_DEAL
+
+TRACE;
+vtcp_log("执行第四步");
+	/* 4.如果变换帐号，产生新旧帐号对照表 */
+	/***
+	if ( cbs_crt_xjzh() ) ERR_DEAL
+	***/
+
+TRACE;
+vtcp_log("执行第五步");
+	/* 5.处理各种登记簿 */
+	if ( cbs_change_table() ) ERR_DEAL
+
+TRACE;
+vtcp_log("执行第六步");
+	/* 6.处理各种分户帐和流水 */
+	if ( cbs_change_fhz(&g_pub_tx,g_pub_tx.reply) ) ERR_DEAL
+
+TRACE;
+vtcp_log("执行第七步");
+	/* 7.为并所后新网点接收数据做准备 */
+	if ( cbs_newunit() ) ERR_DEAL
+	/* 8.将撤销所的各种期初值添加到并入所。年初季初月初 */
+	/**
+	if ( cbs_zzqcz() ) ERR_DEAL
+	**/
+TRACE;
+vtcp_log("执行第八步");
+
+/*正常出口*/
+	strcpy(g_pub_tx.reply,"0000");							/* 响应码 */
+	sprintf(acErrMsg,"Before OK return: g_pub_tx.reply is [%s]",g_pub_tx.reply);
+	vtcp_log(acErrMsg);
+	vtcp_log("撤并所交易成功!!");
+	set_zd_data ("0390",g_pub_tx.reply);
+	return (0);
+
+/*错误出口*/
+ErrExit:
+	vtcp_log("撤并所处理失败，事务回滚...!!");
+	sprintf(acErrMsg,"Before ER return: g_pub_tx.reply is [%s]",g_pub_tx.reply);
+	vtcp_log(acErrMsg);
+	vtcp_log("撤并所异常结束!!");
+	set_zd_data ("0390",g_pub_tx.reply);
+	return (1);
+}
+
+/* 1.取入口参数，初始化处理 */
+int cbs_init()
+{
+	vtcp_log("取入口参数...");
+
+	MEMSET_DEBUG(&pubxtcs,0x00,sizeof(struct com_sys_parm));
+	MEMSET_DEBUG(&old_branch,0x00,sizeof(struct com_branch));
+	MEMSET_DEBUG(&new_branch,0x00,sizeof(struct com_branch));
+	MEMSET_DEBUG(&old_up_branch,0x00,sizeof(struct com_branch));
+	MEMSET_DEBUG(&new_up_branch,0x00,sizeof(struct com_branch));
+	MEMSET_DEBUG(&ass_old, 0x00, sizeof(struct ass_gl ));
+	MEMSET_DEBUG(&ass_new, 0x00, sizeof(struct ass_gl ));
+	MEMSET_DEBUG(&opn_br_no,0x00,sizeof(opn_br_no));
+	MEMSET_DEBUG(&tx_br_no,0x00,sizeof(tx_br_no));
+
+	/* 初始化全局变量 */
+	pub_base_sysinit();
+
+	get_zd_data("0020",opn_br_no);					/*撤消所*/
+	get_zd_data("0030",tx_br_no);					/*并入所*/
+
+	vtcp_log(" 撤消所[%s] 并入所[%s]",opn_br_no,tx_br_no);
+	if( pub_base_GetSysparm(&pubxtcs,g_pub_tx.reply) )
+	{
+		sprintf(acErrMsg,"取系统参数错!!");
+		ERR_DEAL
+	}
+
+	vtcp_log("取入口参数完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+/* 2.获取网点信息，上级行信息 */
+int cbs_get_info()
+{
+	vtcp_log("获取网点信息...");
+	/*撤所网点信息*/
+	EXEC SQL SELECT * INTO :old_branch FROM com_branch WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检索撤所网点[%s]失败 [%d]",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"1401");						/*无此网点*/
+		ERR_DEAL
+	}
+
+	/*并所网点信息*/
+	EXEC SQL SELECT * INTO :new_branch FROM com_branch WHERE br_no=:tx_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检索并所网点[%s]失败[%d]",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"1401");						/*无此网点*/
+		ERR_DEAL
+	}
+
+
+	pub_base_strpack( old_branch.br_no );
+	pub_base_strpack( new_branch.br_no );
+	if ( !strcmp(old_branch.br_no,new_branch.br_no) )
+	{
+		sprintf(acErrMsg,"撤并网点相同!![%s]->[%s]",old_branch.br_no,new_branch.br_no);
+		strcpy(g_pub_tx.reply,"09B2");						/*无效的网点号*/
+		ERR_DEAL
+	}
+
+	/*撤所汇总网点信息*/
+	EXEC SQL SELECT * INTO :old_up_branch FROM com_branch WHERE br_no=:old_branch.up_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检索撤所汇总网点[%s]失败",old_branch.up_br_no);
+		strcpy(g_pub_tx.reply,"1608");						/*无法汇总*/
+		ERR_DEAL
+	}
+
+	/*并所汇总网点信息*/
+	EXEC SQL SELECT * INTO :new_up_branch FROM com_branch WHERE br_no=:new_branch.up_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"检索并所汇总网点[%s]失败",new_branch.up_br_no);
+		strcpy(g_pub_tx.reply,"1608");						/*无法汇总*/
+		ERR_DEAL
+	}
+
+	vtcp_log("获取网点信息完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+/* 3.检查撤并所条件 */
+int cbs_chk_condition()
+{
+	if ( cbs_chk_xtzt() ) ERR_DEAL						/*检查系统状态*/
+
+	if ( cbs_chk_czy() ) ERR_DEAL						/*检查柜员*/
+
+	if ( cbs_chk_unit() ) ERR_DEAL						/*检查网点*/
+
+	if ( cbs_chk_account() ) ERR_DEAL					/*检查内部帐*/
+
+
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_chk_xtzt()										/*检查系统状态*/
+{
+
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_chk_czy()										/*检查柜员*/
+{
+	vtcp_log("检查柜员信息...");
+	num=0;										/*签到操作员数量*/
+
+	/*检查柜员是否签到*/
+	EXEC SQL SELECT COUNT(*) INTO :num FROM com_tel 
+		WHERE br_no=:old_branch.br_no AND csts='0';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取操作员表错误!!!");
+		strcpy(g_pub_tx.reply,"0234");
+		ERR_DEAL
+	}
+	if ( num )
+	{
+		sprintf(acErrMsg,"尚有签到柜员[%d]人",num);
+		strcpy(g_pub_tx.reply,"0156");
+		set_zd_data("1210",acErrMsg);
+		ERR_DEAL
+	}
+
+	vtcp_log("检查柜员信息完成");
+
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_chk_unit()										/*检查网点*/
+{
+	vtcp_log("检查网点信息...");
+	vtcp_log("o.zt=[%s],n.zt=[%s]",old_branch.wrk_sts,new_branch.wrk_sts);
+	if ( old_branch.wrk_sts[0]=='1' || new_branch.wrk_sts[0]=='1' )
+	{
+		sprintf(acErrMsg,"网点处于签到状态 撤[%s] 并[%s]",old_branch.wrk_sts,new_branch.wrk_sts);
+		strcpy(g_pub_tx.reply,"0117");						/*此网点已签到*/
+		ERR_DEAL
+	}
+
+	if ( old_branch.br_type[0]!='3' && old_branch.br_type[0]!='4' && old_branch.br_type[0]!='5' )
+	{
+		sprintf(acErrMsg,"撤所网点[%s]非营业部 [%s]",old_branch.br_no,old_branch.br_type);
+		strcpy(g_pub_tx.reply,"P073");						/*对方网点非营业部*/
+		ERR_DEAL
+	}
+
+	if ( new_branch.br_type[0]!='3' && new_branch.br_type[0]!='4' && old_branch.br_type[0]!='5' )
+	{
+		sprintf(acErrMsg,"并所网点[%s]非营业部 [%s]",new_branch.br_no,new_branch.br_type);
+		strcpy(g_pub_tx.reply,"P073");						/*对方网点非营业部*/
+		ERR_DEAL
+	}
+	
+
+	vtcp_log("检查网点信息完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_chk_account()									/*检查内部帐*/
+{
+	vtcp_log("检查内部帐数据...");
+
+	/*检查现金*
+	EXEC SQL SELECT SUM(bal) INTO :tx_amt1:flag FROM  cash_mst
+		WHERE br_no=:old_branch.br_no ;
+	if ( sqlca.sqlcode ) 
+	{
+		sprintf(acErrMsg,"[%s]取现金台帐错!",old_branch.br_no);
+		strcpy(g_pub_tx.reply,"5M06");						*取现金台帐错*
+		ERR_DEAL
+	}
+	if ( flag ) tx_amt1=0.00;
+	if ( pub_base_CompDblVal(tx_amt1,0.0) )
+	{
+		sprintf(acErrMsg,"撤销所柜员有现金[%s] [%.2lf]",old_branch.br_no,tx_amt1);
+		strcpy(g_pub_tx.reply,"P057");						*交接柜员已有现金*
+		ERR_DEAL
+	}
+	****/
+	/*************/
+
+	tx_amt1=0.0;
+
+	/***
+	EXEC SQL SELECT SUM(cnt) INTO :num:flag FROM note_mst 
+		WHERE br_no=:old_branch.br_no ;
+	if ( sqlca.sqlcode ) 
+	{
+		sprintf(acErrMsg,"[%s]取内部帐错![%d]",old_branch.br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"5M06");						*取内部帐错*
+		ERR_DEAL
+	}
+	if ( flag ) num=0;
+	if ( num )
+	{
+		sprintf(acErrMsg,"有未上缴凭证[%d]",num);
+		strcpy(g_pub_tx.reply,"P025");						*部分凭证尚未上缴*
+		ERR_DEAL
+	}
+	****/
+
+	vtcp_log("检查内部帐数据完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+
+/* 4.如果变换帐号，产生新旧帐号对照表 */
+int cbs_crt_xjzh()
+{
+	vtcp_log("产生新旧帐号...");
+
+	/*建立临时表，为了产生新旧帐号方便*/
+
+	vtcp_log("产生对私新旧帐号...");
+	if ( cbs_crt_dsxjzh() ) ERR_DEAL					/*增加对私新旧帐号*/
+
+	vtcp_log("产生对公新旧帐号...");
+	if ( cbs_crt_dgxjzh() ) ERR_DEAL					/*增加对公新旧帐号*/
+
+	vtcp_log("产生贷款新旧帐号...");
+	if ( cbs_crt_dkxjzh() ) ERR_DEAL					/*增加贷款新旧帐号*/
+
+	vtcp_log("产生内部新旧帐号...");
+	if ( cbs_crt_nbxjzh() ) ERR_DEAL					/*增加内部新旧帐号*/
+
+	vtcp_log("产生新旧帐号完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_crt_dsxjzh()									/*增加对私新旧帐号*/
+{
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_crt_dgxjzh()									/*增加对公新旧帐号*/
+{
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_crt_dkxjzh()									/*增加贷款新旧帐号*/
+{
+	return 0;
+ErrExit:
+	return -1;
+}
+
+int cbs_crt_nbxjzh()									/*增加内部新旧帐号*/
+{
+	return 0;
+ErrExit:
+	return -1;
+}
+
+/* 5.处理各种登记簿 */
+int cbs_change_table()
+{
+	vtcp_log("正在处理各种登记簿...");
+
+	/** 冻结登记簿 **/
+
+	EXEC SQL UPDATE mo_hold SET hold_br_no=:tx_br_no 
+		WHERE hold_br_no=:opn_br_no AND hold_sts='0';	/** 未解除的修改交易机构 **/
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 挂失登记簿 **/
+
+	EXEC SQL UPDATE mo_loss SET opn_br_no=:tx_br_no,loss_br_no=:tx_br_no 
+		WHERE loss_br_no=:opn_br_no AND  unloss_ind='0';	/** 未解除的修改交易机构 **/
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 久悬登记簿 **/
+
+	EXEC SQL UPDATE mo_unchange SET tx_br_no=:tx_br_no 
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 贷款展期登记簿 **/
+
+	EXEC SQL UPDATE ln_expand SET exp_br_no=:tx_br_no 
+		WHERE exp_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 划款协议登记簿 **/
+
+	EXEC SQL UPDATE mo_prdt_prot SET tx_br_no=:tx_br_no 
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 划款协议账户对照表 **/
+
+	EXEC SQL UPDATE mo_prot_ac_rel SET tx_br_no=:tx_br_no
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 委托协议登记簿 **/
+
+	EXEC SQL UPDATE mo_trust_prot SET tx_br_no=:tx_br_no
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 凭证台帐 **/
+
+	EXEC SQL UPDATE note_mst SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 现金台帐 **/
+
+	EXEC SQL UPDATE cash_mst SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 虚拟子帐号台帐 **/
+
+	EXEC SQL UPDATE sub_dd_mst SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 虚拟子帐号明细帐 **/ /** 长沙要求修改明细帐 **/
+
+	EXEC SQL UPDATE sub_dd_mst_hst SET opn_br_no=:tx_br_no
+		WHERE opn_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	EXEC SQL UPDATE sub_dd_mst_hst SET tx_br_no=:tx_br_no
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 虚拟母帐号台帐 **/
+
+	EXEC SQL UPDATE up_dd_mst SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 虚拟母帐号明细帐 **/
+
+	EXEC SQL UPDATE up_dd_mst_hst SET opn_br_no=:tx_br_no
+		WHERE opn_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	EXEC SQL UPDATE up_dd_mst_hst SET tx_br_no=:tx_br_no
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 钱箱明细 **/ /** 是否修改钱箱明细 **/
+	EXEC SQL UPDATE cash_mst_hst SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 现金收付登记簿 **/
+
+	EXEC SQL UPDATE cash_book SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no AND ind in ('0','2'); /* ind 0：未取 1：已取 2：预开票；3预开票核销 **/
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 长短款登记簿 **/
+
+	EXEC SQL UPDATE mo_rmny_smny SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+
+	/** 开销户登记簿 **/
+	/** 下面处理 **
+	EXEC SQL UPDATE mo_opn_cls SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	******/
+
+	/** 捡拾登记薄 **/
+	/**
+	mo_coll 
+	*??*/
+
+	/** 柜员信息 **/
+
+	EXEC SQL UPDATE com_tel	SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 客户凭证台帐 **/
+
+	EXEC SQL UPDATE note_cheq_hst SET tx_br_no=:tx_br_no
+		WHERE tx_br_no=:opn_br_no AND cnt>0;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 贴现登记簿 **/
+
+	EXEC SQL UPDATE mo_discnt SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no AND sts<>'*';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 拆借登记簿 **/
+
+	EXEC SQL UPDATE mo_ibl SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no AND sts<>'*';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 投资登记簿 **/
+
+	EXEC SQL UPDATE mo_invest SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no  AND sts<>'*';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 权益性投资登记薄 **/
+
+	EXEC SQL UPDATE mo_righ_invest SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no AND  sts<>'*';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 证券回购协议登记薄 **/
+
+	EXEC SQL UPDATE mo_stok_rebuy_prot SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no AND sts<>'*';
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 保兑仓登记薄 **/
+
+	EXEC SQL UPDATE mo_sg_cash_po SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no ;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 银行承兑汇票基本信息登记薄 **/
+
+	EXEC SQL UPDATE mo_bank_acc_po SET tx_br_no =:tx_br_no
+		WHERE tx_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 银行汇票查询查复登记薄 **/
+
+	/** 0：等待查询； 1：查询返回；2：等待查复； 3：收到查复 **/
+	EXEC SQL UPDATE mo_po_qry SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no AND sts not in ('0','2'); 
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+
+	/** 银行承兑汇票登记薄 **/
+
+	/** 1：签发；2：核销；3：退票；4：托收 **/
+	EXEC SQL UPDATE mo_bank_po SET sign_br_no=:tx_br_no
+		WHERE sign_br_no=:opn_br_no AND po_sts<>'2'; 
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 银行本票 **/
+
+	EXEC SQL UPDATE mo_cashier SET sign_br_no=:tx_br_no 
+		WHERE sign_br_no=:opn_br_no AND cashier_sts<>'3';/* 0：录入；1：签发；2：付款；3：结清；4：退款 */
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 同城登记薄 **/
+
+	EXEC SQL UPDATE mo_city	SET tx_br_no=:tx_br_no 
+		WHERE tx_br_no =:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	EXEC SQL UPDATE mo_city SET payer_br_no=:tx_br_no
+		WHERE payer_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	EXEC SQL UPDATE mo_city SET payee_br_no=:tx_br_no
+		WHERE payee_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	 /***
+	 同城查询查复登记簿
+	 传真登记薄
+	 传真银行代码表
+	 委托清单
+	 ***/
+
+	/** 委托收款登记薄 **/
+
+	EXEC SQL UPDATE mo_trust_pay SET br_no=:tx_br_no 
+		WHERE br_no=:opn_br_no AND sts<>'2'; /** 1：登记；2：注销 **/
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 再贷款登记薄 ?? **
+	mo_again_ln br_no  
+	** 再贷款还款登记薄 ?? ** 
+	mo_pay_again_ln
+	** 20050829 ***/
+
+	/** 保函登记簿 **/
+
+	EXEC SQL UPDATE protect_note SET tx_br_no=:tx_br_no 
+		WHERE tx_br_no=:opn_br_no AND protect_sts <>'1'; /** 0、登记 1、销户 */
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 考核机构定义表 **/
+
+	EXEC SQL UPDATE ass_br_def SET sts='*' WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 考核总帐 **/ /** 检察是否为同一考核机构如果相同即不需处理，否则处理 */
+	EXEC SQL SELECT br_no INTO :old_ass_br_no FROM ass_br_def
+		WHERE sub_br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	EXEC SQL SELECT br_no INTO :new_ass_br_no FROM ass_br_def
+		WHERE sub_br_no=:tx_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	pub_base_strpack(old_ass_br_no);
+	pub_base_strpack(new_ass_br_no);
+	vtcp_log("old_ass_br_no=[%s] new_ass_br_no=[%s]",old_ass_br_no,new_ass_br_no);
+	if ( strcmp(old_ass_br_no,new_ass_br_no) )
+	{
+		EXEC SQL DECLARE old_ass_gl_cur CURSOR FOR 
+			SELECT * FROM ass_gl 
+			WHERE br_no=:old_ass_br_no
+			ORDER BY ass_code;
+
+		EXEC SQL OPEN old_ass_gl_cur;
+
+		EXEC SQL FETCH old_ass_gl_cur INTO :ass_old;
+
+		while(!sqlca.sqlcode)
+		{
+			EXEC SQL SELECT * INTO :ass_new FROM ass_gl
+				WHERE br_no=:new_ass_br_no AND ass_code=:ass_old.ass_code;
+			if ( sqlca.sqlcode && sqlca.sqlcode !=100 )
+			{
+				sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+				strcpy(g_pub_tx.reply,"0230");		
+				ERR_DEAL
+			}
+			vtcp_log(" 并[%s][%s][%s][%d]",
+				ass_old.br_no,ass_new.br_no,ass_old.ass_code,sqlca.sqlcode);
+			/** 新考核机构不存在  添加新的 **/
+			if ( sqlca.sqlcode == 100 )
+			{
+				strcpy(ass_old.br_no,ass_new.br_no);
+				EXEC SQL INSERT INTO ass_gl VALUES (:ass_old);
+				if ( sqlca.sqlcode )
+				{
+					sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+					strcpy(g_pub_tx.reply,"0230");		
+					ERR_DEAL
+				}
+			}
+			else
+			{	/** 如果存在，在对应字段添加上被并的那个 **/
+				ass_new.in_bal+=ass_old.in_bal;	
+				ass_new.out_bal+=ass_old.out_bal;	
+				ass_new.in_intst_bal+=ass_old.in_intst_bal;	
+				ass_new.out_intst_bal+=ass_old.out_intst_bal;	
+				ass_new.ldd_bal+=ass_old.ldd_bal;	
+				ass_new.lcd_bal+=ass_old.lcd_bal;	
+				ass_new.rdd_amt+=ass_old.rdd_amt;	
+				ass_new.rcd_amt+=ass_old.rcd_amt;	
+				ass_new.tddr_bal+=ass_old.tddr_bal;	
+				ass_new.tdcr_bal+=ass_old.tdcr_bal;	
+				ass_new.tddr_amt+=ass_old.tddr_amt;	
+				ass_new.tdcr_amt+=ass_old.tdcr_amt;	
+				ass_new.mdr_bal+=ass_old.mdr_bal;	
+				ass_new.mcr_bal+=ass_old.mcr_bal;	
+				ass_new.mdr_amt+=ass_old.mdr_amt;	
+				ass_new.mcr_amt+=ass_old.mcr_amt;	
+				ass_new.qdr_bal+=ass_old.qdr_bal;	
+				ass_new.qcr_bal+=ass_old.qcr_bal;	
+				ass_new.qdr_amt+=ass_old.qdr_amt;	
+				ass_new.qcr_amt+=ass_old.qcr_amt;	
+				ass_new.ydr_bal+=ass_old.ydr_bal;	
+				ass_new.ycr_bal+=ass_old.ycr_bal;	
+				ass_new.ydr_amt+=ass_old.ydr_amt;	
+				ass_new.ycr_amt+=ass_old.ycr_amt;	
+				EXEC SQL UPDATE ass_gl SET *=(:ass_new)
+					WHERE br_no=:ass_new.br_no AND ass_code=:ass_new.ass_code;
+				if ( sqlca.sqlcode )
+				{
+					sprintf(acErrMsg,"new_no=[%s][%d] ",ass_new.br_no,sqlca.sqlcode);
+					strcpy(g_pub_tx.reply,"0230");		
+					ERR_DEAL
+				}
+			}
+			EXEC SQL DELETE FROM ass_gl WHERE br_no=:ass_old.br_no and ass_code=:ass_old.ass_code;
+			if ( sqlca.sqlcode )
+			{
+				sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+				strcpy(g_pub_tx.reply,"0230");		
+				ERR_DEAL
+			}
+			MEMSET_DEBUG(&ass_old, 0x00, sizeof(struct ass_gl ));
+			MEMSET_DEBUG(&ass_new, 0x00, sizeof(struct ass_gl ));
+			EXEC SQL FETCH old_ass_gl_cur INTO :ass_old;
+		}
+		EXEC SQL CLOSE old_ass_gl_cur;
+		EXEC SQL FREE old_ass_gl_cur;
+
+	}
+	/**
+	* 考核主文件 *
+	**/
+
+	EXEC SQL UPDATE ass_mst SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	/*** 新旧帐号对照表 ***/
+	EXEC SQL UPDATE mo_merge_ac SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	/** 产品销售情况统计表 **/
+
+	/**
+	ass_prdt_sale_sta br_no sal_cnt 买出数量、合计发生数等字段累加到并入机构字段上
+	**/
+
+	/** 操作员业务量统计  **/
+	EXEC SQL UPDATE ass_tel_pflio_stat SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 揽存人业务量统计 **/
+	EXEC SQL UPDATE ass_cp_stat SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+
+	/** 客户经理业绩考核统计表 **/
+	EXEC SQL UPDATE ass_mger_ach_stat SET br_no=:tx_br_no
+		WHERE br_no=:opn_br_no;
+	if ( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"opn_br_no=[%s] [%d] ",opn_br_no,sqlca.sqlcode);
+		strcpy(g_pub_tx.reply,"0230");		
+		ERR_DEAL
+	}
+	/*****/
+
+	/** 预提利息登记簿 **/
+	/****
+	mo_put_intst opn_brno 
+
+	vtcp_log("处理 djajhkjhb ...");
+	EXEC SQL UPDATE djajhkjhb SET.opn_br_no=:new_branch.br_no WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djajhkjhb")
+
+	vtcp_log("处理 djbzj ...");
+	EXEC SQL UPDATE djbzj SET.opn_br_no=:new_branch.br_no WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djbzj")
+
+	vtcp_log("处理 djcdk ...");
+	EXEC SQL UPDATE djcdk SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djcdk")
+
+	vtcp_log("处理 djcj ...");
+	EXEC SQL UPDATE djcj SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djcj")
+
+	vtcp_log("处理 djcjls ...");
+	EXEC SQL UPDATE djcjls SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djcjls")
+
+	vtcp_log("处理 djpzzxh ...");
+	EXEC SQL DELETE FROM djpzzxh WHERE.opn_br_no=:old_branch.br_no;
+	ERRSQL("djpzzxh")
+
+	vtcp_log("处理 djdkffhs ...");
+	EXEC SQL UPDATE djdkffhs SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdkffhs")
+
+	vtcp_log("处理 djdkjemx ...");
+	EXEC SQL UPDATE djdkjemx SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdkjemx")
+
+	vtcp_log("处理 djdktx ...");
+	EXEC SQL UPDATE djdktx SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdktx")
+
+	vtcp_log("处理 djdkyq ...");
+	EXEC SQL UPDATE djdkyq SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdkyq")
+
+	vtcp_log("处理 djdkzq ...");
+	EXEC SQL UPDATE djdkzq SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdkzq")
+
+	vtcp_log("处理 djdkss ...");
+	EXEC SQL UPDATE djdkss SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdkss")
+
+	vtcp_log("处理 djdyzy ...");
+	EXEC SQL UPDATE djdyzy SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djdyzy")
+
+	vtcp_log("处理 djgyjykz ...");
+	EXEC SQL DELETE FROM djgyjykz WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djgyjykz")
+
+	vtcp_log("处理 djgyqx ...");
+	EXEC SQL DELETE FROM djgyqx WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djgyqx")
+
+	vtcp_log("处理 djk ...");
+	EXEC SQL UPDATE djk SET k.opn_br_no=:new_branch.opn_br_no 
+		WHERE k.opn_br_no=:old_branch.opn_br_no AND (substr(kzt,1,1)='0' OR substr(kzt,1,1)='B');
+	ERRSQL("djk")
+
+	vtcp_log("处理 djsfmx ...");
+	EXEC SQL UPDATE djsfmx SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE.opn_br_no=:old_branch.opn_br_no AND substr(bz,1,1)='0';
+	ERRSQL("djsfmx")
+
+	vtcp_log("处理 djtzjz ...");
+	EXEC SQL UPDATE djtzjz SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djtzjz")
+
+	vtcp_log("处理 djyyzc ...");
+	EXEC SQL UPDATE djyyzc SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE.opn_br_no=:old_branch.opn_br_no AND yxbz='1';
+	ERRSQL("djyyzc")
+
+	vtcp_log("处理 djzp ...");
+	EXEC SQL UPDATE djzp SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE.opn_br_no=:old_branch.opn_br_no AND bzsysl>0;
+	ERRSQL("djzp")
+
+	vtcp_log("处理 djwtxy ...");
+	EXEC SQL UPDATE djwtxy SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("djwtxy")
+
+	vtcp_log("处理 djwtdk ...");
+	EXEC SQL UPDATE djwtdk SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE.opn_br_no=:old_branch.opn_br_no AND bz='0';
+	ERRSQL("djwtdk")
+
+	vtcp_log("处理 fhdkmxz ...");
+	EXEC SQL UPDATE fhdkmxz SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("fhdkmxz")
+
+	vtcp_log("处理 fhdgckmxz ...");
+	EXEC SQL UPDATE fhdgckmxz SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("fhdgckmxz")
+
+	vtcp_log("处理 fhnbmxz ...");
+	EXEC SQL UPDATE fhnbmxz SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("fhnbmxz")
+
+	vtcp_log("处理 ckxjzhdzb ...");
+	EXEC SQL UPDATE ckxjzhdzb SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("ckxjzhdzb")
+
+	vtcp_log("处理 ggkmzdsxh ...");
+	EXEC SQL DELETE FROM ggkmzdsxh WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("ggkmzdsxh")
+
+	vtcp_log("处理 ggqdb ...");
+	EXEC SQL UPDATE ggqdb SET wdzt='*' WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("ggqdb")
+
+	vtcp_log("处理 khzhglb ...");
+	EXEC SQL UPDATE khzhglb SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("khzhglb")
+
+	vtcp_log("处理 tszhdzb ...");
+	EXEC SQL DELETE FROM tszhdzb WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("tszhdzb")
+
+	vtcp_log("处理 wbbbzhdzb ...");
+	EXEC SQL DELETE FROM wbbbzhdzb WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("wbbbzhdzb")
+
+	vtcp_log("处理 revcheck ...");
+	EXEC SQL UPDATE revcheck SET kinbr=:new_branch.opn_br_no WHERE kinbr=:old_branch.opn_br_no;
+	ERRSQL("revcheck")
+
+	vtcp_log("处理 cdatmf ...");
+	EXEC SQL UPDATE cdatmf SET cdatmsts='D' 
+		WHERE cdatmbr=:old_branch.opn_br_no OR cdatmsb=:old_branch.opn_br_no;
+	ERRSQL("cdatmf")
+
+	vtcp_log("处理 cdposf ...");
+	EXEC SQL UPDATE cdposf SET cdpossts='D' 
+		WHERE cdposbr=:old_branch.opn_br_no OR cdpossb=:old_branch.opn_br_no;
+	ERRSQL("cdposf")
+
+	vtcp_log("处理 stkfund ...");
+	EXEC SQL UPDATE stkfund SET opnbr=:new_branch.opn_br_no WHERE opnbr=:old_branch.opn_br_no;
+	ERRSQL("stkfund")
+
+	vtcp_log("处理 stkmetch ...");
+	EXEC SQL UPDATE stkmerch SET opnbr=:new_branch.opn_br_no WHERE opnbr=:old_branch.opn_br_no;
+	ERRSQL("stkmetch")
+
+	vtcp_log("处理 chrtmr ...");
+	EXEC SQL UPDATE chrtmr SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("chrtmr")
+
+	vtcp_log("处理 lxsshdzb ...");
+	EXEC SQL DELETE FROM lxsshdzb WHERE.opn_br_no1=:old_branch.opn_br_no;
+	ERRSQL("lxsshdzb");
+	EXEC SQL UPDATE lxsshdzb SET.opn_br_no2=:new_branch.opn_br_no WHERE.opn_br_no2=:old_branch.opn_br_no;
+	ERRSQL("lxsshdzb");
+
+	vtcp_log("处理 czhbal ...");
+	EXEC SQL UPDATE czhbal SET.opn_br_no=:new_branch.opn_br_no WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("czhbal");
+
+	vtcp_log("处理 dkjgkm ...");
+	EXEC SQL DELETE FROM jgkmb WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("dkjgkm");
+
+	vtcp_log("处理 ggnbtctd ...");
+	EXEC SQL DELETE FROM ggnbtctd WHERE.opn_br_no=:old_branch.opn_br_no;
+	ERRSQL("ggnbtctd");
+
+	vtcp_log("处理 xhdhhp ...");
+	EXEC SQL UPDATE xhdhhp SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE sqrzh IN ( SELECT xzh FROM xjzhdzb WHERE .opn_br_no=:old_branch.opn_br_no );
+	ERRSQL("xhdhhp");
+
+	vtcp_log("处理 djdj ...");
+	EXEC SQL UPDATE djdj SET d.opn_br_no=:new_branch.opn_br_no 
+		WHERE d.opn_br_no=:old_branch.opn_br_no AND ztbz='1' ;
+	ERRSQL("djdj");
+
+	vtcp_log("处理 djgs ...");
+	EXEC SQL UPDATE djgs SET g.opn_br_no=:new_branch.opn_br_no 
+		WHERE g.opn_br_no=:old_branch.opn_br_no and substr(kzxz,3,1)='0';
+	ERRSQL("djgs");
+
+	vtcp_log("处理 khjldmb ...");
+	EXEC SQL UPDATE khjldmb SET.opn_br_no=:new_branch.opn_br_no 
+		WHERE.opn_br_no=:old_branch.opn_br_no ;
+	ERRSQL("khjldmb");
+
+	vtcp_log("处理 djlxs ...");
+	EXEC SQL UPDATE djlxs SET dljg=:new_branch.opn_br_no 
+		WHERE dljg=:old_branch.opn_br_no ;
+	ERRSQL("djlxs");
+	EXEC SQL UPDATE djlxs SET khjg=:new_branch.opn_br_no 
+		WHERE khjg=:old_branch.opn_br_no ;
+	ERRSQL("djlxs");
+
+
+	vtcp_log("处理 zzczdtb 和 zzczdtbrz...");
+	PubJsrqM(g_pub_tx.jyrq,-1,&g_pub_tx.qxrq);
+
+	******* 柳州每月25号预提利息 *******
+	g_pub_tx.qxrq=g_pub_tx.qxrq/100*100+25;
+
+	EXEC SQL SELECT dqdbal INTO :g_pub_tx.je1 FROM zzczdtb
+	WHERE.opn_br_no=:old_branch.opn_br_no AND cz='01' and cq=0;
+	ERRSQL("zzczdtb");
+
+	EXEC SQL SELECT sum(dqdbal) INTO :g_pub_tx.je2 FROM zzczdtbrz 
+	WHERE.opn_br_no=:old_branch.opn_br_no AND cz='01' AND cq=0
+	AND rq>=:g_pub_tx.qxrq ;
+	ERRSQL("zzczdtbrz");
+
+	EXEC SQL UPDATE zzczdtb SET dqdbal=dqdbal+:g_pub_tx.je1+:g_pub_tx.je2 
+	WHERE.opn_br_no=:new_branch.opn_br_no AND cz='01' AND cq=0;
+	ERRSQL("zzczdtb");
+
+	EXEC SQL DELETE FROM  zzczdtbrz 
+	WHERE.opn_br_no=:old_branch.opn_br_no AND cz='01' AND cq=0
+	AND rq>=:g_pub_tx.qxrq;
+	ERRSQL("zzczdtbrz");
+
+	EXEC SQL DELETE FROM  zzczdtb
+	WHERE.opn_br_no=:old_branch.opn_br_no AND cz='01' AND cq=0;
+	ERRSQL("zzczdtb");
+	***/
+
+	vtcp_log("处理各种登记簿完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+/* 6.处理各种登记簿 */
+int cbs_change_fhz()
+{
+	vtcp_log("修改活期开销户记录...");
+
+	EXEC SQL UPDATE mo_opn_cls SET opn_br_no=:tx_br_no,
+		tx_brno=:tx_br_no WHERE tx_brno=:opn_br_no 
+		AND ac_id in (select ac_id from dd_mst where 
+		opn_br_no=:opn_br_no and ac_sts in ('0','1')) ;
+	ERRSQL("dd_mst mo_opn_cls")
+
+	vtcp_log("修改定期开销户记录...");
+
+	EXEC SQL UPDATE mo_opn_cls SET opn_br_no=:tx_br_no,
+		tx_brno=:tx_br_no WHERE tx_brno=:opn_br_no 
+		AND ac_id in (select ac_id from td_mst where 
+		opn_br_no=:opn_br_no and ac_sts in ('0','1')) ;
+	ERRSQL("td_mst mo_opn_cls ")
+
+	vtcp_log("修改贷款开销户记录...");
+
+	EXEC SQL UPDATE mo_opn_cls SET opn_br_no=:tx_br_no,
+		tx_brno=:tx_br_no WHERE tx_brno=:opn_br_no 
+		AND ac_id in (select ac_id from ln_mst where
+		opn_br_no=:opn_br_no and ac_sts in ('1','2','3','4','8')) ;
+	ERRSQL("ln_mst mo_opn_cls ")
+
+	vtcp_log("修改内部帐开销户记录...");
+
+	EXEC SQL UPDATE mo_opn_cls SET opn_br_no=:tx_br_no,
+		tx_brno=:tx_br_no WHERE tx_brno=:opn_br_no 
+		AND ac_id in (select ac_id from in_mst where 
+		opn_br_no=:opn_br_no and sts<>'*') ;
+	ERRSQL("in_mst mo_opn_cls ")
+
+	vtcp_log("处理活期主文件 ...");
+
+	EXEC SQL UPDATE dd_mst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet dd_mst ")
+
+	EXEC SQL UPDATE dd_mst_hst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet dd_mst_hst ")
+
+	vtcp_log("处理贷款主文件 ...");
+
+	EXEC SQL UPDATE ln_mst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet ln_mst ")
+
+	EXEC SQL UPDATE ln_mst_hst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet ln_mst_hst ")
+
+	vtcp_log("处理定期主文件 ...");
+
+	EXEC SQL UPDATE td_mst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet dd_mst ")
+
+	EXEC SQL UPDATE td_mst_hst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet dd_mst_hst ")
+
+	vtcp_log("处理内部帐主文件 ...");
+
+	EXEC SQL UPDATE in_mst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet in_mst ")
+
+	EXEC SQL UPDATE in_mst_hst SET opn_br_no=:tx_br_no 
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet in_mst ")
+
+	EXEC SQL UPDATE com_branch SET wrk_sts='*' 
+		WHERE br_no=:opn_br_no;
+	ERRSQL("updaet com_branch ")
+
+	vtcp_log("处理介质帐户对照表");
+	EXEC SQL UPDATE mdm_ac_rel SET opn_br_no=:tx_br_no
+		WHERE opn_br_no=:opn_br_no;
+	ERRSQL("updaet mdm_ac_rel ")
+
+	vtcp_log("处理各种分户帐完成");
+	return 0;
+ErrExit:
+	return -1;
+}
+
+/* 7.为并所后新网点接收数据做准备 */
+int cbs_newunit()
+{
+
+	return 0;
+ErrExit:
+	return -1;
+}
+
+
+/* 根据旧帐号获取新帐号(先根据bsh检索，再根据zh检索) */
+int cbs_getoldzh(char * oldzh,long oldbsh,struct xjzhdzb * newzh)
+{
+
+	return 0;
+ErrExit:
+	return -1;
+}
+cbs_zzqcz()
+{
+	return 0;
+
+ErrExit:
+
+	return 1;
+}

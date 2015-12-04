@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111111000000000000000000000" TITLE="5533  批量扣税来包查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(5533                      批量扣税来包查询)"/> 
+  <ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5554)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	dim @selid as number;
+	dim @tota as string;
+	dim @tota1 as string;
+	dim @wtdate as string;
+	dim @taxorgcode as string;
+	dim @packid as string;
+	//showmsg($KINBR);	
+	if(#DOLIST !='')
+	{
+		@tota1=getfiletxt('../tmp/'+$KINBR+$TTYNAME+'.backup');
+		if(autolist(@tota1)){
+			@selid=list_work();
+		}
+		if(@selid &lt; 0)
+		{
+			list_del();
+			rerun();
+			return(true);
+		}
+		@selid=list_getselid();
+                if(@selid &lt; 0)
+                {
+                        list_del();
+                        rerun();
+                        return(true);
+                 }
+		@wtdate = rtrim(list_gettext(@selid,0));
+		#ENTRUSTDATE=@wtdate;
+		@packid = rtrim(list_gettext(@selid,1));
+		#PACKNO = @packid;
+		@taxorgcode = rtrim(list_gettext(@selid,2));
+		#TAXORGCODE = @taxorgcode;
+		#DOLIST1='1';
+		//showmsg(@taxorgcode);
+		//showmsg(@wtdate);
+		//showmsg(@packid);
+		goitem(#DOLIST1);
+		return(true);
+		//initfd();
+		//commsend_001();
+		//$FD52=@taxorgcode;
+		//$FD44=@wtdate;
+		//$FD78=@packid;
+		//$FD72='1';
+		//@tota=callserver();
+		//if($FD12!='0000'){
+		//	showmsg(geterror());
+		//	return(false);
+		//}
+		//if(autolist(@tota)){
+		//	list_work();
+		//}
+		//return(true);
+	}
+	list_del();
+	#DOLIST='';
+}"
+</ONLOSTFOCUS>
+</ITEM>	
+  <ITEM NAME="#DOLIST1" TYPE="%-1s" FUNCTIONS="">
+	<ONLOSTFOCUS>"{
+		dim @tota as string;
+		if(#DOLIST1!=''){
+			initfd();
+			commsend_001();
+			$FD52=#TAXORGCODE;
+			$FD44=#ENTRUSTDATE;
+			$FD78=#PACKNO;
+			$FD91=$KINBR;  ///*****ADD BY ZHGF
+			$FD72='1';
+			@tota=calltips();
+			if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+			}
+			if(autolist(@tota)){
+				list_work();
+			}
+			#DOLIST1='';
+			goitem(#DOLIST);
+			return(true);
+		}
+	}"</ONLOSTFOCUS>
+   </ITEM>
+	
+  <!--输入变量-->
+  <ITEM  LINE="9" COL="30" TYPE="%-12s"  FUNCTIONS="T(批量包状态:)"/>
+  <ITEM LINE="11"  COL="30" TYPE="%-12s" INPUT="LABEL" NAME="#LB0"  FUNCTIONS="T(交易  机构:)"/>
+  <ITEM LINE="13"  COL="30" TYPE="%-12s" FUNCTIONS="T(接收  日期:)"/>
+  <ITEM LINE="15"  COL="30" TYPE="%-12s" FUNCTIONS="T(批量包序号:)"/>
+ 
+  <ITEM NAME="#BSTAT" 	INPUT="SELECT" 	LINE="9" COL="42" TYPE="%-1s" 	FUNCTIONS="T(0)">
+  <SELECT LINE="10"  COL="45">
+  		<OPTION VALUE="0" TITLE="0.全部"/>
+  		<OPTION VALUE="1" TITLE="1.行内正常接收"/>
+  		<OPTION VALUE="2" TITLE="2.行内回应9121通用应答"/> 		
+  		<OPTION VALUE="3" TITLE="3.已发2102扣税回执"/> 		
+  		<OPTION VALUE="4" TITLE="4.TIPS成功接收2102"/> 		
+  		<OPTION VALUE="5" TITLE="5.TIPS未成功接收2102"/> 		
+  		<OPTION VALUE="6" TITLE="6.TIPS正常处理2102"/> 		
+  		<OPTION VALUE="7" TITLE="7.TIPS未成功处理2102"/> 		
+  </SELECT>
+  <ONLOSTFOCUS>"{
+	if($KINBR=='50001'){
+		enable(#BR_NO,true);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BR_NO" LINE="11" COL="42"   ENABLE="FALSE" DEVICE="KEYBOARD" TYPE="%-5s"  FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#WTDATE" LINE="13" COL="42"  DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="T($HDATE)D()"/>
+  <ITEM NAME="#PACKID" LINE="15" COL="42"  DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS=""/>
+  <ITEM NAME="#TAXORGCODE"  TYPE="%-12s"  FUNCTIONS=""/>
+  <ITEM NAME="#ENTRUSTDATE" TYPE="%8d"    FUNCTIONS=""/>
+  <ITEM NAME="#PACKNO"      TYPE="%8d"    FUNCTIONS=""/>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @tota as string;
+	dim @offset as number;
+	dim @cnt as number;
+	dim @packlen as number;
+	dim @flag as string;
+	dim @id as number;
+	initfd();
+	commsend_001();
+ 	$FD16='5554';
+	$FD44=#WTDATE;
+	$FD67=#BSTAT;        // 包状态
+	$FD78=#PACKID;       // 包序号
+ 	$FD91=#BR_NO;
+ 	$FD72='0';
+	@tota=calltips();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME+'.backup',@tota);
+	#DOLIST='1';
+	}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+</TRANSACTION>
+

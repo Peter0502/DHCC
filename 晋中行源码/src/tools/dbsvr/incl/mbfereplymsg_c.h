@@ -1,0 +1,30 @@
+#ifndef __mbfereplymsg_CH__
+#define __mbfereplymsg_CH__
+struct mbfereplymsg_c{
+	char      rowid[20];
+	char      rplymsgno[9];
+	long      rplydate;
+	char      origquerymsgno[9];
+	char      odficenter[5];
+	char      isdficode[13];
+	char      rplybkcode[13];
+	char      rdficenter[5];
+	char      origqueryisdficode[13];
+	char      origquerybkcode[13];
+	long      origquerydate;
+	long      origconsigndate;
+	char      origodficode[13];
+	char      origrdficode[13];
+	char      origtxtype[2];
+	char      origtxssno[9];
+	double    origamount;
+	char      rplycontent[256];
+	char      rplyuser[5];
+	char      procstate[3];
+	char      statetime[15];
+	char      errcode[9];
+	char      errdesc[61];
+	long      printno;
+	char      rplysource[3];
+};
+#endif 

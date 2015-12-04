@@ -1,0 +1,314 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mas_hvcd_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mas_hvcd_con ( struct mas_hvcd_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mas_hvcd_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->trace_no);
+	zip_tail(ps->payficcode);
+	zip_tail(ps->payfictype);
+	zip_tail(ps->payer_name);
+	zip_tail(ps->payer_ac_no);
+	zip_tail(ps->payer_br_no);
+	zip_tail(ps->payer_type);
+	zip_tail(ps->payer_id_type);
+	zip_tail(ps->payer_id_no);
+	zip_tail(ps->payee_name);
+	zip_tail(ps->payee_type);
+	zip_tail(ps->payee_id_type);
+	zip_tail(ps->payee_id_no);
+	zip_tail(ps->cur_no);
+	zip_tail(ps->tx_amt);
+	zip_tail(ps->paydate);
+	zip_tail(ps->use);
+	zip_tail(ps->sttl_type);
+	zip_tail(ps->txcode);
+	zip_tail(ps->extend);
+}
+int Mas_hvcd_Debug(struct mas_hvcd_c *ps){
+	vtcp_log("mas_hvcd_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mas_hvcd_c.trace_no=[%s]\n",ps->trace_no);
+	vtcp_log("mas_hvcd_c.payficcode=[%s]\n",ps->payficcode);
+	vtcp_log("mas_hvcd_c.payfictype=[%s]\n",ps->payfictype);
+	vtcp_log("mas_hvcd_c.payer_name=[%s]\n",ps->payer_name);
+	vtcp_log("mas_hvcd_c.payer_ac_no=[%s]\n",ps->payer_ac_no);
+	vtcp_log("mas_hvcd_c.payer_br_no=[%s]\n",ps->payer_br_no);
+	vtcp_log("mas_hvcd_c.payer_type=[%s]\n",ps->payer_type);
+	vtcp_log("mas_hvcd_c.payer_id_type=[%s]\n",ps->payer_id_type);
+	vtcp_log("mas_hvcd_c.payer_id_no=[%s]\n",ps->payer_id_no);
+	vtcp_log("mas_hvcd_c.payee_name=[%s]\n",ps->payee_name);
+	vtcp_log("mas_hvcd_c.payee_type=[%s]\n",ps->payee_type);
+	vtcp_log("mas_hvcd_c.payee_id_type=[%s]\n",ps->payee_id_type);
+	vtcp_log("mas_hvcd_c.payee_id_no=[%s]\n",ps->payee_id_no);
+	vtcp_log("mas_hvcd_c.cur_no=[%s]\n",ps->cur_no);
+	vtcp_log("mas_hvcd_c.tx_amt=[%s]\n",ps->tx_amt);
+	vtcp_log("mas_hvcd_c.paydate=[%s]\n",ps->paydate);
+	vtcp_log("mas_hvcd_c.use=[%s]\n",ps->use);
+	vtcp_log("mas_hvcd_c.sttl_type=[%s]\n",ps->sttl_type);
+	vtcp_log("mas_hvcd_c.txcode=[%s]\n",ps->txcode);
+	vtcp_log("mas_hvcd_c.extend=[%s]\n",ps->extend);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mas_hvcd_Sel(reply,mas_hvcd_c,fmtstr,va_alist)
+char    *reply;
+struct  mas_hvcd_c *mas_hvcd_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mas_hvcd_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mas_hvcd_Fet_Sel( mas_hvcd_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mas_hvcd_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mas_hvcd_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mas_hvcd.* FROM mas_hvcd WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mas_hvcd_sel FROM :comm;
+	EXEC SQL DECLARE sel_mas_hvcd CURSOR FOR mas_hvcd_sel;
+
+	EXEC SQL OPEN sel_mas_hvcd;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mas_hvcd_Fet_Sel ( struct mas_hvcd_c *mas_hvcd_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mas_hvcd INTO :mas_hvcd_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mas_hvcd error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mas_hvcd finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mas_hvcd_c);
+
+	return 0;
+}
+
+int Mas_hvcd_Clo_Sel (){
+	EXEC SQL CLOSE sel_mas_hvcd;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mas_hvcd_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mas_hvcd.* FROM mas_hvcd WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mas_hvcd_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mas_hvcd CURSOR FOR mas_hvcd_upd;
+
+	EXEC SQL OPEN upd_mas_hvcd;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mas_hvcd_Fet_Upd( struct mas_hvcd_c *mas_hvcd_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mas_hvcd INTO :mas_hvcd_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mas_hvcd finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mas_hvcd_c);
+
+	return 0;
+}
+
+int Mas_hvcd_Upd_Upd( struct mas_hvcd_c mas_hvcd_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mas_hvcd SET trace_no=:mas_hvcd_c.trace_no,
+			payficcode=:mas_hvcd_c.payficcode,
+			payfictype=:mas_hvcd_c.payfictype,
+			payer_name=:mas_hvcd_c.payer_name,
+			payer_ac_no=:mas_hvcd_c.payer_ac_no,
+			payer_br_no=:mas_hvcd_c.payer_br_no,
+			payer_type=:mas_hvcd_c.payer_type,
+			payer_id_type=:mas_hvcd_c.payer_id_type,
+			payer_id_no=:mas_hvcd_c.payer_id_no,
+			payee_name=:mas_hvcd_c.payee_name,
+			payee_type=:mas_hvcd_c.payee_type,
+			payee_id_type=:mas_hvcd_c.payee_id_type,
+			payee_id_no=:mas_hvcd_c.payee_id_no,
+			cur_no=:mas_hvcd_c.cur_no,
+			tx_amt=:mas_hvcd_c.tx_amt,
+			paydate=:mas_hvcd_c.paydate,
+			use=:mas_hvcd_c.use,
+			sttl_type=:mas_hvcd_c.sttl_type,
+			txcode=:mas_hvcd_c.txcode,
+			extend=:mas_hvcd_c.extend
+	WHERE rowid=:mas_hvcd_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mas_hvcd_Del_Upd(struct mas_hvcd_c mas_hvcd_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mas_hvcd WHERE rowid=:mas_hvcd_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mas_hvcd_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mas_hvcd;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mas_hvcd_Ins( struct mas_hvcd_c mas_hvcd_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mas_hvcd VALUES (:mas_hvcd_c.trace_no,
+			:mas_hvcd_c.payficcode,
+			:mas_hvcd_c.payfictype,
+			:mas_hvcd_c.payer_name,
+			:mas_hvcd_c.payer_ac_no,
+			:mas_hvcd_c.payer_br_no,
+			:mas_hvcd_c.payer_type,
+			:mas_hvcd_c.payer_id_type,
+			:mas_hvcd_c.payer_id_no,
+			:mas_hvcd_c.payee_name,
+			:mas_hvcd_c.payee_type,
+			:mas_hvcd_c.payee_id_type,
+			:mas_hvcd_c.payee_id_no,
+			:mas_hvcd_c.cur_no,
+			:mas_hvcd_c.tx_amt,
+			:mas_hvcd_c.paydate,
+			:mas_hvcd_c.use,
+			:mas_hvcd_c.sttl_type,
+			:mas_hvcd_c.txcode,
+			:mas_hvcd_c.extend);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mas_hvcd error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

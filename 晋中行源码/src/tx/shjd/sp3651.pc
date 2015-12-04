@@ -1,0 +1,150 @@
+/*************************************************
+* 文 件 名:  spE502.c
+* 功能描述： 柜员开工交易
+*
+* 作    者:  andy
+* 完成日期： 2004年3月9日
+*
+* 修改记录： 
+* 日   期:
+* 修 改 人:
+* 修改内容:
+*************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error.[%d]	[%s][%d]",ret,__FILE__,__LINE__ ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include <stdio.h>
+#include <math.h>
+#define  EXTERN
+#include "public.h"
+#include "com_tel_c.h"
+#include "shjd_tlrpoot_c.h"
+
+int sp3651()
+{
+	int	ret;
+	char ctlrno[5];
+	char cejfno[7];
+	char passwd[7];
+	char filename[256];
+	int  daybuf[9];
+	
+	struct	com_tel_c		g_com_tel;
+	struct shjd_tlrpoot_c shjd_tlrpoot;
+	
+	memset(ctlrno,0x00,sizeof(ctlrno));
+	memset(passwd,0x00,sizeof(passwd));
+	memset(cejfno,0x00,sizeof(cejfno));
+	memset(&shjd_tlrpoot,0x00,sizeof(struct shjd_tlrpoot_c));
+	memset(filename,0x00,sizeof(filename));
+	memset(&g_com_tel,0x00,sizeof(struct com_tel_c));
+
+	get_fd_data("0070",ctlrno);
+	get_fd_data("0040",cejfno);
+	get_fd_data("0790",passwd);
+
+	/* 初始化结构 */
+	pub_base_sysinit();
+	/***********
+	ERR_DEAL
+  	if(desCheckPin(global.global_tbsdy,ctlrno,cejfno,passwd,passwd) != 0)
+  	{
+						sprintf(acErrMsg," open file [%s] error ",filename );
+							WRITEMSG
+							strcpy( g_pub_tx.reply,"S047" );
+							goto ErrExit;
+	}
+	***************/
+	/* 查询柜员签到状态 */
+	ret=Com_tel_Dec_Upd(g_pub_tx.reply,"tel='%s'",ctlrno);
+	if(ret&&ret!=100)
+	{
+		sprintf( acErrMsg, "定义柜员表游标错误!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O065");
+		goto ErrExit;
+	}
+
+	ret=Com_tel_Fet_Upd(&g_com_tel,g_pub_tx.reply);
+	if(ret&&ret!=100)
+	{
+		sprintf( acErrMsg, "查询柜员信息表错误!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O065");
+		goto ErrExit;
+	}
+
+	if(g_com_tel.csts[0]=='-')
+	{
+		sprintf( acErrMsg, "该柜员昨天未作完工处理，已经被封锁!!" );
+		set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"MYQT");
+		goto ErrExit;
+	}
+
+/************************
+	if(g_com_tel.csts[0]=='0')
+	{
+		sprintf( acErrMsg, "该柜员已经签到!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O064");
+		goto ErrExit;
+	}
+************************/
+	if(g_com_tel.csts[0]=='3')
+	{
+		sprintf( acErrMsg, "该柜员已经被锁定,不能签到!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O063");
+		goto ErrExit;
+	}
+
+	if(g_com_tel.csts[0]=='4')
+	{
+		sprintf( acErrMsg, "该柜员已经被删除!!" );
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O062");
+		goto ErrExit;
+	}
+
+	if(g_com_tel.csts[0]=='2'){
+		strcpy(g_com_tel.csts,"0");
+		/*更改柜员状态为签到 */
+		ret=Com_tel_Upd_Upd(g_com_tel,g_pub_tx.tel);
+		if(ret){
+			sprintf( acErrMsg, "更改柜员签到状态出错!!" );
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"O061");
+			goto ErrExit;
+		}
+	}
+	memset(daybuf,'\0',sizeof(daybuf));
+	sprintf(daybuf,"%08d",g_pub_tx.tx_date);
+	ret=sql_count("shjd_tlrpoot","tlrno='%s' and txday='%s'",g_com_tel.tel,daybuf);
+	if(ret==0){
+		Com_tel_Clo_Upd( );
+		sprintf(shjd_tlrpoot.txday,"%ld",g_pub_tx.tx_date);
+		strcpy(shjd_tlrpoot.tlrno,g_com_tel.tel);
+		sprintf(shjd_tlrpoot.poottime,"%ld",g_pub_tx.tx_time);
+		ret=Shjd_tlrpoot_Ins(shjd_tlrpoot,g_pub_tx.reply);
+		ERR_DEAL
+	}
+OkExit:
+    strcpy( g_pub_tx.reply, "0000" );
+    sprintf(acErrMsg,"Before OK return: reply is[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    sprintf(acErrMsg,"Before return: reply is[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}
+int desCheckPin(char caTxDay[],char caTlrNo[],char caEjfNo[],char caRemoteEPin[],char caDBEPin[])
+{
+     return 0;
+}    

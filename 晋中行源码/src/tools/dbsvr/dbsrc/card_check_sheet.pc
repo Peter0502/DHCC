@@ -1,0 +1,370 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"card_check_sheet_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int card_check_sheet_con ( struct card_check_sheet_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct card_check_sheet_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->proxy_br_no);
+	zip_tail(ps->sys_traceno);
+	zip_tail(ps->tx_time);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->tx_amt);
+	zip_tail(ps->pack_type);
+	zip_tail(ps->tx_type);
+	zip_tail(ps->merch_type);
+	zip_tail(ps->term_no);
+	zip_tail(ps->retrive_refno);
+	zip_tail(ps->serv_cond_no);
+	zip_tail(ps->auth_resp_no);
+	zip_tail(ps->recv_br_no);
+	zip_tail(ps->old_sys_traceno);
+	zip_tail(ps->old_tx_time);
+	zip_tail(ps->tx_resp_code);
+	zip_tail(ps->input_mode);
+	zip_tail(ps->get_fee);
+	zip_tail(ps->pay_fee);
+	zip_tail(ps->trans_serv_fee);
+	zip_tail(ps->cardholder_fee);
+	zip_tail(ps->err_get_fee);
+	zip_tail(ps->err_pay_fee);
+	zip_tail(ps->err_tx_flg);
+	zip_tail(ps->transout_brno);
+	zip_tail(ps->transout_cardno);
+	zip_tail(ps->transin_brno);
+	zip_tail(ps->transin_cardno);
+	zip_tail(ps->card_serial_no);
+	zip_tail(ps->term_capbility);
+	zip_tail(ps->card_cond_code);
+	zip_tail(ps->place_flg);
+	zip_tail(ps->tx_start_chnl);
+	zip_tail(ps->reserved);
+}
+int Card_check_sheet_Debug(struct card_check_sheet_c *ps){
+	vtcp_log("card_check_sheet_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("card_check_sheet_c.proxy_br_no=[%s]\n",ps->proxy_br_no);
+	vtcp_log("card_check_sheet_c.sys_traceno=[%s]\n",ps->sys_traceno);
+	vtcp_log("card_check_sheet_c.tx_time=[%s]\n",ps->tx_time);
+	vtcp_log("card_check_sheet_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("card_check_sheet_c.tx_amt=[%s]\n",ps->tx_amt);
+	vtcp_log("card_check_sheet_c.pack_type=[%s]\n",ps->pack_type);
+	vtcp_log("card_check_sheet_c.tx_type=[%s]\n",ps->tx_type);
+	vtcp_log("card_check_sheet_c.merch_type=[%s]\n",ps->merch_type);
+	vtcp_log("card_check_sheet_c.term_no=[%s]\n",ps->term_no);
+	vtcp_log("card_check_sheet_c.retrive_refno=[%s]\n",ps->retrive_refno);
+	vtcp_log("card_check_sheet_c.serv_cond_no=[%s]\n",ps->serv_cond_no);
+	vtcp_log("card_check_sheet_c.auth_resp_no=[%s]\n",ps->auth_resp_no);
+	vtcp_log("card_check_sheet_c.recv_br_no=[%s]\n",ps->recv_br_no);
+	vtcp_log("card_check_sheet_c.old_sys_traceno=[%s]\n",ps->old_sys_traceno);
+	vtcp_log("card_check_sheet_c.old_tx_time=[%s]\n",ps->old_tx_time);
+	vtcp_log("card_check_sheet_c.tx_resp_code=[%s]\n",ps->tx_resp_code);
+	vtcp_log("card_check_sheet_c.input_mode=[%s]\n",ps->input_mode);
+	vtcp_log("card_check_sheet_c.get_fee=[%s]\n",ps->get_fee);
+	vtcp_log("card_check_sheet_c.pay_fee=[%s]\n",ps->pay_fee);
+	vtcp_log("card_check_sheet_c.trans_serv_fee=[%s]\n",ps->trans_serv_fee);
+	vtcp_log("card_check_sheet_c.cardholder_fee=[%s]\n",ps->cardholder_fee);
+	vtcp_log("card_check_sheet_c.err_get_fee=[%s]\n",ps->err_get_fee);
+	vtcp_log("card_check_sheet_c.err_pay_fee=[%s]\n",ps->err_pay_fee);
+	vtcp_log("card_check_sheet_c.err_tx_flg=[%s]\n",ps->err_tx_flg);
+	vtcp_log("card_check_sheet_c.transout_brno=[%s]\n",ps->transout_brno);
+	vtcp_log("card_check_sheet_c.transout_cardno=[%s]\n",ps->transout_cardno);
+	vtcp_log("card_check_sheet_c.transin_brno=[%s]\n",ps->transin_brno);
+	vtcp_log("card_check_sheet_c.transin_cardno=[%s]\n",ps->transin_cardno);
+	vtcp_log("card_check_sheet_c.card_serial_no=[%s]\n",ps->card_serial_no);
+	vtcp_log("card_check_sheet_c.term_capbility=[%s]\n",ps->term_capbility);
+	vtcp_log("card_check_sheet_c.card_cond_code=[%s]\n",ps->card_cond_code);
+	vtcp_log("card_check_sheet_c.place_flg=[%s]\n",ps->place_flg);
+	vtcp_log("card_check_sheet_c.tx_start_chnl=[%s]\n",ps->tx_start_chnl);
+	vtcp_log("card_check_sheet_c.reserved=[%s]\n",ps->reserved);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Card_check_sheet_Sel(reply,card_check_sheet_c,fmtstr,va_alist)
+char    *reply;
+struct  card_check_sheet_c *card_check_sheet_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Card_check_sheet_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Card_check_sheet_Fet_Sel( card_check_sheet_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Card_check_sheet_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Card_check_sheet_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,card_check_sheet.* FROM card_check_sheet WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE card_check_sheet_sel FROM :comm;
+	EXEC SQL DECLARE sel_card_check_sheet CURSOR FOR card_check_sheet_sel;
+
+	EXEC SQL OPEN sel_card_check_sheet;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_check_sheet_Fet_Sel ( struct card_check_sheet_c *card_check_sheet_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_card_check_sheet INTO :card_check_sheet_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch card_check_sheet error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch card_check_sheet finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(card_check_sheet_c);
+
+	return 0;
+}
+
+int Card_check_sheet_Clo_Sel (){
+	EXEC SQL CLOSE sel_card_check_sheet;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Card_check_sheet_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,card_check_sheet.* FROM card_check_sheet WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE card_check_sheet_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_card_check_sheet CURSOR FOR card_check_sheet_upd;
+
+	EXEC SQL OPEN upd_card_check_sheet;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_check_sheet_Fet_Upd( struct card_check_sheet_c *card_check_sheet_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_card_check_sheet INTO :card_check_sheet_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH card_check_sheet finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(card_check_sheet_c);
+
+	return 0;
+}
+
+int Card_check_sheet_Upd_Upd( struct card_check_sheet_c card_check_sheet_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE card_check_sheet SET proxy_br_no=:card_check_sheet_c.proxy_br_no,
+			sys_traceno=:card_check_sheet_c.sys_traceno,
+			tx_time=:card_check_sheet_c.tx_time,
+			ac_no=:card_check_sheet_c.ac_no,
+			tx_amt=:card_check_sheet_c.tx_amt,
+			pack_type=:card_check_sheet_c.pack_type,
+			tx_type=:card_check_sheet_c.tx_type,
+			merch_type=:card_check_sheet_c.merch_type,
+			term_no=:card_check_sheet_c.term_no,
+			retrive_refno=:card_check_sheet_c.retrive_refno,
+			serv_cond_no=:card_check_sheet_c.serv_cond_no,
+			auth_resp_no=:card_check_sheet_c.auth_resp_no,
+			recv_br_no=:card_check_sheet_c.recv_br_no,
+			old_sys_traceno=:card_check_sheet_c.old_sys_traceno,
+			old_tx_time=:card_check_sheet_c.old_tx_time,
+			tx_resp_code=:card_check_sheet_c.tx_resp_code,
+			input_mode=:card_check_sheet_c.input_mode,
+			get_fee=:card_check_sheet_c.get_fee,
+			pay_fee=:card_check_sheet_c.pay_fee,
+			trans_serv_fee=:card_check_sheet_c.trans_serv_fee,
+			cardholder_fee=:card_check_sheet_c.cardholder_fee,
+			err_get_fee=:card_check_sheet_c.err_get_fee,
+			err_pay_fee=:card_check_sheet_c.err_pay_fee,
+			err_tx_flg=:card_check_sheet_c.err_tx_flg,
+			transout_brno=:card_check_sheet_c.transout_brno,
+			transout_cardno=:card_check_sheet_c.transout_cardno,
+			transin_brno=:card_check_sheet_c.transin_brno,
+			transin_cardno=:card_check_sheet_c.transin_cardno,
+			card_serial_no=:card_check_sheet_c.card_serial_no,
+			term_capbility=:card_check_sheet_c.term_capbility,
+			card_cond_code=:card_check_sheet_c.card_cond_code,
+			place_flg=:card_check_sheet_c.place_flg,
+			tx_start_chnl=:card_check_sheet_c.tx_start_chnl,
+			reserved=:card_check_sheet_c.reserved
+	WHERE rowid=:card_check_sheet_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Card_check_sheet_Del_Upd(struct card_check_sheet_c card_check_sheet_c , char * reply  ){
+
+	EXEC SQL DELETE FROM card_check_sheet WHERE rowid=:card_check_sheet_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Card_check_sheet_Clo_Upd( ){
+	EXEC SQL CLOSE upd_card_check_sheet;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Card_check_sheet_Ins( struct card_check_sheet_c card_check_sheet_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO card_check_sheet VALUES (:card_check_sheet_c.proxy_br_no,
+			:card_check_sheet_c.sys_traceno,
+			:card_check_sheet_c.tx_time,
+			:card_check_sheet_c.ac_no,
+			:card_check_sheet_c.tx_amt,
+			:card_check_sheet_c.pack_type,
+			:card_check_sheet_c.tx_type,
+			:card_check_sheet_c.merch_type,
+			:card_check_sheet_c.term_no,
+			:card_check_sheet_c.retrive_refno,
+			:card_check_sheet_c.serv_cond_no,
+			:card_check_sheet_c.auth_resp_no,
+			:card_check_sheet_c.recv_br_no,
+			:card_check_sheet_c.old_sys_traceno,
+			:card_check_sheet_c.old_tx_time,
+			:card_check_sheet_c.tx_resp_code,
+			:card_check_sheet_c.input_mode,
+			:card_check_sheet_c.get_fee,
+			:card_check_sheet_c.pay_fee,
+			:card_check_sheet_c.trans_serv_fee,
+			:card_check_sheet_c.cardholder_fee,
+			:card_check_sheet_c.err_get_fee,
+			:card_check_sheet_c.err_pay_fee,
+			:card_check_sheet_c.err_tx_flg,
+			:card_check_sheet_c.transout_brno,
+			:card_check_sheet_c.transout_cardno,
+			:card_check_sheet_c.transin_brno,
+			:card_check_sheet_c.transin_cardno,
+			:card_check_sheet_c.card_serial_no,
+			:card_check_sheet_c.term_capbility,
+			:card_check_sheet_c.card_cond_code,
+			:card_check_sheet_c.place_flg,
+			:card_check_sheet_c.tx_start_chnl,
+			:card_check_sheet_c.reserved);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT card_check_sheet error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11110000"  TITLE="5403 支票业务历史查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	initfd();
+	commsend_001();
+	$FD16='9568';
+	$FD40=getitems('#ZPAMT1');
+	$FD41=getitems('#ZPAMT2');
+	$FD44=#TXDATE;
+	$FD64=#BRNO;
+	$FD67=#WLFLAG;
+	$FD68=#YWTYPE;
+	$FD69=#ZPSTAT;
+	$FD25=#ZPACTNO;
+
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(5403                      支票汇总查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#YNQSZX"  TYPE="%-1s"  FUNCTIONS="">
+   <ONLOSTFOCUS>
+  "{
+     #BRNO=$KINBR;
+     if($KINBR=='10001')
+      {
+       enable(#BRNO,true);
+      }
+     else 
+      { 
+       enable(#BRNO, false);
+      }        
+    }" 
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+		if(#DOLIST !='')
+	{
+		dim @selid     as number;
+		dim @wtday     as string;
+		dim @orbrno    as string;
+		dim @pkgno     as string;
+	  	dim @orderno   as string;
+	  	dim @filename   as string;
+	  	dim @zpnum   as string;
+	  	dim @zpdate   as string;
+		@selid=list_work();
+		if(@selid &lt; 0)
+		{
+			list_del();
+			rerun();
+			return(true);
+		}
+		initfd();
+		commsend_001();
+		$FD16='9568';
+		@zpnum=rtrim(list_gettext(@selid,1));
+		@zpdate=rtrim(list_gettext(@selid,2));
+		//showmsg(@zpnum);
+		#WT_DATE=rtrim(list_gettext(@selid,3));
+	  	#OR_BR_NO=rtrim(list_gettext(@selid,7));
+	  	#PKGNO=rtrim(list_gettext(@selid,11));
+	  	#ORDERNO=rtrim(list_gettext(@selid,4));
+		$FD123 = getitems('#CRDB#OPCD#PKGNO#ORDERNO#TXNUM#OR_BR_NO#AC_BR_NO#TX_AMT#PAY_OPN_BR_NO#PAY_QS_NO#PAY_AC_NO#PAY_NAME#PAY_ADDR#PWD#CASH_QS_NO#CASH_OPN_BR_NO#CASH_AC_NO#CASH_NAME#CASH_ADDR#YW_TYPE#BRF#WT_DATE#OPERLEVEL#AUTH_TEL#AUTH_PWD#NOTE_TYPE#NOTE_NO#PACK_DATE#PACK_ID#CHRG_IND#CHRG_AMT#RESP_DAY#PO_TYPE#PO_DATE#PO_NUM#PC_TX_AMT#JF_TX_AMT#O_WT_DATE#O_TXNUM#O_ORDERNO#RET_CODE#RCP_STS#RESP1#RESP2#PACK_END#LV_STS#LW_IND#DFXYNO#OORBRNO#OACBRNO');
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		lvrecv_123();	
+		@filename='LVZP_001.XML';
+		//$BUFFER= $FD123;
+		//if(#LW_IND=='1'){
+		//}else if(#LW_IND=='2'){
+		//@filename='LVZP_002.XML';
+		//}
+		#PKGNO=substr($FD123,3,3);
+		//showmsg($FD123);
+		//showmsg(#PKGNO);
+		//showmsg(#ORDERNO);
+		//showmsg(#TX_AMT);
+		//showmsg(#TXNUM);
+		open(@filename,'#WTDATE='+#WT_DATE+';#PACKDAY='+#PACK_DATE+';#CMTNO='+#PKGNO+';#TMP_TXNUM='+#TXNUM+';#TMP_RCPSTAT='+#RCP_STS+';#TMP_TXSTAT='+#LV_STS+';#ZP_NUM='+@zpnum+';#ORDERNO='+#ORDERNO+';#OORDERNO='+#O_ORDERNO+';#ORBRNO='+#OR_BR_NO+';#ACBRNO='+#AC_BR_NO+';#PAYACTNO='+#PAY_AC_NO+';#PAYNAME='+#PAY_NAME+';#PAYADDR='+#PAY_ADDR+';#CASHNAME='+#CASH_NAME+';#CASHACTNO='+#CASH_AC_NO+';#CASHADDR='+#CASH_ADDR+';#PACKID='+#PACK_ID+';#HTXAMT1='+#TX_AMT+';#ZP_DATE='+@zpdate+';#LW_FLAG='+#LW_IND+';');
+	  	return(true);
+	}
+  	list_del();
+	#DOLIST='';
+}"
+</ONLOSTFOCUS>
+</ITEM>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5927)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="6"  COL="15" TYPE="%-14s" FUNCTIONS="T(交 易  行 号:)"/>
+  <ITEM LINE="8"  COL="15" TYPE="%-14s" FUNCTIONS="T(来 往  标 识:!)"/>
+  <ITEM LINE="10" COL="15" TYPE="%-14s" FUNCTIONS="T(业 务  类 型:!)"/>
+  <ITEM LINE="12" COL="15" TYPE="%-14s" FUNCTIONS="T(交 易  日 期:)"/>
+  <ITEM LINE="14" COL="15" TYPE="%-14s" FUNCTIONS="T(支 票  金 额:)"/>
+  <ITEM LINE="16" COL="15" TYPE="%-14s" FUNCTIONS="T(帐        号:)"/>
+  <ITEM LINE="18" COL="15" TYPE="%-14s" FUNCTIONS="T(支 票  状 态:!)"/>
+
+  <!-------输入数据域----->
+  <ITEM LINE="6"  COL="29" NAME="#BRNO"     TYPE="%-5s"   INPUT="TEXT"     DEVICE="KEYBOARD" 
+FUNCTIONS="T()"/>
+  <ITEM LINE="8"  COL="29" NAME="#WLFLAG"   TYPE="%-1s"  INPUT="SELECT"   DEVICE="KEYBOARD" FUNCTIONS="T(1)V(1|2)">
+       <SELECT LINE="6" COL="30">
+          <OPTION VALUE="1" TITLE="1.往帐"/>
+          <OPTION VALUE="2" TITLE="2.来账"/>
+      </SELECT>
+  </ITEM>
+  <ITEM LINE="10"  COL="29" NAME="#YWTYPE"   TYPE="%-1s"  INPUT="SELECT"   DEVICE="KEYBOARD"
+FUNCTIONS="T(0)V(0,2)">
+      <SELECT LINE="10" COL="30">
+          <OPTION VALUE="0" TITLE="0.全部"/>
+          <OPTION VALUE="1" TITLE="1.截留业务"/>
+          <OPTION VALUE="2" TITLE="2.回执业务"/>
+      </SELECT>
+  </ITEM>
+  <ITEM NAME="#PKGNO" TYPE="%-3s"  FUNCTIONS="j(#YWTYPE=0,T{})j(#YWTYPE=1,T{002})j(#YWTYPE=2,T{008})"/> 
+
+  <ITEM LINE="12" COL="29" NAME="#TXDATE"   TYPE="%-8s"     INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)V(NB)D()"/>
+  <ITEM LINE="14" COL="29" NAME="#ZPAMT1"    TYPE="%17.2f"   INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T()V(00000000000100,99999999999999"/>
+  <ITEM LINE="14" COL="50" TYPE="%-3s"  FUNCTIONS="T(---)"/> 
+  <ITEM LINE="14" COL="55" NAME="#ZPAMT2"    TYPE="%17.2f"   INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T()V(00000000000100,99999999999999"/> 
+   
+  <ITEM LINE="16" COL="29" NAME="#ZPACTNO"  TYPE="%-32s"    INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()"/> 
+  <ITEM NAME="#SELECT" TYPE="%-1s" FUNCTIONS="T()">
+    <ONLOSTFOCUS>
+       "{
+         if(#WLFLAG=='0' and #YWTYPE=='0')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               2往帐复核,挂帐          3正式复核               4往帐发送               5往帐拒绝               6往帐扎差               W来帐已付款             V来帐已止付             H临时接收不记帐         Q已做同意应答且未发送   R已做同意应答且已发送   S已做不同意应答且未发送 T已做不同意应答且已发送 ','v1t24');}
+          else if(#WLFLAG=='0' and #YWTYPE=='1')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               2往帐复核,挂帐          4往帐发送               5往帐拒绝               6往帐扎差               H临时接收不记帐         Q已做同意应答且未发送   R已做同意应答且已发送   S已做不同意应答且未发送 T已做不同意应答且已发送 ','v1t23');}
+          else if(#WLFLAG=='0' and #YWTYPE=='2')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               3往帐复核,记帐          4往帐发送               5往帐拒绝               6往帐扎差               W来帐已付款             V来帐已止付             ','v1t23');}
+          else if(#WLFLAG=='1' and #YWTYPE=='0')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               2往帐复核,挂帐          3往帐复核,记帐          4往帐发送               5往帐拒绝               6往帐扎差               ','v1t23');}
+          else if(#WLFLAG=='1' and #YWTYPE=='1')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               2往帐复核,挂帐          4往帐发送               5往帐拒绝               6往帐扎差               ','v1t23');}
+          else if(#WLFLAG=='1' and #YWTYPE=='2')
+                {setsel(#ZPSTAT,'0全部                   1往帐录入               3往帐复核,记帐          4往帐发送               5往帐拒绝               6往帐扎差               ','v1t23');}
+          else if(#WLFLAG=='2' and #YWTYPE=='0') 
+                {setsel(#ZPSTAT,'0全部                   W来帐已付款             V已止付                 H临时接收不记帐         Q已做同意应答且未发送   R已做同意应答且已发送   S已做不同意应答且未发送 T已做不同意应答且已发送','v1t23');}
+          else if(#WLFLAG=='2' and #YWTYPE=='1')
+                {setsel(#ZPSTAT,'0全部                   H临时接收不记帐         Q已做同意应答且未发送   R已做同意应答且已发送   S已做不同意应答且未发送 T已做不同意应答且已发送','v1t23');}
+          else if(#WLFLAG=='2' and #YWTYPE=='2')
+                 {setsel(#ZPSTAT,'0全部                   W来帐已付款             V已止付                 ','v1t23');}
+          else  { showmsg('状态错误'); return(false);}
+          return(true); 
+       }"
+     </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="18" COL="29" NAME="#ZPSTAT"   TYPE="%-1s"  INPUT="SELECT"   DEVICE="KEYBOARD"
+FUNCTIONS="T(0)V(NB)">
+      <SELECT LINE="16" COL="30">
+        <OPTION VALUE="0" TITLE="全部"/>
+     </SELECT>
+
+ </ITEM> 
+
+<ITEM NAME="#WT_DAY"            TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#ORDERNO"     TYPE="%8d"      FUNCTIONS=""/>
+<ITEM NAME="#IORDERNO"    TYPE="%-6s"    FUNCTIONS=""/>
+<ITEM NAME="#OTYPE"       TYPE="%-1s"      FUNCTIONS="T(1)"/>
+<ITEM NAME="#CMTNO"             TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#O_CMTNO"           TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#PAY_QS_NO"         TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#OR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#SENDCO"            TYPE="%-4s"       FUNCTIONS=""/>
+<ITEM NAME="#PAY_OPN_BR_NO"     TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_AC_NO"         TYPE="%-32s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_NAME"          TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#PAY_ADDR"          TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_QS_NO"        TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#AC_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#RECECO"            TYPE="%-4s"       FUNCTIONS=""/>
+<ITEM NAME="#CASH_OPN_BR_NO"    TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_AC_NO"        TYPE="%-32s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_NAME"         TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#CASH_ADDR"         TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#YW_TYPE"           TYPE="%-12s"       FUNCTIONS=""/>
+<ITEM NAME="#YW_TYPE1"          TYPE="%-12s"       FUNCTIONS=""/>
+<ITEM NAME="#CONTENT"           TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#RATE"              TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+<ITEM NAME="#RATEDATE"          TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+<ITEM NAME="#OORDERNO"          TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#NOTPAY_CONTENT"    TYPE="%-255s"     FUNCTIONS=""/>
+<ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/>
+<ITEM NAME="#RESP1"             TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#OPCD"              TYPE="%-2s"       FUNCTIONS="T()"/>
+<ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#PACKID"            TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#O_PACKID"          TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PACK_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PACK_ID"           TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#O_PACK_DATE"       TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#TXNUM"             TYPE="%-5s"       FUNCTIONS=""/>
+<!--<ITEM NAME="#O_TXNUM"           TYPE="%-5s"       FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+<ITEM NAME="#LV_YW_IND"         TYPE="%-12s"      FUNCTIONS=""/>
+<ITEM NAME="#RESP_DATE"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#RCP_STS"           TYPE="%-2s"       FUNCTIONS=""/>
+<ITEM NAME="#RESP2"             TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#RETCODE"           TYPE="%-2s"       FUNCTIONS=""/>
+<ITEM NAME="#YW_DTL_ID"         TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#ACC_IND"           TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#REQ_TYPE"          TYPE="%-1s"       FUNCTIONS=""/>
+<ITEM NAME="#DF_FREEAMT"        TYPE="%-16s"      FUNCTIONS=""/>
+<ITEM NAME="#PROTNO"            TYPE="%-60s"      FUNCTIONS=""/>
+<ITEM NAME="#PO_NO"             TYPE="%-8s"       FUNCTIONS=""/>
+<ITEM NAME="#PO_TYPE"           TYPE="%-2s"       FUNCTIONS=""/>
+<!--<ITEM NAME="#OTYPE"             TYPE="%-1s"       FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+<ITEM NAME="#VTYPE"             TYPE="%3d"        FUNCTIONS="" />
+<ITEM NAME="#VOCNUM"            TYPE="%16d"       FUNCTIONS="" />
+<ITEM NAME="#TXDAY"             TYPE="%-8s"       FUNCTIONS="T($HDATE)"/>
+<ITEM NAME="#NEXTORDERNO"       TYPE="%8s"        FUNCTIONS=""/>
+<ITEM NAME="#NEXTVOCNUM"        TYPE="%16d"       FUNCTIONS=""/>
+<ITEM NAME="#TXAMT"             TYPE="%17.2f"     FUNCTIONS="J(#UTXAMT)J(#XTXAMT)"/>
+<ITEM NAME="#XTXAMT"            TYPE="%-21s"      FUNCTIONS="X(#TXAMT)"/>
+<ITEM NAME="#UTXAMT"            TYPE="%-40s"      FUNCTIONS="U(#TXAMT)"/>
+
+
+<!--下面是小额的123域对应的一些内容,其中与大额123域重复的地方省了-->
+  <ITEM NAME="#CRDB"      TYPE="%1d"  FUNCTIONS="T(1)"/>
+  <ITEM NAME="#TX_AMT"      TYPE="%15s"   FUNCTIONS="T()"/>   <!--交易金额--->
+  <ITEM NAME="#PWD"      TYPE="%-8s"     FUNCTIONS="T()"/>    <!--支取密码-->
+  <ITEM NAME="#BRF"      TYPE="%-60s"    FUNCTIONS="T()"/>  <!--附言--->
+  <ITEM NAME="#WT_DATE"                 TYPE="%-8s"      FUNCTIONS="T($HDATE)"/> <!--委托日期-->
+  <ITEM NAME="#AUTH_TEL"                TYPE="%-6s"     FUNCTIONS="T()"/>    <!--授权操作员号   ---->
+  <ITEM NAME="#AUTH_PWD"                TYPE="%-8s"     FUNCTIONS="T()"/>    <!--授权操作员密码 ---->
+  <ITEM NAME="#NOTE_TYPE"               TYPE="%-2s"     FUNCTIONS="T()"/>    <!--凭证种类---->
+  <ITEM NAME="#NOTE_NO"                 TYPE="%-12s"    FUNCTIONS="T()"/>    <!--凭证号码---->
+  <ITEM NAME="#CHRG_IND"          TYPE="%-1s"     FUNCTIONS="T()"/>    <!--手续费标志     ---->
+  <ITEM NAME="#CHRG_AMT"          TYPE="%-15s"    FUNCTIONS="T()"/>    <!--手续费金额     ---->
+  <ITEM NAME="#RESP_DAY"        TYPE="%-8s"     FUNCTIONS="T()"/>    <!--期待应答日期  ---->
+  <ITEM NAME="#PO_DATE"         TYPE="%-8s"     FUNCTIONS="T()"/>    <!--票据日期     ---->
+  <ITEM NAME="#PO_NUM"          TYPE="%-8s"     FUNCTIONS="T()"/>    <!--票据号码     ---->
+  <ITEM NAME="#PC_TX_AMT"       TYPE="%-16.2f"  FUNCTIONS="T()"/>   <!--赔偿金额---->
+  <ITEM NAME="#JF_TX_AMT"       TYPE="%-16.2f"  FUNCTIONS="T()"/>   <!--拒付金额---->
+  <ITEM NAME="#O_WT_DATE"       TYPE="%-8s"     FUNCTIONS="T()"/>    <!--原委托日期    ---->
+  <ITEM NAME="#O_TXNUM"         TYPE="%-5s"     FUNCTIONS="T()"/>    <!--原业务编号    ---->
+  <ITEM NAME="#O_ORDERNO"       TYPE="%-8s"     FUNCTIONS="T()"/>    <!--原支付交易序号---->
+  <ITEM NAME="#RET_CODE"        TYPE="%-2s"     FUNCTIONS="T()"/>    <!--退汇原因代码  ---->
+  <ITEM NAME="#PACK_END"        TYPE="%-1s"     FUNCTIONS="T()"/>    <!--包结束标志    ---->
+  <ITEM NAME="#LV_STS"          TYPE="%-1s"     FUNCTIONS="T()"/>    <!--交易状态      ---->
+  <ITEM NAME="#DFXYNO"          TYPE="%-60s"    FUNCTIONS="T()"/>               <!--多方协议号-->
+  <ITEM NAME="#OORBRNO"         TYPE="%-12s"    FUNCTIONS="T()"/>       <!--原发起行行号 -->
+  <ITEM NAME="#OACBRNO"         TYPE="%-12s"    FUNCTIONS=""/>          <!--原接收行行号-->
+  <ITEM NAME="#LW_IND"         TYPE="%-1s"    FUNCTIONS=""/>          <!--原接收行行号-->
+
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>
+"{
+        dim @tota as string;
+        list_init(17,78,5,1);
+        commsend_001();
+	$FD16='5927';
+	$FD40=getitems('#ZPAMT1');
+	$FD41=getitems('#ZPAMT2');
+	$FD44=#TXDATE;
+	$FD64=#BRNO;
+	$FD67=#WLFLAG;
+	$FD68=#YWTYPE;
+	$FD69=#ZPSTAT;
+	$FD25=#ZPACTNO;
+	@tota=callserver();
+        if($FD12 != '0000'){
+                showmsg(geterror());
+                return(false);
+        }
+        autolist(@tota);
+  	#DOLIST='1';
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+</TRANSACTION> 

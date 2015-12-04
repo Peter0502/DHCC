@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="4822  VTM对账明细查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-64s" FUNCTIONS=
+		"T(4822                          VTM对账明细查询)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4822)">
+	
+	<ITEM LINE="8" COL="15" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+	<ITEM LINE="8" COL="25" NAME="#BGNDATE" TYPE="%-8s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()D()">
+		<ONLOSTFOCUS>
+		"{
+				dim @txday as date;
+				
+				@txday = substr($HDATE, 0, 4) + substr($HDATE, 4, 2) + substr($HDATE, 6, 2);
+				if (@txday &lt; #BGNDATE)
+				{
+					showmsg('起始日期不能晚于当前日期!');
+					//return(false);
+				}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="8" COL="33" TYPE="%-4s" FUNCTIONS="T( → )"/>
+	<ITEM LINE="8" COL="37" NAME="#ENDDATE" TYPE="%-8s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()D()"> 
+		<ONLOSTFOCUS>
+		"{
+				dim @txday as date;
+				
+				@txday = substr($HDATE, 0, 4) + substr($HDATE, 4, 2) + substr($HDATE, 6, 2);
+				
+				if (len(delspace(#BGNDATE)) != 0 and len(delspace(#ENDDATE)) == 0)
+				{
+					showmsg('请输入终止日期!');
+					//return(false);
+				}
+				if (@txday &lt; #ENDDATE)
+				{
+					showmsg('终止日期不能晚于当前日期!');
+					//return(false);
+				}
+				
+				if (#ENDDATE &lt; #BGNDATE)
+				{
+					showmsg('起始日期不能晚于终止日期！');
+					//return(false);
+				}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+		
+	<ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(交易类型:)"/>
+	<ITEM LINE="10" COL="25" TYPE="%-1s" NAME="#TXTYPE" INPUT="SELECT" FUNCTIONS="T(0)">
+		<SELECT>
+			<OPTION VALUE="0"  TITLE="0 全部"/>
+			<OPTION VALUE="1"  TITLE="1 活期开户"/>
+			<OPTION VALUE="2"  TITLE="2 定期存单撤销"/>
+			<OPTION VALUE="3"  TITLE="3 存款"/>
+			<OPTION VALUE="4"  TITLE="4 存款确认"/>
+			<OPTION VALUE="5"  TITLE="5 取现"/>
+			<OPTION VALUE="6"  TITLE="6 取现冲正"/>
+		</SELECT>
+	</ITEM>
+	
+	<ITEM LINE="12" COL="15" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+	<ITEM LINE="12" COL="25" NAME="#AC_NO" TYPE="%-24s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+				if (len(delspace(#AC_NO)) == 0 and len(delspace(#BGNDATE)) == 0)
+				{
+					showmsg('日期和账号必须输入其中一种条件!');
+					return(false);
+				}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+		
+	<ITEM LINE="14" COL="15" TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+	<ITEM LINE="14" COL="25" NAME="#BGNAMT" TYPE="%16s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			if (len(delspace(#BGNAMT)) != 0)
+			{
+				if (val(#BGNAMT) &lt; 0)
+				{
+					showmsg('金额不能小于零!');
+					return(false);
+				}
+				
+				#BGNAMT = itoa(val(#BGNAMT), '%16.2f');
+				show(#BGNAMT, true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="14" COL="41" TYPE="%-4s" FUNCTIONS="T( → )"/>
+	<ITEM LINE="14" COL="45" NAME="#ENDAMT" TYPE="%16s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			if (len(delspace(#BGNAMT)) != 0 and len(delspace(#ENDAMT)) == 0)
+			{
+				showmsg('请输入终止金额!');
+				return(false);
+			}
+			
+			if (len(delspace(#ENDAMT)) != 0 and len(delspace(#BGNAMT)) == 0)
+			{
+				showmsg('请输入起始金额!');
+				return(false);
+			}
+			
+			if (len(delspace(#ENDAMT)) != 0)
+			{
+				if (val(#ENDAMT) &lt; 0 or val(#ENDAMT) == 0)
+				{
+					showmsg('终止金额不能小于等于零!');
+					return(false);
+				}
+				
+				if (val(#ENDAMT) &lt; val(#BGNAMT))
+				{
+					showmsg('起始金额不能大于终止金额!');
+					return(false);
+				}
+				
+				#ENDAMT = itoa(val(#ENDAMT), '%16.2f');
+				show(#ENDAMT, true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+		
+	<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+				dim @num as number;
+				dim @tota as string;
+				dim @selid as number;
+				
+				initfd();
+				commsend_001();
+				$FD16 = '5099';
+				$FD60 = 'VTMC';
+				$FD44 = #BGNDATE;
+				$FD45 = #ENDDATE;
+				$FD67 = #TXTYPE;
+				$FD39 = itoa(val(#BGNAMT, 100), '%016.0f');
+				$FD40 = itoa(val(#ENDAMT, 100), '%016.0f');
+				$FD32 = #AC_NO;
+				callagnpt();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				
+				@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+				autolist(@tota);
+				while (true)
+				{
+					@selid = list_work();
+					if (@selid &lt; 0)
+					{
+						closeall();
+						return(true);
+					}
+					else
+					{
+						runoutput();
+						closeall();
+						return(true);
+					}
+				}
+		}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印本页记录">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		list_print();
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

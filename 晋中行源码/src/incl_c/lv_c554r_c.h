@@ -1,0 +1,30 @@
+#ifndef __lv_c554r_CH__
+#define __lv_c554r_CH__
+struct lv_c554r_c{
+	char      rowid[20];
+	char      cmtno[4];
+	long      in_date;
+	long      wt_date;
+	char      brno[8];
+	char      tlrno[7];
+	char      sendco[5];
+	char      acbrno[13];
+	char      iftype[2];
+	long      dtlid;
+	char      payno[13];
+	char      paymon[7];
+	long      sdate;
+	long      edate;
+	char      aorm[2];
+	char      rebakno[13];
+	double    rebamt;
+	char      rebrate[7];
+	char      rebnum[7];
+	long      seqno;
+	char      pkgno[4];
+	char      totnum[9];
+	char      brate[7];
+	char      price[7];
+	char      txamt[16];
+};
+#endif 

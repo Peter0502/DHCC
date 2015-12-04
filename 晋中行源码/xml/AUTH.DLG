@@ -1,0 +1,241 @@
+<TRANSACTION>
+<VARIABLE>
+  <ITEM NAME="#FD93" TYPE="%1s" FUNCTIONS="" />  <!--保存fd93-->
+  <ITEM NAME="#TMP11" TYPE="%-1s" FUNCTIONS="s()" />  <!--保存交易信息-->
+  <ITEM LINE="1"  COL="28" TYPE="%-18s" FUNCTIONS="T(授          权)"/>
+  <ITEM LINE="4"  COL="20" TYPE="%-8s" FUNCTIONS="T(流水号:)"/>
+  <ITEM LINE="4"  COL="28" NAME="#WSSRNO" INPUT="TEXT"  TYPE="%-7s" ENABLE="FALSE" FUNCTIONS="T($FD14,2,7)"/> 
+  <ITEM NAME="#OTXWSSRNO" TYPE="%-6s" FUNCTIONS=""/><!--取消的原交易流水号-->
+  <ITEM NAME="#HOLDFLAG"  TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+	dim @txname as string;
+	dim @i as number;
+	#FD93=substr($FD9,10,1);
+	#HOLDFLAG=$FD20;
+	#TXNAME='';
+	savefds('../tmp/prt_'+#WSSRNO+'.fds');
+	initfd();
+	commsend_001();
+	$FD16='9672';
+	$FD64=$TXNO;
+	callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		loadfds('../tmp/prt_'+#WSSRNO+'.fds');
+		return(true);
+	}
+	@txname=delspace($FD63);
+	loadfds('../tmp/prt_'+#WSSRNO+'.fds');
+	#TXNAME=@txname;
+	enable(#TXNAME,false);
+	#LTXNAME=#TXNAME;
+	show(#LLTXNAME,true);
+	show(#LTXNAME,true);
+	if($TXNO=='5701'){//撤销交易
+		#LOTXNAME=$FD38;
+		#LOTXWSSRNO=itoa(val($FD44),'%06.0f');
+		show(#LLOTXNAME,true);
+		show(#LOTXNAME,true);
+		show(#LLOTXWSSRNO,true);
+		show(#LOTXWSSRNO,true);
+	}else if($TXNO=='5331'){//撤销凭证管理
+		#LOTXNAME='凭证管理';
+		#LOTXWSSRNO=itoa(val($FD44),'%06.0f');
+		show(#LLOTXNAME,true);
+		show(#LOTXNAME,true);
+		show(#LLOTXWSSRNO,true);
+		show(#LOTXWSSRNO,true);
+	}else{			//普通交易
+		show(#LLOTXNAME,false);
+		show(#LOTXNAME,false);
+		show(#LLOTXWSSRNO,false);
+		show(#LOTXWSSRNO,false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="7"  COL="20" TYPE="%-8s" FUNCTIONS="T(授权号:)"/> 
+  <ITEM LINE="7"  COL="28" NAME="#AUTHNUM" INPUT="TEXT"  TYPE="%-7s"  >  
+  <ONLOSTFOCUS>
+  "{
+	if(#AUTHNUM!=''){
+		$FD9='@@@'+#AUTHNUM+#FD93;
+		$FD14='9'+#WSSRNO;
+		goitem(#OK,false);
+	}
+	else
+	{
+	  if($TXNO=='2611' or $TXNO=='2610' or $TXNO=='3320')
+	  {
+		showmsg('请清算中心做高级预授权,才能完成此交易!');
+		return(false);
+	  }
+	  if($TXNO=='2406' and #HOLDFLAG=='B')
+	  {
+	  //	 showmsg('请授权柜员做高级预授权,才能完成此交易!'); 解冻不做高级预授权了
+       //return(false);
+	  }
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="10"  COL="20" TYPE="%-8s" FUNCTIONS="T(授权人:)"/>
+  <ITEM LINE="10"  COL="28" NAME="#AUTHNAME" DEVICE="KEYBOARD" INPUT="TEXT"  TYPE="%4d"  FUNCTIONS="F()"> 
+  <ONLOSTFOCUS>
+  "{
+  	if(#AUTHNAME!='')
+  	{
+  	  dim @filename as string;
+  	  dim @fd7 as string;
+  	  dim @fd16 as string;
+  	  dim @tota as string;
+  	  dim @f as file;
+			dim @to_tel as string;
+			dim @line as string;
+			dim @selid as number;
+			if(#AUTHNAME == $TLRNO){
+				showmsg('自己不可以给自己授权!');
+				return(false);
+			}
+			@filename='../tmp/D12_'+#AUTHNAME+'.txt';
+			@fd7=$FD7;
+			@fd16=$FD16;
+			#AUTHNO=#AUTHNAME;
+			savefds('../tmp/prt_'+#WSSRNO+'.fds');// add by martin 20081118
+			commsend_001();	  
+			$FD16='9630';
+			$FD7=#AUTHNAME;
+			@tota=callserver();
+			$FD7=@fd7;
+			$FD16=@fd16;
+			savefiletxt(@filename,@tota);
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				loadfds('../tmp/prt_'+#WSSRNO+'.fds');// add by martin 20081118
+				return(false);
+			}
+			if(len(@tota) &gt; 0)
+			{
+				@f=openfile(@filename,'r');
+				if(@f &lt; 0)
+				{
+					showmsg('打开回传文件错误就');
+					return(false);
+				}
+				list_init(7,20,8,36);
+				list_setcolcnt(1);
+				list_setcol(0,' 角  色',10);
+				while(true)
+				{
+					@line=readline(@f);
+					if(@line!='')
+					{
+						@to_tel=strfld(@line,'|',0);
+						list_additem('',@to_tel);
+					}
+					else
+					{
+						break;
+					}
+				}
+								list_additem('',#AUTHNAME);
+        closefile(@f);
+				while(1){
+					@selid=list_work();
+					if(@selid &gt;= 0){
+						break;
+					}
+				}
+				if(@selid &lt; 0)
+				{
+					list_del();
+					//refresh();
+					//return(true);
+				}else{ 
+					@selid=0;
+					@selid=list_getselid();
+					#AUTHNO=list_gettext(@selid,0);		
+					showmsg(#AUTHNO);			
+					list_del();
+					//refresh();
+					//return(true);
+				}
+			}// add by martin 2008/12/5 15:10
+			commsend_001();
+			$FD16='8930';
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				loadfds('../tmp/prt_'+#WSSRNO+'.fds');// add by martin 20081118
+				return(false);
+			}// end by martin 2008/12/5 15:10
+			loadfds('../tmp/prt_'+#WSSRNO+'.fds');// add by martin 20081118
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>    
+  <ITEM NAME="#AUTHNO" TYPE="%-4d" FUNCTIONS="F()"/>
+  <ITEM LINE="10"  COL="35" TYPE="%-8s" FUNCTIONS="T(口  令:)"/>
+  <ITEM LINE="10"  COL="43" NAME="#AUTHPWD" INPUT="TEXT"  TYPE="%6d" FUNCTIONS="i()V(NB)" >
+  <ONLOSTFOCUS>"{
+	if(#AUTHNAME!=''){
+		$FD9=#AUTHNO+#AUTHPWD+#FD93;
+		$FD124=#AUTHNAME;//修改92 为124  martin 20081118
+	}
+	$FD14='9'+#WSSRNO;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="12"  COL="20" NAME="#LLTXNAME" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-10s" FUNCTIONS="T(交易名称:)" />  
+  <ITEM LINE="13"  COL="20" NAME="#LLOTXNAME" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-12s" FUNCTIONS="T(原交易名称:)" />  
+  <ITEM LINE="14"  COL="20" NAME="#LLOTXWSSRNO" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-12s" FUNCTIONS="T(原交易流水:)" />  
+  <ITEM LINE="12"  COL="30" NAME="#LTXNAME" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-30s" FUNCTIONS="" />  
+  <ITEM LINE="13"  COL="32" NAME="#LOTXNAME" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-30s" FUNCTIONS="" />  
+  <ITEM LINE="14"  COL="32" NAME="#LOTXWSSRNO" INPUT="LABEL"  VISABLE="FALSE" TYPE="%-6s" FUNCTIONS="" />  
+
+  <ITEM NAME="#AUCODE"      TYPE="%-1s" FUNCTIONS="T(9)"/><!---授权标志---> 
+  <ITEM NAME="#OK" LINE="15"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	//首先打印授权信息
+	//开始打印
+		dim @f as file;
+		@f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');//授权修改 begin20080927 martin
+		writeline(@f,' ');
+		closefile(@f);
+		@f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');//授权修改 end20080927 martin
+		if(#AUTHNAME=='')
+		{
+			writeline(@f,'b'+#AUTHNUM+#WSSRNO);
+		}
+		else
+		{
+			writeline(@f,'a'+#AUTHNAME+#WSSRNO);
+		}
+		closefile(@f);
+	close();	
+	//savefds('../tmp/tmp'+$KINBR+$TTYNAME+'.fmp');
+	//openprinter('screen');
+	//print(3,30,'授权信息');
+	//print(5,10,'交易名称:[30]',#TXNAME);
+	//print(6,10,'授权流水:[7]',#WSSRNO);
+	//print(7,10,'授 权 码:[7]',#AUTHNUM);
+	//print(8,10,'交易柜员:[4]',$FD7);
+	//print(9,10,'授权柜员:[4]',#AUTHNAME);
+	//showmsg('授权信息显示');
+	//closeprinter();
+	//print(3,30,'授权信息');
+	//print(5,10,'交易名称:[30]',#TXNAME);
+	//print(6,10,'授权流水:[7]',#WSSRNO);
+	//print(7,10,'授 权 码:[7]',#AUTHNUM);
+	//print(8,10,'交易柜员:[4]',$FD7);
+	//print(9,10,'授权柜员:[4]',#AUTHNAME);
+	//closeprinter();
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+</TRANSACTION>

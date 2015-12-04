@@ -1,0 +1,49 @@
+#ifndef __chnl_single_cnaps_CH__
+#define __chnl_single_cnaps_CH__
+struct chnl_single_cnaps_c{
+	char      rowid[20];
+	char      tx_time[7];
+	char      tx_code[5];
+	char      chnl_type[2];
+	char      bbmk[5];
+	long      pt_date;
+	char      pt_trace_no[13];
+	long      tx_date;
+	long      trace_no;
+	char      tx_br_no[6];
+	char      opn_br_no[6];
+	char      ct_ind[2];
+	char      ac_no[33];
+	char      ac_no1[33];
+	char      ac_no2[33];
+	char      cur_no[3];
+	double    tx_amt;
+	double    th_amt;
+	double    fee_amt;
+	char      sts[2];
+	char      ttyn[21];
+	char      tel[7];
+	long      o_tx_date;
+	char      o_trace_no[13];
+	long      o_pt_date;
+	char      o_pt_trace_no[13];
+	char      new_ac_no2[33];
+	char      new_ac_name2[61];
+	char      g_ac_no2[33];
+	char      dz_ind[2];
+	char      dz_ref[33];
+	char      pt_time[7];
+	char      brf[31];
+	long      fd15_cups;
+	char      fd11_cups[7];
+	char      fd7_cups[11];
+	char      fd32_cups[12];
+	char      fd33_cups[12];
+	char      fill1[33];
+	char      fill2[33];
+	double    fill3;
+	double    fill4;
+	long      fill5;
+	long      fill6;
+};
+#endif 

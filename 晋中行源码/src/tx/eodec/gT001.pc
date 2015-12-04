@@ -1,0 +1,130 @@
+/*************************************************************
+* 文 件 名: gT001.c
+* 功能描述：检查提供的数据中是否存在相同证件号码但名字不同的情况
+* 作    者: 
+* 完成日期: 2007-2-27 9:31
+*
+* 修改记录：
+* 日    期: 2007-2-27 9:31
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+EXEC SQL include sqlca;
+#include "dc_log_bk_c.h"
+
+gT001()
+{
+	int ret = 0;
+	int cnt=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	char cId    [21];
+	char cIdtype[2];
+	char cName  [81];
+	int  iTotCnt=0;
+	char cOld_Id    [21];
+	char cOld_Idtype[2];
+	char cOld_Name  [81];
+	EXEC SQL END DECLARE SECTION;
+	memset(cId    , 0 , sizeof(cId    ));
+	memset(cIdtype, 0 , sizeof(cIdtype));
+	memset(cName  , 0 , sizeof(cName  ));
+	memset(cOld_Id    , 0 , sizeof(cOld_Id    ));
+	memset(cOld_Idtype, 0 , sizeof(cOld_Idtype));
+	memset(cOld_Name  , 0 , sizeof(cOld_Name  ));
+
+	ret=sql_begin();
+	if( ret )
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL UPDATE CZCUST SET name=trim(name);
+	EXEC SQL update czcust set id_no=trim(id_no);
+	EXEC SQL DECLARE CUR_CNT CURSOR FOR select id_no,name,count(*) from czcust group by id_no,name order by id_no ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL OPEN CUR_CNT;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	cnt=0;
+	while(1)
+	{
+		memset(cId    , 0 , sizeof(cId    ));
+		memset(cIdtype, 0 , sizeof(cIdtype));
+		memset(cName  , 0 , sizeof(cName  ));
+		iTotCnt=0;
+		EXEC SQL FETCH CUR_CNT INTO :cId,:cName,:iTotCnt;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			goto ErrExit;
+		}
+		pub_base_strpack(cId);
+		pub_base_strpack(cName);
+		pub_base_strpack(cOld_Name);
+		pub_base_strpack(cOld_Id);
+		if(strlen(cId)<=1) continue;
+		/**
+		vtcp_log("%s,%d cOld_Id=[%s],cOld_Idtype=[%s],cOld_Name=[%s]",__FILE__,__LINE__,cOld_Id,cOld_Idtype,cOld_Name);
+		vtcp_log("%s,%d cId=[%s],cOld_Idtype=[%s],cName=[%s]",__FILE__,__LINE__,cId,cOld_Idtype,cName);
+		*/
+		if(strlen(cId)==strlen(cOld_Id))
+		if(memcmp(cId,cOld_Id,strlen(cId))==0 && (strlen(cOld_Name)!=strlen(cName) || memcmp(cOld_Name,cName,sizeof(cOld_Name)-1)!=0))
+		{
+			/* 如果上下两笔证件号码相同，那么就打印上下两笔户名 */
+			vtcp_log("%s,%d old_id=[%s],old_name=[%s]",__FILE__,__LINE__,cOld_Id,cOld_Name);
+			vtcp_log("%s,%d     id=[%s],    name=[%s]",__FILE__,__LINE__,cId,cName);
+			vtcp_log(" ");
+		}
+		memset(cOld_Id    , 0 , sizeof(cOld_Id    ));
+		memset(cOld_Idtype, 0 , sizeof(cOld_Idtype));
+		memset(cOld_Name  , 0 , sizeof(cOld_Name  ));
+		strncpy(cOld_Id    , cId     , strlen(cId    ));
+		strncpy(cOld_Idtype, cIdtype , strlen(cIdtype));
+		strncpy(cOld_Name  , cName   , strlen(cName  ));
+		/*
+		vtcp_log("%s,%d cOld_Id=[%s],cOld_Idtype=[%s],cOld_Name=[%s]",__FILE__,__LINE__,cOld_Id,cOld_Idtype,cOld_Name);
+		*/
+		cnt++;
+	}
+	EXEC SQL CLOSE CUR_CNT;
+	vtcp_log("%s,%d ===== end =========",__FILE__,__LINE__);
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"测试程序执行成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	strcpy(g_pub_tx.reply,"D008");
+	sprintf(acErrMsg,"测试程序执行失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

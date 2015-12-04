@@ -1,0 +1,613 @@
+/*****************************************************
+* 文 件 名:  sp3611.pc
+* 功能描述： 实现机器自动监督功能
+* 作    者:  刘杨  (开封写) 
+* 完成日期
+* 修改记录： 
+* 日    期:  2007-1-15 13:35
+* 修 改 人:  xyy
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+#include "shjdcode_c.h"
+#include "xdtl_main_c.h"
+#include "tranpara_c.h"
+#define   MAX_CNT  5
+EXEC SQL INCLUDE sqlca;
+
+extern char * pcGetWorkday();
+
+int  sp3611()
+{
+    int  i,len;
+    int  count = 0;
+    int  packnum = 0;
+    int  check_num;
+    int  checkzd = 0;
+    int  length1;
+    char cTel      [TLRLENGTH+1];
+    char cBuf      [800];
+    char cBhday    [9];
+    char cTaname   [241];
+    char cTxno     [7];
+    char cTrancode [5];
+    char cXdtl_name[11];
+    char cXdtlno   [7];   /*对应流水表序号*/
+    char cXdtlflg  [6];   /*监督要素类型,0-字符型,1-浮点型;第二位表示监督方式,
+                                      0-要素的监督方式(显示),1-监督方式(录入)*/
+    char cName     [21];
+    char cLength   [3];
+    char cTmpBuf   [601];
+    /**这里定义老系统tis部分***/
+    char cTlrno    [TLRLENGTH+1];
+    char cWssrno    [7];
+    char cTmpBuf1  [31];
+    char cTmpBuf2  [31];
+    char cTmpBuf3  [31];
+    char cTmpBuf4  [31];
+    char cTmpBuf5  [31];
+    char cTmpBuf6  [31];
+    char cTmpBuf7  [31];
+    char cTmpBuf8  [31];
+    char cTmpBuf9  [31];
+    char cTmpBuf10 [31];
+    char cTmpBuf11 [31];
+    char cTmpBuf12 [31];
+    char cTmpBuf13 [31];
+    char cTmpBuf14 [31];
+    char cTmpBuf15 [31];
+    /***以上是老系统的tis部分***/
+    /***这里定义的老系统的tos部分***/
+    char cShjdflg[2];
+    /***以上是老系统的tos部分***/
+    struct shjdcode_c wd_shjdcode;
+    struct tranpara_c wd_tranpara;
+    struct global_c  global;
+    struct xdtl_main_c xdtl_main;
+    
+    len =0;
+    memset(cTel     , 0 , sizeof(cTel));
+    memset(cBuf     , 0 , sizeof(cBuf));
+    memset(cTaname  , 0 , sizeof(cTaname));
+    memset(cWssrno  , 0 , sizeof(cWssrno));
+    memset(cTlrno   , 0 , sizeof(cTlrno));
+    memset(cTxno    , 0 , sizeof(cTxno));
+    memset(cTrancode, 0 , sizeof(cTrancode));
+    memset(cXdtlno   , 0 , sizeof(cXdtlno));
+    memset(cName     , 0 , sizeof(cName));
+    memset(cLength   , 0 , sizeof(cLength));
+    memset(cTaname   , 0 , sizeof(cTaname));
+    memset(cXdtlflg  , 0 , sizeof(cXdtlflg));
+    memset(cXdtl_name, 0 , sizeof(cXdtl_name));
+    memset(cShjdflg , 0 , sizeof(cShjdflg));
+    memset(cTmpBuf  , 0 , sizeof(cTmpBuf));
+    memset(cTmpBuf1 , 0 , sizeof(cTmpBuf1 ));
+    memset(cTmpBuf2 , 0 , sizeof(cTmpBuf2 ));
+    memset(cTmpBuf3 , 0 , sizeof(cTmpBuf3 ));
+    memset(cTmpBuf4 , 0 , sizeof(cTmpBuf4 ));
+    memset(cTmpBuf5 , 0 , sizeof(cTmpBuf5 ));
+    memset(cTmpBuf6 , 0 , sizeof(cTmpBuf6 ));
+    memset(cTmpBuf7 , 0 , sizeof(cTmpBuf7 ));
+    memset(cTmpBuf8 , 0 , sizeof(cTmpBuf8 ));
+    memset(cTmpBuf9 , 0 , sizeof(cTmpBuf9 ));
+    memset(cTmpBuf10, 0 , sizeof(cTmpBuf10));
+    memset(cTmpBuf11, 0 , sizeof(cTmpBuf11));
+    memset(cTmpBuf12, 0 , sizeof(cTmpBuf12));
+    memset(cTmpBuf13, 0 , sizeof(cTmpBuf13));
+    memset(cTmpBuf14, 0 , sizeof(cTmpBuf14));
+    memset(cTmpBuf15, 0 , sizeof(cTmpBuf15));
+    memset(&wd_shjdcode,0,sizeof(wd_shjdcode));
+    memset(&wd_tranpara,0,sizeof(wd_tranpara));
+    memset(&global     ,0,sizeof(global));
+    memset(&xdtl_main  ,0,sizeof(xdtl_main));
+
+    vtcp_log("[%s][%d] dh110700开始喽\n",__FILE__,__LINE__);
+
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    get_fd_data("0070",cTel);
+    get_fd_data("0950",cTmpBuf);
+    vtcp_log("[%s][%d]cTmpBuf=[%s]",__FILE__,__LINE__,cTmpBuf);
+    memcpy(cTmpBuf1 ,cTmpBuf   ,sizeof(cTmpBuf1)-1);
+    len +=30;
+    memcpy(cTmpBuf2,cTmpBuf+len,sizeof(cTmpBuf2)-1); 
+    len +=30;            
+    memcpy(cTmpBuf3,cTmpBuf+len,sizeof(cTmpBuf3)-1); 
+    len +=30;            
+    memcpy(cTmpBuf4,cTmpBuf+len,sizeof(cTmpBuf4)-1); 
+    len +=30;            
+    memcpy(cTmpBuf5,cTmpBuf+len,sizeof(cTmpBuf5)-1); 
+    len +=30;            
+    memcpy(cTmpBuf6,cTmpBuf+len,sizeof(cTmpBuf6)-1); 
+    len +=30;            
+    memcpy(cTmpBuf7,cTmpBuf+len,sizeof(cTmpBuf7)-1); 
+    len +=30;            
+    memcpy(cTmpBuf8,cTmpBuf+len,sizeof(cTmpBuf8)-1); 
+    len +=30;            
+    memcpy(cTmpBuf9,cTmpBuf+len,sizeof(cTmpBuf9)-1); 
+    len +=30;            
+    memcpy(cTmpBuf10,cTmpBuf+len,sizeof(cTmpBuf10)-1); 
+    len +=30;            
+    memcpy(cTmpBuf11,cTmpBuf+len,sizeof(cTmpBuf11)-1); 
+    len +=30;            
+    memcpy(cTmpBuf12,cTmpBuf+len,sizeof(cTmpBuf12)-1);
+    len +=30;            
+    memcpy(cTmpBuf13,cTmpBuf+len,sizeof(cTmpBuf13)-1); 
+    len +=30;            
+    memcpy(cTmpBuf14,cTmpBuf+len,sizeof(cTmpBuf14)-1); 
+    len +=30;            
+    memcpy(cTmpBuf15,cTmpBuf+len,sizeof(cTmpBuf15)-1); 
+    vtcp_log("[%s][%d]len==[%d]",__FILE__,__LINE__,len);
+    vtcp_log("[%s][%d]cTmpBuf1==[%s]",__FILE__,__LINE__,cTmpBuf1);
+    vtcp_log("[%s][%d]cTmpBuf2==[%s]",__FILE__,__LINE__,cTmpBuf2);
+    vtcp_log("[%s][%d]cTmpBuf3==[%s]",__FILE__,__LINE__,cTmpBuf3);
+    vtcp_log("[%s][%d]cTmpBuf4==[%s]",__FILE__,__LINE__,cTmpBuf4);
+    vtcp_log("[%s][%d]cTmpBuf5==[%s]",__FILE__,__LINE__,cTmpBuf5);
+    vtcp_log("[%s][%d]cTmpBuf6==[%s]",__FILE__,__LINE__,cTmpBuf6);
+    vtcp_log("[%s][%d]cTmpBuf7==[%s]",__FILE__,__LINE__,cTmpBuf7);
+    vtcp_log("[%s][%d]cTmpBuf8==[%s]",__FILE__,__LINE__,cTmpBuf8);
+    vtcp_log("[%s][%d]cTmpBuf9==[%s]",__FILE__,__LINE__,cTmpBuf9);
+    vtcp_log("[%s][%d]cTmpBuf10==[%s]",__FILE__,__LINE__,cTmpBuf10);
+    vtcp_log("[%s][%d]cTmpBuf11==[%s]",__FILE__,__LINE__,cTmpBuf11);
+    vtcp_log("[%s][%d]cTmpBuf12==[%s]",__FILE__,__LINE__,cTmpBuf12);
+    vtcp_log("[%s][%d]cTmpBuf13==[%s]",__FILE__,__LINE__,cTmpBuf13);
+    vtcp_log("[%s][%d]cTmpBuf14==[%s]",__FILE__,__LINE__,cTmpBuf14);
+    vtcp_log("[%s][%d]cTmpBuf15==[%s]",__FILE__,__LINE__,cTmpBuf15);
+    memset(cBhday , 0 ,sizeof(cBhday));
+    g_reply_int = Global_Sel(g_pub_tx.reply,global,"1=1");
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查系统时间标错误[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cBhday,global.global_bhdate,sizeof(cBhday)-1);
+    vtcp_log("[%s][%d]cBhday===[%s]",__FILE__,__LINE__,cBhday);
+    
+    g_reply_int = Xdtl_main_Sel(g_pub_tx.reply,xdtl_main,"wssrno='%s' and tlrno='%s' and txday='%s' ",cWssrno,cTlrno,cBhday);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]此笔流水无须监督或尚未配置[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cTxno,xdtl_main.txtno,sizeof(cTxno)-1);/**xdtl_main表中的txtno字段是6位**/
+    zip_space(cTxno); 
+    vtcp_log("[%s][%d]cTxno===[%s]",__FILE__,__LINE__,cTxno);
+    
+    g_reply_int = Shjdcode_Sel(g_pub_tx.reply,&wd_shjdcode,"trancode='%.4s' ",cTxno);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]查事后登记簿错[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    memcpy(cTrancode,wd_shjdcode.trancode,sizeof(cTrancode)-1);
+    vtcp_log("[%s][%d]cTrancode===[%s]",__FILE__,__LINE__,cTrancode);
+
+    check_num = 1;
+    
+    /******************************/
+    /*如果没有机器监督项,则空返回**/
+    /**并将监督标志置成已监督状态**/
+    /******************************/
+    g_reply_int = Tranpara_Sel(g_pub_tx.reply,&wd_tranpara,"trancode='%s' and substr(xdtl_flag,2,1) = '1' order by recno",cTrancode);
+    if(g_reply_int == 1403)
+    {
+       /****把xdtl_main记录状态置1******/
+       g_reply_int = sql_execute("update xdtl_main set stat='1' ,shtlrno='%s' where txday='%s' and tlrno='%s' and wssrno='%s' ",cTel,cBhday,cTlrno,cWssrno);
+       if(g_reply_int)
+       {
+           sprintf( acErrMsg,"更新监督状态错[%s][%d]", __FILE__,__LINE__);
+           strcpy( g_pub_tx.reply, "P015" );
+           set_zd_data(DC_GET_MSG,acErrMsg);
+           WRITEMSG
+           goto ErrExit;
+       }
+       EXEC SQL commit;
+       checkzd = 1;
+       goto ErrExit;
+    }
+    /******************************/
+    
+    if(Pshjd_bfbcz() == 1){         /*控制监督量函数*/
+      vtcp_log("抽查监督数据总量已符合要求,剩余无需监督!");
+      return;
+    }
+    
+    g_reply_int = Tranpara_Dec_Sel( g_pub_tx.reply,"trancode='%s' and substr(xdtl_flag,2,1) = '1' order by recno ",cTrancode);
+    if( g_reply_int )
+    {
+        sprintf( acErrMsg,"[%s][%d]声明tranpara游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while (1) 
+    { 
+      memset(cXdtlno   , 0 , sizeof(cXdtlno));
+      memset(cName     , 0 , sizeof(cName));
+      memset(cLength   , 0 , sizeof(cLength));
+      memset(cTaname   , 0 , sizeof(cTaname));
+      memset(cXdtlflg  , 0 , sizeof(cXdtlflg));
+      memset(cXdtl_name, 0 , sizeof(cXdtl_name));
+      
+      length1 = 0;
+    
+      g_reply_int = Tranpara_Fet_Sel(&wd_tranpara, g_pub_tx.reply );
+      if (g_reply_int) 
+      {
+        if (i == 0)
+        {
+            vtcp_log("[%s][%d]此笔流水无须监督或尚未配置!",__FILE__,__LINE__);
+            sprintf( acErrMsg,"[%s][%d]此笔流水无须监督或尚未配置[%d]",__FILE__,__LINE__,g_reply_int);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        break;
+      }
+      i++;
+      memcpy(cXdtl_name,wd_tranpara.xdtl_name  ,sizeof(cXdtl_name)-1);
+      memcpy(cName     ,wd_tranpara.name       ,sizeof(cName)-1);
+      memcpy(cLength   ,wd_tranpara.length     ,sizeof(cLength)-1);
+      memcpy(cXdtlno   ,wd_tranpara.xdtl_no     ,sizeof(cXdtlno)-1);
+      memcpy(cXdtlflg  ,wd_tranpara.xdtl_flag  ,sizeof(cXdtlflg)-1);
+      
+      sprintf(cBuf, "select %s from xdtl_main where tlrno='%s' and wssrno='%s' and txday='%s'",cXdtl_name,cTlrno,cWssrno,cBhday);
+    
+      vtcp_log("[%s][%d]cBuf=[%s]",__FILE__,__LINE__,cBuf);
+    
+      EXEC SQL PREPARE s2 FROM :cBuf;
+      if(sqlca.sqlcode)
+      {
+           vtcp_log("[%s][%d]准备游标错误![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+           sprintf( acErrMsg,"[%s][%d]准备游标错误[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+           strcpy( g_pub_tx.reply, "P015" );
+           set_zd_data(DC_GET_MSG,acErrMsg);
+           WRITEMSG
+           goto ErrExit;
+      }
+      EXEC SQL DECLARE c2 CURSOR FOR s2;
+      EXEC SQL OPEN c2;
+      if(sqlca.sqlcode)
+      {
+           vtcp_log("[%s][%d]打开游标错误![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+           sprintf( acErrMsg,"[%s][%d]打开游标错误[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+           strcpy( g_pub_tx.reply, "P015" );
+           set_zd_data(DC_GET_MSG,acErrMsg);
+           WRITEMSG
+           goto ErrExit;
+      }
+      EXEC SQL FETCH  c2  INTO :cTaname;
+      EXEC SQL CLOSE  c2;
+      
+      trim(cXdtl_name);
+      length1 = atoi(cLength);
+      if(memcmp(cXdtl_name,"text",4)==0)  /*对text字段的处理*/
+      {           
+          int   number;
+          char  ls_taname[31];
+          
+          memset(ls_taname,'\0',sizeof(ls_taname));
+          number = atoi(cXdtlno);
+          memcpy(ls_taname,cTaname+number,length1);
+          memset(cTaname,'\0',sizeof(cTaname)-1);
+          memcpy(cTaname,ls_taname,length1);
+          vtcp_log("[%s][%d]cTaname =[%s]!",__FILE__,__LINE__,cTaname);  
+      }
+      
+      int   len = 0;
+      
+      trim(cTaname);
+      vtcp_log("[%s][%d] taname=[%s]\n",__FILE__,__LINE__,cTaname);
+      switch(check_num)
+      {
+        case 1:
+          len = strlen(cTmpBuf1);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf1,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf1);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 2:
+          len = strlen(cTmpBuf2);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf2,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf2);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 3:
+          len = strlen(cTmpBuf3);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf3,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf3);
+            }else{
+              check_num++;
+              packnum = 1;
+            } 
+          }
+        case 4:
+          len = strlen(cTmpBuf4);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf4,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf4);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 5:
+          len = strlen(cTmpBuf5);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf5,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf5);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 6:
+          len = strlen(cTmpBuf6);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf6,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf6);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 7:
+          len = strlen(cTmpBuf7);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf7,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf7);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 8:
+          len = strlen(cTmpBuf8);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf8,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf8);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 9:
+          len = strlen(cTmpBuf9);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf9,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf9);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 10:
+          len = strlen(cTmpBuf10);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf10,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf10);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 11:
+          len = strlen(cTmpBuf11);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf11,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf11);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 12:
+          len = strlen(cTmpBuf12);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf12,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf12);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 13:
+          len = strlen(cTmpBuf13);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf13,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf13);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 14:
+          len = strlen(cTmpBuf14);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf14,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf14);
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+          }
+        case 15:
+          len = strlen(cTmpBuf15);
+          if(len != 0){
+            if(memcmp(cTaname,cTmpBuf15,length1)!=0){
+              check_num++;
+              vtcp_log("[%s][%d]错误[%s]!=[%s]\n",__FILE__,__LINE__,cTaname,cTmpBuf15);
+              vtcp_log("监督失败![%s不一致]",cTaname);
+              return 0;
+            }else{
+              check_num++;
+              packnum = 1;
+            }
+            break;
+          }
+          vtcp_log("监督失败![%s不一致]",cTaname);
+          packnum = 0;
+          break;
+        default:
+          vtcp_log("监督超出范围!");
+          break;
+      }
+      
+      if(packnum == 0)
+      {
+        /****把xdtl_main记录状态置0******/
+        g_reply_int = sql_execute("update xdtl_main set stat='0' where txday='%s' and tlrno='%s' and wssrno='%s' ",cBhday,cTlrno,cWssrno);
+        if(g_reply_int)
+        {
+            sprintf( acErrMsg,"更新xdtl_main表失败[%s][%d]", __FILE__,__LINE__);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        checkzd = 0;
+        break;
+      }
+      else if(packnum == 1)
+      {
+        /****把xdtl_main记录状态置1******/
+        g_reply_int = sql_execute("update xdtl_main set stat='1',shtlrno='%s' where txday='%s' and tlrno='%s' and wssrno='%s' ",cTel,cBhday,cTlrno,cWssrno);
+        if(g_reply_int)
+        {
+            sprintf( acErrMsg,"更新xdtl_main表失败[%s][%d]", __FILE__,__LINE__);
+            strcpy( g_pub_tx.reply, "P015" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        checkzd = 1;
+      }
+      else
+      {
+          sprintf( acErrMsg,"监督异常请与管理员联系[%s][%d]", __FILE__,__LINE__);
+          strcpy( g_pub_tx.reply, "P015" );
+          set_zd_data(DC_GET_MSG,acErrMsg);
+          WRITEMSG
+          checkzd = 0;
+          goto ErrExit;
+      }
+    }
+    Tranpara_Clo_Sel();
+    cShjdflg[0]= '1';
+    
+OkExit:
+    strcpy( g_pub_tx.reply, "0000" );
+    sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 0;
+ErrExit:
+    if(memcmp(g_pub_tx.reply,"0000",4)==0)
+    {
+        memcpy(g_pub_tx.reply,"T063",4);
+    }     
+    sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 1;     
+}
+
+int Pshjd_bfbcz()
+{
+  int   count_num;
+  int   tpcount_num;
+  int   tpcount_num1;
+  int   count;
+  double  ppcount_num;
+  char  text_count[4];
+  char  cText[201];
+  count = 0;
+  count_num = 0;
+  tpcount_num = 0;
+  tpcount_num1 = 0;
+  ppcount_num = 0;
+  memset(cText,'\0',sizeof(cText));
+  memset(text_count,'\0',sizeof(text_count));
+
+  count = sql_count("xdtl_main","stat <>'3' ");
+  if(count < 0)
+  {
+    vtcp_log("[%s][%d]取未监督总数错!",__FILE__,__LINE__);
+    return;
+  }
+  count_num = count;
+  count = 0;
+  
+  count = sql_count("xdtl_main","stat = '1' ");
+  if(count < 0)
+  {
+    vtcp_log("[%s][%d]取已监督总数错!",__FILE__,__LINE__);
+    return;
+  }
+  tpcount_num = count;
+  EXEC SQL select text INTO :cText from shjdcode where trancode='7011';
+  if(sqlca.sqlcode!=0)
+  {
+    vtcp_log("查询数据库出错!");
+    return;
+  }
+  memcpy(text_count,cText+17,sizeof(text_count)-1);
+  str2dbl(text_count,sizeof(text_count)-1,2,&ppcount_num);
+  tpcount_num1 = (int)count_num*ppcount_num;
+  if(tpcount_num > tpcount_num1)
+  {
+    EXEC SQL update xdtl_main set stat='1' where stat='0';
+    if(sqlca.sqlcode!=0)
+    {
+      vtcp_log("更新状态标志错!");
+      return;
+    }
+    EXEC SQL commit;
+    if(sqlca.sqlcode!=0)
+    {
+      vtcp_log("数据库操作提交失败!");
+      return;
+    }
+    return 1;
+  }
+}

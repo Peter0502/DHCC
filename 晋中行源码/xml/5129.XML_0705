@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5129 与村镇银行清算  "
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+      initfd();
+      commsend_001();
+      $FD30= #SH_AC_NO;
+      $FD31= #YX_AC_NO;
+      $FD43 = getitems('#ZCAMT');
+      $FD67 = #QS_FS;
+      $FD68 = #ZFLX;
+      $FD91 = #JGHM;
+      $FD44 = #QSDATE;
+      $FD120=getitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_A#FD120_B');
+      $FD121=getitems('#FD121_1#FD121_2#FD121_3#FD121_4#FD121_5#FD121_6#FD121_7#FD121_8#FD121_9#FD121_A#FD121_B');
+      $FD101=getitems('#FD10101#FD10102#FD10103#FD10104#FD10105#FD10106#FD10107#FD10108#FD10109#FD10110#FD10111#FD10112#FD10113#FD10114#FD10115');
+      $FD102=getitems('#FD102_1#FD102_2#FD102_3#FD102_4#FD102_5#FD102_6#FD102_7#FD102_8#FD102_9#FD102_10#FD102_11#FD102_12#FD102_13#FD102_14#FD102_15#FD102_16#FD102_17#FD102_18#FD102_19#FD102_20#FD102_21#FD102_22#FD102_23#FD102_24#FD102_25#FD102_26#FD102_27#FD102_28#FD102_29#FD102_30#FD102_31#FD102_32#FD102_33#FD102_34');
+      //showmsg('111');
+  }"
+  </COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+  <VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(5129                        与村镇银行清算)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   <ITEM NAME="#TXNO" 	 TYPE="%-4s" FUNCTIONS="T($TXNO=5206)"/>
+   <!--输入变量-->
+  <ITEM LINE="7"  COL="7" TYPE="%-14s" FUNCTIONS="T(支 付 类 型 :!)"/>
+  <ITEM LINE="7"  COL="36" TYPE="%-10s" FUNCTIONS="T(机构号码:!)"/>
+  <ITEM LINE="8"  COL="7" TYPE="%-14s" FUNCTIONS="T(清 算 日 期 :)"/>
+  <ITEM LINE="10" COL="7" TYPE="%-14s" FUNCTIONS="T(清 算 方 式 :)"/>
+  <ITEM LINE="11" COL="7" TYPE="%-14s" FUNCTIONS="T(商行清算账户:)"/>
+  <ITEM LINE="12" COL="7" TYPE="%-14s" FUNCTIONS="T(村镇清算账户:)"/>
+  <ITEM LINE="13" COL="7" TYPE="%-14s" FUNCTIONS="T(往 帐 金 额 :)"/>
+  <ITEM LINE="14" COL="7" TYPE="%-14s" FUNCTIONS="T(来 帐 金 额 :)"/>
+  <ITEM LINE="15" COL="7" TYPE="%-14s" FUNCTIONS="T(清 算 金 额 :)"/>
+  <ITEM NAME="#ZFLX" 	INPUT="SELECT" LINE="7" COL="20" TYPE="%-1s" 	FUNCTIONS="T(1)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="1" TITLE="1.大额"/>
+  		<OPTION VALUE="2" TITLE="2.小额"/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#JGHM" INPUT="TEXT" LINE="7" COL="47" TYPE="%5s" 	FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#QSDATE" INPUT="TEXT" LINE="8" COL="20" TYPE="%8d" 	FUNCTIONS="T($HDATE)D()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+      dim @txno_bak as string;
+      @txno_bak=$TXNO;
+      $TXNO='9505';
+      initfd();
+      commsend_001();
+      $FD44=#QSDATE;
+      $FD68=#ZFLX;
+      $FD91=#JGHM;
+      callserver();
+      $TXNO=@txno_bak;
+      if($FD12!='0000'){
+          showmsg(geterror());
+          return(false);
+      }
+      #QS_FS=$FD67;
+      #SH_AC_NO=$FD30;
+      #YX_AC_NO=$FD31;
+      setitems('#WZAMT',$FD39);
+      setitems('#LZAMT',$FD40);
+      setitems('#ZCAMT',$FD43);
+      if($FD67 == '1')
+      {
+          #CQS_FS='村镇银行往帐金额多，商行110清算账户计贷方';
+      }else
+      {
+          #CQS_FS='村镇银行来帐金额多，商行110或414清算账户计借方';
+      }
+      //往帐 村镇银行欠商行 清算账户记借，内部帐记贷
+      #FD102_1=#YX_AC_NO;
+      #FD102_2='0000';
+      #FD102_3='299';
+      #FD102_4='N';
+      #FD102_15=#WZAMT;
+      #FD102_19='01';
+      #FD102_20='2';
+      if(#ZFLX=='1'){
+        #FD102_34='大额清算';
+      } else {
+        #FD102_34='小额清算';
+      }
+	
+      //往帐 商行内部帐记贷方
+      #FD121_1=#SH_AC_NO;
+      #FD121_4='01';
+      #FD121_5='2';//转账
+      #FD121_8=#WZAMT;
+       if(#ZFLX=='1'){
+        #FD121_A=='大额清算';
+      } else {
+        #FD121_A=='小额清算';
+      }
+      
+      //来帐 商行欠村镇银行 清算账户记贷，内部帐记借
+      #FD120_1=#SH_AC_NO;
+      #FD10101=#YX_AC_NO;
+      #FD10103=#LZAMT;
+      #FD10104='299';
+      if(#ZFLX=='1'){
+        #FD10106='大额清算';
+      } else {
+        #FD10106='小额清算';
+      }
+      #FD10107='0';// 无折
+      #FD10110='01';
+      #FD10111='2';//转账
+
+      //来帐 商行内部帐记借方
+      #FD120_1=#SH_AC_NO;
+      #FD120_4='01';
+      #FD120_5='2';//转账
+      #FD120_8=#LZAMT;
+      if(#ZFLX=='1'){
+        #FD120_A=='大额清算';
+      } else {
+        #FD120_A=='小额清算';
+      }
+      
+
+      enable(#SH_AC_NO,true);
+      enable(#YX_AC_NO,true);
+      enable(#WZAMT,true);
+      enable(#LZAMT,true);
+      enable(#ZCAMT,true);
+      
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#QS_FS"   TYPE="%-1s"/>
+  <ITEM NAME="#CQS_FS"   INPUT="LABEL" LINE="10" COL="20" TYPE="%-50s" FUNCTIONS=""/>
+  <ITEM NAME="#SH_AC_NO" INPUT="TEXT" LINE="11" COL="20" TYPE="%20s"	FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#YX_AC_NO" INPUT="TEXT" LINE="12" COL="20" TYPE="%20s"	FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#WZAMT"    INPUT="TEXT" LINE="13"  COL="20" TYPE="%17.2f" FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#LZAMT"    INPUT="TEXT" LINE="14"  COL="20" TYPE="%17.2f" FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#ZCAMT"    INPUT="TEXT" LINE="15"  COL="20" TYPE="%17.2f" FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#CWZAMT"   TYPE="%20s" FUNCTIONS="X(#WZAMT)"/>
+  <ITEM NAME="#CLZAMT"   TYPE="%20s" FUNCTIONS="X(#LZAMT)"/>
+  <ITEM NAME="#CZCAMT"   TYPE="%20s" FUNCTIONS="X(#ZCAMT)"/>
+  <!-- 账务处理信息 -->
+  
+  <ITEM NAME="#FD120_1" TYPE="%20s"/>
+  <ITEM NAME="#FD120_2" TYPE="%60s"/>
+  <ITEM NAME="#FD120_3" TYPE="%16s"/>
+  <ITEM NAME="#FD120_4" TYPE="%2s"/>
+  <ITEM NAME="#FD120_5" TYPE="%1s" FUNCTIONS="T(2)"/>
+  <ITEM NAME="#FD120_6" TYPE="%3s"/>
+  <ITEM NAME="#FD120_7" TYPE="%16s"/>
+  <ITEM NAME="#FD120_8" TYPE="%17.2f"/>
+  <ITEM NAME="#FD120_9" TYPE="%2s"/>
+  <ITEM NAME="#FD120_A" TYPE="%20s"/>
+  <ITEM NAME="#FD120_B" TYPE="%2s"/>
+
+  
+  <ITEM NAME="#FD121_1" TYPE="%20s" />
+  <ITEM NAME="#FD121_2" TYPE="%60s" />
+  <ITEM NAME="#FD121_3" TYPE="%16s" />
+  <ITEM NAME="#FD121_4" TYPE="%2s"  />
+  <ITEM NAME="#FD121_5" TYPE="%1s" FUNCTIONS="T(2)"/>
+  <ITEM NAME="#FD121_6" TYPE="%3s"  />
+  <ITEM NAME="#FD121_7" TYPE="%16s" />
+  <ITEM NAME="#FD121_8" TYPE="%17.2f"/>
+  <ITEM NAME="#FD121_9" TYPE="%2s"  />
+  <ITEM NAME="#FD121_A" TYPE="%20s" />
+  <ITEM NAME="#FD121_B" TYPE="%2s"  />
+
+<!-- 101域变量 -->
+  <ITEM NAME="#FD10101"    TYPE="%-24s"  FUNCTIONS=""/>     <!--1账号-->
+  <ITEM NAME="#FD10102"    TYPE="%4d"    FUNCTIONS="T(0000)"/>     <!--2账户序号-->
+  <ITEM NAME="#FD10103"    TYPE="%17.2f"/>  <!--3金额-->
+  <ITEM NAME="#FD10104"    TYPE="%-3s"   FUNCTIONS="" />    <!--4凭证种类-->
+  <ITEM NAME="#FD10105"    TYPE="%16d"   FUNCTIONS=""/>     <!--5凭证号-->
+  <ITEM NAME="#FD10106"    TYPE="%-10s"  FUNCTIONS=""/>     <!--6摘要-->
+  <ITEM NAME="#FD10107"    TYPE="%-1s"   FUNCTIONS=""/>     <!--7有折无折-->
+  <ITEM NAME="#FD10108"    TYPE="%-60s"  FUNCTIONS=""/>     <!--8户名-->
+  <ITEM NAME="#FD10109"    TYPE="%17.2f" FUNCTIONS=""/>     <!--9余额-->
+  <ITEM NAME="#FD10110"    TYPE="%-2s"   FUNCTIONS=""/>     <!--A币种-->
+  <ITEM NAME="#FD10111"    TYPE="%-1s"   FUNCTIONS=""/>     <!--B现转标志-->
+  <ITEM NAME="#FD10112"    TYPE="%-3s"   FUNCTIONS=""/>     <!--C摘要选项-->
+  <ITEM NAME="#FD10113"    TYPE="%-1s"   FUNCTIONS=""/>     <!--D帐户类型-->
+  <ITEM NAME="#FD10114"    TYPE="%-4s"   FUNCTIONS=""/>     <!--E账户序号2-->
+  <ITEM NAME="#FD10115"    TYPE="%-30s"  FUNCTIONS=""/>     <!--F产品名称-->
+<!-------以上是FD101域的内容 以下是FD102内容-------->
+  <ITEM NAME="#FD102_1"   TYPE="%-24s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_2"   TYPE="%-4s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_3"   TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_4"   TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_5"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_6"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_7"   TYPE="%-6s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_8"   TYPE="%-6s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_9"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_10"  TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_11"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_12"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_13"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_14"  TYPE="%-8s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_15"  TYPE="%17.2f"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_16"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_17"  TYPE="%-60s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_18"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_19"  TYPE="%-2s"   FUNCTIONS="T(01)"/>
+  <ITEM NAME="#FD102_20"  TYPE="%-1s"   FUNCTIONS="T(2)"/>
+  <ITEM NAME="#FD102_21"  TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_22"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_23"  TYPE="%-4s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_24"  TYPE="%-1s"   FUNCTIONS="T(0)"/>
+  <ITEM NAME="#FD102_25"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_26"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_27"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_28"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_29"  TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_30"  TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_31"  TYPE="%-30s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_32"  TYPE="%-24s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD102_33"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD102_34"  TYPE="%-20s"  FUNCTIONS=""/>
+<!--   以上是FD102内容 --->
+  <ITEM LINE="21" COL="59" NAME="#OK"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="支付系统与村镇银行清算">
+ NOTHING
+</PACKAGE>
+  <PRINT>"{
+          print( 2,  24,'交易名称:支付系统与村镇银行清算');
+
+          print( 4,  20,'交易机构:[5]',$FD2);
+          print( 5,  20,'交易日期:[8]',$HDATE);  
+          print( 6,  20,'流水号码:[6]',$FD4);
+          print( 7,  20,'操作员号:[4]',$FD7);
+          print( 8,  20,'清算方式:[50 ]',#CQS_FS);
+          print( 9,  20,'往帐金额:[20 ]',#CWZAMT);
+          print( 10, 20,'来帐金额:[20 ]',#CLZAMT);
+          print( 11, 20,'扎差金额:[20 ]',#CZCAMT);
+          print( 12, 20,'对方机构:[5  ]',#JGHM);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印专用凭证" LINESPACE="24">
+ NOTHING
+ </PACKAGE>
+  <PRINT>
+  "{
+$KINDNO='00';
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 4, 25,'[5]',$KINBR);
+	print( 4, 10,'[30]',$BRNAME);
+	print( 4, 5,'操作员号:[4]',$FD7);
+	print( 5, 15,'[6]',$FD4);
+	print( 5, 28,'支付系统与村镇银行清算');
+	print( 5, 22,'[8]  [8]',$HDATE,@txtime);
+	if(#JGHM=='99999')
+	print( 6, 15,'融信村镇银行:[5]',#JGHM);
+	printacdtl_1();
+	}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

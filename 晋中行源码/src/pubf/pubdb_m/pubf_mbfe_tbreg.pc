@@ -1,0 +1,89 @@
+#include "find_debug.h" 
+#include <stdio.h>
+
+#define EXTERN
+#include "public.h"
+#include "mbfepub.h"
+
+
+EXEC SQL INCLUDE sqlda.h;
+
+/*******************************************************************
+	大额支付自动登记登记簿函数
+*******************************************************************/
+pubf_mbfe_tbreg( struct mbfe_cmt_fmt_c *mbfe_cmt_fmt_v )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char	comm_sel[100];
+	char	comm_ins[1024];
+	struct	sqlda	*da_tbreg;
+EXEC SQL END DECLARE SECTION;
+
+	int i;
+	char colname[32];
+	char col_val[1024];
+	char comm_ins_tmp[1024];
+	struct mbfe_cmt_tag_c mbfe_cmt_tag_v;
+
+	MEMSET_DEBUG(comm_sel,0x00,sizeof(comm_sel));
+	MEMSET_DEBUG(comm_ins,0x00,sizeof(comm_ins));
+
+	sprintf(comm_sel,"select * from %s",mbfe_cmt_fmt_v->regtable);
+
+	sprintf(acErrMsg,"comm_select[%s]",comm_sel);
+	MBFEWRITEMSG
+	EXEC SQL PREPARE query_tbreg FROM :comm_sel;
+	if(sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"[%s]定义登记簿字段游标错",comm_sel);
+		MBFEERRDEAL
+	}
+
+	EXEC SQL DESCRIBE query_tbreg INTO da_tbreg;
+
+	strcpy(comm_ins,"insert into %s values(",mbfe_cmt_fmt_v->regtable);
+	for(i=0;i<da_tbreg->sqld;i++)
+	{
+		strcpy(colname,da_tbreg->sqlvar[i].sqlname);
+		g_reply_int=Mbfe_cmt_tag_Sel(g_pub_tx.reply,&mbfe_cmt_tag_v,"cmt_no='%s' and (field1='%s' or field2='%s')",mbfe_cmt_fmt_v->cmt_no,colname);
+		if(g_reply_int==100)
+		{
+			if(i==0)
+				strcat(comm_ins,"''");
+			else
+				strcat(comm_ins,",''");
+		}
+		else if(g_reply_int)
+		{
+			sprintf(acErrMsg,"[%s]取定义登记簿字段记录错,sqlcode[%d]",sqlca.sqlcode);
+			MBFEERRDEAL
+		}
+		else if(g_reply_int==0)
+		{
+			MEMSET_DEBUG(comm_ins_tmp,0x00,sizeof(comm_ins_tmp));
+			MEMSET_DEBUG(col_val,0x00,sizeof(col_val));
+
+			if(!strcmp(mbfe_cmt_tag_v.field1,colname));
+				mbfe_get_zd_tag(mbfe_cmt_tag_v,&col_val,1);
+			if(!strcmp(mbfe_cmt_tag_v.field2,colname));
+				mbfe_get_zd_tag(mbfe_cmt_tag_v,&col_val,2);
+
+			if(i==0)
+				sprintf(comm_ins_tmp,"'%s'",col_val);
+			else
+				sprintf(comm_ins_tmp,",'%s'",col_val);
+			strcat(comm_ins,comm_ins_tmp);
+		}
+	}
+	strcat(comm_ins,")");
+	sprintf(acErrMsg,"comm_insert[%s]",comm_ins);
+	MBFEWRITEMSG
+
+	if(sql_execute(comm_ins))
+	{
+			sprintf(acErrMsg,"自动登记登记簿出错");
+			MBFEERRDEAL
+	}
+
+	return 0;
+}

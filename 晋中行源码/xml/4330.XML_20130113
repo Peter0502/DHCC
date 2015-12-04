@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="4330 小区信息管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	$FD16='7605';
+	$FD30=#ACNO;
+	$FD25=#XQMC;
+	$FD26=#XQDZ;
+	$FD81=#LXR;
+	$FD27=#XQKFS;
+	//$FD52=#CODE;
+	$FD52=getitems('#CODE');
+	$FD58=#LXDH;
+	$FD70=#CLFS;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4330                          小区信息管理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=7605)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXNAME"  TYPE="%-20s" FUNCTIONS="T(小区信息管理)"/><!---交易名称--->
+
+	<ITEM NAME="#LCR"  LINE="06" COL="06" TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(处理方式:)"/>
+	<ITEM NAME="#CLFS" LINE="06" COL="18" TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(1)">
+		<SELECT>
+			<OPTION  VALUE="1" TITLE="新建"/>
+			<OPTION  VALUE="2" TITLE="修改"/>
+			<OPTION  VALUE="3" TITLE="删除"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#CLFS=='1')
+			{
+				show(#LCJR,false);
+				show(#CJRQ,false);
+				show(#LCJS,false);
+				show(#CJSJ,false);
+				show(#LXGR,false);
+				show(#XGRQ,false);
+				show(#LXGS,false);
+				show(#XGSJ,false);
+				show(#LXGY,false);
+				show(#XGGY,false);
+			}
+			else
+			{
+				show(#LCJR,true);
+				show(#CJRQ,true);
+				show(#LCJS,true);
+				show(#CJSJ,true);
+				show(#LXGR,true);
+				show(#XGRQ,true);
+				show(#LXGS,true);
+				show(#XGSJ,true);
+				show(#LXGY,true);
+				show(#XGGY,true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#LZZH" LINE="07" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(主 账 号:)"/>
+	<ITEM NAME="#ACNO" LINE="07" COL="18" TYPE="%-19s" INPUT="TEXT"  FUNCTIONS="V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			dim @tota as string;
+			dim @cnt  as number;
+				initfd();
+				commsend_001();
+				$FD16='9706';
+				$FD30=#ACNO;
+				callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				if(substr($FD88,0,1)!='1')
+				{
+					showmsg('此账户不能开立子账户');
+					return(false);
+				}
+				if($FD2!=$KINBR)
+				{
+					showmsg('请到开户网点办理业务');
+					return(false);
+				}
+				//获得小区编号
+			if(#CLFS=='1')
+			{
+				initfd();
+				commsend_001();
+				$FD16='9598';
+				$FD123='select count(*) from xqdz';
+				@tota=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				@cnt=val(strfld(@tota,'|',0),1);
+				@cnt=@cnt+1;
+				#CODE=itoa(@cnt);
+				enable(#CODE,false);
+			}
+			else
+			{
+				enable(#CODE,true);
+				if(#CLFS=='3')
+				{
+					enable(#XQMC,false);
+					enable(#XQDZ,false);
+					enable(#LXR,false);
+					enable(#LXDH,false);
+					enable(#XQKFS,false);
+				}
+				else
+				{
+					enable(#XQMC,true);
+					enable(#XQDZ,true);
+					enable(#LXR,true);
+					enable(#LXDH,true);
+					enable(#XQKFS,true);
+				}
+			}
+			refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#LCOD" LINE="08" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区编号:)"/>
+	<ITEM NAME="#CODE" LINE="08" COL="18" TYPE="%-12s"   INPUT="TEXT"  FUNCTIONS="T()V(NB)"  >
+		<ONLOSTFOCUS>
+		"{
+				dim @tota  as string;
+				initfd();
+				commsend_001();
+				$FD16='9598';
+				$FD123='select * from xqdz where xqdz100='+chr(39)+#ACNO+chr(39)+' and xqdz30='+chr(39)+'1'+chr(39)+' and xqdz101='+chr(39)+delspace(#CODE)+chr(39);
+				@tota=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				if(len(@tota) &lt; 1)
+				{
+					showmsg('无此小区信息');
+					return(false);
+				}
+				#XQMC=strfld(@tota,'|',4);
+				#XQDZ=strfld(@tota,'|',5);
+				#LXR=strfld(@tota,'|',6);
+				#LXDH=strfld(@tota,'|',7);
+				#CJRQ=strfld(@tota,'|',8);
+				#CJSJ=strfld(@tota,'|',9);
+				#XGRQ=strfld(@tota,'|',11);
+				#XGSJ=strfld(@tota,'|',12);
+				#XGGY=strfld(@tota,'|',13);
+				#XQKFS=strfld(@tota,'|',15);
+				refresh();
+
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#LMC"  LINE="09" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区名称:)"/>
+	<ITEM NAME="#XQMC" LINE="09" COL="18" TYPE="%-60s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM NAME="#LDZ"  LINE="10" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(小区地址:)"/>
+	<ITEM NAME="#XQDZ" LINE="10" COL="18" TYPE="%-60s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM NAME="#KFS"  LINE="11" COL="06" TYPE="%-12s" INPUT="LABEL" FUNCTIONS="T(小区开发商:)"/>
+	<ITEM NAME="#XQKFS" LINE="11" COL="18" TYPE="%-60s" INPUT="TEXT"  FUNCTIONS="T()V(NB)"/>
+	<ITEM NAME="#LLXR" LINE="12" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(联 系 人:)"/>
+	<ITEM NAME="#LXR"  LINE="12" COL="18" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM NAME="#LLXDH" LINE="13" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(联系电话:)"/>
+	<ITEM NAME="#LXDH" LINE="13" COL="18" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM NAME="#LCJR" LINE="14" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(创建日期:)" VISABLE="FALSE" />
+	<ITEM NAME="#CJRQ" LINE="14" COL="18" TYPE="%-8d"  INPUT="TEXT" FUNCTIONS="D()" VISABLE="FALSE" ENABLE="FALSE" />
+	<ITEM NAME="#LCJS" LINE="15" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(创建时间:)" VISABLE="FALSE" />
+	<ITEM NAME="#CJSJ" LINE="15" COL="18" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T()" VISABLE="FALSE" />
+	<ITEM NAME="#LXGR" LINE="16" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(修改日期:)" VISABLE="FALSE" />
+	<ITEM NAME="#XGRQ" LINE="16" COL="18" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T()" VISABLE="FALSE" />
+	<ITEM NAME="#LXGS" LINE="17" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(修改时间:)" VISABLE="FALSE" />
+	<ITEM NAME="#XGSJ" LINE="17" COL="18" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T()" VISABLE="FALSE" />
+	<ITEM NAME="#LXGY" LINE="18" COL="06" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(修改柜员:)" VISABLE="FALSE" />
+	<ITEM NAME="#XGGY" LINE="18" COL="18" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T()" VISABLE="FALSE" />
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="小区管理">
+ NOTHING
+</PACKAGE>
+	<PRINT>"{
+	          print( 2,  24,'交易名称:小 区 管 理');
+
+		print( 6, 20,'小区名称:[20 ]',#XQMC);
+		print( 7, 20,'小区编号:[20 ]',#CODE);
+		print( 8, 20,'小区地址:[20 ]',#XQDZ);
+		print( 9, 20,'联 系 人:[16 ]',#LXR);
+		print(10, 20,'联系电话:[16 ]',#LXDH);
+		}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+ NOTHING
+	</PACKAGE>
+	<PRINT>
+  "{
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	// if($REPRINT=='true')
+	// {
+	// 	reprint_nx();
+	// }
+		print( 2,  24,'交易名称:小区管理');
+
+		print( 4,  12,'交易机构:[5]',$FD2);
+		print( 5,  12,'交易日期:[4]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+		print( 6,  12,'流水号码:[6]',$FD4);
+	 	print( 7,  12,'操作员号:[6]',$FD7);
+		print( 9,  12,'小区名称:[20 ]',#XQMC);
+		print( 10, 12,'小区编号:[20 ]',#CODE);
+		print( 11, 12,'小区地址:[20 ]',#XQDZ);
+		print( 12, 12,'联 系 人:[16 ]',#LXR);
+		print( 13, 12,'联系电话:[16 ]',#LXDH);
+		print(18,12,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(18,5,'柜员:[6]',$FD7);
+		print(18,5,'流水号:[6]',$FD4);
+		print(19,12,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

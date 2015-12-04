@@ -1,0 +1,227 @@
+/******************************************************************************
+*交易名称：事后监督差错管理                                                   *
+*函数名称：sp3612.pc                                                          *
+*功能描述:                                                                    *
+*编写人：         ZhangFan                                                    *
+*编写日期：       2007/1/15                                                   *
+*修 改 人：       YXJ                                                         *
+*修改日期：       2007/03/22                                                  *
+*数据库表:        sherrmsg                                                    *
+******************************************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "sherrmsg_c.h"
+
+int sp3612()
+{
+    	char      tx_day[9];
+    	char      trace_no[7];
+    	char      err_lvl[3];
+	char cFlg[2];
+	char f_day[9];
+	char if_prt[2];
+
+	memset(cFlg,'\0',sizeof(cFlg));
+    	memset(tx_day  , 0 , sizeof(tx_day));
+    	memset(trace_no  , 0 , sizeof(trace_no));
+    	memset(err_lvl  , 0 , sizeof(err_lvl));
+    	memset(f_day  , 0 , sizeof(f_day));
+    	memset(if_prt  , 0 , sizeof(if_prt));
+
+	sprintf(f_day,"%8d",g_pub_tx.tx_date);
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+    	pub_base_sysinit();
+    	/***这里从前台得到数值***/
+    	get_fd_data("0440",tx_day);
+    	get_fd_data("0170",trace_no);
+    	get_fd_data("0670",err_lvl);
+	get_fd_data("0200",cFlg);
+    	get_fd_data("0680",if_prt);
+	vtcp_log("[%s][%d]tx_day  ==[%s]",__FILE__,__LINE__,tx_day);
+    	vtcp_log("[%s][%d]trace_no  ==[%s]",__FILE__,__LINE__,trace_no);
+    	vtcp_log("[%s][%d]err_lvl  ==[%s]",__FILE__,__LINE__,err_lvl);
+    	vtcp_log("[%s][%d]cFlg  ==[%s]",__FILE__,__LINE__,cFlg);
+    	vtcp_log("[%s][%d]>>>>>>>>>>>if_prt ==[%s]",__FILE__,__LINE__,if_prt);
+	switch(cFlg[0]){
+		case '0':
+			g_reply_int=refresh_rec(tx_day);
+       			if(g_reply_int){
+               			goto ErrExit;
+       			}
+			break;
+		case '1':
+			memset(f_day,'\0',sizeof(f_day));
+			g_reply_int=upd_rec(tx_day,trace_no,err_lvl,f_day,if_prt);
+       			if(g_reply_int){
+               			goto ErrExit;
+       			}
+			break;
+		case '2':
+			g_reply_int=upd_rec(tx_day,trace_no,err_lvl,f_day,if_prt);
+       			if(g_reply_int){
+               			goto ErrExit;
+       			}
+			break;
+		default:
+			vtcp_log("错误的操作类型[%s]\n",cFlg);
+			sprintf(acErrMsg,"错误的操作类型[%s]",cFlg);
+			goto ErrExit;
+	}
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;  
+} 
+int  refresh_rec(char tx_day[])
+{
+	FILE *fp;
+	int iNum=0;
+	char filename[100];
+	char err_lvl[9];
+	char tmp_buf[101];
+	char err_msg[21];
+	char err_dscpt[101];
+	char pin_day[9];
+	char re_buf[301];
+	struct sherrmsg_c wd_sherrmsg;
+	memset(&wd_sherrmsg,'\0',sizeof(wd_sherrmsg));
+	memset(filename,'\0',sizeof(filename));
+	memset(re_buf,'\0',sizeof(re_buf));
+	g_reply_int=Sherrmsg_Dec_Sel(g_pub_tx.reply,"txday='%s' order by tlrno,wssrno",tx_day);	
+	if(g_reply_int){
+		vtcp_log("[%s][%d] 声明游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+		sprintf(acErrMsg,"声明游标出错");
+		WRITEMSG
+		return g_reply_int;
+	}
+	while(1){
+		g_reply_int=Sherrmsg_Fet_Sel(&wd_sherrmsg,g_pub_tx.reply);
+		if(g_reply_int){
+			if(g_reply_int==100){
+				if(iNum==0){
+					vtcp_log("[%s][%d] 数据库记录为空",__FILE__,__LINE__);
+					sprintf(acErrMsg,"数据库记录为空");
+					WRITEMSG
+					return 1;
+				}
+				break;
+			}
+			vtcp_log("[%s][%d] 取sherrmsg数据错误[%d]",__FILE__,__LINE__,g_reply_int);
+			sprintf(acErrMsg,"取差错登记簿出错[%d]",g_reply_int);
+			WRITEMSG
+			return g_reply_int;
+		}
+		if(iNum==0){
+			pub_base_AllDwnFilName(filename);
+			fp=fopen(filename,"w");
+			if(fp==NULL){
+				vtcp_log("[%s][%d]open file or [%s]",__FILE__,__LINE__,filename);
+				sprintf(acErrMsg,"[%s][%d]open file or [%s]",__FILE__,__LINE__,filename);
+				WRITEMSG
+				return 1;
+			}
+			/*写标题
+			fprintf(fp,"~交易日期|交易机构|操作柜员|交易流水|交易名称|差错级别|差错信息|差错日期|\n");
+			*/
+		}
+		memset(err_lvl,'\0',sizeof(err_lvl));
+		switch(atoi(wd_sherrmsg.errseq)){
+			case 0: memcpy(err_lvl,"暂无级别",sizeof(err_lvl)-1);
+                                break;
+                        case 1: memcpy(err_lvl,"一级错误",sizeof(err_lvl)-1);
+                                break;
+                        case 2:
+                                memcpy(err_lvl,"二级错误",sizeof(err_lvl)-1);
+                                break;
+                        case 3:
+                                memcpy(err_lvl,"三级错误",sizeof(err_lvl)-1);
+                                break;
+                        case 4:
+                                memcpy(err_lvl,"查询查复",sizeof(err_lvl)-1);
+                                break;
+                        default:
+				vtcp_log("[%s][%d] 错误的差错级别[%s]",__FILE__,__LINE__,wd_sherrmsg.errseq);
+				sprintf(acErrMsg,"错误的差错级别[%s]",wd_sherrmsg.errseq);
+				WRITEMSG
+				return 1;
+		}
+		memset(tmp_buf,'\0',sizeof(tmp_buf));
+		memset(err_dscpt,'\0',sizeof(err_dscpt));
+		memcpy(tmp_buf,wd_sherrmsg.errmsg,sizeof(tmp_buf)-1);
+		memset(err_msg,'\0',sizeof(err_msg));
+vtcp_log(">>>>>>>>>>>>errmsg=%s",wd_sherrmsg.errmsg);
+		if(tmp_buf[0]=='1'){
+			strcpy(err_msg,"已打印");
+		}
+		else{
+			strcpy(err_msg,"未打印");
+		}
+		memset(pin_day,'\0',sizeof(pin_day));
+		memcpy(pin_day,wd_sherrmsg.errmsg+1,sizeof(pin_day)-1);
+		memcpy(err_dscpt,wd_sherrmsg.errmsg+9,sizeof(err_dscpt)-1);
+vtcp_log("err_dscpt|%s",err_dscpt);
+		fprintf(fp,"%s|%s|%s|%s|%s|%s|%s|%s|%s|\n",tx_day,wd_sherrmsg.kinbr,wd_sherrmsg.tlrno,wd_sherrmsg.wssrno,wd_sherrmsg.tranname,err_lvl,err_msg,err_dscpt,wd_sherrmsg.sdtlrno);
+		iNum++;
+		vtcp_log("<<<<<<<<<<iNum[%d]",iNum);
+	}
+	Sherrmsg_Clo_Sel();
+	fclose(fp);
+	if(iNum){
+                set_zd_data(DC_FILE_SND,"1" );
+	}
+	return 0;
+}
+int  upd_rec(char tx_day[],char trace_no[],char lvl[],char f_day[],char if_prt[])
+{
+	struct sherrmsg_c wd_sherrmsg;
+	memset(&wd_sherrmsg,'\0',sizeof(wd_sherrmsg));
+	g_reply_int = Sherrmsg_Dec_Upd(g_pub_tx.reply,"txday='%s' and wssrno='%s'",tx_day,trace_no);
+        if(g_reply_int != 0){
+        	sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",g_reply_int);
+                WRITEMSG
+		return g_reply_int;
+        }
+        g_reply_int=Sherrmsg_Fet_Upd(&wd_sherrmsg,g_pub_tx.reply);
+	if (g_reply_int != 0){
+        	sprintf(acErrMsg,"FETCH ERROR !! [%d]",g_reply_int);
+                WRITEMSG
+		return g_reply_int;
+	}
+printf(">>>>>>>>>>>>>>>>>>>>if_prt[%s] errmsg[%c]",if_prt,wd_sherrmsg.errmsg[0]);
+	if(if_prt[0]=='1' && wd_sherrmsg.errmsg[0]=='0'){
+		memcpy(wd_sherrmsg.errmsg,"1",1);
+	}
+	else if(if_prt[0]=='0'){
+		memcpy(wd_sherrmsg.errseq,lvl,sizeof(wd_sherrmsg.errseq)-1);
+	}
+/************************
+	if(strlen(f_day)==0)
+		memcpy(wd_sherrmsg.errseq,lvl,sizeof(wd_sherrmsg.errseq)-1);
+	else
+		memcpy(wd_sherrmsg.errmsg+1,f_day,strlen(f_day));
+************************/
+	g_reply_int =Sherrmsg_Upd_Upd(wd_sherrmsg,g_pub_tx.reply);
+	if (g_reply_int != 0){
+        	sprintf(acErrMsg,"修改柜员信息表错误!!!");
+                WRITEMSG
+		return g_reply_int;
+        }
+        Sherrmsg_Clo_Upd();
+	return 0;
+}

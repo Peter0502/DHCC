@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000000000000000000000000000"  TITLE="6347 银 行 本 票 挂 失"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+     initfd();
+     $FD39=itoa(#iTxAmt*100,'%016.0f');//票面金额
+     call_9986();
+     $FD44=$HDATE;
+     $FD123=getitems('#iBankType#iSignDay#iPoNo#iPayBrNo#iPayBrName#iCashBrNo#iCashBrName#iFiller#TEMPXYY');
+     commsend_001();
+     $FD21=#CUR_NO;          //货币标志
+     $FD66='1';              //借贷标志
+     $FD93='9';
+     $FD99='2';
+     $FD102='10101';
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+     commrecv_001();
+     setitems('#FD9_AUTH_NO#FD9_AUTH_PWD#FD9_FEE_IND',$FD9);
+}"
+</COMMRECV>
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+"T(6347                        银 行 本 票 挂 失)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-70s" FUNCTIONS=
+"T(───────────────────────────────────)"/>
+<ITEM NAME="#TXNO"          TYPE="%-4s"    FUNCTIONS="T($TXNO=6347)"/>
+<ITEM NAME="#MSGTYPE"       TYPE="%-5s"    FUNCTIONS="T()"/>
+<ITEM NAME="#TXCD"          TYPE="%-4s"     FUNCTIONS="T(6347)"/>
+<ITEM NAME="#TXNAME"        TYPE="%-30s"    FUNCTIONS="T(银行本票挂失)"/>
+<ITEM NAME="#PAY_AC_NO"     TYPE="%-30s"    FUNCTIONS="T()"/>
+<ITEM NAME="#PAY_NAME"      TYPE="%-30s"    FUNCTIONS="T()"/>
+<ITEM NAME="#CASH_AC_NO"    TYPE="%-30s"    FUNCTIONS="T()"/>
+<ITEM NAME="#CASH_NAME"     TYPE="%-30s"    FUNCTIONS="T()"/>
+<ITEM LINE="7"   COL="3" TYPE="%-12s"   FUNCTIONS="T(出票  日期:)"/>
+<ITEM LINE="8"   COL="3" TYPE="%-12s"   FUNCTIONS="T(本票  号码:)"/>
+<ITEM LINE="10"  COL="3" TYPE="%-12s"   FUNCTIONS="T(签发行行号:)"/>
+<ITEM LINE="11"  COL="3" TYPE="%-12s"   FUNCTIONS="T(签发行行名:)"/>
+<ITEM LINE="13"  COL="3" TYPE="%-12s"   FUNCTIONS="T(兑付行行号:)"/>
+<ITEM LINE="14"  COL="3" TYPE="%-12s"   FUNCTIONS="T(兑付行行名:)"/>
+<ITEM LINE="15"  COL="3" TYPE="%-12s"   FUNCTIONS="T(票面  金额:)"/>
+<ITEM LINE="18"  COL="3" TYPE="%-12s"   FUNCTIONS="T(附      言:)"/>
+<ITEM NAME="#CUR_NO"  TYPE="%-2s" FUNCTIONS="T(01)"/>
+<!--
+<ITEM LINE="18"  COL="3" TYPE="%-12s"   FUNCTIONS="T(手续费标志:!)"/> 
+-->
+<!--输入内容 -->
+<ITEM NAME="#iAvbalType" TYPE="%-1s"  FUNCTIONS="T(1)"/>
+
+<ITEM NAME="#iBankType" TYPE="%-1s" FUNCTIONS="T(0)V(0|1)J(#oBankType)"/>
+<ITEM NAME="#iSignDay" LINE="7" COL="15"  DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="V(NB)D()T($HDATE)">
+<ONLOSTFOCUS>
+"{
+    if(atoi(#iSignDay) &gt; atoi($HDATE)){
+        showmsg('出票日期不能大于当前系统日期!');
+        return(false);
+    }
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="8" COL="15" NAME="#iPoNo" TYPE="%-16s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+<ONLOSTFOCUS>
+"{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9696';
+        $FD11='0';            //操作类型0,查询1,查询
+        $FD30=#iPoNo;         //本票号码
+        $FD44=#iSignDay;      //签发日期
+        if(#iBankType=='0')
+        {
+            $FD20='0';    //行内标志0本行1外行
+            commsend_001();
+            callserver();
+            $TXNO=@baktxno;
+            if($FD12!='0000')
+            {
+                showmsg(geterror());
+                showmsg('无此票号!');
+                return(false);
+            }
+            
+            if($FD98!='1'){//当前状态
+                showmsg('本票不是签发状态!');
+                return(false);
+            }
+            
+            #iPayBrNo=delspace($FD52);
+            #iPayBrName=delspace($FD81);
+            #iCashBrNo=delspace($FD58);
+            #iCashBrName=delspace($FD82);
+            #iTxAmt=val($FD39,0.01);
+            enable(#iPayBrNo,false);
+            enable(#iPayBrName,false);
+            enable(#iCashBrNo,false);
+            enable(#iCashBrName,false);
+            enable(#iTxAmt,false);
+        }
+        else
+        {
+            $FD20='1';    //行内标志0本行1外行
+            commsend_001();
+            callserver();
+             $TXNO=@baktxno;
+            if($FD12!='0000')
+              {
+                    showmsg(geterror());
+            #iPayBrNo='';
+            #iPayBrName='';
+            #iCashBrNo='';
+            #iCashBrName='';
+            #iTxAmt='';
+                    return(false);
+                }
+            if($FD98!='1'){
+                showmsg('本票不是签发状态!');
+                return(false);
+            }
+            #iPayBrNo=delspace($FD52);
+            #iPayBrName=delspace($FD81);
+            #iCashBrNo=delspace($FD58);
+            #iCashBrName=delspace($FD82);
+            #iTxAmt=val(substr($FD39),0.01);
+            enable(#iPayBrNo,true);
+            enable(#iPayBrName,true);
+            enable(#iCashBrNo,false);
+            enable(#iCashBrName,false);
+            enable(#iTxAmt,true);
+        }
+        refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="10" COL="15" NAME="#iPayBrNo" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+    dim @baktxno as string;
+    dim @a       as string;
+    if(#iPayBrNo!='')
+    {
+        @baktxno=$TXNO;
+        $TXNO='9553';
+        $FD32=#iPayBrNo;
+        commsend_001();
+        @a = callserver();
+        $TXNO=@baktxno;
+        if(@a!=''){
+            showhelp(3,70,18,3,'大额行号信息','行 名:'+substr($FD96,0,60));
+            #iPayBrName=delspace(substr($FD96,0,60));
+            enable(#iPayBrName,false);
+        }
+        else{
+             enable(#iPayBrName,true);
+        }
+    }
+    refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="11"  COL="15" NAME="#iPayBrName" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+<ITEM LINE="13"  COL="15" NAME="#iCashBrNo"  TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+    dim @baktxno as string;
+    if(#iCashBrNo!='')
+    {
+        @baktxno=$TXNO;
+        $TXNO='9553';
+        $FD32=#iCashBrNo;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            enable(#iCashBrName,true);
+            return(false);
+        }
+        else{
+        showhelp(3,70,18,3,'大额行号信息','行 名:'+substr($FD96,0,60));
+        #iCashBrName=delspace(substr($FD96,0,60));
+                   enable(#iHoldBrName,false);
+                   }
+    }
+        refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="14" COL="15" NAME="#iCashBrName" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS=""/>
+<ITEM LINE="15" COL="15" NAME="#iTxAmt"  TYPE="%16.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,0000099999999999)"/>
+<ITEM NAME="#iFeeFlag" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM LINE="18" COL="15" NAME="#iFiller" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+
+<ITEM NAME="#oXTxAmt"    TYPE="%-20s"  FUNCTIONS="X(#iTxAmt)"/>
+<ITEM NAME="#TXAMT"      TYPE="%13.2f" FUNCTIONS="T(000000000001)"/>
+<ITEM NAME="#oXFeeAmt"   TYPE="%-20s"  FUNCTIONS="X(#TXAMT)"/>
+<ITEM NAME="#oXFeeAmt1"  TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#oBankType"  TYPE="%-8s"   FUNCTIONS="S(#iBankType,#iBankType)"/>
+<ITEM NAME="#oAvbalType" TYPE="%6s"    FUNCTIONS="j(#iAvbalType=0,T{定额})j(#iAvbalType=1,T{不定额})"/>
+<!--系统变量-->
+<ITEM NAME="#HTRMSEQ" TYPE="%-2s"  FUNCTIONS="T($HTRMSEQ)"/>
+<ITEM NAME="#HEJFNO"  TYPE="%-6s"  FUNCTIONS="T($HEJFNO)"/>
+<ITEM NAME="#HCODE"   TYPE="%-1s"  FUNCTIONS="T($HCODE)"/>
+<ITEM NAME="#KINBR"   TYPE="%-7s"  FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#TXTYPE"  TYPE="%-2s"  FUNCTIONS="T()"/>
+<ITEM NAME="#TRMSEQ"  TYPE="%-2s"  FUNCTIONS="T($TRMSEQ)"/>
+<ITEM NAME="#EJFNO"   TYPE="%-6s"  FUNCTIONS="T($TXTNO)"/>
+<ITEM NAME="#TASKID"  TYPE="%-2s"  FUNCTIONS="T(UM)"/>
+<ITEM NAME="#TMTYPE"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#APTYPE"  TYPE="%-1s"  FUNCTIONS="T(b)"/>
+<ITEM NAME="#TXNO"    TYPE="%-2s"  FUNCTIONS="T(07)"/>
+<ITEM NAME="#DSCPT"   TYPE="%3d"   FUNCTIONS="T(001)"/>
+<ITEM NAME="#PTYPE"   TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#MULTTX"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#CRDB"    TYPE="%-1s"  FUNCTIONS="T(1)"/>
+<ITEM NAME="#SUPIN1"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#SUPIN2"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#REASON"  TYPE="%-6s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#TLRNO"   TYPE="%6d"   FUNCTIONS="T($TLRNO)"/>
+<ITEM NAME="#NBCD"    TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#TRNMOD"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#SBTMOD"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+<ITEM NAME="#CURCD"   TYPE="%-3s"  FUNCTIONS="T(RMB)"/>
+<ITEM NAME="#XCRT"    TYPE="%-8s"  FUNCTIONS="T($XCRT)"/>
+<ITEM NAME="#OPNBR"   TYPE="%-7s"  FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#ACTNO"   TYPE="%-18d"   FUNCTIONS="T()"/>
+<ITEM NAME="#TEMPXYY" TYPE="%-749s"  FUNCTIONS=""/>
+<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<OUTPUT>
+</OUTPUT>
+<!--输出模块-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+    print(02,0,'                        银行本票挂失');
+    print(05,0,'               出票  日期：[08]',#iSignDay);
+    print(06,0,'               本票  号码: [16]',#iPoNo);
+    print(09,0,'               签发行行号：[12]',#iPayBrNo);
+    print(10,0,'               签发行行名：[60]',#iPayBrName);
+    print(12,0,'               兑付行行号: [12]',#iCashBrNo);
+    print(13,0,'               兑付行行名: [60]',#iCashBrName);
+    print(16,0,'               流  水　号: [ 6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印普通凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+        dim @txdate as string;
+        @txdate=substr($HDATE,0,4)+'/'+substr($HDATE,4,2)+'/'+substr($HDATE,6,2);
+        dim @txtime  as string;
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+	      print( 5, 2,'代码:6347');
+	      print( 5, 13,'交易:银行本票挂失');
+        print(07,11,'         本票  号码: [16          ]                 ',#iPoNo);
+        print(08,11,'         签发行行号：[12]',#iPayBrNo);
+        print(09,11,'         签发行行名：[60]',#iPayBrName);
+        print(10,11,'         兑付行行号: [12]',#iCashBrNo);
+        print(11,11,'         兑付行行名: [60]',#iCashBrName);
+        print(12,11,'         金      额: [20]',#oXTxAmt);
+        print(24,20,'备注:');
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="打印专用凭证" >
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+ $KINDNO='00';
+dim @txtime  as string;
+@txtime=substr($HDATE,0,2)+':'+substr($HDATE,2,2)+':'+substr($HDATE,4,2);
+ 	print( 5, 20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:6347');
+	print( 5, 13,'交易:银行本票挂失');
+	printacdtl_1();
+	print(24,20,'备注:');
+  print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+  print(24,5,'柜员:[4]',$FD7);
+  print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<IMPORT>MBFEFEE.IMP</IMPORT>
+</TRANSACTION>

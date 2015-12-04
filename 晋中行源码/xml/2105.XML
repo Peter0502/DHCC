@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2105 客户联系方式信息录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD25=#LXINFO;
+	$FD27=#LXNAME;
+	$FD29=#CUSTNO;
+	$FD67=#LXTYPE;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	#ORDERNO=$FD48;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(2105                      客户联系方式信息录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1105)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="7" COL="10" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="9" COL="10" TYPE="%-10s" FUNCTIONS="T(联 系 人:)"/>
+  <ITEM LINE="11" COL="10" TYPE="%-10s" FUNCTIONS="T(联系方式:)"/>
+  <ITEM LINE="13" COL="10" TYPE="%-10s" FUNCTIONS="T(联系信息:)"/>
+  <ITEM NAME="#SHOW" LINE="15" COL="10" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS="T(序    号:)" INPUT="LABEL"/>
+  <ITEM NAME="#CUSTNO" INPUT="TEXT"   LINE="7" COL="20" TYPE="%-8s" FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#LXNAME" INPUT="TEXT"   LINE="9" COL="20" TYPE="%-20s" FUNCTIONS="T()"/>
+  <ITEM NAME="#LXTYPE" INPUT="SELECT" LINE="11" COL="20" TYPE="%-1s" FUNCTIONS="T(1)">
+  	<SELECT>
+		<OPTION VALUE="1" TITLE="1.住宅电话"/>
+		<OPTION VALUE="2" TITLE="1.公司电话"/>
+		<OPTION VALUE="3" TITLE="1.传真"/>
+		<OPTION VALUE="5" TITLE="1.手机"/>
+		<OPTION VALUE="6" TITLE="1.电子邮件"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#LXINFO"  INPUT="TEXT" LINE="13" COL="20" TYPE="%-50s" FUNCTIONS="T()"/>
+  <ITEM NAME="#ORDERNO" INPUT="TEXT" LINE="15" COL="20" TYPE="%-4s" VISABLE="FALSE" FUNCTIONS=""/>
+  <!--输出变量--->
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+<!--	
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT">-->
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    	<ONCLICK>
+    	"{
+			//与神码通讯开始
+			initfd();
+			commsend_001();
+			dim @baktxno as string;
+			@baktxno=$TXNO;
+			$FD16='7015';
+			$FD28=#CUSTNO;
+			$FD71=#LXTYPE;
+			$FD95=#LXINFO;
+			callagn();
+			$TXNO=@baktxno;
+			if($FD12!='0000')
+			{
+			showmsg(geterror());
+			return(false);
+			}
+			//与神码通讯结束
+    		dim @tota as string;
+    		dim @ch as string;
+			commsend_001();
+			$FD25=#LXINFO;
+			$FD27=#LXNAME;
+			$FD29=#CUSTNO;
+			$FD67=#LXTYPE;
+    		@tota=callserver();
+    		#ORDERNO=$FD48;
+    		if($FD12!='0000'){
+				showmsg(geterror());
+				return(false);
+			}
+			else{
+				showall();
+				show(#SHOW,true);
+				//showmsg(#ORDERNO);
+				show(#ORDERNO,true);
+				runoutput();		
+    		@ch=showmsg('下一步执行 客户地址信息录入，Y-继续;N-退出：');
+				if(@ch == 'Y' or @ch == 'y' ){	
+						open('2106.XML', '#CUSTNO='+#CUSTNO+';');
+						return(true);
+					}
+					else{
+						return(true);
+					}
+					}
+    		}"
+		</ONCLICK>    		
+  </ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="按任意键继续">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,30,        '录入成功！')
+    print(9,10,'客户号:[8]',#CUSTNO);
+		print(10,10,'联系人:[20]',#LXNAME);
+		print(11,10,'联系信息:[50]',#LXINFO);
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+	  $KINDNO='00';
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	  print( 5, 20,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'代码:2105');
+	  print( 5, 13,'交易:客户联系方式信息录入代码');
+	  print( 8, 20,'客 户 号:[8]',#CUSTNO);
+	  print( 9, 20,'联 系 人:[20]',#LXNAME);
+	  print(10, 20,'联系信息:[50]',#LXINFO);
+	  print( 24,20,'备注:');
+	  print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	  print( 24,5,'柜员:[4]',$FD7);
+	  print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+
+

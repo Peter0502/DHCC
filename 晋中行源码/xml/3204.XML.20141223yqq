@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3204 储蓄销户业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	   
+	//身份核查 如果此帐号标识为3年以及3年以上不动 则提醒去做2322 add by wudawei 20130219
+	dim @tota as string;
+	dim @result as string;
+  		initfd();
+  		commsend_001();
+  		$FD16='9321'; 
+  		$FD30=#ACTNO;
+  		$FD67='1';
+  		@tota=callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+  		@result=strfld(@tota,'|',11);
+  		if( @result!='' and @result=='三年及三年以上不动户'){
+				showmsg(''+@result);
+			}
+			
+	//add by yanqq 20140529 检查燃气代收绑定用户需解绑后销户
+	if(substr(#ACTNO,0,6) == '621223')
+	{
+		initfd();
+		commsend_001();
+		$FD16='9040';             //平台用户绑定查询接口
+		$FD60='RQDS';             //平台交易类型
+		$FD31=#ACTNO;             //查询银行卡
+		callagnpt();
+		if($FD12!='0000' and $FD12!='0033'){
+			showmsg(geterror());
+			rerun();
+			return(false);
+		}
+		if($FD12=='0000')
+		{
+			showmsg('您已经进行燃气用户绑定,请先进行9920交易解绑后销户!!');
+			return(false);
+		}
+	}
+	//add end yanqq 20140529
+		
+		//add by lwb 20141217  增加是否购买理财产品的检查
+  	initfd();
+	  $FD30=#ACTNO;
+    commsend_001();
+    $FD16='8018';
+    $FD65='0008';
+    callserver();
+    if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+    }
+  
+		if($FD67 == '1'  or $FD67 == '2')
+		{
+			showmsg('此账号签约了理财产品，请先撤销或者更换理财签约账号');
+			return(false);
+		}
+		
+		//add end lwb
+
+	//add by ck 20091122 调用卡系统的销户交易
+	if(substr(#ACTNO,0,6) == '621223')
+	{
+		initfd();
+		commsend_001();
+		$FD16='7003';
+		$FD30=#ACTNO;
+		$FD79=#DRAW_PWD;
+		$FD66=#CASHFLAG;
+		$FD75=$MSR2;
+		$FD76=$MSR3;
+		$FD95=#ACCT_CLOSE;
+		if(#XKTYPE=='2')
+		{
+		$FD58=#XKGSBH;//挂失编号
+		}
+		$FD70=#XKTYPE;
+		callagn();
+		if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+                //showmsg('test');
+	#TRAN_FEE = $FD39;
+        #CARD_TRACENO = delspace(itoa(val($FD43),'%16d'));
+        //showmsg(' #CARD_TRACENO ='+ #CARD_TRACENO );
+	 }
+	//卡卡转账销户(相当于卡存款) add by ck 20091122
+	if((substr(#DFNO,0,6)=='621223') and (substr(#ACTNO,0,6) == '621223') and (#CASHFLAG=='2'))
+	{
+		initfd();
+		commsend_001();
+		$FD16='7004';
+		$FD30=#DFNO;
+		$FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+		callagn();
+		//卡卡转账销户交易卡处理开户失败时，往数码发送卡销户撤销交易 add by ck 091122
+		if($FD12!='0000')
+		{
+			#RESP_CODE=$FD12;
+			showmsg(geterror());
+			initfd();
+			commsend_001();
+			$FD16='7777';
+			$FD12=#RESP_CODE;
+			$FD30=#ACTNO;
+			$FD39=itoa(#TXAMT*100);
+			$FD43=#CARD_TRACENO;
+			callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				//return (false);
+			}
+			showmsg('卡销户失败!!...');
+			rerun();
+		}
+		 #CARD_TRACENO_TRAN=delspace(itoa(val($FD43),'%16d'));
+		 //#TRAN_FEE=$FD40;
+ 	}
+ 	//折卡转账销户(相当于卡存款) add by ck 20091122
+ 	else if ((substr(#ACTNO,0,6)!='621223') and (substr(#DFNO,0,6)=='621223')  and (#CASHFLAG=='2'))
+ 	{
+ 		initfd();
+		commsend_001();
+		$FD16='7004';
+		$FD30=#DFNO;
+		$FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+		callagn();
+		//卡转账销户交易卡处理开户失败时，往数码发送卡销户撤销交易 add by ck 091122
+		
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		 #CARD_TRACENO_TRAN=delspace(itoa(val($FD43),'%16d'));
+		 //#TRAN_FEE=$FD40;
+ 	}
+	
+	//loadfds(@filename);	
+	//与神码通讯 End by ck
+	initfd();
+	commsend_001();
+	$FD12='2204';
+	$FD16='9986';
+	
+	//#ACT_LX_CK=#ACT_LX;
+
+	if(#VOCTYPE=='013' or #VOCTYPE=='014')
+	{
+		#ACT_LX='3';
+	}
+	//如果是存单，且挂失状态，使用以下标志控制打印原存单 20130710 begin
+	if(#ACT_LX=='3' and #XKTYPE!='2')
+	{
+		#CD_PRT_FLAG='1';//为此时，打印原存单
+	}else{
+		#CD_PRT_FLAG='0';
+	}
+	
+	//20130710 end
+	
+	//ACCOUNTFLAG和ACTTYPE已互换
+	if(#CASHFLAG=='2')
+	{
+		$FD101=getitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME');
+	}
+	else
+	{
+		$FD101=space(28,' ')+getitems('#AVBAL')+space(98,' ')+'2'+space(3,' ')+'20000';
+	}
+	$FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#CERTFLAG#CERTNO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+	callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	$MSGTYPE='03001';	
+	$FD16='2204';
+	  if(#XKTYPE=='2')
+		{
+					$FD72='1';
+		}
+
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	//showmsg('$FD12='+$FD12);
+	//如果是转账销卡户,记录核心返回的12域返回错误代码,否则记为0000,确保是否需要进行转存款的撤销
+	if(($FD12!='0000') and ($FD12!='Z003') )
+		{
+			#RESP_CODE_TRAN=$FD12;
+			//showmsg('#RESP_CODE_TRAN='+#RESP_CODE_TRAN);
+		}
+	else
+		{
+			#RESP_CODE_TRAN='0000';
+		}
+	//add by ck 2009 1122
+	//卡转账销户核心处理失败往数码发送卡存款撤销交易 
+	if(($FD12 != '0000') and ($FD12 != 'Z003') and (substr(#DFNO,0,6)=='621223')and (#CASHFLAG=='2'))
+	{
+		//#RESP_CODE=$FD12;
+		//showmsg('#RESP_CODE='+$FD12);
+		//showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE_TRAN;
+		$FD30=#DFNO;
+		$FD39=itoa(#TXAMT*100);
+		$FD43=#CARD_TRACENO_TRAN;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg('撤销卡系统转存款失败:['+geterror()+']');
+			//return (false);   //由于要执行2次撤销交易,故执行撤销错误的情况下只返回错误信息,不退出而继续执行下一次撤销 
+		}
+		//showmsg('卡销户失败!!...');
+		//rerun();
+	}
+	//卡交易核心处理失败往数码发送取消交易
+	if((#RESP_CODE_TRAN!='0000') and (#RESP_CODE_TRAN!='Z003') and (substr(#ACTNO,0,6)=='621223'))
+	{
+		//showmsg('#RESP_CODE_TRAN='+$FD12);
+		$FD12=#RESP_CODE_TRAN;
+		//showmsg('#RESP_CODE='+$FD12);
+		showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE_TRAN;
+		$FD30=#ACTNO;
+		$FD39=itoa(#TXAMT*100);
+		$FD43=#CARD_TRACENO;
+		//showmsg('#CARD_TRACENO2='+#CARD_TRACENO);
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg('撤销卡系统开户失败:['+geterror()+']');
+			//return (false); //此处只提示错误信息而不返回,确保程序继续往下执行
+		}
+		showmsg('卡销户失败!!...');
+		rerun();
+	}
+	
+	//end by ck 
+	//如果挂失状态 不补登存折 wudawei 20130716
+	if(#XKTYPE=='2')
+	{
+		$FD13='7';
+	}
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3204                          储蓄销户业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=2204)"/>
+  <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <ITEM NAME="#ACT_LX"    TYPE="%-5s"  FUNCTIONS="T(1)"/>   
+  <ITEM NAME="#ACT_LX_CK" TYPE="%-5s"  FUNCTIONS=""/>
+  <ITEM NAME="#TXCD"      TYPE="%4s"   FUNCTIONS="T(3204)"/>      <!---交易代码--->
+  <ITEM NAME="#TXNAME"    TYPE="%-10s" FUNCTIONS="T(储蓄销户)"/>  <!---交易名称--->
+  <ITEM NAME="#TRACK2"      TYPE="%-37s"   FUNCTIONS=""/>   <!--二磁信息-->
+  <ITEM NAME="#TRACK3"      TYPE="%-104s"   FUNCTIONS=""/>  <!--三磁信息--> 
+  <ITEM NAME="#TRAN_FEE"      TYPE="%17.2f"   FUNCTIONS=""/>  <!--交易手续费-->   
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#CARD_TRACENO_TRAN" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE_TRAN" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#CD_PRT_FLAG"   TYPE="%-1s" FUNCTIONS=""/><!----原存单打印标志---->
+  
+ 
+  <!-- 取款信息录入 -->
+  <IMPORT>ACINFO3204.IMP</IMPORT>
+
+  <!-- 转帐对方账号 -->
+  <IMPORT>TRANSINFO.IMP</IMPORT>
+
+  <!--输出变量--->
+  <ITEM NAME="#MSGEND"   TYPE="%-4s" FUNCTIONS="T(销户)"/>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD"   TYPE="%-6s" FUNCTIONS="T()"/>
+  <!--<ITEM NAME="#CERTTYPE" TYPE="%-1s" FUNCTIONS=""/>--><!--同名ITEM liangq注-->
+
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示信息">
+LXQD|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@av_bal|@all_intst|@tax_intst|@tax_rate|@intst|@real_intst|@real_bal|@dinum|@intst_type|@memo|@ac_seqn|@term|@prt_line|@brf|@ac_no1|@book_line|@mtr_date|@tmp_seqn|@rate|@prdt_no|@int_acc_hrt|
+</PACKAGE>
+<PRINT>
+"{
+dim @txamt      as string;
+dim @intr       as string;
+dim @all_intr   as string;
+dim @real_intr  as string;
+dim @real_avbal as string;
+dim @tax        as string;
+dim @ctax_rate  as string;
+dim @crate      as string;
+dim @txday      as string;
+
+@txamt       ='￥'+ltrim(comma(@tx_amt1));
+@intr        ='￥'+ltrim(comma(@intst));
+@all_intr    ='￥'+ltrim(comma(@all_intst));
+@real_intr   ='￥'+ltrim(comma(@real_intst));
+@real_avbal  ='￥'+ltrim(comma(@real_bal));
+@tax         ='￥'+ltrim(comma(@tax_intst));
+
+print(03,30,'储蓄销户');
+print(05,20,'帐/卡 号:[24                        ]',@ac_no);
+print(06,20,'本    金:[21                        ]',@txamt);
+print(07,20,'实付利息:[21                        ]',@real_intr);
+print(08,20,'利 息 税:[21                        ]',@tax);
+//print(09,20,'保值利息:[21                        ]','￥'+ltrim(comma(substr($FD102,235,14)+'.'+substr($FD102,249,2))));
+print(10,20,'实付总额:[21                        ]',@real_avbal);
+}"
+</PRINT>
+</RESPONSE>
+
+<IMPORT>CX_QK_VOC.IMP</IMPORT>
+
+<IMPORT>CX_PRT_LXQD.IMP</IMPORT>
+
+<IMPORT>CX_CK_PZ.IMP</IMPORT>
+
+<IMPORT>CXCZ.IMP</IMPORT>
+<LASTWORK>
+"{
+	//showmsg('CK='+#ACT_LX_CK);
+	//showmsg(#ACT_LX);
+}"
+</LASTWORK>
+</TRANSACTION>

@@ -1,0 +1,75 @@
+/******************************************************************************
+*交易名称：更新操作员表                                                       *
+*函数名称：sp3662()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-15 10:12                                             *
+*修改日期：                                                                   *
+*数据库表: com_tel                                                            *
+*修改说明: 每次重导完com_tel 需要将com_tel_shjd 里的操作员信息加入到com_tel中 *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "com_tel_shjd_c.h"
+#include "com_tel_c.h"
+EXEC SQL INCLUDE sqlca;
+int sp3662()
+{
+  	int ret=0,cnt=0;
+  	struct com_tel_c wd_com_tel;
+  	memset(&wd_com_tel,0x00,sizeof(wd_com_tel));
+  	memset(&wd_com_tel_shjd,0x00,sizeof(wd_com_tel_shjd));
+	g_reply_int=Com_tel_shjd_Dec_Sel(g_pub_tx.reply,"1=1");
+        if(g_reply_int){
+                sprintf(acErrMsg,"[%s][%d]声明com_tel游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+                strcpy( g_pub_tx.reply, "P015" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                return g_reply_int;
+        }
+	while(1){
+		g_reply_int=Com_tel_Fet_Sel(&wd_com_tel,g_pub_tx.reply);
+		if(g_reply_int==100) break;
+		else if(g_reply_int){
+                	sprintf(acErrMsg,"[%s][%d]com_tel取数据错误[%d]",__FILE__,__LINE__,g_reply_int);
+                	strcpy( g_pub_tx.reply, "P015" );
+                	set_zd_data(DC_GET_MSG,acErrMsg);
+                	WRITEMSG
+                	return g_reply_int;
+		}
+		cnt=sql_count("com_tel","com_tel.tel="%s" ",wd_com_tel.tel);
+		if(cnt>0) continue;
+		else{
+    			g_reply_int=Com_tel_Ins(wd_com_tel_shjd,g_pub_tx.reply);
+			if(g_reply_int){
+                		sprintf(acErrMsg,"[%s][%d]com_tel插入数据错误[%d]",__FILE__,__LINE__,g_reply_int);
+                		strcpy( g_pub_tx.reply, "P015" );
+                		set_zd_data(DC_GET_MSG,acErrMsg);
+                		WRITEMSG
+                		return g_reply_int;
+			}
+		}
+	}
+	ret=Com_tel_Clo_Sel();		
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

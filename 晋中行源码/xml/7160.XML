@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00111000" TITLE="7160 727柜员凭证销毁"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+	commsend_001();
+    if($FD7 != '0006')
+    {
+      showmsg('柜员无此权限'+$FD7);
+      return(false);
+    }
+	$FD58=#QSHM;
+	$FD59=#ZZHM;
+	$FD52=#PZSL;
+	$FD89=#PZZL;
+	}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+<FIRSTWORK>"{
+	dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$TXNO='9885';
+	commsend_001();
+	@tota=callserver();
+	$TXNO=@txno_bak;	
+	setsel(#PZZL,@tota,'o5t20o1v3o2');
+	initfd();
+}"
+</FIRSTWORK>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(7160                            727凭证销毁)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5160)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="7" COL="5">
+  <ITEM LINE="1" COL="15" TYPE="%-10s" FUNCTIONS="T(凭证种类:)"/>
+  <ITEM LINE="3" COL="15" TYPE="%-10s" FUNCTIONS="T(起始号码:)"/>
+  <ITEM LINE="5" COL="15" TYPE="%-10s" FUNCTIONS="T(终止号码:)"/>
+  <ITEM LINE="7" COL="15" TYPE="%-10s" FUNCTIONS="T(销毁数量:)"/>
+  <ITEM NAME="#PZZL" 	INPUT="SELECT" LINE="1" COL="25" TYPE="%-3s" 	FUNCTIONS="T(001)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="001" TITLE="1.现金支票"/>	  	
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#QSHM" INPUT="TEXT" LINE="3" COL="25" TYPE="%16d" 	FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#ZZHM" INPUT="TEXT" LINE="5" COL="25" TYPE="%16d" 	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+         if(#ZZHM &lt; #QSHM)
+         {
+           showmsg('终止号码必须大于起始号码');
+           return(false);
+         }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#FLAG" TYPE="%-12s" FUNCTIONS="T(1)">
+   <ONLOSTFOCUS>
+  "{
+#PZSL=itoa((atoi(substr(#ZZHM,8,8))-atoi(substr(#QSHM,8,8))+1),'%12d');
+   
+     show(#PZSL,true);
+     enable(#PZSL,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PZSL" INPUT="TEXT" LINE="7" COL="25" TYPE="%12s" 	FUNCTIONS="T(0)"/>
+  </BLOCK>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#PZZL,#PZZL)"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($HDATE,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($HDATE,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($HDATE,7,2)"/>  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="727凭证销毁!">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+          print( 2,  24,'交易名称:727凭证销毁');
+          print( 4,  20,'交易机构:[5]',$FD2);
+	  print( 5,  20,'交易日期:[4]年[2]月[2]日',#YEAR,#MON,#DAY);  
+	  print( 6,  20,'流水号码:[6]',$FD4);
+	  print( 7,  20,'操作员号:[4]',$FD7);
+	  print( 8, 20,'凭证种类:[20 ]',#NAME2);	   
+	  print( 9, 20,'起始号码:[20 ]',#QSHM);
+	  print( 10, 20,'终止号码:[20 ]',#ZZHM);
+	  print( 11, 20,'销毁数量:[20 ]',#PZSL);
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印凭证" LINESPACE="24">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:7160');
+	print( 5, 13,'交易:727凭证销毁');
+	
+	print( 7, 20,'凭证种类:[20 ]',#NAME2);
+	print( 8, 20,'起始号码:[16 ]',#QSHM);
+	print( 9, 20,'终止号码:[16 ]',#ZZHM);
+	print(10, 20,'凭证数量:[12 ]',#PZSL);
+	print_sq();
+	
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

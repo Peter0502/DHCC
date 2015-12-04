@@ -1,0 +1,330 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"hvcdtab_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int hvcdtab_con ( struct hvcdtab_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct hvcdtab_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->brno);
+	zip_tail(ps->brname);
+	zip_tail(ps->txday);
+	zip_tail(ps->txtime);
+	zip_tail(ps->aptype);
+	zip_tail(ps->txcd);
+	zip_tail(ps->sendday);
+	zip_tail(ps->apflg);
+	zip_tail(ps->paybrno);
+	zip_tail(ps->paybrtype);
+	zip_tail(ps->payname);
+	zip_tail(ps->payactno);
+	zip_tail(ps->paycode);
+	zip_tail(ps->payertype);
+	zip_tail(ps->paycertif);
+	zip_tail(ps->cashname);
+	zip_tail(ps->cashertype);
+	zip_tail(ps->cashcertif);
+	zip_tail(ps->txamt);
+	zip_tail(ps->paydate);
+	zip_tail(ps->dscpt);
+	zip_tail(ps->cashtype);
+	zip_tail(ps->txtypeno);
+	zip_tail(ps->expand);
+}
+int Hvcdtab_Debug(struct hvcdtab_c *ps){
+	vtcp_log("hvcdtab_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("hvcdtab_c.brno=[%s]\n",ps->brno);
+	vtcp_log("hvcdtab_c.brname=[%s]\n",ps->brname);
+	vtcp_log("hvcdtab_c.txday=[%s]\n",ps->txday);
+	vtcp_log("hvcdtab_c.txtime=[%s]\n",ps->txtime);
+	vtcp_log("hvcdtab_c.aptype=[%s]\n",ps->aptype);
+	vtcp_log("hvcdtab_c.txcd=[%s]\n",ps->txcd);
+	vtcp_log("hvcdtab_c.sendday=[%s]\n",ps->sendday);
+	vtcp_log("hvcdtab_c.apflg=[%s]\n",ps->apflg);
+	vtcp_log("hvcdtab_c.paybrno=[%s]\n",ps->paybrno);
+	vtcp_log("hvcdtab_c.paybrtype=[%s]\n",ps->paybrtype);
+	vtcp_log("hvcdtab_c.payname=[%s]\n",ps->payname);
+	vtcp_log("hvcdtab_c.payactno=[%s]\n",ps->payactno);
+	vtcp_log("hvcdtab_c.paycode=[%s]\n",ps->paycode);
+	vtcp_log("hvcdtab_c.payertype=[%s]\n",ps->payertype);
+	vtcp_log("hvcdtab_c.paycertif=[%s]\n",ps->paycertif);
+	vtcp_log("hvcdtab_c.cashname=[%s]\n",ps->cashname);
+	vtcp_log("hvcdtab_c.cashertype=[%s]\n",ps->cashertype);
+	vtcp_log("hvcdtab_c.cashcertif=[%s]\n",ps->cashcertif);
+	vtcp_log("hvcdtab_c.txamt=[%s]\n",ps->txamt);
+	vtcp_log("hvcdtab_c.paydate=[%s]\n",ps->paydate);
+	vtcp_log("hvcdtab_c.dscpt=[%s]\n",ps->dscpt);
+	vtcp_log("hvcdtab_c.cashtype=[%s]\n",ps->cashtype);
+	vtcp_log("hvcdtab_c.txtypeno=[%s]\n",ps->txtypeno);
+	vtcp_log("hvcdtab_c.expand=[%s]\n",ps->expand);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Hvcdtab_Sel(reply,hvcdtab_c,fmtstr,va_alist)
+char    *reply;
+struct  hvcdtab_c *hvcdtab_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Hvcdtab_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Hvcdtab_Fet_Sel( hvcdtab_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Hvcdtab_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Hvcdtab_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,hvcdtab.* FROM hvcdtab WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE hvcdtab_sel FROM :comm;
+	EXEC SQL DECLARE sel_hvcdtab CURSOR FOR hvcdtab_sel;
+
+	EXEC SQL OPEN sel_hvcdtab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Hvcdtab_Fet_Sel ( struct hvcdtab_c *hvcdtab_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_hvcdtab INTO :hvcdtab_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch hvcdtab error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch hvcdtab finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(hvcdtab_c);
+
+	return 0;
+}
+
+int Hvcdtab_Clo_Sel (){
+	EXEC SQL CLOSE sel_hvcdtab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Hvcdtab_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,hvcdtab.* FROM hvcdtab WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE hvcdtab_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_hvcdtab CURSOR FOR hvcdtab_upd;
+
+	EXEC SQL OPEN upd_hvcdtab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Hvcdtab_Fet_Upd( struct hvcdtab_c *hvcdtab_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_hvcdtab INTO :hvcdtab_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH hvcdtab finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(hvcdtab_c);
+
+	return 0;
+}
+
+int Hvcdtab_Upd_Upd( struct hvcdtab_c hvcdtab_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE hvcdtab SET brno=:hvcdtab_c.brno,
+			brname=:hvcdtab_c.brname,
+			txday=:hvcdtab_c.txday,
+			txtime=:hvcdtab_c.txtime,
+			aptype=:hvcdtab_c.aptype,
+			txcd=:hvcdtab_c.txcd,
+			sendday=:hvcdtab_c.sendday,
+			apflg=:hvcdtab_c.apflg,
+			paybrno=:hvcdtab_c.paybrno,
+			paybrtype=:hvcdtab_c.paybrtype,
+			payname=:hvcdtab_c.payname,
+			payactno=:hvcdtab_c.payactno,
+			paycode=:hvcdtab_c.paycode,
+			payertype=:hvcdtab_c.payertype,
+			paycertif=:hvcdtab_c.paycertif,
+			cashname=:hvcdtab_c.cashname,
+			cashertype=:hvcdtab_c.cashertype,
+			cashcertif=:hvcdtab_c.cashcertif,
+			txamt=:hvcdtab_c.txamt,
+			paydate=:hvcdtab_c.paydate,
+			dscpt=:hvcdtab_c.dscpt,
+			cashtype=:hvcdtab_c.cashtype,
+			txtypeno=:hvcdtab_c.txtypeno,
+			expand=:hvcdtab_c.expand
+	WHERE rowid=:hvcdtab_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Hvcdtab_Del_Upd(struct hvcdtab_c hvcdtab_c , char * reply  ){
+
+	EXEC SQL DELETE FROM hvcdtab WHERE rowid=:hvcdtab_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Hvcdtab_Clo_Upd( ){
+	EXEC SQL CLOSE upd_hvcdtab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Hvcdtab_Ins( struct hvcdtab_c hvcdtab_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO hvcdtab VALUES (:hvcdtab_c.brno,
+			:hvcdtab_c.brname,
+			:hvcdtab_c.txday,
+			:hvcdtab_c.txtime,
+			:hvcdtab_c.aptype,
+			:hvcdtab_c.txcd,
+			:hvcdtab_c.sendday,
+			:hvcdtab_c.apflg,
+			:hvcdtab_c.paybrno,
+			:hvcdtab_c.paybrtype,
+			:hvcdtab_c.payname,
+			:hvcdtab_c.payactno,
+			:hvcdtab_c.paycode,
+			:hvcdtab_c.payertype,
+			:hvcdtab_c.paycertif,
+			:hvcdtab_c.cashname,
+			:hvcdtab_c.cashertype,
+			:hvcdtab_c.cashcertif,
+			:hvcdtab_c.txamt,
+			:hvcdtab_c.paydate,
+			:hvcdtab_c.dscpt,
+			:hvcdtab_c.cashtype,
+			:hvcdtab_c.txtypeno,
+			:hvcdtab_c.expand);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT hvcdtab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

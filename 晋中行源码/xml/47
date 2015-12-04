@@ -1,0 +1,821 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="guotest1"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+<ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(guoabc)"/>
+<ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=1010)"/>
+<ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+<ITEM LINE="5" COL="3"  TYPE="%-10s" NAME="#LBIFS" FUNCTIONS="T(ceshi: )"/>
+<ITEM LINE="5" COL="15" TYPE="%-1s"  NAME="#BIFS"  INPUT="SELECT" FUNCTIONS="V(NB)T(0)">
+<SELECT>
+<OPTION VALUE="0" TITLE="aaaa"/>
+<OPTION VALUE="1" TITLE="bbbb"/>
+</SELECT>
+<ONLOSTFOCUS>"{
+
+//核心查询柜员是否签到
+dim @info as string;
+dim @tmpcsts as string;
+refresh();
+
+initfd();
+commsend_001();
+$FD16='9598';
+$FD123='select csts from com_tel where tel='+chr(39)+$FD7+chr(39);
+@info=callserver();
+
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+
+@tmpcsts=delspace(strfld(@info,'|',0));
+if(@tmpcsts!='0')
+{
+showmsg('柜员尚未签到不可进行缴费,请先签到!!');
+return(false);
+}
+
+//检查绑定方式来区分缴费方式
+if(#BIFS=='0')
+{
+show(#LBIDQFS,true);
+show(#BIDQFS,true);
+show(#LBIACTNO,true);
+show(#LMM,true);
+show(#DRAW_PWD,true);
+show(#LACNAME,true);
+show(#AC_NAME,true);
+show(#LACBAL,true);
+show(#AC_BAL,true);
+enable(#BIUSER_NO,true);
+show(#BIUSER_NO,true);
+show(#LDQFS,false);
+show(#DQFS,false);
+show(#LACTNO,false);
+enable(#ACTNO1,false);
+enable(#ACTNO2,false);
+show(#ACTNO1,false);
+show(#ACTNO2,false);
+show(#LJFFS,false);
+show(#JFFS,false);
+enable(#USER_NO,false);
+show(#USER_NO,false);
+}
+if(#BIFS=='1')
+{
+show(#LBIDQFS,false);
+show(#BIDQFS,false);
+show(#LBIACTNO,false);
+show(#LMM,false);
+show(#DRAW_PWD,false);
+show(#LACNAME,false);
+show(#AC_NAME,false);
+show(#LACBAL,false);
+show(#AC_BAL,false);
+enable(#ACTNO3,false);
+enable(#ACTNO4,false);
+show(#ACTNO3,false);
+show(#ACTNO4,false);
+enable(#BIUSER_NO,false);
+show(#BIUSER_NO,false);
+enable(#USER_NO,true);
+show(#USER_NO,true);
+show(#LJFFS,true);
+show(#JFFS,true);
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="6" COL="3" TYPE="%-10s" NAME="#LBIDQFS" VISABLE="FALSE"  INPUT="LABEL"  FUNCTIONS="T(读取方式: )"/>
+<ITEM LINE="6" COL="15" TYPE="%-1s"  NAME="#BIDQFS"  VISABLE="FALSE"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+<SELECT>
+<OPTION VALUE="0" TITLE="读取磁条方式"/>
+<OPTION VALUE="1" TITLE="读取芯片方式"/>
+</SELECT>
+<ONLOSTFOCUS>"{
+if(#BIDQFS=='1')
+{
+enable(#ACTNO3,false);
+enable(#ACTNO4,true);
+show(#ACTNO3,false);
+show(#ACTNO4,true);
+}
+if(#BIDQFS=='0')
+{
+enable(#ACTNO3,true);
+enable(#ACTNO4,false);
+show(#ACTNO3,true);
+show(#ACTNO4,false);
+}
+refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="6" COL="35" NAME="#LBIACTNO" TYPE="%-10s"  VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(支付账号:)" />
+
+<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<ITEM LINE="6" COL="44" TYPE="%-19s"  NAME="#ACTNO3" DEVICE="FIXMSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+<ONLOSTFOCUS>
+"{
+#AC_NO=#ACTNO3;
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="6" COL="44" TYPE="%-19s"  NAME="#ACTNO4" DEVICE="FIXICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+<ONLOSTFOCUS>
+"{
+#AC_NO=#ACTNO4;
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM  LINE="7"   COL="15"  NAME="#BIUSER_NO" INPUT="LABEL" TYPE="%-6s"  VISABLE="FALSE"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+if(#BIFS=='0')
+{
+initfd();
+commsend_001();
+$FD16='9040';             //平台用户绑定查询接口
+$FD60='RQDS';             //平台交易类型
+$FD31=#AC_NO;             //查询银行卡
+
+callagnpt();
+if($FD12!='0000'){
+showmsg(geterror());
+rerun();
+return(false);
+}
+#BIUSER_NO=delspace($FD30);  //用户代码
+
+initfd();
+commsend_001();
+$FD16='1010';                  //平台用户查询接口
+$FD60='RQDS';                  //平台交易类型
+$FD30=#BIUSER_NO;              //绑定卡的用户代码利用短交易查询
+//showmsg('@@@@!$FD30='+$FD30);
+
+callagnpt();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+#YHNAME=delspace($FD25);       //用户姓名
+#ADDRESS=delspace($FD76);      //用户单位及地址
+#SYBS=delspace($FD86);         //上月表指数
+#BYBS=delspace($FD87);         //本月表指数
+#YL=delspace($FD88);           //用量
+#DJ=delspace($FD91);           //单价
+#RQF=delspace($FD73);          //燃气费
+#BXF=delspace($FD84);          //保险费
+#FZJ=delspace($FD85);          //复置金
+#SYQF=delspace($FD58);         //上月欠费
+#ZNJ=delspace($FD59);          //滞纳金
+#SYJY=delspace($FD26);         //上月结余
+#DYJJK=delspace($FD61);        //当月已交款
+#YSHJ=delspace($FD52);         //应收合计
+#CHBY=delspace($FD27);         //抄表员
+#PHONE=delspace($FD62);        //电话
+
+show(#YHNAME,true);
+show(#ADDRESS,true);
+show(#SYBS,true);
+show(#BYBS,true);
+show(#YL,true);
+show(#DJ,true);
+show(#RQF,true);
+show(#BXF,true);
+show(#FZJ,true);
+show(#SYQF,true);
+show(#ZNJ,true);
+show(#SYJY,true);
+show(#DYJJK,true);
+show(#YSHJ,true);
+show(#CHBY,true);
+show(#PHONE,true);
+enable(#YHNAME,false);
+enable(#ADDRESS,false);
+enable(#SYBS,false);
+enable(#BYBS,false);
+enable(#YL,false);
+enable(#DJ,false);
+enable(#RQF,false);
+enable(#BXF,false);
+enable(#FZJ,false);
+enable(#SYQF,false);
+enable(#ZNJ,false);
+enable(#SYJY,false);
+enable(#DYJJK,false);
+enable(#YSHJ,false);
+enable(#CHBY,false);
+enable(#PHONE,false);
+
+//核心查询已绑定卡户名
+dim @info as string;
+dim @tmpacid as string;
+#AC_NAME='';
+#OPN_BR_NO='';
+refresh();
+
+initfd();
+commsend_001();
+$FD16='9598';
+$FD123='select ac_id, note_sts, opn_br_no from mdm_ac_rel where ac_no='+chr(39)+#AC_NO+chr(39);
+@info=callserver();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+if(@info=='')
+{
+showmsg('账号不存在,请核对后重新输入!!');
+return(false);
+}
+@tmpacid=delspace(strfld(@info,'|',0));
+#OPN_BR_NO=delspace(strfld(@info,'|',2));
+
+initfd();
+commsend_001();
+$FD16='9598';
+@info='';
+$FD123='select name from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+@info=callserver();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+#AC_NAME=delspace(strfld(@info,'|',0));
+}else{
+showmsg('交易异常,未绑定的用户不应该使用BIUSER_NO，请于科技部联系!!!!!');
+return(false);
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="7"   COL="3" TYPE="%-12s"  FUNCTIONS="T(用 户 代 码:)"/>
+<ITEM LINE="7"   COL="15" NAME="#USER_NO" INPUT="TEXT" TYPE="%-6s" VISABLE="FALSE" FUNCTIONS="V(000001,999999)">
+<ONLOSTFOCUS>
+"{
+if(#BIFS=='1')                   //未绑定卡的用户代码
+{
+initfd();
+commsend_001();
+$FD16='1010';                  //平台用户查询接口
+$FD60='RQDS';                  //平台交易类型
+$FD30=#USER_NO;
+callagnpt();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+#YHNAME=delspace($FD25);       //用户姓名
+#ADDRESS=delspace($FD76);      //用户单位及地址
+#SYBS=delspace($FD86);         //上月表指数
+#BYBS=delspace($FD87);         //本月表指数
+#YL=delspace($FD88);           //用量
+#DJ=delspace($FD91);           //单价
+#RQF=delspace($FD73);          //燃气费
+#BXF=delspace($FD84);          //保险费
+#FZJ=delspace($FD85);          //复置金
+#SYQF=delspace($FD58);         //上月欠费
+#ZNJ=delspace($FD59);          //滞纳金
+#SYJY=delspace($FD26);         //上月结余
+#DYJJK=delspace($FD61);        //当月已交款
+#YSHJ=delspace($FD52);         //应收合计
+#CHBY=delspace($FD27);         //抄表员
+#PHONE=delspace($FD62);        //电话
+
+show(#YHNAME,true);
+show(#ADDRESS,true);
+show(#SYBS,true);
+show(#BYBS,true);
+show(#YL,true);
+show(#DJ,true);
+show(#RQF,true);
+show(#BXF,true);
+show(#FZJ,true);
+show(#SYQF,true);
+show(#ZNJ,true);
+show(#SYJY,true);
+show(#DYJJK,true);
+show(#YSHJ,true);
+show(#CHBY,true);
+show(#PHONE,true);
+enable(#YHNAME,false);
+enable(#ADDRESS,false);
+enable(#SYBS,false);
+enable(#BYBS,false);
+enable(#YL,false);
+enable(#DJ,false);
+enable(#RQF,false);
+enable(#BXF,false);
+enable(#FZJ,false);
+enable(#SYQF,false);
+enable(#ZNJ,false);
+enable(#SYJY,false);
+enable(#DYJJK,false);
+enable(#YSHJ,false);
+enable(#CHBY,false);
+enable(#PHONE,false);
+}else{
+showmsg('交易异常,绑定的用户不应该使用USER_NO，请于科技部联系!!!!!');
+return(false);
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<PAGE NAME="DEFAULT">
+<ITEM LINE="7" COL="25"  TYPE="%-12s"    FUNCTIONS="T(用 户 姓 名:)"/>
+<ITEM LINE="7" COL="35"  TYPE="%-40s"    NAME="#YHNAME"    INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="8"  COL="3"  TYPE="%-12s"    FUNCTIONS="T(地       址:)"/>
+<ITEM LINE="8"  COL="15" TYPE="%-64s"    NAME="#ADDRESS"    INPUT="TEXT" FUNCTIONS="T()"/>
+<ITEM LINE="9"  COL="3"  TYPE="%-12s"    FUNCTIONS="T(上月表指数:)"/>
+<ITEM LINE="9"  COL="15" TYPE="%-9s"     NAME="#SYBS"  INPUT="TEXT"    FUNCTIONS="T()"/>
+<ITEM LINE="9"  COL="41" TYPE="%-12s"    FUNCTIONS="T(本月表指数:)"/>
+<ITEM LINE="9"  COL="53" TYPE="%-9s"     NAME="#BYBS"    INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="10"  COL="3"  TYPE="%-12s"    FUNCTIONS="T(用       量:)"/>
+<ITEM LINE="10"  COL="15" TYPE="%-9s"     NAME="#YL"  INPUT="TEXT"    FUNCTIONS="T()"/>
+<ITEM LINE="10"  COL="41"  TYPE="%-12s"   FUNCTIONS="T(单       价:)"/>
+<ITEM LINE="10"  COL="53" TYPE="%-4s"     NAME="#DJ"  INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="11"  COL="3"  TYPE="%-12s"   FUNCTIONS="T(燃  气   费:)"/>
+<ITEM LINE="11"  COL="15" TYPE="%-10s"   NAME="#RQF"  INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="11"  COL="41" TYPE="%-12s"   FUNCTIONS="T(保  险   费:)"/>
+<ITEM LINE="11"  COL="53" TYPE="%-8s"    NAME="#BXF"  INPUT="TEXT"   FUNCTIONS="T()"/>
+<ITEM LINE="12"  COL="3" TYPE="%-12s"    FUNCTIONS="T(复  置   金:)"/>
+<ITEM LINE="12"  COL="15" TYPE="%-8s"    NAME="#FZJ"  INPUT="TEXT"   FUNCTIONS="T()"/>
+<ITEM LINE="12" COL="41"  TYPE="%-12s"   FUNCTIONS="T(上 月 欠 费:)"/>
+<ITEM LINE="12" COL="53" TYPE="%-10s"    NAME="#SYQF"  INPUT="TEXT"    FUNCTIONS="T()"/>
+<ITEM LINE="13" COL="3"  TYPE="%-12s"    FUNCTIONS="T(滞  纳   金:)"/>
+<ITEM LINE="13" COL="15" TYPE="%-8s"     NAME="#ZNJ" INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="13" COL="41"  TYPE="%-12s"   FUNCTIONS="T(上 月 结 余:)"/>
+<ITEM LINE="13" COL="53" TYPE="%-10s"    NAME="#SYJY" INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="14" COL="3"  TYPE="%-12s"    FUNCTIONS="T(当月已交款:)"/>
+<ITEM LINE="14" COL="15" TYPE="%-10s"    NAME="#DYJJK" INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="14" COL="41"  TYPE="%-12s"   FUNCTIONS="T(应 收 合 计:)"/>
+<ITEM LINE="14" COL="53" TYPE="%-11s"    NAME="#YSHJ" INPUT="TEXT" FUNCTIONS="T()"/>
+<ITEM LINE="15" COL="3"  TYPE="%-12s"    FUNCTIONS="T(抄  表   员:)"/>
+<ITEM LINE="15" COL="15" TYPE="%-8s"     NAME="#CHBY"  INPUT="TEXT"  FUNCTIONS="T()"/>
+<ITEM LINE="15" COL="41"  TYPE="%-12s"   FUNCTIONS="T(电       话:)"/>
+<ITEM LINE="15" COL="53" TYPE="%-11s"    NAME="#PHONE"  INPUT="TEXT"  FUNCTIONS="T()"/>
+
+<ITEM LINE="16"  COL="3"  NAME="#HEDUI2"  TYPE ="%-20s" FUNCTIONS = "T(是 否 缴 费:!)"/>
+<ITEM LINE="16"  COL="15" NAME="#HEDUI3"  TYPE="%-1s"   INPUT="SELECT"   FUNCTIONS="T(0)V(NB)" >
+<SELECT>
+<OPTION VALUE ="0" TITLE="0.是" />
+<OPTION VALUE ="1" TITLE="1.否" />
+</SELECT>
+<ONLOSTFOCUS>
+"{
+if(#HEDUI3=='0')
+{
+showmsg('开始缴费！');
+}
+else
+{
+showmsg('退出缴费！');
+rerun();
+return(false);
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="17" COL="3" TYPE="%-12s"  NAME="#LJFFS" VISABLE="FALSE"   FUNCTIONS="T(缴 费 方 式:)"/>
+<ITEM LINE="17" COL="15" TYPE="%-1s"  NAME="#JFFS"  VISABLE="FALSE"   INPUT="SELECT" FUNCTIONS="T(1)V(NB)">
+<SELECT>
+<OPTION VALUE="1" TITLE="1.现金"/>
+<OPTION VALUE="2" TITLE="2.转账"/>
+</SELECT>
+<ONLOSTFOCUS>
+"{
+if(#BIFS=='1')              //未绑定的场合，用户选择缴费方式
+{
+if(#JFFS=='2')
+{
+show(#LDQFS,true);
+show(#DQFS,true);
+show(#LACTNO,true);
+show(#LMM,true);
+show(#DRAW_PWD,true);
+}
+else
+{
+show(#LDQFS,false);
+show(#DQFS,false);
+show(#LACTNO,false);
+show(#LMM,false);
+show(#DRAW_PWD,false);
+show(#LACNAME,false);
+show(#AC_NAME,false);
+show(#LACBAL,false);
+show(#AC_BAL,false);
+show(#ACTNO1,false);
+show(#ACTNO2,false);
+}
+}else{
+showmsg('交易异常,绑定的用户不应该选择缴费方式，请于科技部联系!!!!!');
+return(false);
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="17" COL="41" TYPE="%-10s" NAME="#LDQFS" VISABLE="FALSE"  INPUT="LABEL"  FUNCTIONS="T(读取方式: )"/>
+<ITEM LINE="17" COL="50" TYPE="%-1s"  NAME="#DQFS"  VISABLE="FALSE"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+<SELECT>
+<OPTION VALUE="0" TITLE="读取磁条方式"/>
+<OPTION VALUE="1" TITLE="读取芯片方式"/>
+</SELECT>
+<ONLOSTFOCUS>"{
+if(#DQFS=='1')
+{
+enable(#ACTNO1,false);
+enable(#ACTNO2,true);
+show(#ACTNO1,false);
+show(#ACTNO2,true);
+}
+if(#DQFS=='0')
+{
+enable(#ACTNO1,true);
+enable(#ACTNO2,false);
+show(#ACTNO1,true);
+show(#ACTNO2,false);
+}
+refresh();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="18"  COL="3" NAME="#LACTNO" TYPE="%-10s"  VISABLE="FALSE" INPUT="LABEL"  FUNCTIONS="T(支付账号:)" />
+
+<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<ITEM LINE="18" COL="15" TYPE="%-19s"  NAME="#ACTNO1" DEVICE="FIXMSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+<ONLOSTFOCUS>
+"{
+#AC_NO=#ACTNO1;
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="18" COL="15" TYPE="%-19s"  NAME="#ACTNO2" DEVICE="FIXICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE">
+<ONLOSTFOCUS>
+"{
+#AC_NO=#ACTNO2;
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+//IC卡bin=621780  ,磁条卡bin=621223
+dim @baktxno as string;
+//if((substr(#ACTNO1,0,6)!='621223' or substr(#ACTNO1,0,6)!='621780') )
+//{
+//   showmsg('请刷磁条卡或者存折!');
+//   return(false);
+//}
+
+#MSR2BAK=$MSR2;
+#MSR3BAK=$MSR3;
+$MSR2='';
+$MSR3='';
+//showmsg('#MSR2='+#MSR2);
+//showmsg('#MSR3='+#MSR3);
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="18" COL="41" NAME="#LMM" TYPE="%-10s" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(密    码:)"/>
+<ITEM LINE="18" COL="50" NAME="#DRAW_PWD" TYPE="%6d" VISABLE="FALSE" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+<ONLOSTFOCUS>
+"{
+if(substr(#AC_NO,0,6)!='621223' and substr(#AC_NO,0,6)!='621780')  //存折验密
+{
+dim @baktxno as string;
+@baktxno=$TXNO;
+$TXNO='9317';
+commsend_001();
+$FD30=#AC_NO;
+$FD79=getitems('#DRAW_PWD');
+callserver();
+$TXNO=@baktxno;
+if($FD12!='0000'){
+showmsg(geterror());
+return (false);
+}
+}
+else if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')  //卡验密
+{
+//showmsg('!!!!!!#BIFS='+#BIFS);
+//showmsg('@@@@@@#ACTNO1='+#ACTNO1);
+//showmsg('@@@@@@#ACTNO2='+#ACTNO2);
+//showmsg('@@@@@@#ACTNO3='+#ACTNO3);
+//showmsg('@@@@@@#ACTNO4='+#ACTNO4);
+initfd();
+commsend_001();
+$FD16='7007';         //卡验密接口
+$FD30=#AC_NO;         //签约卡号
+$FD68='4';
+$FD79=#DRAW_PWD;      //卡密码
+callagn();
+if( $FD12 != '0000')
+{
+showmsg(geterror());
+return(false);
+}
+}
+
+show(#LACNAME,true);
+show(#AC_NAME,true);
+show(#LACBAL,true);
+show(#AC_BAL,true);
+
+//核心查询已签约卡户名及余额
+dim @info as string;
+dim @tmpacid as string;
+#AC_NAME='';
+#AC_BAL='';
+#OPN_BR_NO='';
+refresh();
+
+initfd();
+commsend_001();
+$FD16='9598';
+$FD123='select ac_id, opn_br_no  from mdm_ac_rel where ac_no='+chr(39)+#AC_NO+chr(39);
+@info=callserver();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+if(@info=='')
+{
+showmsg('账号不存在,请核对后重新输入!!');
+return(false);
+}
+@tmpacid=delspace(strfld(@info,'|',0));
+#OPN_BR_NO=delspace(strfld(@info,'|',1));
+
+initfd();
+commsend_001();
+$FD16='9598';
+@info='';
+$FD123='select name, bal from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+@info=callserver();
+if($FD12!='0000')
+{
+showmsg(geterror());
+return(false);
+}
+#AC_NAME=delspace(strfld(@info,'|',0));
+#AC_BAL=delspace(strfld(@info,'|',1));
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="19" COL="3"  NAME="#LACNAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+<ITEM LINE="19" COL="15" NAME="#AC_NAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-60s" FUNCTIONS="V(NB)"/>
+<ITEM LINE="19" COL="41" NAME="#LACBAL"  VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(余    额:)" />
+<ITEM LINE="19" COL="50" NAME="#AC_BAL"  VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-18s" FUNCTIONS="V(NB)"/>
+
+<ITEM LINE="20" COL="3" TYPE="%-12s"     FUNCTIONS="T(缴 费 金 额:)"/>
+<ITEM LINE="20" COL="15" TYPE="%10.2f"   NAME="#TX_AMT"  INPUT="TEXT" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+if(#TX_AMT == 0)
+{
+showmsg('缴费金额不能为零，请重新输入缴费金额!!');
+return(false);
+}
+//燃气公司要求增加单笔缴费金额限制
+if(#TX_AMT > 900000)
+{
+showmsg('单笔缴费金额不能大于90万，请重新输入缴费金额!!');
+return(false);
+}
+if(#JFFS=='2')
+{
+dim @totbal as number;
+@totbal = val(#AC_BAL);
+if(#TX_AMT &gt; @totbal)
+{
+showmsg('您卡内余额不足，请先充值或选择现金缴费!!');
+return(false);
+}
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#UTX_AMT"  TYPE="%-40s"   FUNCTIONS="U(#TX_AMT)"/>
+
+<ITEM NAME="#OVERDUE_AMT"  TYPE="%-12s"   FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+#OVERDUE_AMT='0.00';
+
+//当应收合计为正数时，说明该用户欠费
+if(substr(#YSHJ,0,1) != '-')
+{
+//当缴费金额小于应收合计时，产生欠费
+if(#TX_AMT &lt; val(#YSHJ))
+{
+#OVERDUE_AMT=itoa((val(#YSHJ)-#TX_AMT),'%-10.2f');
+}
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#BALANCE_AMT"  TYPE="%-12s"   FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+#BALANCE_AMT='0.00';
+
+//当应收合计为负数时，说明该用户有剩余结余
+//本次结余为缴费金额、应收合计金额之和
+if(substr(#YSHJ,0,1) == '-')
+{
+#BALANCE_AMT=itoa((#TX_AMT-val(#YSHJ)),'%-10.2f');
+}
+//当应收合计为正数、缴费金额大于应收合计时，本次有结余
+else if(#TX_AMT &gt; val(#YSHJ))
+{
+#BALANCE_AMT=itoa((#TX_AMT-val(#YSHJ)),'%-10.2f');
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</PAGE>
+
+<ITEM LINE="21"  COL="63" NAME="#BTN" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+initfd();
+commsend_001();
+$FD16='2010';             //平台用户缴费接口
+$FD60='RQDS';             //平台交易类型
+$FD20='1';                //柜面发起标志
+//BIUSER_NO:绑定卡的用户代码
+if(#BIFS=='0')
+{
+#USER_NO=#BIUSER_NO;
+}
+$FD30=#USER_NO;
+//showmsg('$用户代码FD30='+$FD30);
+$FD25=#YHNAME;
+$FD76=#ADDRESS;
+$FD86=#SYBS;
+$FD87=#BYBS;
+$FD88=#YL;
+$FD91=#DJ;
+$FD73=#RQF;
+$FD84=#BXF;
+$FD85=#FZJ;
+$FD58=#SYQF;
+$FD59=#ZNJ;
+$FD26=#SYJY;
+$FD61=#DYJJK;
+$FD52=#YSHJ;
+$FD27=#CHBY;
+$FD62=#PHONE;
+$FD39=itoa(#TX_AMT,'%-10.2f');       //缴费金额
+$FD31=#AC_NO;                        //支付账号
+$FD33=#AC_NAME;                      //户名
+$FD79=#DRAW_PWD;                     //密码
+//绑定的场合，默认转账缴费方式
+if((#BIFS=='0'))
+{
+$FD68=='2';
+}
+//未绑定的现转标志
+else
+{
+$FD68=#JFFS;
+}
+//showmsg('$缴费方式FD68='+$FD68);
+
+callagnpt();
+if($FD12!='0000'){
+showmsg(geterror());
+return(false);
+}
+
+#TRACE_NO=delspace($FD32);           //平台流水号
+
+//燃气公司要求，应收合计为负数时，默认为0
+if(substr(#YSHJ,0,1) == '-')
+{
+#YSHJ='0.00';
+}
+//showmsg('$应收合计转换YSHJ='+#YSHJ);
+
+//转账存折缴费场合，需要补登存折
+if(#JFFS=='2' and len(delspace(#AC_NO))==13)
+{
+showmsg('转账存折缴费方式，请凭证打印完毕后进行3407补登存折！');
+}
+
+runoutput();
+rerun();
+}"
+</ONCLICK>
+</ITEM>
+<ITEM NAME="#OPN_BR_NO"   TYPE="%-5s"  FUNCTIONS=""/>
+<ITEM NAME="#TRACE_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+</VARIABLE>
+
+<REQUEST>
+<PACKAGE DEVICE="SCREEN"  DESC="银行向燃气公司单笔缴费成功">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+}"
+</PRINT>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+print( 3,24,'银行向燃气公司提交单笔缴费成功');
+print( 6,20,'用户代码:[6]       用户名:[60]',#USER_NO,#YHNAME);
+if(#JFFS=='1'){
+print(7,20,'缴费方式:现金         缴费金额:[15]',delspace(comma(itoa(#TX_AMT,'%.2f'))));
+}else{
+print(7,20,'缴费方式:转账         支付账号:[20]',delspace(#AC_NO));
+print(8,20,'缴费金额:[15]',delspace(comma(itoa(#TX_AMT,'%.2f'))));
+}
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印燃气公司收据">
+NOTHING
+</PACKAGE>
+
+<PRINT>
+"{
+dim @txdate  as string;
+@txdate=substr($HDATE,0,4)+'年'+substr($HDATE,4,2)+'月'+substr($HDATE,6,2)+'日';
+
+print(3,40,'[14]                     [8]',@txdate,delspace(#TRACE_NO));
+print(4,13,'\B0[30]\B1[40]\B0[6]\B1',delspace(#YHNAME),delspace(#ADDRESS),delspace(#USER_NO));
+print(5,6,'[9]      [9]      [9]     [4]       [10]   [8]    [8]',delspace(#SYBS),delspace(#BYBS),delspace(#YL),delspace(#DJ),delspace(#RQF),delspace(#BXF),delspace(#FZJ));
+print(8,10,'[2][10]      [8]       [10]       [10]         [11]',' ',delspace(#SYQF),delspace(#ZNJ),delspace(#SYJY),delspace(#DYJJK),delspace(#YSHJ));
+print(10,22,'[15]                             [15]',delspace(comma(itoa(#TX_AMT,'%.2f'))),delspace(#OVERDUE_AMT));
+print(11,22,'[36]        [15]',delspace(#UTX_AMT),delspace(#BALANCE_AMT));
+print(15,12,'[8]                [11]                            [4]',delspace(#CHBY),delspace(#PHONE),$FD7);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+print(5,20,'机构名称:[30]',$BRNAME);
+print(5,2,'代码:9923');
+print(5,13,'交易:燃气查询缴费');
+
+print(7,40,'\L0燃气缴费\L1');
+if(#JFFS=='1'){
+print(9,20,'缴费方式：现金                       缴费金额：[15]',delspace(comma(itoa(#TX_AMT,'%.2f'))));
+print(10,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+print(11,20,'地    址：[64]',#ADDRESS);
+print(12,20,'平台流水：[8]                   交 易 行：[5]',#TRACE_NO,$FD3);
+}else{
+print(9,20,'开 户 行：[5]                      交 易 行：[5]',#OPN_BR_NO,$FD3);
+print(10,20,'缴费方式：转账                       缴费金额：[15]',delspace(comma(itoa(#TX_AMT,'%.2f'))));
+print(11,20,'支付账号：[20]       户    名：[20]',delspace(#AC_NO),#AC_NAME);
+print(12,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+print(13,20,'地    址：[64]',#ADDRESS);
+print(14,20,'平台流水：[8]',#TRACE_NO);
+}
+print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+print(19,80,'客户签名:_____________________');
+
+print( 24,20,'备注:');
+print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+print( 24,5,'柜员:[4]',$FD7);
+print( 24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

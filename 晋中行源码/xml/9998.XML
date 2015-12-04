@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="9998    对公活期单户计息"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+    	commsend_001();
+    	$FD102=#ACTNO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-74s" FUNCTIONS=
+    "T(9998                     对公活期单户计息)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=6701)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(9998)"/>
+  <ITEM NAME="#TXNAME"  TYPE="%-16s" FUNCTIONS="T(对公活期单户计息)"/>
+
+  <ITEM LINE="9"  COL="15" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="11" COL="15" TYPE="%-10s"  FUNCTIONS="T(户    名:)"/>
+  <ITEM NAME="#ACTNO" LINE="9" COL="25" TYPE="%-24s" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  	 dim @txno as string;
+		 initfd();
+     @txno=$TXNO;
+     $TXNO='9958';
+     commsend_001();
+     $FD38=#ACTNO;
+     callserver();
+     $TXNO=@txno;
+     if($FD12!='0000')
+        {showmsg(geterror());
+         return(false);
+     }
+     if(#ACTNO != '')
+     {
+         initfd();
+         @txno=$TXNO;
+         $TXNO='6700';
+         commsend_001();
+         $FD30=#ACTNO;
+         $FD67='1';
+         callserver();
+         $TXNO=@txno;     
+         if($FD12!='0000')
+            {showmsg(geterror());
+             return(false);
+         }
+         if($KINBR!=$FD91)
+         {
+             showmsg('只能查询本机构帐户!');
+             return(false);
+         } 
+     }
+     #NAME=delspace($FD25);
+     enable(#NAME,false);
+  "}
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM NAME="#NAME" LINE="11" COL="25" TYPE="%-50s" INPUT="TEXT" FUNCTIONS=""/>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="25"  DESC="显示内容">
+LXQD|@ac_no|@name|@day|@day1|@day2|@intst1|@acm|@type|@rate
+</PACKAGE>
+<PRINT>
+"{
+			print( 2,10,'                         对公利息清单               ');
+			print( 5,10,'客户  账号:[20                  ]       流  水  号:[6]',@ac_no,$FD4);			
+			print( 6,10,'客户  户名:[50]',@name);			
+			print( 7,10,'上次结息日:[8       ]                   当前交易日:[8]',@day,@day1);
+			print( 8,10,'计息  类型:[12          ]               利      率:[9]%',@type,@rate);
+			print( 9,10,'利      息:[16              ]           计息  天数:[4]',@intst1,@day2); 
+ 
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24"  DESC="请打印业务专用凭证(利息清单)">
+LXQD|@ac_no|@name|@day|@day1|@day2|@intst1|@acm|@type|@rate
+</PACKAGE>
+<PRINT>
+"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:[4]',#TXCD);
+		print( 5,13,'交易:[16]',#TXNAME);
+		print( 7,20,'                             对公利息清单');
+		print( 8,20,'---------------------------------------------------------------------------------');
+		print( 9,20,'     客户  账号:[20                  ]            流  水  号:[6]',@ac_no,$FD4);			
+		print(10,20,'     客户  户名:[50]',@name);			
+		print(11,20,'     上次结息日:[8       ]                        当前交易日:[8]',@day,@day1);
+		print(12,20,'     计息  类型:[12          ]                    利      率:[7]%',@type,rtrim(@rate));
+		print(13,20,'     利      息:[16              ]                计息  天数:[4]',@intst1,@day2); 
+		print(14,20,'---------------------------------------------------------------------------------');
+		print(15,20,'                                                        记    帐: ');
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+ 
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

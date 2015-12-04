@@ -1,0 +1,233 @@
+/*******
+	        为每个柜员初始化现金台帐 
+********/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "public.h"
+#include "svrpub_c.h"
+EXEC SQL INCLUDE SQLCA;
+
+#include "com_branch_c.h"
+#include "com_tel_c.h"
+#include "com_item_c.h"
+#include "cash_mst_c.h"
+#include "com_cur_no_code_c.h"
+int db_connect()
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	if(sqlca.sqlcode)
+	{
+		printf("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		vtcp_log("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		return -1;
+	}
+	return (0);
+}
+
+int main(int argc, char *argv[])
+{
+	struct cash_mst_c cash_mst;
+	struct com_tel_c com_tel;
+	struct com_item_c com_item;
+	struct com_cur_no_code_c com_cur_no_code;
+	struct com_branch_c com_branch;
+	char comm[1000],comm1[1000];
+	char dbname[20];
+	char pcResp[5]; 
+	char ac_no[24];
+	int num=0;
+	int sum=0;
+	int ret;
+	memset(pcResp,'\0',sizeof(pcResp));
+	db_connect();
+	if (sqlca.sqlcode)
+	{
+	    printf("database err [%d]\n",sqlca.sqlcode);
+	    return 1;
+	}
+
+	/* 初始化科技处的状态 */
+	EXEC SQL UPDATE COM_BRANCH SET wrk_sts='1' where br_type='0';
+	if (sqlca.sqlcode)
+	{
+	    printf("更新科技处的状态错误!! [%d]",sqlca.sqlcode);
+	    goto ErrExit;
+	}
+
+	EXEC SQL UPDATE COM_BRANCH SET wrk_sts='2' where br_type <> '0';
+	if (sqlca.sqlcode)
+	{
+	    printf("更新科技处的状态错误!! [%d]",sqlca.sqlcode);
+	    goto ErrExit;
+	}
+
+	Com_tel_Dec_Sel(pcResp,"1=1");
+	if (sqlca.sqlcode)
+	{
+	    printf("[%s] \n",comm);
+	    printf("prepare error [%d]\n",sqlca.sqlcode);
+	    goto ErrExit;
+	}
+	EXEC SQL SELECT COUNT(*) into :sum from com_tel;
+	EXEC SQL DELETE FROM cash_mst;
+	/****初始化序号表****/
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) select br_no,'99',1 from COM_BRANCH;
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) select br_no,'98',1 from COM_BRANCH;
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) select br_no,'97',1 from COM_BRANCH;
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) values('00000','99',1);
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) values('00000','98',1);
+	EXEC SQL INSERT INTO SEQCTL(br_no,ac_ind,seqno) values('00000','97',1);
+	printf("导入基础数据后处理步骤三>>>>\n");
+	while(1)
+	{
+		num++;
+		printf("INIT3进行中,请稍候...[%2d%%]\r",num*100/sum);
+		fflush(stdout);
+		Com_tel_Fet_Sel(&com_tel,pcResp);
+	    if (sqlca.sqlcode&&sqlca.sqlcode!=1403)
+	    {
+	        printf("Fet com_tel erro!!! [%d]\n",sqlca.sqlcode);
+	        goto ErrExit;
+	    }
+	    else if ( sqlca.sqlcode == 1403 )
+	    {
+	        break;
+	    }
+ 
+	    memset(&com_branch,0x0,sizeof(struct com_branch_c));
+	    strcpy(com_branch.br_no,com_tel.br_no);
+		Com_branch_Sel(pcResp,&com_branch,"br_no='%s'",com_branch.br_no);
+	    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403)
+	    {
+	        printf("select from com_branch error [%d]\n",sqlca.sqlcode);
+	        goto ErrExit;
+	    }
+	    else if (sqlca.sqlcode == 1403)
+	    {
+	        /* 没有该柜员的机构号,删除该柜员,并将信息写在文件中 */
+	        continue;
+	    }
+	    
+	    /* 更新所有操作员的状态 */
+
+	    if (com_branch.br_type[0]!='0')
+	    {
+	        /* 更新为2 正式签退状态 */
+	        EXEC SQL UPDATE COM_TEL SET csts='2' where tel=:com_tel.tel;
+	        if (sqlca.sqlcode)
+	        {
+	        	printf("com_tel= [%s] [%s]\n ",com_tel.tel,com_tel.br_no);
+	            printf("更新柜员[%s]状态错误!![%d]",com_tel.tel,sqlca.sqlcode);
+	            goto ErrExit;
+	        } 
+	    }
+	    else
+	    {
+	        /* 更新为0 科技处柜员没有签退 */
+	        EXEC SQL UPDATE COM_TEL SET csts='0' where tel=:com_tel.tel;
+	        if (sqlca.sqlcode)
+	        {
+	        	printf("com_tel= [%s] [%s]\n ",com_tel.tel,com_tel.br_no);
+	            printf("更新柜员[%s]状态错误!![%d]",com_tel.tel,sqlca.sqlcode);
+	            goto ErrExit;
+	        } 
+	    }
+
+	    /* 给该柜员增加现金台帐 */
+	    strcpy(cash_mst.br_no,com_tel.br_no);
+	    strcpy(cash_mst.tel,com_tel.tel);
+	    cash_mst.bal = 0.00;
+	    cash_mst.ys_bal = 0.00;
+	    strcpy(cash_mst.sts,"0");
+
+	    memset(comm1,0x0,sizeof(comm1));
+	    sprintf ( comm1 ," SELECT * FROM com_cur_no_code WHERE 1=1 ");
+
+		Com_cur_no_code_Dec_Sel(pcResp,"1=1");
+	    if (sqlca.sqlcode)
+	    {
+	        printf("[%s]\n",comm);
+	        printf("prepare error [%d]\n",sqlca.sqlcode);
+	        goto ErrExit;
+	    }
+	    while(1)
+	    {
+			Com_cur_no_code_Fet_Sel(&com_cur_no_code,pcResp);
+	        if (sqlca.sqlcode&&sqlca.sqlcode!=1403)
+	        {
+	            printf("Fet com_cur_no_code erro [%d]\n",sqlca.sqlcode);
+	            goto ErrExit;
+	        }
+	        else if ( sqlca.sqlcode == 1403 )
+	        {
+	            break;
+	        }
+	        
+	        /* 生成一个内部账号 */
+			/***SSH:此方法生成帐号超长,改用新方法****
+	        ret=pub_base_CrtInAc("10101",ac_no);
+			******/
+		    /* 根据科目控制字取应用代码 */
+			memset(&com_item,'\0',sizeof(com_item));
+		    ret=Com_item_Sel(g_pub_tx.reply , &com_item , "acc_hrt = '10101'");
+		    if ( ret == 100 ) 
+    		{
+		    	printf("无此科目,acchrt=[%s]", "10101" );
+	            printf("生成该柜员的现金账号错误!!\n");
+	            goto ErrExit;
+    		}else if ( ret )
+    		{
+		    	printf("查找公共科目表错，acchrt=[%s],[%d]","10101", ret );
+	            printf("生成该柜员的现金账号错误!!\n");
+	            goto ErrExit;
+    		}
+			sprintf(ac_no,"9%4s0%4s",com_item.app_cod,com_tel.tel);	
+			/******************************************/
+
+	        strcpy(cash_mst.cur_no,com_cur_no_code.cur_no);
+	        strcpy(cash_mst.ac_no,ac_no);
+	        
+	        /* 登记现金台帐 */
+			Cash_mst_Ins(cash_mst,pcResp);
+	        if (sqlca.sqlcode != 0)
+	        {
+	            printf("登记钱箱错误 [%s] [%s][%d]\n",com_tel.tel,
+	                   com_cur_no_code.cur_no,sqlca.sqlcode);
+	            goto ErrExit;
+	        }
+	    }
+	   	Com_cur_no_code_Clo_Sel(); 
+	}
+	Com_tel_Clo_Sel();
+
+	EXEC SQL commit work;
+	if (sqlca.sqlcode)
+	{
+	    printf("commit db err [%d]\n",sqlca.sqlcode);
+	    return 1;
+	}
+
+	printf("INIT3进行中,请稍候...[完成]\n");
+
+	return 0;
+ErrExit:
+	printf("unnormal quit from init8.ec \n");
+
+	EXEC SQL ROLLBACK WORK;
+	if(sqlca.sqlcode)
+	{
+	    printf("database erro!! %d\n",sqlca.sqlcode);
+	    return 1;
+	}
+
+	return 1;
+}

@@ -1,0 +1,169 @@
+/***************************************************************************************
+*交易名称: 金额控制监督
+*文件名称: sp3643.pc
+*
+*
+*功能描述: 4031.XML 本函数对shjdcode.text的1到16位操作  
+*改造者  : lyz
+*改造日期: 20070110
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "shjdcode_c.h"
+
+int sp3643()
+{
+	FILE *fp;
+	char filename[100];
+	int cnt=0;
+	int ret=0;
+	struct shjdcode_c shjdcode;
+	char flag[2];
+	char txcode[5];
+	double bzcode=0;
+	char tmp[17];
+
+	memset(filename,0x00,sizeof(filename));
+	memset(tmp,0x00,sizeof(tmp));
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+	memset(flag,0x00,sizeof(flag));
+	memset(txcode,0x00,sizeof(txcode));
+
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+	pub_base_sysinit();
+
+	get_fd_data("0670",flag);
+	get_fd_data("0340",txcode);
+	get_zd_double("0390",&bzcode);
+	sprintf(txcode,"%04d",atoi(txcode));
+vtcp_log("传进来的值是:flag=[%s],txcode=[%s],bzcode=[%.2lf],[%s]--[%d]",flag,txcode,bzcode,__FILE__,__LINE__);
+	switch(flag[0])
+	{
+		case '1': /*增加和修改的操作是相同的*/
+		case '3': /*修改*/
+			ret=Shjdcode_Dec_Upd(g_pub_tx.reply," trancode='%s' ",txcode);
+			if(ret)
+			{
+				sprintf(acErrMsg,"声明游标出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}	
+			ret=Shjdcode_Fet_Upd(&shjdcode,g_pub_tx.reply);
+			if(ret)
+			{
+				sprintf(acErrMsg,"FETCH出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}
+			sprintf(tmp,"%.2lf",bzcode);
+			memcpy(shjdcode.text+1,tmp,16);		
+		vtcp_log("注意:tmp=[%s],shjdcode.text=[%18s],[%s]--[%d]",tmp,shjdcode.text,__FILE__,__LINE__);		
+			ret=Shjdcode_Upd_Upd(shjdcode,g_pub_tx.reply);
+			if(ret)
+			{
+				sprintf(acErrMsg,"UPDATE出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}	
+			Shjdcode_Clo_Upd();	
+			break;
+		case '2': /*删除*/
+			ret=Shjdcode_Dec_Upd(g_pub_tx.reply," trancode='%s' ",txcode);
+			if(ret)
+			{
+				sprintf(acErrMsg,"声明游标出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}	
+			ret=Shjdcode_Fet_Upd(&shjdcode,g_pub_tx.reply);
+			if(ret)
+			{
+				sprintf(acErrMsg,"FETCH出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}
+			memset(shjdcode.text+1,0x00,16);
+			ret=Shjdcode_Upd_Upd(shjdcode,g_pub_tx.reply);
+			if(ret)
+			{
+				sprintf(acErrMsg,"UPDATE出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}	
+			Shjdcode_Clo_Upd();	
+			break;
+		case '4': /*刷新*/
+			ret=Shjdcode_Dec_Sel(g_pub_tx.reply," 1=1 order by trancode");
+			if(ret)
+			{
+				sprintf(acErrMsg,"声明游标出错shjdcode表.[%d]",ret);
+				WRITEMSG
+				goto ErrExit;
+			}
+			while(1)
+			{ /*1 while*/
+				memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+				memset(tmp,0x00,sizeof(tmp));
+
+				ret=Shjdcode_Fet_Sel(&shjdcode,g_pub_tx.reply);
+				if(ret == 100) break;
+				else if(ret)
+				{
+					sprintf(acErrMsg,"FETCH出错shjdcode表.[%d]",ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				if(!cnt)
+				{
+					pub_base_AllDwnFilName(filename);
+					fp=fopen(filename,"w");
+					if(!fp)
+					{
+						sprintf(acErrMsg," open file [%s] error ",filename );
+						WRITEMSG
+						strcpy( g_pub_tx.reply,"S047" );
+						goto ErrExit;
+					}
+				/*	fprintf(fp,"~交易代码|交易名称|额度控制|\n");*/
+				}
+				memcpy(tmp,shjdcode.text+1,17);
+				fprintf(fp,"%s|%s|%s|\n",shjdcode.trancode,shjdcode.tranname,tmp);
+vtcp_log("trancode=[%s],tranname=[%s],txcode=[%s],tmp=[%s]",shjdcode.trancode,shjdcode.tranname,shjdcode.txcode,tmp);
+				cnt++;
+			} /*2 while*/	
+			Shjdcode_Clo_Sel();
+			if(!cnt)
+			{
+				strcpy(g_pub_tx.reply,"S049");
+				goto ErrExit;
+			}
+			else
+			{
+				fclose(fp);
+				set_zd_data( DC_FILE_SND,"1");
+			}
+			break;
+		default: sprintf(acErrMsg,"不存在这样的操作类型. [%s]--[%d]",__FILE__,__LINE__);
+			 WRITEMSG
+			goto ErrExit;	
+	}
+
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

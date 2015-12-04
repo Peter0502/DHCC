@@ -1,0 +1,92 @@
+<TRANSACTION RIGHTS="00000000" TITLE="9599 系统状态查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    commsend_001();
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(9599                    业务权限查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9599)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>
+  "{
+	dim @f as file;
+	dim @line as string;
+	dim @fld0 as string;
+	dim @fld1 as string;
+	dim @fld2 as string;
+	dim @tota as string;
+	dim @selid as number;
+  	commsend_001();
+	$FD123='1=1 ';
+	@tota=callserver();
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME,@tota);
+
+    	if($FD12!='0000')
+    	{
+    		showmsg(geterror());
+    		return (false);
+    	}
+	@f=openfile('../tmp/'+$KINBR+$TTYNAME);
+	if(@f &lt; 0){
+		showmsg('打开回传文件错误就');
+		return(false);
+	}
+	list_init(17,78,3,1);
+	list_setcolcnt(3);
+	list_setcol(0,'参与者',13);
+	list_setcol(1,'权限种类',10);
+	list_setcol(2,'权限内容',50);
+	while(true){
+		@line=readline(@f);
+		if(@line!=''){
+			@fld0=strfld(@line,'|',0);
+			@fld1=strfld(@line,'|',1);
+			@fld2=strfld(@line,'|',2);
+			list_additem(@fld2,@fld0,@fld1,substr(@fld2,0,45));
+		}else{
+			break;
+		}
+	}
+	while(true){
+		@selid=list_work();
+		if(@selid &lt; 0){
+			break;
+		}
+		msgbox(list_getaction(@selid)+chr(10)+chr(10)+chr(10)+chr(10)+chr(10)+chr(10)+chr(10)+chr(10)+chr(10),'行号['+list_gettext(@selid,0)+']的'+list_gettext(@selid,1),'ok');
+	}	
+		list_del();	
+	rerun();
+   }"
+   </ONCLICK>
+   </ITEM>
+
+  </VARIABLE>
+  <REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE>
+    NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        }"
+    </PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

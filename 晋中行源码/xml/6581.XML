@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE=" 代付回执"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    initfd();
+    commsend_001();
+    $FD96=getitems('#REPCONTENT');
+    $FD44=#PACKID;
+    $FD45=#ORDERNO;
+    $FD46=#WTDAY;
+    $FD23=#REPSTAT;
+}"
+</COMMSEND>
+<COMMRECV>"{
+    #OPFLAG=$FD69;
+    #ERRCODE=$FD74;
+}"
+</COMMRECV>
+
+  <VARIABLE UPLOOP="FALSE">
+  <ITEM LINE="3"  COL="3" TYPE="%-49s" FUNCTIONS=
+    "T(6581                            40503代付回执)"/>
+
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+    "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=6581)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="8"  COL="9" TYPE="%-16s" FUNCTIONS="T(原代付包序号: )"/>
+  <ITEM LINE="10" COL="9" TYPE="%-16s" FUNCTIONS="T(原代付交易序号: )"/>
+  <ITEM LINE="12" COL="9" TYPE="%-16s" FUNCTIONS="T(原代付委托日期: )"/>
+  <ITEM LINE="14" COL="9" TYPE="%-10s" FUNCTIONS="T(回执状态: )"/>
+  <ITEM LINE="16" COL="9" TYPE="%-10s" FUNCTIONS="T(附    言: )"/>
+
+  <ITEM LINE="8" COL="25" NAME="#PACKID" TYPE="%08s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="25" NAME="#ORDERNO" TYPE="%08s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12" COL="25" NAME="#WTDAY" TYPE="%08s" DEVICE="KEYBOARD" FUNCTIONS="D()T($HDATE)"/>
+  <ITEM LINE="14" COL="25" NAME="#REPSTAT" TYPE="%-2s" DEVICE="KEYBOARD" FUNCTIONS="T(AA)V(NB)">
+    <SELECT LINE="14" COL="27">
+      <OPTION VALUE="00 成功"             TITLE="00.成功"/>
+      <OPTION VALUE="01 账号不存在"       TITLE="01.账号不存在"/>
+      <OPTION VALUE="02 账号，户名不符"   TITLE="02.账号，户名不符"/>
+      <OPTION VALUE="03 余额不足"         TITLE="03.余额不足"/>
+      <OPTION VALUE="10 账号,密码错误"    TITLE="10.账号,密码错误"/>
+      <OPTION VALUE="11 账号状态错"       TITLE="11.账号状态错"/>
+      <OPTION VALUE="20 业务已撤销"       TITLE="20.业务已撤销"/>
+      <OPTION VALUE="90 其它错误"         TITLE="90.其它错误"/>
+      <OPTION VALUE="AA 自动回执"         TITLE="AA.自动回执"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#REPSCR" TYPE="%-14s"  FUNCTIONS="j(#REPSTAT=00,T{成功})j(#REPSTAT=01,T{账号不存在})j(#REPSTAT=02,T{账号，户名不符})j(#REPSTAT=03,T{余额不足})j(#REPSTAT=10,T{账号，密码错误})j(#REPSTAT=11,T{账号状态错})j(#REPSTAT=20,T{业务已撤销})j(#REPSTAT=90,T{其它错误})j(#REPSTAT=AA,T{自动回执})">
+    <ONLOSTFOCUS>
+      "{
+         // showmsg('#REPSTAT:'+#REPSTAT);
+         // showmsg('#REPSCR'+#REPSCR);
+         // return(false);
+      }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="17" COL="10" NAME="#REPCONTENT" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS=""/>
+
+  <ITEM NAME="#OPFLAG"  TYPE="%-1s"/>
+  <ITEM NAME="#ERRCODE"  TYPE="%-60s"/>
+
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />  
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容" CHECK="#OPFLAG=0">
+NOTHING
+</PACKAGE>
+    <PRINT>"{
+        print( 8,25,'操作成功');
+    }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="显示内容" CHECK="#OPFLAG=1">
+NOTHING
+</PACKAGE>
+    <PRINT>"{
+        print( 4,25,'操作失败');
+        print( 6, 5,'错误描述 :[60]',#ERRCODE);
+    }"
+    </PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+    <PRINT>"{
+       $KINDNO='00';
+       dim @txtime as string;
+       @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+       print(3,25,'40503代付回执');
+       print(05,15,'原代付委托日期 :[08]',#WTDAY);
+       print(07,15,'原代付包序号   :[08]',#PACKID);
+       print(09,15,'原代付交易序号 :[08]',#ORDERNO);
+       print(11,15,'回执      状态 :[14]',#REPSCR);
+       print(13,15,'机 构 号 :[12]',$KINBR);
+       print(15,15,'柜 员 号 :[12]',$TLRNO);
+       print(17,15,'附加信息 :[60]',#REPCONTENT);
+       
+       
+       print(22,20,'交易日期:[8] [8]',$HDATE,@txtime);
+       print(22,5,'柜员:[4]',$FD7);
+       print(22,5,'流水号:[6]',$FD4);
+    }"
+    </PRINT>
+</RESPONSE>

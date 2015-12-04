@@ -1,0 +1,32 @@
+#ifndef __od_parm_CH__
+#define __od_parm_CH__
+struct od_parm_c{
+	char      rowid[20];
+	char      prdt_no[4];
+	char      title[31];
+	long      beg_date;
+	long      end_date;
+	char      cif_type[2];
+	char      cur_no[4];
+	double    max_amt;
+	double    cash_amt;
+	long      turn_ill_days;
+	char      intst_ind[2];
+	char      pay_ind[2];
+	long      pay_date;
+	long      pay_intvl;
+	long      pay_drt_days;
+	long      hst_keep_day;
+	char      rate_code[4];
+	char      rate_mode[2];
+	char      rate_code_def[4];
+	double    year_chrg;
+	double    min_pay_amt;
+	double    min_pay_ratio;
+	char      late_chrg_mode[2];
+	char      late_chrg_code[4];
+	long      opn_lmt;
+	long      cls_lmt;
+	char      dc_code[5];
+};
+#endif 

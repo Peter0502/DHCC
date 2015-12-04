@@ -1,0 +1,81 @@
+/***************************************************************************************
+*交易名称: 监督总量控制
+*文件名称: sp3644.pc
+*
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070111
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "shjdcode_c.h"
+int sp3644()
+{
+	int ret=0;
+	struct shjdcode_c shjdcode;
+	char zj[4];
+	
+	memset(zj,0x00,sizeof(zj));
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+	pub_base_sysinit();
+
+	get_fd_data("0230",zj);
+	/*
+	pub_base_strpack_all(zj);
+	*/
+	vtcp_log("[%s][%d] <<<<<<<<<<<zj[%s]",__FILE__,__LINE__,zj);
+	ret=Shjdcode_Dec_Upd(g_pub_tx.reply,"trancode='7011'");
+	if(ret)
+	{
+	vtcp_log("[%s][%d] <<<<<<<<<<<",__FILE__,__LINE__);
+		sprintf(acErrMsg,"声明游标出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Shjdcode_Fet_Upd(&shjdcode,g_pub_tx.reply);
+	vtcp_log("[%s][%d] <<<<<<<<<<<",__FILE__,__LINE__);
+	if(ret && ret != 100)
+	{
+	vtcp_log("[%s][%d] <<<<<<<<<<<",__FILE__,__LINE__);
+		sprintf(acErrMsg,"FETCH出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+		WRITEMSG
+		goto ErrExit;
+	}
+vtcp_log("赋值前:text=[%18s],[%s]--[%d]",shjdcode.text,__FILE__,__LINE__);
+	memcpy(shjdcode.text+17,zj,3);	
+vtcp_log("赋值后:text=[%18s],[%s]--[%d]",shjdcode.text,__FILE__,__LINE__);
+	ret=Shjdcode_Upd_Upd(shjdcode,g_pub_tx.reply);
+	if(ret)
+	{
+		sprintf(acErrMsg,"UPDATE出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+		WRITEMSG
+		goto ErrExit;
+	}
+	Shjdcode_Clo_Upd();
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	/*
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	*/
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

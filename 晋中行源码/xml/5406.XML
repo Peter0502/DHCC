@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="支票业务录入发送"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(5406                        支票业务录入发送)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5930)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+    <ITEM NAME="#ITXAMT" TYPE="%-16s" FUNCTIONS="">
+    <ONLOSTFOCUS>
+     "{
+        #LTXAMT=val(#ITXAMT);
+      }"
+    </ONLOSTFOCUS>
+    </ITEM>
+
+  <ITEM LINE="6"   COL="3"   TYPE="%-12s"  FUNCTIONS="T(委托  日期:)"/>
+  <ITEM LINE="7"   COL="3"   TYPE="%-12s"  FUNCTIONS="T(交易  序号:)"/>
+  <ITEM LINE="8"   COL="3"   TYPE="%-12s"  FUNCTIONS="T(业务  类型:!)"/>
+  <ITEM LINE="9"   COL="3"   TYPE="%-12s"  FUNCTIONS="T(发起行行号:)"/>
+  <ITEM LINE="10"  COL="3"   TYPE="%-12s"  FUNCTIONS="T(收款  帐号:)"/>
+  <ITEM LINE="11"  COL="3"   TYPE="%-12s"  FUNCTIONS="T(交易  金额:)"/>
+  <ITEM LINE="12"  COL="3"   TYPE="%-12s"  FUNCTIONS="T(接收行行号:)"/>
+  <ITEM LINE="13"  COL="3"   TYPE="%-12s"  FUNCTIONS="T(付款  帐号:)"/>
+  
+  <ITEM NAME="#LCRDB" TYPE="%1d"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#OPCD"  TYPE="%2d"  FUNCTIONS="T(11)"/>
+  <ITEM NAME="#PKGNO" TYPE="%3d"  FUNCTIONS="T(002)"/>
+  
+  <ITEM LINE="6" COL="15" NAME="#WTDAY"   DEVICE="KEYBOARD" TYPE="%-8s"  FUNCTIONS="V(NB)T()D()"/>
+  <ITEM LINE="7" COL="15" NAME="#ORDERNO" DEVICE="KEYBOARD" TYPE="%-8s"  FUNCTIONS="V(NB)T()"/>
+  <ITEM LINE="8" COL="15" NAME="#TXNUM"   DEVICE="KAYBOARD" TYPE="%-5s"  FUNCTIONS="T(30102)V(NB)">
+	<SELECT>
+		<OPTION VALUE="30102" TITLE="0.支票截留业务"/>
+		<OPTION VALUE="30103" TITLE="0.通用截留业务"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="9" COL="15" NAME="#ORBRNO" TYPE="%-12s"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  		dim @a as string;  	
+		initfd();
+		commsend_001();
+		$FD16='9553';
+		$FD32=#ORBRNO;
+		callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(true);
+		}
+		@a=$FD96;
+  		if(@a!=''){
+  			showhelp(3,70,18,3,'大额行号信息','行 名:'+substr(@a,0,60)); 
+  		}else{
+  			showmsg('无此支付行号!');
+  			return(false);
+  		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="10" COL="15" NAME="#CASHACTNO"  DEVICE="KEYBOARD" TYPE="%-32s"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    dim @b as string;
+    if(len(#CASHACTNO) &lt; 7){
+               @b=substr(#CASHACTNO,0,len(#CASHACTNO));
+                   #CASHACTNO=@b;
+                  enable(#CASHACTNO,true);
+
+                  if(#CASHACTNO!='2430100' && #CASHACTNO!='2430200')
+                  {
+                     showmsg('您输入的科目不能做此交易!');
+                        return(false);
+                  }
+                }
+      if(#CASHACTNO=='1010100')
+      {
+        showmsg('不能直接输入现金科目!');
+        return(false);
+      }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+ <!-- <ITEM LINE="10" COL="15" NAME="#CASHACTNO"  DEVICE="KEYBOARD" TYPE="%-32s"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    dim @b as string;
+    if(len(#CASHACTNO) &lt; 7){
+               @b=substr(#CASHACTNO,0,len(#CASHACTNO));
+                   #CASHACTNO=@b;
+                  enable(#CASHACTNO,true);
+
+                  if(#CASHACTNO!='2430100' && #CASHACTNO!='2430200')
+                  {
+                     showmsg('您输入的科目不能做此交易!');
+                        return(false);
+                  }
+                }
+
+    //#CASHACTNO=delspace(#CASHACTNO);
+    //@a=checkno('D11',#CASHACTNO);
+
+    //if(@a!=''){
+     // #CASHACTNO=substr(@a,56,18);
+      //#CASHACTNO=delspace(#CASHACTNO);
+      //@b=substr(#CASHACTNO,5,1);
+      //@c=substr(@a,101,1);
+
+      if(#CASHACTNO=='1010100')
+      {
+        showmsg('不能直接输入现金科目!');
+        return(false);
+      }
+      //showhelp(4,40,5,35,'账户信息','姓  名:'+substr(@a,0,30)+' 余  额:'+substr(
+@a,40,16));
+      //#CASHNAME=substr(@a,0,40);
+      //#CASHNAME=delspace(#CASHNAME);
+       //         @brno=substr(@a,92,4);
+        //        if(@brno!=$KINBR)
+         //       {
+          //         showmsg('您输入的帐号不是本机构的帐号!!');
+           //        return(false);
+            //    }
+    //}else{
+     // showmsg('账号不存在!');
+      //return(false);
+    //}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+-->
+  <ITEM NAME="#CASHNAME" TYPE="%-60s" FUNCTIONS=""/>
+
+  <ITEM LINE="11" COL="15" NAME="#LTXAMT"  TYPE="%16.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000010,9999999999999999)T()"/>
+
+  <ITEM LINE="12" COL="15" NAME="#ACBRNO" DEVICE="KEYBOARD" TYPE="%-12s"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  		dim @a as string;  	
+		initfd();
+		commsend_001();
+		$FD16='9553';
+		$FD32=#ACBRNO;
+		callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(true);
+		}
+		@a=$FD96;
+  		if(@a!=''){
+  			showhelp(3,70,18,3,'大额行号信息','行 名:'+substr(@a,0,60)); 
+  		}else{
+  			showmsg('无此支付行号!');
+  			return(false);
+  		}
+         #PAYNO=#ACBRNO;
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PAYNO" TYPE="%-12s" FUNCTIONS=""/>
+  <ITEM LINE="13" COL="15" NAME="#PAYACTNO"  DEVICE="KEYBOARD" TYPE="%-32s"  FUNCTIONS=""/>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+		initfd();
+		commsend_001();
+		$FD16='5930';
+		$FD44=#WTDAY;
+		$FD28=#ORDERNO;
+		$FD64=#TXNUM;
+		$FD52=#ORBRNO;
+		$FD81=#CASHACTNO;
+		$FD39=#LTXAMT;
+		$FD62=#ACBRNO;
+		$FD82=#PAYACTNO;
+		callserver();
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		showmsg('CIF报文发送成功!');
+		close('#OK');
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="24"  DESC="CIF报文发送成功">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+		print(6,10,'CIF报文发送成功!');
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

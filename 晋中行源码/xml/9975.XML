@@ -1,0 +1,71 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="发票使用详情查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9974                  发票使用详情查询)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6620)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="7"   COL="30"   TYPE="%-14s"    FUNCTIONS="T(柜 员 号:)"/>
+  <ITEM LINE="7"   COL="38"   NAME="#TX_TEL"  INPUT="TEXT" TYPE="%-4s"  FUNCTIONS="T($TLRNO)"/>
+
+  <ITEM LINE="9"  COL="30"    TYPE="%-14s"      FUNCTIONS="T(发票类型:)"/>
+  <ITEM LINE="9"  COL="38"    NAME="#VOC_TYPE"  TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="V(NB)T(0)">
+    <SELECT>
+      <OPTION VALUE="0" TITLE="0.全部"/>
+      <OPTION VALUE="1" TITLE="1.自来水"/>
+      <OPTION VALUE="2" TITLE="2.国新洁源天然气"/>
+    </SELECT>
+  </ITEM>
+
+  <ITEM LINE="11"  COL="30"    TYPE="%-14s"        FUNCTIONS="T(起始号码:)"/>
+  <ITEM LINE="11"  COL="38"    NAME="#VOC_BEG_NO"   INPUT="TEXT"  TYPE="%16d" FUNCTIONS=""/>
+  <ITEM LINE="13"  COL="30"    TYPE="%-14s"        FUNCTIONS="T(结束号码:)"/>
+  <ITEM LINE="13"  COL="38"    NAME="#VOC_END_NO"   INPUT="TEXT"  TYPE="%16d" FUNCTIONS=""/>
+
+  <ITEM LINE="15" COL="30" TYPE="%-10s" FUNCTIONS="T(使用日期:)"/>
+  <ITEM LINE="15" COL="38" NAME="#USE_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS=""/>
+
+  <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>"{
+      dim @tota as string;
+      dim @selid as number;
+      initfd();
+      commsend_001();
+      $FD16='6620';              //发票库存查询接口
+      $FD60='AGENT';             //交易类型
+      $FD21='01';                //柜面发起标志
+      $FD28=#USE_DATE;           //使用日期
+      $FD29=#TX_TEL;             //交易柜员
+      $FD89=#VOC_TYPE;           //发票类型
+      $FD58=#VOC_BEG_NO;         //发票起始号码
+      $FD59=#VOC_END_NO;         //发票结束号码
+
+      @tota=callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      @tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+      if(@tota==''){
+        showmsg('未找到该柜员的发票使用详情记录!');
+        rerun();
+        return(false);
+      }
+      autolist(@tota);
+      @selid=list_work();
+
+      runoutput();
+      rerun();
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

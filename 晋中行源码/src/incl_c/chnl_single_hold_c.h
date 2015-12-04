@@ -1,0 +1,31 @@
+#ifndef __chnl_single_hold_CH__
+#define __chnl_single_hold_CH__
+struct chnl_single_hold_c{
+        char      rowid[20];
+        long      tx_date;
+        char      tx_time[7];
+        long      trace_no;
+        char      cur_no[3];
+        char      ac_no[33];
+        char      tx_code[5];
+        char      tx_br_no[6];
+        char      opn_br_no[6];
+        char      tel[7];
+        char      bbmk[5];
+        char      ttyn[21];
+        long      pt_date;
+        char      pt_time[7];
+        char      pt_trace_no[13];
+        char      premise_no[9];
+        double    hold_amt;
+        double    tx_amt;
+        char      brf[31];
+        char      sts[2];
+        long      o_tx_date;
+        char      o_trace_no[13];
+        long      o_pt_date;
+        char      o_pt_trace_no[13];
+        char      dz_ind[2];
+        char      dz_ref[29];
+};
+#endif 

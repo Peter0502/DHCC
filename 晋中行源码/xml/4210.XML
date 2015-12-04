@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="4210  二级账子户单边记账交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	initfd();
+	commsend_001();
+	$FD30=#ACTNO;
+	$FD78=#D_SUBAC;
+	$FD62=#DBRF;
+	$FD67=#JD;
+	$FD68='2';
+	$FD39=getitems('#DAMT');
+	$FD62=#S_ZHY2;
+}"
+</COMMSEND>
+
+<COMMRECV>
+	"{
+	}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+	$BUFFER='';
+}"
+</FIRSTWORK>
+<VARIABLE UPLOOP="FALSE">
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(4210                   二级账子户单边记账交易 )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2213)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(4210)"/>   <!----交易代码---->
+
+  <ITEM LINE="6" COL="10" TYPE="%-10s" FUNCTIONS="T(一级账号:)"/>
+  <ITEM LINE="6" COL="20" TYPE="%-24s" FUNCTIONS="T()V(NB)" NAME="#ACTNO" INPUT="TEXT" >
+  	<ONGOTFOCUS>
+  	"{
+  		#ACTNO=$BUFFER;
+  	}"
+  	</ONGOTFOCUS>
+  	<ONLOSTFOCUS>
+  	"{
+  		dim @tmp as string;
+  		initfd();
+  		commsend_001();
+  		$FD16='9955';
+  		$FD102=#ACTNO;
+  		callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+  		#YJHM=substr($FD102,125,60);
+  		@tmp=substr($FD102,185,16);
+  		#PWD_MACH_YN=substr($FD102,103,1);
+  		setitems('#YJAMT',@tmp);
+  		$BUFFER=#ACTNO;
+  		refresh();
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PWD_MACH_YN" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM LINE="7" COL="10" TYPE="%-10s" FUNCTIONS="T(一级户名:)"/>
+  <ITEM LINE="7" COL="20" TYPE="%-50s" FUNCTIONS="T()" INPUT="LABEL" NAME="#YJHM" />
+  <ITEM LINE="8" COL="10" TYPE="%-10s" FUNCTIONS="T(账户余额:)"/>
+  <ITEM LINE="8" COL="20" TYPE="%17.2f" FUNCTIONS="T()" INPUT="TEXT" NAME="#YJAMT" ENABLE="FALSE"/>
+	<ITEM LINE="9" COL="10" TYPE="%-10s" FUNCTIONS="T(借贷方向:)"/>
+	<ITEM LINE="9" COL="20" TYPE="%-1s"  FUNCTIONS="T(1)" NAME="#JD" INPUT="TEXT" >
+		<SELECT>
+			<OPTION VALUE="2"   TITLE="借"/>
+			<OPTION VALUE="1"   TITLE="贷"/>
+		</SELECT>
+	</ITEM>
+
+	<ITEM LINE="11" COL="10" TYPE="%-10s" FUNCTIONS="T(子户序号:)"/>
+	<ITEM LINE="11" COL="20" TYPE="%8d" FUNCTIONS="T()V(NB)" NAME="#D_SUBAC" INPUT="TEXT" >
+		<ONLOSTFOCUS>
+		"{
+  		initfd();
+  		commsend_001();
+  		$FD16='9677';
+  		$FD101=#ACTNO;
+  		$FD44=#D_SUBAC;
+  		callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+			if($FD70=='*')
+			{
+				showmsg('该子账户已经销户');
+				return(false);
+			}
+  		#DFHM=delspace($FD25);
+  		setitems('#DBAL',$FD40);
+  		#D_SUB_AC_NO=$FD31;
+  		refresh();
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#D_SUB_AC_NO" TYPE="%-20s" FUNCTIONS=""/>
+	<ITEM LINE="12" COL="10" TYPE="%-10s" FUNCTIONS="T(子账户名:)"/>
+	<ITEM LINE="12" COL="20" TYPE="%-50s" FUNCTIONS="" NAME="#DFHM" INPUT="TEXT" ENABLE="FALSE"/>
+	<ITEM LINE="13" COL="10" TYPE="%-10s" FUNCTIONS="T(发 生 额:)" />
+	<ITEM LINE="13" COL="20" TYPE="%17.2f" FUNCTIONS="T()" INPUT="TEXT" NAME="#DAMT" />
+	<ITEM LINE="13" COL="43" TYPE="%-10s"  FUNCTIONS="T(子户余额:)" INPUT="LABEL"/>
+	<ITEM LINE="13" COL="53" TYPE="%17.2f"  FUNCTIONS="T()" INPUT="TEXT" NAME="#DBAL" ENABLE="FALSE"/>
+	<ITEM LINE="15" COL="10" TYPE="%-6s" FUNCTIONS="T(摘要:)"/>
+	<ITEM LINE="15" COL="16" TYPE="%-1s" FUNCTIONS="T(7)" INPUT="SELECT" NAME="#D_ZY">
+		<SELECT>
+  		<OPTION  VALUE="1"  TITLE="办公费"/>
+  		<OPTION  VALUE="2"  TITLE="国库扣款"/>
+  		<OPTION  VALUE="3"  TITLE="维修费"/>
+  		<OPTION  VALUE="4"  TITLE="接待费"/>
+  		<OPTION  VALUE="5"  TITLE="工会经费"/>
+  		<OPTION  VALUE="6"  TITLE="失业保险"/>
+  		<OPTION  VALUE="7"  TITLE="手工输入"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#D_ZY=='7')
+			{
+				show(#DBRF1,true);
+				enable(#DBRF1,true);
+			}
+			else
+			{
+				show(#DBRF1,false);
+				enable(#DBRF1,false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#S_ZHY2" TYPE="%-20s" FUNCTIONS="S(#D_ZY,#D_ZY)"/>
+	<ITEM LINE="15" COL="30" TYPE="%-20s" FUNCTIONS="T()V(NB)" NAME="#DBRF1" INPUT="TEXT" VISABLE="FALSE"/>
+	<ITEM NAME="#DBRF" TYPE="%-20s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			//if(#D_ZY!='7')
+			//{
+				//#DBRF=#S_ZHY2;
+			//}
+			//else
+			//{
+				//#DBRF=#DBRF1;
+			//}
+			if(#D_ZY=='7')
+			{
+				#S_ZHY2=#DBRF1;
+			}
+			//showmsg('#S_ZHY2='+#S_ZHY2);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#OK" LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+</VARIABLE>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="记账成功">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @tmp1 as string;
+
+		print(6,25,'主 账 号:[20]',#ACTNO);
+		if(#JD=='2'){
+			print(8,25,'借方子户:[16]',delspace($FD78));
+		}else{
+			print(8,25,'贷方子户:[16]',delspace($FD78));
+		}
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @txtime  as string;
+		dim @tmp     as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	// if($REPRINT=='true')
+	// {
+	// 	reprint_nx();
+	// }
+	//	if(#OPT=='2')
+	//	{
+	//		@tmp=itoa(#JAMT,'%17.2f');
+	//	}
+	//	else
+	//	{
+	//		@tmp=itoa(#DAMT,'%17.2f');
+	//	}
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:4210');
+		print( 5, 13,'交易名称:二级账子户单边记账交易');
+
+		print( 7,30,'\L0二级账子户单边记账\L1');
+		print( 9,12,'主 账 号:[20]',#ACTNO);
+		print(10,12,'户    名:[60]',#YJHM);
+		print(11,12,'子户序号:[8]',itoa(val(#D_SUBAC)));
+		print(12,12,'子户名称:[60]',#DFHM);
+		if(#JD=='1'){
+			print(13,12,'借贷标志:贷');
+		}else{
+			print(13,12,'借贷标志:借');
+		}
+		print(14,12,'交易金额:[16]',ltrim(comma(#DAMT,16)));
+
+		print(24,15,'备注:');
+		print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(24, 5,'柜员:[6]',$FD7);
+		print(24, 5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<LASTWORK>
+	"{
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J002';
+		$FD30=#ACTNO+'-'+itoa(val(#D_SUBAC));            //账  号
+		$FD5=$HDATE;                                //交易日期
+		$FD39=getitems('#DAMT');                    //交易金额
+		$FD41=$KINBR;                               //银行代码
+		if(#JD=='2')
+		{
+			$FD81='2转账取款'+' '+#DBRF;        //摘要
+		}
+		else
+		{
+			$FD81='1转账存款'+' '+#DBRF;        //摘要
+		}
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+		showmsg('二级账子户单边记账成功!');
+	}"
+</LASTWORK>
+
+
+</TRANSACTION>

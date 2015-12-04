@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9137 活期账户行内转账明细查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	if(substr(#ZH,0,6) == '621223' or substr(#ZH,0,6) == '621780')
+	{
+		initfd();
+		commsend_001();
+		$FD16='7009';
+		$FD30=#ZH;
+		$FD79=#MM;
+// mod by chenggongxun 20091023 beg 
+		$FD75	= $MSR2;
+		$FD76	= $MSR3;
+// mod by chenggongxun 20091023  end
+		callagn();
+		if( $FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		#TRAN_FEE = val($FD40); 
+		#TRAN_FEE1 = val($FD40,0.01); 
+		initfd(); 
+	}
+
+	commsend_001();
+	$FD38=#ZH;
+	$FD51=#ZHXH;
+	$FD70=#ZJBZ;
+	$FD66=#XZBZ;
+	$FD2=#KHJG;
+	$FD29=#JYRQ;
+	$FD44=#JYRQQ;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	if($FD12=='0000'){
+		show(#TI,true);
+		show(#STI,true);
+		show(#HMI,true);
+		show(#CNAME,true);
+	}
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(9137                        活期账户行内转账明细查询)"/>
+  <ITEM LINE="5"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8237)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+   <ITEM NAME="#TRAN_FEE"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费----> 
+   <ITEM NAME="#TRAN_FEE1"   TYPE="%17.2f"  FUNCTIONS=""/>    <!----交易手续费----> 
+   
+  <!--输入变量-->   
+  <ITEM NAME="#STI"   LINE="4"  COL="59" TYPE="%-8s"  INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(账/卡号:)"/>
+  
+  <ITEM NAME="#TI"    LINE="4"  COL="67" TYPE="%-20s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(#ZH)"/>
+  <ITEM NAME="#HMI"   LINE="4"  COL="4" TYPE="%-5s"  INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(户名:)"/>
+  <ITEM NAME="#CNAME" LINE="4"  COL="9" TYPE="%-50s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(#NAME)"/>
+  <ITEM NAME="#LDQFS" LINE="6"  COL="25"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="35" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <BLOCK NAME="COMMON" LINE="7" COL="25">
+  <ITEM LINE="0"  COL="0"  TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+  <ITEM LINE="2"  COL="0"  TYPE="%-10s" FUNCTIONS="T(帐户序号:)"/>
+  <ITEM LINE="4"  COL="0"  TYPE="%-10s" FUNCTIONS="T(借贷标志:!)"/>
+  <ITEM LINE="6"  COL="0"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="8"  COL="0"  TYPE="%-11s" FUNCTIONS="T(开户机构号:)"/>
+  <ITEM LINE="10" COL="0"  TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+  <ITEM LINE="10" COL="19" TYPE="%-3s"  FUNCTIONS="T( → )"/>
+  <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="0" COL="10" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#ZH=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="0"  COL="10" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#ZH=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ZH"  TYPE="%-19s"  FUNCTIONS="" >
+  <ONGOTFOCUS>
+  "{
+  	show(#MMLAB,false);
+  	show(#MM,false);
+  }"
+  </ONGOTFOCUS>
+  <ONLOSTFOCUS>
+  "{ dim @txno as string;
+     @txno=$TXNO;
+     $TXNO='9958';
+     commsend_001();
+     $FD38=#ZH;
+     callserver();
+     $TXNO=@txno;
+ 
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	#ZH=$FD38;	//新帐号
+
+      if(#ZH != '')
+     {
+         initfd();
+         @txno=$TXNO;
+         $TXNO='6700';
+         commsend_001();
+         $FD30=#ZH;
+         $FD67='1';
+         callserver();
+         $TXNO=@txno;
+     
+         if($FD12!='0000')
+            {showmsg(geterror());
+             return(false);
+         }
+	// showmsg($FD25);
+	 #NAME=$FD25;
+		//showmsg($KINBR);
+		//showmsg($FD91);
+         if($KINBR!=$FD91)
+         {
+             showmsg('只能查询本机构帐户!');
+             return(false);
+         } 
+     }
+     if(substr(#ZH,0,6) == '621223' or substr(#ZH,0,6) == '621780')
+     {
+     	show(#MMLAB,true);
+  		show(#MM,true);
+     }
+     else
+     {
+     	show(#MMLAB,false);
+  		show(#MM,false);     	
+     }
+        }"
+  </ONLOSTFOCUS>       
+   </ITEM>  
+  <ITEM NAME="#NAME" TYPE="%-50s" FUNCTIONS=""/><!---户名--->
+
+  <ITEM NAME="#ZHXH" INPUT="TEXT" LINE="2" COL="10" TYPE="%3s" FUNCTIONS="T()"/>
+  <!--add by luolz 20090925-->
+  <ITEM LINE="2" COL="17" NAME="#MMLAB" TYPE="%-6s" FUNCTIONS="T(密码:)" VISABLE="FALSE"/>
+  <ITEM LINE="2" COL="23" NAME="#MM" TYPE="%6d" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()" VISABLE="FALSE">
+  	<ONLOSTFOCUS>
+		 "{
+		 		 if(substr(#ZH,0,6) != '621223' and substr(#ZH,0,6) != '621780')
+		     {     
+		         	dim @baktxno as string;
+		
+		        	@baktxno=$TXNO;
+		        	
+		        	commsend_001();        	
+		        	$FD16='9735';
+		        	$FD30=#ZH;
+		        	$FD79=#MM;     
+		     	   	
+		        	callserver();
+		        	$TXNO=@baktxno;
+		        	if($FD12!='0000'){
+		        		showmsg(geterror());
+		        		return(false);
+		        	}
+		        }else if(substr(#ZH,0,6) == '621223' or substr(#ZH,0,6) == '621780')  //add by zhangjie 20091124
+						  {
+									initfd();
+									commsend_001();
+									$FD16='7007';
+									$FD30=#ZH;
+									$FD79=#MM;
+									$FD68='4';
+									callagn();
+									if($FD12!='0000')
+									{
+										showmsg(geterror());
+										return (false);
+									}
+							}
+		}"
+		</ONLOSTFOCUS>
+  </ITEM>   
+  <!--add by luolz 20090925-->
+
+    
+  <ITEM NAME="#ZJBZ" INPUT="SELECT" LINE="4" COL="10" TYPE="%-1s" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="0.借"/>
+		<OPTION VALUE="1" TITLE="1.贷"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM NAME="#XZBZ" INPUT="SELECT" LINE="6" COL="10" TYPE="%-3s" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="1.现金"/>
+		<OPTION VALUE="2" TITLE="2.转帐"/>
+		<OPTION VALUE="3" TITLE="3.同城"/>
+		<OPTION VALUE="4" TITLE="3.大额"/>
+			</SELECT>
+  </ITEM>
+  <ITEM NAME="#KHJG" INPUT="LABEL" LINE="8" COL="11" TYPE="%5s" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#JYRQ" INPUT="TEXT" LINE="10" COL="10" TYPE="%-8s" FUNCTIONS="T()"/>
+  <ITEM NAME="#JYRQQ" INPUT="TEXT" LINE="10" COL="23" TYPE="%-8s" FUNCTIONS="T()"/>
+  </BLOCK>
+  <!--输出变量--->
+  <ITEM NAME="#TXCNT"   TYPE="%2d"  FUNCTIONS="T($OCCURS=#TXCNT)J(#TOTCNT)" />
+  <ITEM NAME="#TOTCNT"  TYPE="%5d"  FUNCTIONS="E(#TOTCNT+#TXCNT)J(#TOTCNTC)"/>
+  <ITEM NAME="#TOTCNTC" TYPE="%5d"  FUNCTIONS="T($TOTCNT=#TOTCNT)"/>
+  <ITEM NAME="#O_TXDAY" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#O_PBDSC" TYPE="%-3s" FUNCTIONS="J(#OL_PBDSC)"/>
+  <ITEM NAME="#OL_PBDSC" TYPE="%-2s" FUNCTIONS="T(  )j(#O_PBDSC=001,T{存})j(#O_PBDSC=002,T{取})"/>
+  <ITEM NAME="#O_TXAMT" TYPE="%16.2f" FUNCTIONS="J(#OL_TXAMT)"/>
+  <ITEM NAME="#OL_TXAMT" TYPE="%-16s" FUNCTIONS="X(#O_TXAMT)"/>
+  <ITEM NAME="#O_CRDB" TYPE="%-1s" FUNCTIONS="J(#OL_SIGN)"/>
+  <ITEM NAME="#OL_SIGN" TYPE="%-1s" FUNCTIONS="T( )j(#O_CRDB=1,T{-})"/>
+  <ITEM NAME="#O_AVBAL" TYPE="%16.2f" FUNCTIONS="J(#OL_AVBAL)"/>
+  <ITEM NAME="#OL_AVBAL" TYPE="%-16s" FUNCTIONS="X(#O_AVBAL)"/>
+  <ITEM NAME="#O_TLRNO" TYPE="%-4s" FUNCTIONS=""/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

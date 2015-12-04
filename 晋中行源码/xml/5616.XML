@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="5616 开提货单"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		initfd();
+		commsend_001();
+  		$MSGTYPE='03001';
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9986';
+		$FD12 = '4340';
+        $FD26 = #CASHCONAME;
+        $FD27 = #PAYCONAME;
+		$FD33 = #CDXYNUM;
+		$FD39 = itoa(val(#XYKAVBAL,100),'%016d');
+		$FD40 = itoa(val(#XCPAVBAL,100),'%016d');
+		$FD42 = itoa(val(#XKKAVBAL,100),'%016d');
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+		$FD16 = '4340';
+  		$MSGTYPE='03001';
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(5616                            开提货单)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4340)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"  COL="10"   TYPE="%-15s" FUNCTIONS="T(承兑协议编号:)"/>
+  <ITEM LINE="8"  COL="10"   TYPE="%-15s" FUNCTIONS="T(出 票  金 额:)"/>
+
+  <ITEM LINE="10"  COL="13"  TYPE="%-60s" FUNCTIONS=
+	   "T(-------------------- 以下为回显信息 ---------------------)"/>
+  <ITEM LINE="12" COL="10"  TYPE="%-15s" FUNCTIONS="T(卖方单位名称:)"/>
+  <ITEM LINE="14" COL="10"  TYPE="%-15s" FUNCTIONS="T(买方单位名称:)"/>
+  <ITEM LINE="16" COL="10"  TYPE="%-15s" FUNCTIONS="T(已开提货单金额:)"/>
+  <ITEM LINE="18" COL="10"  TYPE="%-15s" FUNCTIONS="T(可开提货单金额:)"/>
+
+
+  <ITEM LINE="6"  COL="25" TYPE="%-24s" NAME="#CDXYNUM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9909';
+        $FD33 = #CDXYNUM;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        #CASHCONAME = $FD26;
+        #PAYCONAME = $FD27;
+		#XYKAVBAL = itoa(val($FD39,0.01),'%.2f');
+		#XKKAVBAL = itoa(val($FD42,0.01),'%.2f');
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="12" COL="25" TYPE="%-50s"  NAME="#PAYCONAME"    INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM LINE="14" COL="25" TYPE="%-50s"  NAME="#CASHCONAME"   INPUT="LABEL" FUNCTIONS=""/>
+
+  <ITEM LINE="16" COL="25" TYPE="%-16s"   NAME="#XYKAVBAL"    INPUT="LABEL"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="16" COL="25" TYPE="%-16s"   NAME="#XYKAVBAL"    INPUT="LABEL"  FUNCTIONS="X(#YKAVBAL)"/>
+  <ITEM TYPE="%17.2f" NAME="#YKAVBAL" FUNCTIONS="J(#XYKAVBAL)"/>
+-->
+
+
+  <ITEM LINE="18" COL="25" TYPE="%-16s"   NAME="#XKKAVBAL"    INPUT="LABEL"  FUNCTIONS=""/>
+<!--
+  <ITEM LINE="18" COL="25" TYPE="%-16s"   NAME="#XKKAVBAL"    INPUT="LABEL"  FUNCTIONS="X(#KKAVBAL)"/>
+  <ITEM TYPE="%17.2f" NAME="#KKAVBAL" FUNCTIONS="J(#XKKAVBAL)"/>
+-->
+
+  <ITEM LINE="8"  COL="25" TYPE="%17.2f" NAME="#CPAVBAL"    DEVICE="KEYBOARD" FUNCTIONS="J(#XCPAVBAL)"/>
+  <ITEM TYPE="%-16s" NAME="#XCPAVBAL"    DEVICE="KEYBOARD" FUNCTIONS="X(#CPAVBAL)"/>
+
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+    NOTHING
+    </PACKAGE>
+    <PRINT>
+    "{
+        print(5,20,'质押存单录入成功!');
+        print(7, 8,'承兑协议编号: [16]',#CDXYNUM);
+        print(8, 8,'出 票  金 额: [16]',#XCPAVBAL);
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="打印凭条">
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print( 5, 16,'[4]      [2]     [2]',#YEAR,#MON,#DAY);
+        print( 7,  8,'[5]',$FD2);
+        print( 7, 24,'5616开提货单');
+        print( 7, 46,'[4]',$FD7);
+        print( 7, 62,'[6]',$FD4);
+        print( 8, 8,'承兑协议编号: [16]',#CDXYNUM);
+        print( 9, 8,'出 票  金 额: [16]',#XCPAVBAL);
+    }"
+    </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

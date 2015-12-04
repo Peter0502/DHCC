@@ -1,0 +1,69 @@
+#include "find_debug.h" 
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode); \
+	WRITEMSG \
+	strcpy( g_pub_tx.reply,"D103" ); \
+	goto ErrExit; \
+	}
+
+
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL include "trace_log_bk_c.h";
+EXEC SQL include "ass_tel_pflio_stat_c.h";
+
+/*******************************************************************
+汇总流水 柜员业务量
+*******************************************************************/
+pub_pubdb_gyywl_Dec()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct ass_tel_pflio_stat_c tlk;
+		short z1,z2;
+	EXEC SQL END DECLARE SECTION;
+	int ret=0;
+
+	EXEC SQL declare gyywl_cur cursor for
+		select tx_br_no,tel,prdt_no,tx_code,ct_ind,sum(amt),count(*)
+		from trace_log_bk
+		where prdt_no is not null and sts='0'
+		group by tx_br_no,tel,prdt_no,tx_code,ct_ind
+		order by 1,2,3,4,5;
+	MYSQLERR
+
+	EXEC SQL open gyywl_cur;
+	MYSQLERR
+
+	while(1)
+	{
+		MEMSET_DEBUG( &tlk,0,sizeof(tlk) );
+
+		EXEC SQL fetch gyywl_cur 
+			into :tlk.br_no,:tlk.tel,:tlk.prdt_code,
+			:tlk.trad_code,:tlk.ct_ind,:tlk.amt:z1,:tlk.cnt:z2;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		pub_base_strpack(tlk.prdt_code);
+		if( strlen(tlk.prdt_code)==0 ) continue;
+
+		tlk.date=g_pub_tx.tx_date;
+		if( z1 ) tlk.amt=0.00;
+		if( z2 ) tlk.cnt=0;
+
+		ret=Ass_tel_pflio_stat_Ins( tlk,g_pub_tx.reply );
+		MYSQLERR
+	}
+
+	EXEC SQL close gyywl_cur;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}

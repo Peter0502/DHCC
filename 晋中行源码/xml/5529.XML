@@ -1,0 +1,186 @@
+<TRANSACTION RIGHTS="11111111100000000000000000000000" TITLE="5529 国税自由格式报文录入/发送"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+    commsend_001();
+    //输入要素
+    $FD60=#DESNODECODE;//目的节点代码
+    $FD61=#RCVORGCODE; //接收机构代码
+    $FD95=#CONTENT;    //报文内容
+}"
+</COMMSEND>
+<COMMRECV>"{
+    commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+"T(5529                    国税自由格式报文录入/发送)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"       TYPE="%-4s"  FUNCTIONS="T($TXNO=5549)"/>
+<ITEM NAME="#MSGTYPE"    TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE="8"  COL="02" TYPE="%-14s" FUNCTIONS="T(目的节点代码:)"/>
+<ITEM LINE="9"  COL="02" TYPE="%-14s" FUNCTIONS="T(接收机构代码:)"/>
+<ITEM LINE="10" COL="06" TYPE="%-10s" FUNCTIONS="T(报文内容:)"/>
+<ITEM LINE="8"  COL="15" NAME="#DESNODECODE" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{  
+    dim @h as string;
+    dim @i as string;
+    dim @g as string;
+    dim @FMsg2 as string;
+    @FMsg2='';
+    initfd();
+    dim @baktxno as string;
+    if(#DESNODECODE =='')
+    {
+       return(true);
+    }
+    @baktxno=$TXNO;
+    $TXNO='9412';
+
+    $FD70='1';
+    $FD71='2';
+    $FD72='3';
+    //$FD73='4567890123';
+
+    $FD33=#DESNODECODE;
+    commsend_001();
+    calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    @h = substr($FD95,12,60);
+    @i = substr($FD95,72,1);
+    //add by xijie 20090709
+    if(@i=='0'){
+         @g='中心';
+    }else if(@i=='1'){
+         @g='征收机关、社保机构';
+    }else if(@i=='2'){
+         @g='商业银行';
+    }else{
+         @g='国库';
+    }
+    @FMsg2='节点名称:'+@h+chr(10)+'节点类型:'+@g;
+    showhelp(5,70,8,3,'节点基本信息',@FMsg2);
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+<ITEM LINE="9"  COL="15" NAME="#RCVORGCODE"  TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()">
+ <ONLOSTFOCUS>
+  "{
+    
+    if(#RCVORGCODE =='' and #DESNODECODE =='')
+    {
+        showmsg('节点和机构代码不能同时为空');
+        return(false);
+    }
+    if(#RCVORGCODE =='')
+    {
+       return(true);
+    }else if(#RCVORGCODE != '')
+    {
+        
+        initfd();
+        commsend_001();
+        $FD16='9181';
+        $FD60=#DESNODECODE;
+        $FD59=#RCVORGCODE;
+        calltips();
+        if($FD12 !='0000'){
+             showmsg(geterror());
+             return(false);
+        }    
+    }
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM LINE="10" COL="15" LINES="5" COLS="50" NAME="#CONTENT" TYPE="%-255s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+  if(strfldcnt(#CONTENT,':')!=1 or strfldcnt(#CONTENT,'{')!=1 or strfldcnt(#CONTENT,'}')!=1)
+  {
+        showmsg('输入内容中不能含有半角:{}字符,请修改为全角其它字符');
+        return(false);
+  }
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+<ITEM LINE="21" COL="65"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>"{
+    commsend_001();
+    $FD16='5549';
+	  $FD60=#DESNODECODE;//目的节点代码
+    $FD61=#RCVORGCODE; //接收机构代码
+    $FD95=#CONTENT;    //报文内容
+	  calltips();
+	  if($FD12!='0000'){
+	    showmsg(geterror());
+	    return(false);
+	  }
+	  
+	  runoutput();
+	  rerun();
+ }"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键推出">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+   dim @txtime as string;
+   @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+   print( 5,25,'【国税自由格式录入/发送成功】');
+   print( 7,15,'时   间:[10        ]   操作员号:[4]',@txtime,$FD7);  
+   print( 9,15,'附   言:[44]',substr($FD95,0,44));
+   print(10,15,'[54]',substr($FD95, 44,54));
+   print(11,15,'[54]',substr($FD95, 98,54));
+   print(12,15,'[54]',substr($FD95,152,54));
+   print(13,15,'[54]',substr($FD95,206,54));
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+    $KINDNO = '00';
+    dim @txtime as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print( 5,20,'机构名称:[30]',$BRNAME);
+    print( 5, 2,'代码:5529');
+    print( 5,13,'交易:国税自由格式录入/发送成功');
+    print( 7,20,'目的结点代码:[12]',#DESNODECODE);
+    print( 8,20,'接收结点代码:[12]',#RCVORGCODE);
+    print( 9,20,'附    言:[255]',delspace(#CONTENT));
+    
+    //print(10,20,'[64]',substr(#CONTENT,60,64));
+    //print(11,20,'[64]',substr(#CONTENT,124,64));
+    //print(12,20,'[64]',substr(#CONTENT,188,64));
+    
+    print(24,20,'交易日期:[8]  [8]',$HDATE,@txtime);
+    print(24,5,' 前置柜员:[8]',substr($FD74,25,8));
+    print(24,5,' 流水号:[6]',$FD4);
+    print(24,5,' 交易机构:[24]',substr($FD74,0,24));
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,609 @@
+<TRANSACTION RIGHTS="11110000" TITLE="5366 通存通兑解付"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    commsend_001();
+    $FD72=getitems('#TXTYPE');
+    $FD44=getitems('#TXDATE');
+    $FD52=getitems('#OR_BR_NO');
+    $FD94=getitems('#ORDERNO');
+    $FD120=getitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_10#FD120_11');
+    $FD119=getitems('#FD119_1#FD119_2#FD119_3#FD119_4#FD119_5#FD119_6#FD119_7#FD119_8');
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5366                        通存通兑往帐解付)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5829)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS= "T(─────────────────────────────────────)"/>
+  <ITEM LINE="6"  COL="15"  TYPE="%-10s" FUNCTIONS="T(查询日期: )"/>
+  <ITEM LINE="8"  COL="15"  TYPE="%-10s" FUNCTIONS="T(查询业务:!)"/>
+  <ITEM LINE="10" COL="15"  TYPE="%-10s" FUNCTIONS="T(查询状态:!)"/>
+  <ITEM INPUT="LABEL" NAME="#LORDERNO" VISABLE="FALSE" LINE="12" COL="15"  TYPE="%-10s" FUNCTIONS="T(交易序号:)"/>
+  <ITEM NAME="#TXDATE"  LINE="6"  COL="25" TYPE="%8s" INPUT="TEXT" ENABLE="TRUE"  FUNCTIONS="T($HDATE)D()"/>
+
+  <ITEM NAME="#OPTYPE" TYPE="%1d"  FUNCTIONS="T(0)"/><!--0查询,1-解付/打印-->
+  <ITEM NAME="#TXTYPE" LINE="8" COL="25" TYPE="%1d"   DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+    <SELECT LINE="8" COL="27">
+      <OPTION VALUE="0" TITLE="0.通兑"/>
+      <OPTION VALUE="1" TITLE="1.通存"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#TXSTAT" LINE="10" COL="25" TYPE="%1d"   DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+    <SELECT LINE="10" COL="27">
+      <OPTION VALUE="0" TITLE="0.轧差"/>
+      <OPTION VALUE="1" TITLE="1.未轧差"/>
+      <OPTION VALUE="2" TITLE="1.已解付"/>
+    </SELECT>
+    <ONLOSTFOCUS>"{
+	dim @tota as string;
+	dim @orbrno as string;
+	dim @orderno as string;
+	dim @pay_ac_no as string;
+	dim @pay_name as string;
+	dim @cash_ac_no as string;
+	dim @cash_name as string;
+	dim @tx_amt as string;
+	dim @lv_sts as string;//发送,轧差,拒绝,解付,冲正,其他
+	dim @pay_opn_br_no as string;
+	dim @cash_opn_br_no as string;
+	dim @sts_name  as string;
+	dim @selid as number;
+	dim @sql_stat as string;
+	dim @sql_pkgno as string;	
+	dim @file as file;
+	dim @line as string;
+	dim @tag as string;
+	dim @len as number;
+	dim @baktxno as string;
+	dim @avbal as string;
+	dim @rcpstat as string;
+	@baktxno=$TXNO;
+	initfd();
+	
+	$TXNO='9406';
+	$FD2=$KINBR;
+	$FD48='0008';
+	commsend_001();
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (false);
+	}
+	else
+	{
+		$FD16='9712';//这里调用9712,把1201的值作为条件,得到120域的信息
+    		setitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_10#FD120_11',$FD120);
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		setitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_10#FD120_11',$FD120);
+	  //added by liuhaijun 20091113 此交易属于现金交易，现金标志只能是现金，不能是转账
+	  #FD120_5='1';
+	}
+	
+	list_init(16,78,5,1);
+	list_setcolcnt(10);
+	list_setcol(0,'交易序号',9);
+	list_setcol(1,'付款帐号',20);
+	list_setcol(2,'付款户名',9);
+	list_setcol(3,'收款帐号',20);
+	list_setcol(4,'收款户名',9);
+	list_setcol(5,'  交易金额',11);
+	list_setcol(6,'交易状态',9);
+	list_setcol(7,'付款行号',13);
+	list_setcol(8,'收款行号',13);
+	list_setcol(9,'发起行号',13);
+	#OPTYPE='0';	//查询
+	switch(#TXSTAT){
+	case '0':
+		//轧差
+		@sql_stat=' and lv_sts='+chr(39)+'6'+chr(39);
+		break;
+	case '1':
+		//未轧差
+		@sql_stat=' and lv_sts not in('+chr(39)+'6'+chr(39)+','+chr(39)+'B'+chr(39)+')';
+		break;
+	case '2':
+		//解付(用退回状态充当解付)
+		@sql_stat=' and lv_sts='+chr(39)+'B'+chr(39);
+		break;
+	}	
+	switch(#TXTYPE){
+	case '0':
+		@sql_pkgno=' and pkgno='+chr(39)+'004'+chr(39)+ ' ';
+		break;
+	case '1':
+		@sql_pkgno=' and pkgno='+chr(39)+'003'+chr(39)+ ' ';
+		break;
+	}
+		
+	$FD123='select orderno,pay_ac_no,pay_name,cash_ac_no,cash_name,tx_amt,lv_sts,pay_opn_br_no,cash_opn_br_no,input_tel,input_trace_no,or_br_no from lv_pkgreg where  wt_date='+#TXDATE+' and lw_ind='+chr(39)+'1'+chr(39)+' and br_no='+$KINBR+@sql_stat+@sql_pkgno;
+	commsend_001();
+	$FD16='9598';
+	@tota=callserver();
+	if($FD12!='0000' or @tota==''){
+		showmsg('未找到交易记录!');
+        showfooter();
+        return(false);
+	}
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME,@tota);	
+	@file=openfile('../tmp/'+$KINBR+$TTYNAME,'r');
+	if(@file &lt; 0){
+		showmsg('取附件失败!');
+		return(false);
+	}
+	while(true){
+		@line=readline(@file);
+		if(@line==''){
+			break;
+		}	
+		@len=len(@line);
+		if(substr(@line,@len-1,1)==chr(10) or substr(@line,@len-1,1)==chr(13)){
+			@line=substr(@line,0,@len-1);
+		}
+		@orderno=strfld(@line,'|',0);#ORDERNO=@orderno;	
+		@pay_ac_no=strfld(@line,'|',1);	
+		@pay_name=strfld(@line,'|',2);	
+		@cash_ac_no=strfld(@line,'|',3);	
+		@cash_name=strfld(@line,'|',4);	
+		@tx_amt=strfld(@line,'|',5);	
+		@lv_sts=strfld(@line,'|',6);	
+		@pay_opn_br_no=strfld(@line,'|',7);	
+		@cash_opn_br_no=strfld(@line,'|',8);	
+		@orbrno=strfld(@line,'|',11);
+		@tag=strfld(@line,'|',9)+'|'+strfld(@line,'|',10);	
+		switch(@lv_sts){
+		case '4':
+			@sts_name='发    送';
+			break;
+		case '5':
+			@sts_name='拒    绝';
+			break;
+		case '6':
+			@sts_name='轧    差';
+			break;
+		case 'C':
+			@sts_name='冲    正';
+			break;
+		case 'B':
+			@sts_name='解    付';
+			break;
+		default:
+			@sts_name='其他['+@lv_sts+'] ';
+		}	
+		list_additem(@tag,@orderno,@pay_ac_no,@pay_name,@cash_ac_no,@cash_name,
+						comma(itoa(val(@tx_amt),'%.2f'),10),@sts_name,
+						@pay_opn_br_no,@cash_opn_br_no,@orbrno);
+	}
+        //added by liuyong 20091117
+        closefile(@file);
+	while(true){
+		@selid=list_work();
+		if(@selid &lt; 0){
+			list_del();
+			refresh();
+			show(#LORDERNO,false);
+			show(#ORDERNO,false);
+			return(false);
+		}
+		#ORDERNO=list_gettext(@selid,0);
+		#PAY_OPN_BR_NO=list_gettext(@selid,7);
+		#PAY_AC_NO=list_gettext(@selid,1);
+		#PAY_NAME=list_gettext(@selid,2);
+		#TX_AMT=val(list_gettext(@selid,5));
+		#CASH_OPN_BR_NO=list_gettext(@selid,8);
+		#CASH_AC_NO=list_gettext(@selid,3);
+		#CASH_NAME=list_gettext(@selid,4);
+		#TLRNO=strfld(list_getaction(@selid),'|',0);
+		#WSSRNO=strfld(list_getaction(@selid),'|',1);
+		if(substr(#PAY_AC_NO,0,5)=='10101'){
+			#PAY_AC_NO='现金';
+		}
+
+		if(#TXTYPE=='0'){
+			//通兑
+			@sts_name=delspace(list_gettext(@selid,6));
+			if(@sts_name!='轧差' and @sts_name!='解付' and @sts_name!='拒绝' and
+					@sts_name!='冲正'){
+				showmsg('通兑业务未回执,不能解付或打印');
+				continue;
+			}
+			if(@sts_name=='解付'){
+				if(msgbox('此笔交易已经解付,重打凭证吗?'+chr(10)+chr(10),'提示','yes|no')==1){
+					continue;
+				}
+			}
+			//showmsg(#FD120_1);
+			if(substr(@cash_ac_no,0,5)!='92613'){
+				//showmsg('cashacno=['+@cash_ac_no+']');
+				//showmsg('非现金交易,打印凭证流水!');
+			}
+		}else{
+			//通存
+			@sts_name=delspace(list_gettext(@selid,6));
+			if(@sts_name!='轧差' and @sts_name!='解付' and @sts_name!='拒绝' and
+					@sts_name!='冲正'){
+				showmsg('通存业务未回执,不能解付或打印');
+				continue;
+			}
+			if(@sts_name=='解付'){
+				if(msgbox('此笔交易已经解付,重打凭证吗?'+chr(10)+chr(10),'提示','yes|no')==1){
+					continue;
+				}
+			}
+			if(#PAY_AC_NO!='10101' and #PAY_AC_NO!='现金' ){
+				//showmsg('payacno=['+#PAY_AC_NO+']');
+				//showmsg('非现金交易打印凭证流水!');
+				//if(msgbox('是否在此打印来帐凭证?'+chr(10)+chr(10),'提示','yes|no')==1){
+				//continue;
+				//}
+
+			}			
+		}
+		switch(delspace(@sts_name)){
+		case '轧差':
+			#STS_NAME='成功';
+			break;
+		case '拒绝':
+			#STS_NAME='拒付';
+			break;
+		default:
+			#STS_NAME=delspace(@sts_name);	
+			break;
+		}	
+		$FD40=val(list_gettext(@selid,5));
+		#FD120_8=val(list_gettext(@selid,5));
+		#FD119_4=val(list_gettext(@selid,5));
+		#FD119_8=#FD120_1;
+    	#OR_BR_NO=list_gettext(@selid,9);
+		list_del();
+		refresh();
+		show(#LORDERNO,true);
+		show(#ORDERNO,true);
+		break;
+	}
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ORDERNO" INPUT="LABEL" VISABLE="FALSE" LINE="12" COL="25"  TYPE="%-8s"  FUNCTIONS=""/>
+
+
+  <ITEM NAME="#PGLINES"  TYPE="%-1s"     FUNCTIONS="T($PGLINES=35)"/>
+  <ITEM NAME="#PAY_OPN_BR_NO" TYPE="%-12s"  FUNCTIONS=""/>
+  <ITEM NAME="#STS_NAME" TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#PAY_AC_NO" TYPE="%-19s"  FUNCTIONS=""/>
+  <ITEM NAME="#PAY_NAME" TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#TX_AMT" TYPE="%11.2f"  FUNCTIONS=""/>
+  <ITEM NAME="#CASH_OPN_BR_NO" TYPE="%-12s"  FUNCTIONS=""/>
+  <ITEM NAME="#CASH_AC_NO" TYPE="%-19s"  FUNCTIONS=""/>
+  <ITEM NAME="#CASH_NAME" TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#TLRNO" TYPE="%-6s"  FUNCTIONS=""/>
+  <ITEM NAME="#WSSRNO" TYPE="%-6s"  FUNCTIONS=""/>
+  <!--123域变量-->
+
+<!--这里定义了$FD123域中需要的所有的字段,根据交易的不同删除其中的某些字段,并重新
+命名,IMPORT到自己的交易前台代码中,主要是为了使变量定义统一化,同时减少出错---->
+
+
+
+<!----FD123的字段-----函数commsend_123()中用到-->
+<ITEM NAME="#CMTNO" 		    TYPE="%-3s"		  FUNCTIONS=""/>
+<ITEM NAME="#O_CMTNO"    		TYPE="%-3s"		  FUNCTIONS=""/>
+<ITEM NAME="#PAY_QS_NO"   		TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#OR_BR_NO"  	 	TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#SENDCO"		    TYPE="%-4s"		  FUNCTIONS=""/>
+<!--
+<ITEM NAME="#PAY_OPN_BR_NO"	    TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#PAY_AC_NO"		    TYPE="%-32s"	  FUNCTIONS=""/>
+-->
+<ITEM NAME="#CASH_QS_NO"	    TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#RECECO"		    TYPE="%-4s"		  FUNCTIONS=""/>
+<!--
+<ITEM NAME="#CASH_OPN_BR_NO"    TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#CASH_AC_NO"	    TYPE="%-32s"	  FUNCTIONS=""/>
+-->
+<ITEM NAME="#CASH_ADDR"		    TYPE="%-60s"	  FUNCTIONS=""/>
+<ITEM NAME="#YW_TYPE"		    TYPE="%-2s"		  FUNCTIONS=""/>
+<!--
+<ITEM NAME="#ORDERNO"		    TYPE="%-8s"		  FUNCTIONS=""/>
+-->
+<ITEM NAME="#CONTENT"		    TYPE="%-60s"	  FUNCTIONS=""/>
+<ITEM NAME="#RATE"			    TYPE="%-7s"		  FUNCTIONS=""/>
+<ITEM NAME="#RATEDATE"		    TYPE="%-5s"		  FUNCTIONS=""/>
+<ITEM NAME="#OORDERNO"		    TYPE="%-8s"		  FUNCTIONS=""/>
+<ITEM NAME="#PROCODE"		    TYPE="%-8s"		  FUNCTIONS=""/>
+<ITEM NAME="#CR_DATE"		    TYPE="%-8s"		  FUNCTIONS=""/>
+<ITEM NAME="#CR_BR_NO"		    TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#CR_TX_NUM"		    TYPE="%-8s"		  FUNCTIONS=""/>
+<ITEM NAME="#QR_BR_NO"		    TYPE="%-12s"	  FUNCTIONS=""/>
+<ITEM NAME="#QR_TX_NUM"		    TYPE="%-8s"		  FUNCTIONS=""/>
+<ITEM NAME="#TX_TYPE"		    TYPE="%-1s"		  FUNCTIONS=""/>
+<ITEM NAME="#NOTPAY_CONTENT"	TYPE="%-255s"	  FUNCTIONS=""/>
+<ITEM NAME="#NOTPAY_ORDERNO"	TYPE="%-3s"		  FUNCTIONS=""/>
+<ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"		  FUNCTIONS=""/>
+<ITEM NAME="#OPERLEVEL"			TYPE="%-1s"		  FUNCTIONS=""/><!--优先级别-->
+<ITEM NAME="#PROC_STS"			TYPE="%-1s"		  FUNCTIONS=""/><!--处理状态-->
+<ITEM NAME="#OPCD"		TYPE="%-2s"	FUNCTIONS="T(10)"/>
+<ITEM NAME="#NOTE_NO"		TYPE="%-16s"	FUNCTIONS=""/>
+<ITEM NAME="#LW_IND"		TYPE="%-1s"	FUNCTIONS="T(1)"/>
+<ITEM NAME="#HP_ADD_PWD"	TYPE="%-1s"	FUNCTIONS=""/>
+<ITEM NAME="#PACKID"		TYPE="%8d"	FUNCTIONS=""/>
+<ITEM NAME="#O_PACKID"          TYPE="%8d"       FUNCTIONS=""/>
+<ITEM NAME="#PACK_DATE"		TYPE="%8d"	FUNCTIONS=""/>
+<ITEM NAME="#O_PACK_DATE"	TYPE="%8d"	FUNCTIONS=""/>
+<ITEM NAME="#TXNUM"		TYPE="%5d"	FUNCTIONS=""/>
+<ITEM NAME="#LV_YW_IND"		TYPE="%12s"	FUNCTIONS=""/>
+<ITEM NAME="#RESP_DAY"		TYPE="%8d"	FUNCTIONS=""/>
+<ITEM NAME="#RETCODE"        	TYPE="%2d"       FUNCTIONS=""/>
+<ITEM NAME="#YW_DTL_ID"       	TYPE="%8d"       FUNCTIONS=""/>
+<ITEM NAME="#ACC_IND"         	TYPE="%1d"       FUNCTIONS=""/>
+<ITEM NAME="#REQ_TYPE"         	TYPE="%1d"       FUNCTIONS=""/>
+<ITEM NAME="#DF_FREEAMT"        TYPE="%16s"      FUNCTIONS=""/>
+<ITEM NAME="#PROTNO"         	TYPE="%60s"      FUNCTIONS=""/>
+<ITEM NAME="#PO_NO"         	TYPE="%8d"       FUNCTIONS=""/>
+<ITEM NAME="#PO_TYPE"         	TYPE="%1d"       FUNCTIONS=""/>
+<ITEM NAME="#OTYPE"         	TYPE="%1d"       FUNCTIONS="T(1)"/><!-- 表示大额 -->
+<ITEM NAME="#PC_TX_AMT"    	TYPE="%-15s"	FUNCTIONS="T()"/>		<!--赔偿金额      ----> 
+<ITEM NAME="#JF_TX_AMT"    	TYPE="%-15s"	FUNCTIONS="T()"/>		<!--拒付金额      ----> 
+<ITEM NAME="#O_WT_DATE"    	TYPE="%-8s" 	FUNCTIONS="T()"/>		<!--原委托日期    ----> 
+<ITEM NAME="#O_TXNUM"   	TYPE="%-5s" 	FUNCTIONS="T()"/>		<!--原业务编号    ----> 
+<ITEM NAME="#O_ORDERNO"   	TYPE="%-8s" 	FUNCTIONS="T()"/>		<!--原支付交易序号----> 
+<ITEM NAME="#RET_CODE"   	TYPE="%-2s" 	FUNCTIONS="T()"/>		<!--退汇原因代码  ----> 
+<ITEM NAME="#RCP_STS"		TYPE="%-2s" 	FUNCTIONS="T()"/>		<!--业务回执状态  ----> 
+<ITEM NAME="#RESP1"			TYPE="%-8s" 	FUNCTIONS="T()"/>		<!--Mbfe应答码    ----> 
+<ITEM NAME="#RESP2"			TYPE="%-8s" 	FUNCTIONS="T()"/>		<!--Ccpc应答码    ----> 
+<ITEM NAME="#PACK_END"   	TYPE="%-1s" 	FUNCTIONS="T()"/>		<!--包结束标志    ----> 
+<ITEM NAME="#DFXYNO"      	TYPE="%-60s"   	FUNCTIONS="T()"/>		<!--多方协议号-->
+<ITEM NAME="#OORBRNO"     	TYPE="%-12s"   	FUNCTIONS="T()"/>	<!--原发起行行号 -->
+  <ITEM NAME="#OACBRNO"      	TYPE="%-12s"   	FUNCTIONS=""/>		<!--原接收行行号-->
+<ITEM NAME="#LV_STS"     	TYPE="%-1s"   	FUNCTIONS="T()"/>		<!--交易状态      ---->
+
+<!-----大额交易中的一些公共的字段,暂时就是这几个 函数commsend_hv()中用到--->
+<ITEM NAME="#WT_DAY"	TYPE="%8d"   FUNCTIONS=""/>
+<ITEM NAME="#NOTE_TYPE"	TYPE="%-3s"   FUNCTIONS=""/>
+<ITEM NAME="#FD120_1"   TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_2"   TYPE="%-60s"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_3"   TYPE="%-16s"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_4"   TYPE="%-2s"   FUNCTIONS=""/>
+<ITEM NAME="#FD120_5"   TYPE="%-1s"   FUNCTIONS=""/>
+<ITEM NAME="#FD120_6"   TYPE="%-3s"   FUNCTIONS=""/>
+<ITEM NAME="#FD120_7"   TYPE="%-16s"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_8"   TYPE="%17.2f"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_9"   TYPE="%-2s"   FUNCTIONS=""/>
+<ITEM NAME="#FD120_10"  TYPE="%-20s"  FUNCTIONS=""/>
+<ITEM NAME="#FD120_11"  TYPE="%-2s"   FUNCTIONS=""/>
+
+<ITEM NAME="#FD119_1"   TYPE="%-2s"   FUNCTIONS="T(01)"/>
+<ITEM NAME="#FD119_2"   TYPE="%-3s"   FUNCTIONS="T(299)"/>
+<ITEM NAME="#FD119_3"   TYPE="%-16s"  FUNCTIONS="T(0000000000000000)"/>
+<ITEM NAME="#FD119_4"   TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#FD119_5"   TYPE="%-7s"   FUNCTIONS=""/>
+<ITEM NAME="#FD119_6"   TYPE="%-2s"   FUNCTIONS=""/>
+<ITEM NAME="#FD119_7"   TYPE="%-20s"  FUNCTIONS="T(小额解付)"/>
+<ITEM NAME="#FD119_8"   TYPE="%-24s"  FUNCTIONS=""/>
+<ITEM NAME="#FLAG"      TYPE="%-1s"  FUNCTIONS=""/>
+
+  <ITEM NAME="#OK" LINE="21"  COL="59" TYPE="%-6s"  NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+	dim @tota as string;
+	dim @fd4 as string;
+	//调用后台交易记帐以及更新状态
+	if(#TXSTAT!='2'){
+	}
+	initfd();
+	@fd4='';
+	#FLAG='0';
+	$TXNO='5829';
+	$FD72=getitems('#TXTYPE');
+	$FD44=getitems('#TXDATE');
+	$FD52=getitems('#OR_BR_NO');
+	$FD78=getitems('#ORDERNO');
+	$FD120=getitems('#FD120_1#FD120_2#FD120_3#FD120_4#FD120_5#FD120_6#FD120_7#FD120_8#FD120_9#FD120_10#FD120_11');
+	$FD119=getitems('#FD119_1#FD119_2#FD119_3#FD119_4#FD119_5#FD119_6#FD119_7#FD119_8');
+	commsend_001();
+	callserver();
+	if($FD12=='9101'){
+		showmsg(delspace($FD13));
+	}else if($FD12=='9102'){
+		showmsg(delspace($FD13));
+		#FLAG='1';
+	}else if($FD12=='0000'){
+		@fd4=$FD4;	
+		#FLAG='1';
+		showmsg('解付成功打印凭证,任意键继续...');
+	}else
+	{
+		showmsg(geterror());
+		return (false);
+	}
+	if(opendlg('../xml/CZRQ.DLG'))
+	{	
+		if(@fd4!=''){
+			$FD4=@fd4;	
+		}
+		runoutput();
+	}
+  }"
+  </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<!--接收信息包-->
+<!--打印凭证-->
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="实时业务通存" CHECK="#TXTYPE=1">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+dim @startpos as number;
+@startpos=1;
+print(@startpos,5,   '                   =============================='    ); 
+print(@startpos+1,5, '                     小额通存([4  ])',#STS_NAME   );
+print(@startpos+2,5, '                   =============================='    );
+print(@startpos+2,5, '                   =============================='    );
+print(@startpos+3,5, '       委 托  日 期: [8     ]    交易机构:[7    ]',#TXDATE,$KINBR);
+print(@startpos+4,5, '       交 易  序 号: [8     ]    ',#ORDERNO,   ); 
+
+print(@startpos+6,5, '       付 款  行 号: [12        ]',#PAY_OPN_BR_NO);
+print(@startpos+7,5, '       付 款人帐 号: [19               ]',#PAY_AC_NO  );
+print(@startpos+8,5, '       付 款人名 称: [8     ]',#PAY_NAME          );
+
+print(@startpos+9,5,'       汇 款  金 额: [10      ]',delspace(comma(itoa(#TX_AMT,'%.2f'),10)));
+print(@startpos+10,5,'       收 款 行行号: [12        ]',#CASH_OPN_BR_NO  ); 
+print(@startpos+11,5,'       收 款人帐 号: [19                ]',#CASH_AC_NO);
+print(@startpos+12,5,'       收 款人名 称: [8     ]',#CASH_NAME);
+
+if($FD12=='9101' or $FD12=='9102'){
+print(@startpos+14,5,'       操   作   员:[6   ]     流水号:[6   ]',#TLRNO,#WSSRNO);
+}else{
+print(@startpos+14,5,'       操   作   员:[6   ]     流水号:[6   ]',$FD7,$FD4);
+}
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="实时业务通兑" CHECK="#TXTYPE=0">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+dim @startpos as number;
+@startpos=1;
+print(@startpos,5,   '                   =============================='    ); 
+print(@startpos+1,5, '                       小额通兑([4  ])',#STS_NAME );
+print(@startpos+2,5, '                   =============================='    );
+print(@startpos+3,5, '       委 托  日 期: [8     ]    交易机构:[7    ]',#TXDATE,$KINBR);
+print(@startpos+4,5, '       交 易  序 号: [8     ]    ',#ORDERNO,   ); 
+
+print(@startpos+6,5, '       付 款  行 号: [12        ]',#PAY_OPN_BR_NO);
+print(@startpos+7,5, '       付 款人帐 号: [19               ]',#PAY_AC_NO  );
+print(@startpos+8,5, '       付 款人名 称: [8     ]',#PAY_NAME          );
+
+print(@startpos+9,5,'       汇 款  金 额: [10      ]',delspace(comma(itoa(#TX_AMT,'%.2f'),10)));
+print(@startpos+10,5,'       收 款 行行号: [12        ]',#CASH_OPN_BR_NO  ); 
+if(substr(#CASH_AC_NO,0,1)=='9'){
+	print(@startpos+11,5,'       收 款人帐 号: 现金');
+}else{
+	print(@startpos+11,5,'       收 款人帐 号: [19                ]',#CASH_AC_NO);
+}
+print(@startpos+12,5,'       收 款人名 称: [8     ]',#CASH_NAME);
+
+if($FD12=='9101' or $FD12=='9102'){
+print(@startpos+14,5,'       操   作   员:[6   ]     流水号:[6   ]',#TLRNO,#WSSRNO);
+}else{
+print(@startpos+14,5,'       操   作   员:[6   ]     流水号:[6   ]',$FD7,$FD4);
+}
+}"
+</PRINT>
+</RESPONSE>
+
+
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印支付系统通存凭证" CHECK="#TXTYPE=1">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+dim @startpos as number;
+@startpos=1;
+print(@startpos+1,5,   '                   =============================='    ); 
+print(@startpos+2,5, '                     小额通存([4  ])凭证',#STS_NAME   );
+print(@startpos+3,5, '                   =============================='    );
+print(@startpos+4,5, '       委 托  日 期: [8     ]    交易机构:[7    ]',#TXDATE,$KINBR);
+print(@startpos+5,5, '       交 易  序 号: [8     ]    ',#ORDERNO,   ); 
+
+print(@startpos+7,5, '       付 款  行 号: [12        ]',#PAY_OPN_BR_NO);
+print(@startpos+8,5, '       付 款人帐 号: [19               ]',#PAY_AC_NO  );
+print(@startpos+9,5, '       付 款人名 称: [8     ]',#PAY_NAME          );
+
+print(@startpos+10,5,'       汇 款  金 额: [10      ]',delspace(comma(itoa(#TX_AMT,'%.2f'),10)));
+print(@startpos+11,5,'       收 款 行行号: [12        ]',#CASH_OPN_BR_NO  ); 
+print(@startpos+12,5,'       收 款人帐 号: [19                ]',#CASH_AC_NO);
+print(@startpos+13,5,'       收 款人名 称: [8     ]',#CASH_NAME);
+
+if($FD12=='9101' or $FD12=='9102'){
+print(@startpos+15,5,'       操   作   员:[6   ]     流水号:[6   ]',#TLRNO,#WSSRNO);
+}else{
+print(@startpos+15,5,'       操   作   员:[6   ]     流水号:[6   ]',$FD7,$FD4);
+}
+print(@startpos+20,80,'客户签名:_____________________');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印支付系统通兑凭证" CHECK="#TXTYPE=0">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+dim @startpos as number;
+@startpos=1;
+print(@startpos+1,5,   '                   =============================='    ); 
+print(@startpos+2,5, '                       小额通兑([4  ])凭证',#STS_NAME );
+print(@startpos+3,5, '                   =============================='    );
+print(@startpos+4,5, '       委 托  日 期: [8     ]    交易机构:[7    ]',#TXDATE,$KINBR);
+print(@startpos+5,5, '       交 易  序 号: [8     ]    ',#ORDERNO,   ); 
+
+print(@startpos+7,5, '       付 款  行 号: [12        ]',#PAY_OPN_BR_NO);
+print(@startpos+8,5, '       付 款人帐 号: [19               ]',#PAY_AC_NO  );
+print(@startpos+9,5, '       付 款人名 称: [8     ]',#PAY_NAME          );
+
+print(@startpos+10,5,'       汇 款  金 额: [10      ]',delspace(comma(itoa(#TX_AMT,'%.2f'),10)));
+print(@startpos+11,5,'       收 款 行行号: [12        ]',#CASH_OPN_BR_NO  ); 
+if(substr(#CASH_AC_NO,0,1)=='9'){
+	print(@startpos+12,5,'       收 款人帐 号: 现金');
+}else{
+	print(@startpos+13,5,'       收 款人帐 号: [19                ]',#CASH_AC_NO);
+}
+print(@startpos+14,5,'       收 款人名 称: [8     ]',#CASH_NAME);
+
+if($FD12=='9101' or $FD12=='9102'){
+print(@startpos+15,5,'       操   作   员:[6   ]     流水号:[6   ]',#TLRNO,#WSSRNO);
+}else{
+print(@startpos+15,5,'       操   作   员:[6   ]     流水号:[6   ]',$FD7,$FD4);
+}
+print(@startpos+20,80,'客户签名:_____________________');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="请打印业务专用凭证" CHECK="#FLAG=1">
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+ $KINDNO='00';
+dim @txtime  as string;
+dim @tmp_fd4  as string;
+if($FD12=='9101' or $FD12=='9102'){
+	@tmp_fd4=$FD4;
+	$FD4=$FD64;
+}
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+ 	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5,2,'代码:5366');
+	print( 5,13,'交易:通存通兑往帐解付');
+	printacdtl_1();
+	print(lineno()+1,15,'支付交易序号:[8       ]',#ORDERNO);
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

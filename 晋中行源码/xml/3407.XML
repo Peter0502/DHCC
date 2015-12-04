@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3407 补登存折"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD31=#ACTNO;
+	$FD79=#PASSWD;
+	$FD67=#ACTFLAG;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(3407                            补登存折)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2407)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--获取焦点-->
+  <ITEM NAME="#FOCUS" INPUT="TEXT" LINE="8"  COL="1000" VISABLE="TRUE" />
+  <!--输入变量-->
+  <ITEM LINE="9"   COL="25" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="10"  COL="25" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="12"  COL="25" TYPE="%-14s" FUNCTIONS="T(补登存折......)"/>
+
+  <!--<ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="MSR" LINE="9"  COL="35" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="m($MSR2,1,19)" DEVICE="FIXMSR">-->
+
+  <!--ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="9"   COL="35" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"-->
+  <ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="MSR" LINE="9"  COL="35" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="m($MSR2,1,19)" >
+  <ONLOSTFOCUS>
+  "{
+	dim @txno as string;
+	
+	commsend_001();
+	@txno  = $TXNO;
+	$FD101 = #ACTNO;
+	$FD16  = '9951';
+	
+	callserver();
+	if($FD12 != '0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#NAME = substr($FD101,74,50);
+	//showmsg(#NAME);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#NAME" 	INPUT="LABEL" LINE="10"   COL="35" TYPE="%-30s" 	FUNCTIONS=""/>
+  <!---
+  <ITEM NAME="#ACTFLAG"	INPUT="TEXT" 	LINE="12"  COL="40" TYPE="%-1s" 	FUNCTIONS="T()"/>
+  --->
+  <ITEM NAME="#ACTFLAG"	TYPE="%-1s" 	FUNCTIONS="T()"/>
+
+   <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="补登存折成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		print( 5, 25,'补 登 存 折 成 功 ！');
+		print(10, 22,'新帐卡号:[24]',$FD31);
+		print(12, 22,'户    名:[50]',#NAME);
+	}"
+	</PRINT>
+</RESPONSE>
+<IMPORT>CXCZ.IMP</IMPORT>
+<RESPONSE>
+	 <PACKAGE DEVICE="SCREEN" DESC="换折提示" CHECK="$FD20=1">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(10,22,'还有未打印的明细,请进行换折打印');
+	}"
+	</PRINT>
+</RESPONSE>
+		
+</TRANSACTION>
+

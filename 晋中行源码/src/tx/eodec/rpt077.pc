@@ -1,0 +1,857 @@
+/*************************************************************
+* 文 件 名: rpt077.c
+* 功能描述：所得税报告
+**************************************************************/
+#define MYRETERR if(ret){\
+	sprintf(acErrMsg,"REt[%d]",ret);\
+	WRITEMSG\
+	goto ErrExit;\
+	}
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sqlca.sqlcode[%d]",sqlca.sqlcode);\
+	WRITEMSG\
+	goto ErrExit;\
+	}
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+
+#include "sum_tax_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+
+int line=0;
+char vpfm[21],txtname[41];
+struct com_branch_c rggjgm;
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct sum_tax_c g_tax;
+double g_bal;
+char g_term_type[11];
+int g_term;
+long rq1,rq2;
+char vjgbm[11];
+EXEC SQL END DECLARE SECTION;
+
+int page=0;	
+int get_ratio_rjb( int bli,int bll, char str[100], int rpt_code );
+
+rpt077()
+{
+	int ret = 0;
+	struct com_sys_parm_c com_sys_parm_c;
+
+    ret=sql_begin(); /*打开事务*/
+	MYRETERR
+
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+
+    /* 取前一天日期 */
+    ret = Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+    g_pub_tx.tx_date = com_sys_parm_c.lst_date;
+
+	rq1=g_pub_tx.tx_date/100*100+1;
+	rq2=g_pub_tx.tx_date/100*100+31;
+
+	strcpy( vjgbm,TOT_BR_NO );
+	/*
+	strcpy( vpfm,"lxsbgb" );
+	strcpy( txtname,"BMlxsbgb" );
+	*/
+	strcpy( vpfm,"RPT077");
+	strcpy( txtname,"RPT077");
+	
+	pub_rpt_rmfile( vjgbm,txtname,0 );
+
+	if( Make_b_61000() )
+		goto ErrExit;
+
+	page=0;
+	/*	没有这个机构
+	strcpy( vjgbm,"61027" );
+
+	strcpy( vpfm,"lxsbgb" );
+	strcpy( txtname,"BMlxsbgb" );
+	
+	pub_rpt_rmfile( vjgbm,txtname,0 );
+
+	if( Make_b() )
+		goto ErrExit;
+	*/
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成sdsbgb成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成sdsbgb失败!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+
+int Make_b()
+{
+	
+	int first=0;
+	int flag = 0;
+	double tmpdbl;
+	int ret;
+	char new_cur_no[3],old_cur_no[3];
+	EXEC SQL BEGIN DECLARE SECTION;
+	short z1,z2,z3,z4;
+	EXEC SQL END DECLARE SECTION;
+
+	if( Make_yeb_sub("AA") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('242','243','244') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('242','243','244')
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("BB") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('101','102','241') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('101','102','241')
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("CC") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('101','102') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('101','102')
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("MM") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('241') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('241')
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("DD") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where substr(dc_code,1,3)='215' ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where substr(dc_code,1,3)='215' )
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("EE") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') )
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("FF") ) goto ErrExit;
+	EXEC SQL DECLARE cur_1 CURSOR FOR
+		SELECT term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		FROM td_parm b , sum_tax a
+		WHERE a.prdt_no=b.prdt_no(+)
+		AND dc_code in(SELECT dc_code FROM dc_acc_rel WHERE acc_hrt='21501')
+		AND a.br_no=:vjgbm
+		AND "date">=:rq1 and "date"<=:rq2
+		GROUP BY term_type,term
+		ORDER BY 1,2;
+	MYSQLERR
+	EXEC SQL open cur_1 ;;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_1 
+		INTO :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3 ;
+
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		if( z4 ) g_tax.cls_amt=0.00;
+		if( z1 ) g_tax.intst=0.00;
+		if( z2 ) g_tax.tax=0.00;
+		if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') ) 
+			and br_no=:vjgbm
+			;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("GG") ) goto ErrExit;
+	}
+	EXEC SQL close cur_1;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') )
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("HH") ) goto ErrExit;
+
+	EXEC SQL declare cur_2 cursor for
+		select term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		from td_parm b ,sum_tax a
+		where a.prdt_no=b.prdt_no(+)
+		and dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502')
+		and a.br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2
+		group by term_type,term 
+		order by 1,2;
+	MYSQLERR
+	EXEC SQL open cur_2;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_2
+		into :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') )
+			and br_no=:vjgbm;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("II") ) goto ErrExit;
+	}
+	EXEC SQL close cur_2;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where /***  prdt_no not in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') ) 
+			and ***/ "date">=:rq1 and "date"<=:rq2
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where ( prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where substr(acc_hrt,1,3) in('215','202','211')) )
+				or prdt_no in('101','102') )
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("JJ") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') )
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("KK") ) goto ErrExit;
+
+	EXEC SQL declare cur_3 cursor for
+		select term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		from td_parm b , sum_tax a
+		where a.prdt_no=b.prdt_no(+)
+		and dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506')
+		and a.br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2
+		group by term_type,term 
+		order by 1,2;
+	MYSQLERR
+	EXEC SQL open cur_3;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_3
+		into :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') )
+		and br_no=:vjgbm ;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("LL") ) goto ErrExit;
+	}
+	EXEC SQL close cur_3;
+
+	if( Make_yeb_sub("NN") ) goto ErrExit;
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int Make_yeb_sub( char vrec[3] )
+{
+	int rpt_code;
+	int opncnt=0;
+	FILE *fp;
+	
+
+	pub_rpt_openfile( &fp,vjgbm,txtname );
+
+	rpt_code=0002;
+
+
+	if( vrec[0]=='H' && vrec[1]=='Y' )
+		fprintf( fp,"\n\f\n" );
+	else
+	{
+		if( pub_rpt_read_pfm_qd(fp,&line,vpfm,rpt_code,vrec,&opncnt,
+				get_ratio_rjb) ) 
+			goto ErrExit;
+	}
+
+	fclose(fp);
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+int Make_b_61000()
+{
+	
+	int first=0;
+	int flag = 0;
+	double tmpdbl;
+	int ret;
+	char new_cur_no[3],old_cur_no[3];
+	short z1,z2,z3,z4;
+
+	if( Make_yeb_sub("AA") ) goto ErrExit;
+/*打印通知存款的值*/
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('242','243','244') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('242','243','244')
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("BB") ) goto ErrExit;
+/*打印活期类的值*/
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('101','102','241') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('101','102','241')
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("CC") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('101','102') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('101','102')
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("MM") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in('241') 
+		and br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in('241')
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("DD") ) goto ErrExit;
+/*打印定期类 */
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where substr(dc_code,1,3)='215' ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where substr(dc_code,1,3)='215' )
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("EE") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') )
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("FF") ) goto ErrExit;
+
+	EXEC SQL declare cur_01 cursor for
+		select term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		from td_parm b , sum_tax a
+		where a.prdt_no=b.prdt_no(+)
+		and dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501')
+		and a.br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2
+		group by term_type,term 
+		order by 1,2;
+	MYSQLERR
+	EXEC SQL open cur_01;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_01
+		into :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21501') ) 
+			;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("GG") ) goto ErrExit;
+	}
+	EXEC SQL close cur_01;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') )
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("HH") ) goto ErrExit;
+
+	EXEC SQL declare cur_02 cursor for
+		select term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		from td_parm b  , sum_tax a
+		where a.prdt_no=b.prdt_no(+)
+		and dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502')
+		and a.br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2
+		group by term_type,term 
+		order by 1,2;
+	MYSQLERR
+	EXEC SQL open cur_02;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_02
+		into :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21502') )
+			;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("II") ) goto ErrExit;
+	}
+	EXEC SQL close cur_02;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where 
+		/**
+		prdt_no not in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') ) 
+		and **/
+			"date">=:rq1 and "date"<=:rq2
+		and br_no=:vjgbm ;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where substr(acc_hrt,1,3) in('215','202','211')) )
+				or prdt_no in('101','102')
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("JJ") ) goto ErrExit;
+
+	EXEC SQL select sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		into :g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3
+		from sum_tax
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') ) 
+		and br_no=:vjgbm
+			and "date">=:rq1 and "date"<=:rq2;
+	MYSQLERR
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+	EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+		where prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') )
+		;
+	MYSQLERR
+	if( z1 ) g_bal=0.00;
+	if( Make_yeb_sub("KK") ) goto ErrExit;
+
+	EXEC SQL declare cur_03 cursor for
+		select term_type,term,sum(cls_amt),sum(intst),sum(tax),sum(cnt) 
+		from td_parm b , sum_tax a
+		where a.prdt_no=b.prdt_no(+)
+		and dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506')
+		and a.br_no=:vjgbm
+		and "date">=:rq1 and "date"<=:rq2
+		group by term_type,term 
+		order by 1,2;
+	MYSQLERR
+	EXEC SQL open cur_03;
+	MYSQLERR
+	while(1)
+	{
+		EXEC SQL fetch cur_03
+		into :g_term_type,:g_term,:g_tax.cls_amt:z4,:g_tax.intst:z1,:g_tax.tax:z2,:g_tax.cnt:z3;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+	if( z4 ) g_tax.cls_amt=0.00;
+	if( z1 ) g_tax.intst=0.00;
+	if( z2 ) g_tax.tax=0.00;
+	if( z3 ) g_tax.cnt=0;
+
+		EXEC SQL select sum(cr_bal) into :g_bal:z1 from gl_prdt_dyn 
+			where prdt_no in(
+			select prdt_no from td_parm where term_type=:g_term_type and term=:g_term ) 
+			and  prdt_no in(
+			select prdt_no from td_parm where dc_code in(select dc_code from dc_acc_rel where acc_hrt='21506') )
+		 ;
+		MYSQLERR
+		if( z1 ) g_bal=0.00;
+		if( Make_yeb_sub("LL") ) goto ErrExit;
+	}
+	EXEC SQL close cur_03;
+
+	if( Make_yeb_sub("NN") ) goto ErrExit;
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}
+
+int get_ratio_rjb( bli,bll,str ,rpt_code)
+ int bli,bll,rpt_code;
+ char str[100];
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char vhm[101];
+	EXEC SQL END DECLARE SECTION;
+
+	char vstr[101];
+	char fmt[20];
+	int i=0;
+	int ret;
+	double vje=0.0,vje1=0.0;
+
+	memset( str,0,sizeof(str) );
+
+	switch( bli )
+	{
+		case 'X':
+			if( !strcmp(vjgbm,"61000") )
+				strcpy( vhm,"长治市商业银行" );
+			else
+			{
+				EXEC SQL select br_name into :vhm from com_branch
+					where br_no=:vjgbm;
+				if( sqlca.sqlcode ) strcpy( vhm ," ");
+				pub_base_strpack(vhm);
+			}
+			sprintf( fmt,"%%-%ds",bll );
+			sprintf( str,fmt,vhm );
+			break;
+		case 'Z':
+			sprintf( fmt,"%%0%dd",bll );
+			sprintf( str,fmt,g_pub_tx.tx_date );
+			break;
+
+		case 'A':
+			if( g_tax.cls_amt==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",g_tax.cls_amt );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'B':
+			if( g_tax.intst==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",g_tax.intst );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'C':
+			if( g_tax.tax==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",g_tax.tax );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'D':
+			sprintf( vstr,"%ld",g_tax.cnt );
+			sprintf( fmt,"%%%ds",bll );
+			sprintf( str,fmt,vstr );
+			break;
+		case 'E':
+			if( g_bal==0.00 )
+				memset( str,' ',bll );
+			else
+			{
+				sprintf( vstr,"%.2lf",g_bal );
+				pub_rpt_flttomon( vstr,vhm );
+				sprintf( fmt,"%%%ds",bll );
+				if( strlen(vhm)>bll )
+					sprintf( str,fmt,vstr );
+				else
+					sprintf( str,fmt,vhm );
+			}
+			break;
+		case 'G':
+			if( g_term_type[0]=='M' )
+			{
+				sprintf( vstr,"%2d个月",g_term);
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vstr );
+			}
+			else if( g_term_type[0]=='Y' )
+			{
+				sprintf( vstr,"%2d  年",g_term);
+				sprintf( fmt,"%%%ds",bll );
+				sprintf( str,fmt,vstr );
+			}
+			else
+			{
+				memset( str,' ',bll );
+			}
+			break;
+
+		default :
+			memset( str,' ',bll );
+			break;
+	}
+
+GoodExit:
+	return 0;
+ErrExit:
+	return 1;
+}

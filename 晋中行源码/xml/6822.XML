@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="6822 回购式再贴现信息录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+		initfd();
+		$MSGTYPE='03001';
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$FD12='4943';
+		$TXNO='9986';
+        $FD44=#ZTXRQ;
+		$FD46=#HGRQ ;
+		$FD63=#XYBH ;
+		$FD69=#CZBZ ;
+		$FD100=getitems('#KKKK#HZPJJE');
+  		commsend_001();
+		callserver();
+	    if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+        $FD16='4943';
+	    $MSGTYPE='03001';
+	}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(6822                      回购式再贴现信息录入  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4943)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   <!--输入变量-->
+  <ITEM LINE="7"   COL="3" TYPE="%-14s" FUNCTIONS="T(操作标志:!)"/>
+  <ITEM LINE="9"   COL="3" TYPE="%-16s" FUNCTIONS="T(再贴现协议编号:)"/>
+  
+  <ITEM LINE="11"   COL="3" TYPE="%-16s" FUNCTIONS="T(汇总票据金额:)"/>
+  <ITEM LINE="13"   COL="3" TYPE="%-14s" FUNCTIONS="T(再贴现日期:)"/>
+  <ITEM LINE="15"   COL="3" TYPE="%-14s" FUNCTIONS="T(回购日期:)"/>
+
+
+  <ITEM NAME="#CZBZ"   INPUT="SELECT" LINE="7" COL="15" TYPE="%-1s" 	FUNCTIONS="T(0)"> 
+  	<SELECT>
+  		<OPTION VALUE="0" TITLE="0.录入 "/>
+  		<OPTION VALUE="1" TITLE="1.修改 "/>
+  		<OPTION VALUE="2" TITLE="2.删除 "/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#FLAGCZBZ" TYPE="%4s" FUNCTIONS="S(#CZBZ,#CZBZ)"/>
+  <ITEM NAME="#XYBH" 	INPUT="TEXT" LINE="9" COL="19" TYPE="%-20s" 	FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  	enable(#ZTXRQ , true);
+	enable(#HGRQ  , true);
+	enable(#HZPJJE, true);
+
+	$TXNO='9692';
+	$FD63=#XYBH;
+	$FD69=#CZBZ;
+	if('0' != #CZBZ){
+		commsend_001();
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}else{
+		return(true);
+	}
+	#ZTXRQ =$FD44;
+	#HGRQ  =$FD46;
+	#HZPJJE= val(substr( $FD100, 16, 16), 0.01);
+
+	enable(#ZTXRQ , false);
+	enable(#HGRQ  , false);
+	enable(#HZPJJE, false);
+
+	if('1' == #CZBZ){
+		enable(#ZTXRQ , true);
+		enable(#HGRQ  , true);
+		enable(#HZPJJE, true);
+	}else{
+		goitem(#FD);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM NAME="#HZPJJE"	 LINE="11" COL="17" TYPE="%17.2f" INPUT="TEXT"	FUNCTIONS="J(#LHZPJJE)"/>
+  <ITEM NAME="#LHZPJJE" TYPE="%-16s" FUNCTIONS="X(#HZPJJE)"/>
+  <ITEM NAME="#ZTXRQ"	 LINE="13" COL="15" TYPE="%8d" INPUT="TEXT"	FUNCTIONS="T()D()V(NB)"/>
+  <ITEM NAME="#HGRQ"	 LINE="15" COL="15" TYPE="%8d" INPUT="TEXT"	FUNCTIONS="T()D()V(NB)"/>
+
+  <ITEM NAME="#FD" TYPE="%-1s">
+  <ONLOSTFOCUS>
+  "{
+		$FD44=#ZTXRQ;
+		$FD46=#HGRQ;
+		$FD100=space(16)+itoa(#HZPJJE*100, '%016.0f');
+
+	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#KKKK" TYPE="%-16s" FUNCTIONS="T()"/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="回购式再贴现信息录入!">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+	 print( 7, 30,' 回购式再贴现信息--[4]成功',#FLAGCZBZ);
+     print( 8, 20,'操  作  标  志 : [4]',#FLAGCZBZ);
+     print( 9, 20,'再贴现协议编号 : [20]',#XYBH);
+     print(12, 20,'汇总 票据 金额 : [16]',#LHZPJJE);
+     print(13, 20,'再贴现日期 : [8]',#ZTXRQ);
+     print(14, 20,'回购日期 : [8]',#HGRQ);
+   }"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="38" DESC="打印凭条">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+      print( 5, 16,'[4]     [2]     [2]',#YEAR,#MON,#DAY);
+      print( 7,  8,'[5]',$FD2);
+	  print( 7, 24,' 回购式再贴现信息录入');
+	  print( 7, 46,'[4]',$FD7);
+      print( 7, 62,'[6]',$FD4);
+      print( 8,  2,'操  作  标  志 : [4]',#FLAGCZBZ);
+      print( 9,  2,'再贴现协议编号 : [20]',#XYBH);
+	  print(12,  2,'汇总 票据 金额 : [16]',#LHZPJJE);
+	  print(13,  2,'再贴现日期 : [8]',#ZTXRQ);
+      print(14,  2,'回购日期 : [8]',#HGRQ);
+ }"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

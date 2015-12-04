@@ -1,0 +1,281 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mo_infrm_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mo_infrm_con ( struct mo_infrm_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mo_infrm_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->sts);
+	zip_tail(ps->name);
+	zip_tail(ps->phone);
+	zip_tail(ps->id_knd);
+	zip_tail(ps->id_no);
+}
+int Mo_infrm_Debug(struct mo_infrm_c *ps){
+	vtcp_log("mo_infrm_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mo_infrm_c.ac_id=[%ld]\n",ps->ac_id);
+	vtcp_log("mo_infrm_c.ac_seqn=[%ld]\n",ps->ac_seqn);
+	vtcp_log("mo_infrm_c.infrm_date=[%ld]\n",ps->infrm_date);
+	vtcp_log("mo_infrm_c.prm_draw_date=[%ld]\n",ps->prm_draw_date);
+	vtcp_log("mo_infrm_c.prm_draw_amt=[%f]\n",ps->prm_draw_amt);
+	vtcp_log("mo_infrm_c.fct_wd_amt=[%f]\n",ps->fct_wd_amt);
+	vtcp_log("mo_infrm_c.occ_date=[%ld]\n",ps->occ_date);
+	vtcp_log("mo_infrm_c.sts=[%s]\n",ps->sts);
+	vtcp_log("mo_infrm_c.name=[%s]\n",ps->name);
+	vtcp_log("mo_infrm_c.phone=[%s]\n",ps->phone);
+	vtcp_log("mo_infrm_c.wrk_date=[%ld]\n",ps->wrk_date);
+	vtcp_log("mo_infrm_c.trace_no=[%ld]\n",ps->trace_no);
+	vtcp_log("mo_infrm_c.id_knd=[%s]\n",ps->id_knd);
+	vtcp_log("mo_infrm_c.id_no=[%s]\n",ps->id_no);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mo_infrm_Sel(reply,mo_infrm_c,fmtstr,va_alist)
+char    *reply;
+struct  mo_infrm_c *mo_infrm_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mo_infrm_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mo_infrm_Fet_Sel( mo_infrm_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mo_infrm_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mo_infrm_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mo_infrm.* FROM mo_infrm WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_infrm_sel FROM :comm;
+	EXEC SQL DECLARE sel_mo_infrm CURSOR FOR mo_infrm_sel;
+
+	EXEC SQL OPEN sel_mo_infrm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_infrm_Fet_Sel ( struct mo_infrm_c *mo_infrm_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mo_infrm INTO :mo_infrm_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mo_infrm error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mo_infrm finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_infrm_c);
+
+	return 0;
+}
+
+int Mo_infrm_Clo_Sel (){
+	EXEC SQL CLOSE sel_mo_infrm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mo_infrm_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mo_infrm.* FROM mo_infrm WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_infrm_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mo_infrm CURSOR FOR mo_infrm_upd;
+
+	EXEC SQL OPEN upd_mo_infrm;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_infrm_Fet_Upd( struct mo_infrm_c *mo_infrm_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mo_infrm INTO :mo_infrm_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mo_infrm finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_infrm_c);
+
+	return 0;
+}
+
+int Mo_infrm_Upd_Upd( struct mo_infrm_c mo_infrm_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mo_infrm SET ac_id=:mo_infrm_c.ac_id,
+			ac_seqn=:mo_infrm_c.ac_seqn,
+			infrm_date=:mo_infrm_c.infrm_date,
+			prm_draw_date=:mo_infrm_c.prm_draw_date,
+			prm_draw_amt=:mo_infrm_c.prm_draw_amt,
+			fct_wd_amt=:mo_infrm_c.fct_wd_amt,
+			occ_date=:mo_infrm_c.occ_date,
+			sts=:mo_infrm_c.sts,
+			name=:mo_infrm_c.name,
+			phone=:mo_infrm_c.phone,
+			wrk_date=:mo_infrm_c.wrk_date,
+			trace_no=:mo_infrm_c.trace_no,
+			id_knd=:mo_infrm_c.id_knd,
+			id_no=:mo_infrm_c.id_no
+	WHERE rowid=:mo_infrm_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mo_infrm_Del_Upd(struct mo_infrm_c mo_infrm_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mo_infrm WHERE rowid=:mo_infrm_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_infrm_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mo_infrm;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mo_infrm_Ins( struct mo_infrm_c mo_infrm_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mo_infrm VALUES (:mo_infrm_c.ac_id,
+			:mo_infrm_c.ac_seqn,
+			:mo_infrm_c.infrm_date,
+			:mo_infrm_c.prm_draw_date,
+			:mo_infrm_c.prm_draw_amt,
+			:mo_infrm_c.fct_wd_amt,
+			:mo_infrm_c.occ_date,
+			:mo_infrm_c.sts,
+			:mo_infrm_c.name,
+			:mo_infrm_c.phone,
+			:mo_infrm_c.wrk_date,
+			:mo_infrm_c.trace_no,
+			:mo_infrm_c.id_knd,
+			:mo_infrm_c.id_no);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_infrm error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

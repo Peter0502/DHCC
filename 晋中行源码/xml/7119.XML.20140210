@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11001100000011000000000000000000" TITLE="4819    VTM加卡 "
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+		"T(4819                             VTM加卡)"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+	<ITEM NAME="#TXNO" 	 TYPE="%-4s" FUNCTIONS="T($TXNO=5117)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-10s" FUNCTIONS="T(VTM加卡)"/>
+	
+	<ITEM LINE="8" COL="10" TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"/>
+	<ITEM LINE="8" COL="20" NAME="#PZZL" INPUT="SELECT" TYPE="%-3s" FUNCTIONS="T(020)V(NB)">
+		<SELECT>
+			<OPTION VALUE="020" TITLE="储蓄卡"/>
+			<OPTION VALUE="024" TITLE="金融IC卡"/>
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#PZZL,#PZZL)"/>
+	
+	<ITEM LINE="9" COL="10" TYPE="%-10s" FUNCTIONS="T(起始号码1:)"/>
+	<ITEM LINE="9" COL="20" NAME="#QSHM1" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()V(NB)"/>
+	
+	<ITEM LINE="9" COL="37" TYPE="%-10s" FUNCTIONS="T(终止号码1:)"/>
+	<ITEM LINE="9" COL="47" NAME="#ZZHM1" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+			if(#ZZHM1 &lt; #QSHM1)
+			{
+				showmsg('终止号码必须大于起始号码');
+				return(false);
+			}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="10" COL="10" TYPE="%-10s" FUNCTIONS="T(起始号码2:)"/>
+	<ITEM LINE="10" COL="20" NAME="#QSHM2" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()"/>
+	
+	<ITEM LINE="10" COL="37" TYPE="%-10s" FUNCTIONS="T(终止号码2:)"/>
+	<ITEM LINE="10" COL="47" NAME="#ZZHM2" INPUT="TEXT" TYPE="%16d" FUNCTIONS="T()">
+	<ONLOSTFOCUS>
+	"{
+			if(#ZZHM2 &lt; #QSHM2)
+			{
+				showmsg('终止号码必须大于起始号码');
+				return(false);
+			}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="11"COL="10" TYPE="%-10s" FUNCTIONS="T(起始号码3:)"/>
+	<ITEM LINE="11"COL="20" NAME="#QSHM3"INPUT="TEXT" TYPE="%16d"FUNCTIONS="T()"/>
+	
+	<ITEM LINE="11" COL="37" TYPE="%-10s" FUNCTIONS="T(终止号码3:)"/>
+	<ITEM LINE="11"COL="47" NAME="#ZZHM3"INPUT="TEXT" TYPE="%16d"FUNCTIONS="T()">
+	<ONLOSTFOCUS>
+	"{
+			if(#ZZHM3 &lt; #QSHM3)
+			{
+				showmsg('终止号码必须大于起始号码');
+				return(false);
+			}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM NAME="#FLAG" TYPE="%-12s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @pzsl1 as number;
+			dim @pzsl2 as number;
+			dim @pzsl3 as number;
+			@pzsl1=atoi(substr(#ZZHM1,8,11))-atoi(substr(#QSHM1,8,11))+1;
+			
+			if(#QSHM2=='' or #ZZHM2=='')
+			{
+				@pzsl2=0;
+			}
+			else
+			{
+				@pzsl2=atoi(substr(#ZZHM2,8,11))-atoi(substr(#QSHM2,8,11))+1;
+			}
+			if(#QSHM3=='' or #ZZHM3=='')
+			{
+				@pzsl3=0;
+			}
+			else
+			{
+				@pzsl3=atoi(substr(#ZZHM3,8,11))-atoi(substr(#QSHM3,8,11))+1;
+			}
+			#PZSL=itoa(@pzsl1+@pzsl2+@pzsl3,'%12d');
+			show(#PZSL,true);
+			enable(#PZSL,false);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="12" COL="10" TYPE="%-10s" FUNCTIONS="T(凭证数量:)"/>
+	<ITEM LINE="12" COL="20" NAME="#PZSL" INPUT="TEXT" TYPE="%12s" FUNCTIONS="T(0)"/>
+	
+	<ITEM LINE="14" COL="10" TYPE="%-10s" FUNCTIONS="T(VTM 柜员:)"/>
+	<ITEM LINE="14" COL="20" NAME="#TLRNO" INPUT="TEXT" TYPE="%4d" 	FUNCTIONS="T()V(NB)">
+		<ONLOSTFOCUS>
+		"{
+			dim @txno_bak as string;
+			
+			if(#TLRNO == $TLRNO)
+			{
+				showmsg('对方柜员不可以为自己!');
+				return(false);
+			}
+			
+			initfd();
+			@txno_bak=$TXNO;
+			$TXNO='9803';
+			commsend_001();
+			$FD92=#TLRNO;
+			callserver();
+			$TXNO=@txno_bak;
+			#GYXM=$FD26;	
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			enable(#GYXM,false);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+		<ITEM LINE="15" 	COL="10" TYPE="%-10s" FUNCTIONS="T(VTM 名称:)"/>
+	<ITEM NAME="#GYXM" 	INPUT="TEXT" LINE="15" COL="20" TYPE="%-30s" 	FUNCTIONS="T()V(NB)"/>
+	
+	<ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+	
+	<ITEM NAME="#OK" LINE="21" COL="65"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>
+		"{
+			initfd();
+			commsend_001();
+			$FD67='0';
+			$FD89=#PZZL;
+			$FD92=#TLRNO;
+			$FD123=getitems('#QSHM1#ZZHM1#QSHM2#ZZHM2#QSHM3#ZZHM3');
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			runoutput();
+			closeall();
+			return(true);
+		}"
+		</ONCLICK>
+	</ITEM>
+	
+	<ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($HDATE,1,4)"/>
+	<ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($HDATE,5,2)"/>
+	<ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($HDATE,7,2)"/>
+	
+</VARIABLE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="VTM加卡">
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 2,  24,'交易名称:VTM加卡');
+		print( 4,  20,'交易机构:[5]',$FD2);
+		print( 5,  20,'交易日期:[4]年[2]月[2]日',#YEAR,#MON,#DAY);  
+		print( 6,  20,'流水号码:[6]',$FD4);
+		print( 7,  20,'操作员号:[4]',$FD7);
+		print( 9,  20,'凭证种类:[20 ]',#NAME2);
+		print( 10, 20,'VTM 柜员:[4  ]',#TLRNO);
+		print( 11, 20,'VTM 名称:[30 ]',#GYXM);
+		print( 12, 20,'起始号码1:[16 ] 终止号码1:[16 ]',#QSHM1,#ZZHM1);
+		print( 13, 20,'起始号码2:[16 ] 终止号码2:[16 ]',#QSHM2,#ZZHM2);
+		print( 14, 20,'起始号码3:[16 ] 终止号码3:[16 ]',#QSHM3,#ZZHM3);
+		print( 15, 20,'凭证数量:[12 ]',#PZSL);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印普通凭证(1/2打印纸[单层])" LINESPACE="24">
+		NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME); 
+		print( 5, 2,'代码:4819'); 
+		print( 5,20,'交易:VTM加卡');
+		print( 7,20,'凭证种类:[20 ]',#NAME2);
+		print( 8,20,'VTM 柜员:[4  ]',#TLRNO);
+		print( 9,20,'VTM 名称:[30 ]',#GYXM);
+		print( 10,20,'起始号码1:[16 ] 终止号码1:[16 ]',#QSHM1,#ZZHM1);
+		print( 11,20,'起始号码2:[16 ] 终止号码2:[16 ]',#QSHM2,#ZZHM2);
+		print( 12,20,'起始号码3:[16 ] 终止号码3:[16 ]',#QSHM3,#ZZHM3);
+		print( 13,20,'凭证数量:[12 ]',ltrim(#PZSL));
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8]',$HDATE);
+		print(24,15,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

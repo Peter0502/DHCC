@@ -1,0 +1,114 @@
+<!-----显示帐号信息的变量组合----------> 
+
+  <ITEM NAME="#FD101_1"   TYPE="%-24s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD101_2"   TYPE="%-4s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_3"   TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM NAME="#FD101_4"   TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_5"   TYPE="%-16s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD101_6"   TYPE="%-10s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD101_7"   TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_8"   TYPE="%-50s"  FUNCTIONS=""/>
+  <ITEM NAME="#FD101_9"   TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM NAME="#FD101_10"  TYPE="%-2s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_11"  TYPE="%-1s"   FUNCTIONS="T(2)"/>
+  <ITEM NAME="#FD101_12"  TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_13"  TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_14"  TYPE="%-4s"   FUNCTIONS=""/>
+  <ITEM NAME="#FD101_15"  TYPE="%-30s"  FUNCTIONS=""/>
+
+  <ITEM NAME="#LACTNO" LINE="0"  COL="0" TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(帐    号: )"/>
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="0"  COL="10" TYPE="%-18s" VISABLE="TRUE" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+    dim @baktxno as string;
+    dim @tota as string;
+    dim @list1 as string;
+    dim @list2 as string;
+    dim @i as number;
+
+	initfd();
+	@baktxno=$TXNO;
+	$TXNO='9730';
+	$FD101=#ACTNO;
+	commsend_001();
+	@tota = callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+
+	setitems('#FD101_1#FD101_2#FD101_3#FD101_4#FD101_5#FD101_6#FD101_7#FD101_8#FD101_9#FD101_10#FD101_11#FD101_12#FD101_13#FD101_14#FD101_15',$FD101);
+
+	#CUSTNAME = #FD101_8;
+	#BIZHONG = #FD101_10;
+	#AVBAL = #FD101_9;
+	#PRODNAME = #FD101_15;
+
+	show(#BIZHONG,true);
+	show(#A1,false);
+	show(#A2,false);
+	show(#VOCTYPE_A1,false);
+	show(#DSCPT_A2,false);
+
+    if(delspace(#FD101_4) != '')    //当凭证号不为空时,即输入是对公账号
+    {
+        while(substr(@tota, @i, 4)=='101C'){
+             @i = @i + 30;
+        }
+        @list2=substr(@tota, 0 , @i+1);
+        setsel(#DSCPT_A2,@list2,'o5t20o1v2o2');
+
+        @list1=substr(@tota, @i, len(@tota)-@i);
+        setsel(#VOCTYPE_A1,@list1,'o5t20o1v3o1');
+
+		show(#A1,true);
+		show(#A2,true);
+		show(#VOCTYPE_A1,true);
+		show(#DSCPT_A2,true);
+	}
+
+	showblock('5607_ACTINFO',true,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#BIAOSHI" LINE="1"  COL="0" TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+
+  <ITEM LINE="4"  COL="0"  TYPE="%-10s" NAME="#L1" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"  COL="0"  TYPE="%-10s" NAME="#L2" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="6"  COL="0"  TYPE="%-10s" NAME="#L3" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="7"  COL="0"  TYPE="%-10s" NAME="#L4" FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="9"  COL="0"  TYPE="%-10s" NAME="#A1" VISABLE="FALSE" FUNCTIONS="T(凭证种类:!)"/>
+  <ITEM LINE="9"  COL="45" TYPE="%-10s" NAME="#A2" VISABLE="FALSE" FUNCTIONS="T(摘要选项:!)"/>
+  <ITEM LINE="11" COL="0"  TYPE="%-10s" NAME="#L9" FUNCTIONS="T(转出金额:)"/>
+
+  <ITEM NAME="#CUSTNAME" LINE="4"  COL="10" TYPE="%-50s" FUNCTIONS=""/>
+
+  <ITEM NAME="#BIZHONG"  LINE="5"  COL="10" TYPE="%-2s" INPUT="SELECT"  ENABLE="FALSE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#LAVBAL" LINE="6"  COL="10" TYPE="%-16s" FUNCTIONS="X(#AVBAL)"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>
+
+  <ITEM NAME="#PRODNAME" LINE="7"  COL="10" TYPE="%-30s" FUNCTIONS=""/>
+
+  <ITEM NAME="#VOCTYPE_A1"  LINE="9"  COL="10" TYPE="%-3s" INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="120" TITLE="0.进帐单"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#DSCPT_A2"  LINE="9"  COL="55" TYPE="%-2s" INPUT="SELECT" VISABLE="FALSE" FUNCTIONS="">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.备用金"/>
+	</SELECT>
+  <ONLOSTFOCUS>"{
+		#FD101_6 = getseltitle(#DSCPT_A2,#DSCPT_A2);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="11" COL="10" NAME="#XZCAVBAL" TYPE="%-16s" FUNCTIONS="T(#XCPAVBAL)"/>

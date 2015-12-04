@@ -1,0 +1,232 @@
+/*************************************************************
+* 文 件 名: gD0286.c
+* 功能描述：试结时备份 gl_mst,gl_sub,gl_bal,gl_amt,试结后从备份表中再恢复这4个表
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "dc_log_bk_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+
+	struct com_sys_parm_c com_sys_parm_c;
+
+gD0286( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+	ret=rec_gl_sub();
+	MYRETERR
+
+	ret=rec_gl_bal();
+	MYRETERR
+
+	ret=rec_gl_amt();
+	MYRETERR
+
+	ret=rec_gl_mst();
+	MYRETERR
+	
+	/****增加备份gl_tsub表 20101229****/
+	ret=rec_gl_tsub();
+	MYRETERR
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+rec_gl_sub()
+{
+	int ret=0; 
+
+	if( pub_pubdb_droptab("gl_sub_nj") ) 
+	{
+		sprintf(acErrMsg,"drop表错误!! ");
+		WRITEMSG
+	}
+	if( pub_pubdb_recrttab("gl_sub","gl_sub_nj") ) 
+	{
+		sprintf(acErrMsg,"建立备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_sub_nj 
+		select * from gl_sub;
+	MYSQLERR
+	if( pub_pubdb_recrtidx("gl_sub","gl_sub_nj") ) 
+	{
+		sprintf(acErrMsg,"建立表index错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+rec_gl_bal()
+{
+	int ret=0; 
+
+	if( pub_pubdb_droptab("gl_bal_nj") ) 
+	{
+		sprintf(acErrMsg,"drop表错误!! ");
+		WRITEMSG
+	}
+	if( pub_pubdb_recrttab("gl_bal","gl_bal_nj") ) 
+	{
+		sprintf(acErrMsg,"建立备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_bal_nj 
+		select * from gl_bal;
+	MYSQLERR
+	if( pub_pubdb_recrtidx("gl_bal","gl_bal_nj") ) 
+	{
+		sprintf(acErrMsg,"建立表index错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+rec_gl_amt()
+{
+	int ret=0; 
+
+	if( pub_pubdb_droptab("gl_amt_nj") ) 
+	{
+		sprintf(acErrMsg,"drop表错误!! ");
+		WRITEMSG
+	}
+	if( pub_pubdb_recrttab("gl_amt","gl_amt_nj") ) 
+	{
+		sprintf(acErrMsg,"建立备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_amt_nj 
+		select * from gl_amt;
+	MYSQLERR
+	if( pub_pubdb_recrtidx("gl_amt","gl_amt_nj") ) 
+	{
+		sprintf(acErrMsg,"建立表index错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+rec_gl_mst()
+{
+	int ret=0; 
+
+	if( pub_pubdb_droptab("gl_mst_nj") ) 
+	{
+		sprintf(acErrMsg,"drop表错误!! ");
+		WRITEMSG
+	}
+	if( pub_pubdb_recrttab("gl_mst","gl_mst_nj") ) 
+	{
+		sprintf(acErrMsg,"建立备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_mst_nj 
+		select * from gl_mst;
+	MYSQLERR
+	if( pub_pubdb_recrtidx("gl_mst","gl_mst_nj") ) 
+	{
+		sprintf(acErrMsg,"建立表index错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+
+/****增加备份gl_tsub表 20101229 begin****/
+rec_gl_tsub()
+{
+	int ret=0; 
+
+	if( pub_pubdb_droptab("gl_tsub_nj") ) 
+	{
+		sprintf(acErrMsg,"drop表错误!! ");
+		WRITEMSG
+	}
+	if( pub_pubdb_recrttab("gl_tsub","gl_tsub_nj") ) 
+	{
+		sprintf(acErrMsg,"建立备份表错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into gl_tsub_nj 
+		select * from gl_tsub;
+	MYSQLERR
+	if( pub_pubdb_recrtidx("gl_tsub","gl_tsub_nj") ) 
+	{
+		sprintf(acErrMsg,"建立表index错误!! ");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	return 0;
+ErrExit:
+	return 1;
+}
+/****20101229 end****/

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="L10 小额支票业务录入)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+   $FD39 = itoa( #TX_AMT*100,'%016.0f');
+   //备份附加数据文件NEWYX
+   call('cp ../tmp/'+$KINBR+$TTYNAME+' ../tmp/'+$KINBR+$TTYNAME+'.backup');
+   //call_9986();
+   call('mv ../tmp/'+$KINBR+$TTYNAME+'.backup ../tmp/'+$KINBR+$TTYNAME);
+   $FD44=$HDATE;
+  commsend_001();
+  #TXAMT15=itoa(#TX_AMT*100,'%016.0f');
+	if($FD68=='1')// 帐户类型 1活期帐号6内部帐户7科目
+	{
+	  #ACTSEQ='1';
+	}
+  if($FD68=='6')
+  {
+    #ACTSEQ='0';
+  }
+  #CURCD ='01';
+  #CT_IND='2'; // 转帐
+	$FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#ID_NO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+  #OPCD='10';
+  lvsend_123();
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	enable(#ORDERNO,true);
+	commrecv_001();
+	lvrecv_123();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5408                        小额支票业务录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5850)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+
+  <!-- 小额贷记基本信息录入 -->
+  <IMPORT>LV_PTJJ_ZP.IMP</IMPORT>
+  <ITEM NAME="#GOOK" TYPE="%1s" FUNCTIONS="j(#TXNUM=00119,T{0}T{1})G(0,#OK)"/>
+	<ITEM NAME="#BUFFER" TYPE="%-750s" FUNCTIONS=""/>
+	<ITEM NAME="#TMP" TYPE="%-750s" FUNCTIONS=""/>
+	<ITEM NAME="#TMP1" TYPE="%-750s" FUNCTIONS="">
+	<ONLOSTFOCUS>"{
+//		#TMP=getitems('#ITEM1#CPTYPE#ITEM2#TSFKDAY#ITEM3#ITEM4#ITEM5')+itoa(#ITEM6*100,'%015.0f')+getitems('#ITEM7#ITEM8');
+  		#TMP=$BUFFER;
+
+	}"</ONLOSTFOCUS>
+	</ITEM>
+  
+	<ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  	<ONCLICK>"{
+  		#BUFFER=$BUFFER;
+  		submit();
+ 	 	}"
+  	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE>
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(3,5, '                  小额支票往帐录入');
+		print(4,5, '委 托 日 期:[08]              支付交易序号:[8]',$HDATE,#ORDERNO);
+		print(5,5, '接收行行号:[12]          业务类型:[16]',#AC_BR_NO,#QTXNUM);
+		print(6,5, '付款人帐号 :[24]',#PAY_AC_NO);
+		print(7,5, '付款人名称 :[60]',#PAY_NAME);
+		print(8,5, '交 易 金 额:[21]',#XTX_AMT);
+		print(10,5,'收款人帐号:[32]',#CASH_AC_NO);
+		print(11,5,'收款人名称:[60]',#CASH_NAME);
+		print(12,5,'附      言:[60]',#BRF);
+		print(14,5,'流  水  号:[6]                         操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+  
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:5408');
+	print( 5, 13,'交易:小额支票业务录入');
+	
+	print( 7,20, '支付交易序号:[8       ]    委托日期:[8       ] 出票日期:[8]',#ORDERNO,$HDATE,#ZP_DATE);
+	print( 8,20, '接收行 行 号:[12          ]                  业务类型:[16              ]',#AC_BR_NO,#QTXNUM);
+	print( 9,20, '付款人 帐 号:[32                      ]',#PAY_AC_NO);
+	print(10,20, '付款人 名 称:[60                                                          ]',#PAY_NAME);
+	print(11,20, '交 易  金 额:[21                   ]',#XTX_AMT);
+	print(12,20, '收款人 帐 号:[32                              ]',#CASH_AC_NO);
+	print(13,20, '收款人 名 称:[60                                                          ]',#CASH_NAME);
+	print(14,20, '附        言:[60                                                          ]',#BRF);
+	print(15,20, '支票号码:[12          ]  支付密码:[20]',#ZP_NUM,#ZP_PWD);
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+      }"
+  </PRINT>
+</RESPONSE>
+<!--打印信息 -->
+</TRANSACTION>

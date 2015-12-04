@@ -1,0 +1,180 @@
+<!-----显示帐号信息的变量组合----------> 
+
+  <ITEM NAME="#LACTNO" LINE="7"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(帐    号: )"/>
+  <ITEM NAME="#LACSEQ" LINE="7"  COL="45"  TYPE="%-10s" FUNCTIONS="T(帐户序号: )" VISABLE="FALSE" INPUT="LABEL"/>
+  <ITEM LINE="8" COL="45" TYPE="%-10s" FUNCTIONS="T(照    片:)"/> 
+	<ITEM LINE="8" COL="55" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#LACTNO" LINE="9"  COL="10"  TYPE="%-16s" VISABLE="TRUE" FUNCTIONS="T(【产品信息】)"/>
+  <ITEM NAME="#LACTNO" LINE="10" COL="11"  TYPE="%-50s" VISABLE="TRUE" FUNCTIONS="T(------------------------------------------------------------)"/>
+  
+
+  <ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="MSR" LINE="7"  COL="21" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="m($MSR2,1,19)">
+  <ONLOSTFOCUS>"{
+	dim @baktxno as string;
+   if(substr(#ACTNO,0,6)=='621223' and len(rtrim($MSR2))!=37)
+    {
+       showmsg('刷卡错误,请重试!');
+      // return(false);
+    }
+	@baktxno=$TXNO;
+	$TXNO='9951';
+	$FD101=#ACTNO+space(157);
+	commsend_001();
+	
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	commrecv_101();
+	//#LAVBAL=delspace(itoa(#AVBAL,'%17.2f'));
+	//showmsg('#LAVBAL_zhe='+#LAVBAL);
+	//showmsg('substr($FD101,134,16)'+substr($FD101,134,16));
+	#AVBAL=(val(substr($FD101,134,16),0.01));
+	#LAVBAL=delspace(itoa(#AVBAL,'%17.2f'));
+	//showmsg('#LAVBAL1='+#LAVBAL);
+	
+	#PRODNAME=delspace(#PRODNAME);
+	// 卡户的判断条件是: 101-1域长度为19并且101-E域不为空
+	if( (len(delspace(substr($FD101,0,24)))==19)  and atoi(substr($FD101,24,4))!=0 )
+	{
+			#ACTSEQ=substr($FD101,24,4);
+	    //show(#S_NBCD,false);
+	    //show(#NBFLAG,false);
+	    show(#ACTSEQ,true);
+	    show(#LACSEQ,true);
+	    //showmsg('IMP2'+#SCASHFLAG);
+	    //return(true);
+	}else{
+			#NBFLAG='1';
+			#CASHFLAG='1';
+			//showmsg('IMP'+#SCASHFLAG);
+	    showblock('ACTINFO',true,true);
+	    show(#ACTSEQ,false);
+	    show(#LACSEQ,false);
+	    show(#S_NBCD,true);
+	    show(#NBFLAG,true);
+	 }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  
+  <ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="7"  COL="55" TYPE="%4d" DEVICE="KEYBOARD" VISABLE="FALSE" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+	dim @baktxno as string;
+	@baktxno=$TXNO;
+	$TXNO='9846';
+	$FD101=#ACTNO+space(24-len(#ACTNO))+#ACTSEQ+space(153);
+	commsend_001();
+	
+	callserver();
+	$TXNO=@baktxno;
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	commrecv_101();
+	//showmsg('substr($FD101,134,16)'+substr($FD101,134,16));
+	#AVBAL=val(substr($FD101,134,16),0.01);
+	#LAVBAL=delspace(itoa(#AVBAL,'%17.2f'));
+	//showmsg('#LAVBAL_card='+#LAVBAL);
+	#PRODNAME=delspace(#PRODNAME);
+	#NBFLAG='0';
+	#CASHFLAG='1';
+	
+	show(#S_NBCD,true);
+	show(#NBFLAG,true);
+	#NBFLAG='0';
+	showblock('ACTINFO',true,true);	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#ACTNO24"    TYPE="%-24s"  FUNCTIONS=""/>  
+  <ITEM NAME="#TXAMT15"    TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM NAME="#DESC10"     TYPE="%-10s"  FUNCTIONS=""/>
+  <ITEM NAME="#DSCPT"      TYPE="%-3s"   FUNCTIONS=""/>
+  <ITEM NAME="#ACTTYPE"    TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"   TYPE="%-4s"   FUNCTIONS=""/>
+  
+  <BLOCK NAME="ACTINFO" LINE="10" COL="5" VISABLE="FALSE">
+
+
+  <ITEM LINE="2"  COL="6"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="3"  COL="6"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="4"  COL="6"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="5"  COL="6"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  
+  <ITEM LINE="7"  COL="6"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="7"  COL="40" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="8"  COL="6"  TYPE="%-10s" FUNCTIONS="T(无折标志:!)"  NAME="#S_NBCD" INPUT="LABEL"/>
+  <ITEM LINE="9"  COL="6"  TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/>
+  <ITEM LINE="10" COL="6"  TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+  <!---------------------------------------------------->
+  <ITEM NAME="#CUSTNAME" LINE="2"  COL="16" TYPE="%-57s" FUNCTIONS="J(#CUSTNAME30)"/>
+  <ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+  <ITEM NAME="#CURCD" LINE="3"  COL="16" TYPE="%-2s" INPUT="SELECT" FUNCTIONS="T(01)" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM NAME="#LAVBAL" LINE="4"  COL="16" TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#AVBAL"  TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>
+  <ITEM NAME="#PRODNAME" LINE="5"  COL="16" TYPE="%-30s" FUNCTIONS=""/>
+  <ITEM NAME="#VOCTYPE"  LINE="7"  COL="16" TYPE="%-3s" INPUT="SELECT" FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="010" TITLE="0.储蓄活期存折"/>
+		<OPTION VALUE="020" TITLE="0.储蓄卡"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SVOCTYPE"         TYPE="%-30s"         FUNCTIONS="S(#VOCTYPE,#VOCTYPE)"/>
+
+  <ITEM NAME="#VOCNUM" LINE="7"  COL="50" TYPE="%16d" FUNCTIONS=""/>
+  
+  <ITEM NAME="#NBFLAG" LINE="8"  COL="16" TYPE="%-1s" INPUT="SELECT" DEVICE = "KEYBOARD"  FUNCTIONS="T(1)"  VISABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="0" TITLE="0.无折"/>
+		<OPTION VALUE="1" TITLE="1.有折"/>
+	</SELECT>
+  </ITEM>
+  
+  
+  <ITEM NAME="#SNBFLAG"  TYPE="%-4s"        FUNCTIONS="S(#NBFLAG,#NBFLAG)"/>
+
+  <ITEM NAME="#CASHFLAG" LINE="9"  COL="16" TYPE="%-1s" INPUT="SELECT" DEVICE = "KEYBOARD" FUNCTIONS="T(1)" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.现金"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SCASHFLAG" TYPE="%-4s"        FUNCTIONS="S(#CASHFLAG,#CASHFLAG)"/>
+  <!--ITEM NAME="#SCASHFLAG" TYPE="%-4s"        FUNCTIONS="S(#CASHFLAG,#CASHFLAG)">
+  <ONLOSTFOCUS>
+  	"{
+  		if(#CASHFLAG=='1')
+  		{
+  			#SCASHFLAG='现金';
+  			show(#SCASHFLAG,true);
+  			//showmsg('#SCASHFLAG='+#SCASHFLAG);
+  		}
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM-->
+  
+  <ITEM NAME="#TXAMT" LINE="10"  COL="16" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(000000000000001,9999999999999999)J(#LTXAMT)"/>
+  <ITEM NAME="#LTXAMT" TYPE="%-21s" FUNCTIONS="X(#TXAMT)"/>
+  
+   </BLOCK>

@@ -1,0 +1,38 @@
+#ifndef __in_parm_CH__
+#define __in_parm_CH__
+struct in_parm_c{
+	char      rowid[20];
+	char      prdt_no[4];
+	char      acc_hrt[6];
+	char      cur_no[3];
+	char      prdt_mo[41];
+	char      amt_dc[2];
+	long      star_date;
+	long      stop_date;
+	double    min_amt;
+	double    max_amt;
+	long      min_term;
+	long      max_term;
+	char      term_type[2];
+	char      rate_no[4];
+	char      fine_rate_no[4];
+	double    min_flot_rate;
+	double    max_flot_rate;
+	char      cal_day_type[2];
+	char      intst_ind[2];
+	char      intst_knd[3];
+	char      acm_type[3];
+	long      intst_mon;
+	long      intst_date;
+	char      od_ind[2];
+	double    od_amt;
+	char      dc_code[5];
+	char      shar_ind[5];
+	long      shar_term;
+	char      shar_term_type[2];
+	char      over_date_type[2];
+	char      invst_type[2];
+	char      pre_term[2];
+	char      spe_ind[11];
+};
+#endif 

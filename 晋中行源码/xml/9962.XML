@@ -1,0 +1,57 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="电费代收跨行结算文件查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9962                电费代收跨行结算文件查询)"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6631)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM  NAME="#TX_TEL"   TYPE="%-4s"  FUNCTIONS="T($TLRNO)"/>
+  <ITEM LINE="12"  COL="6"  TYPE="%-14s"    FUNCTIONS="T(代理类型:)"/>
+  <ITEM LINE="12"  COL="14" NAME="#AGENT_TYPE"  TYPE="%-2s"  INPUT="SELECT" FUNCTIONS="V(NB)T(07)">
+    <SELECT>
+      <OPTION VALUE="07" TITLE="0.晋中供电"/>
+    </SELECT>
+  </ITEM>
+
+  <ITEM LINE="14"  COL ="6" TYPE="%-14s"   FUNCTIONS="T(解款日期:)"/>
+  <ITEM LINE="14"  COL="14" NAME="#TX_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS="T($HDATE)V(00000001,99999999)"/>
+
+  <ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>"{
+      dim @tota as string;
+      dim @selid as number;
+      initfd();
+      commsend_001();
+      $FD16='6631';            //供电公司对账完成后生成一个跨行转账信息，此交易通过前台查询来取回文件
+      $FD60='AGENT';           //平台交易类型
+      $FD21='01';              //柜面发起标志     
+      $FD28=#TX_DATE;          //日期
+      $FD29=#TX_TEL;
+
+      @tota=callagnpt();
+      if($FD12!='0000'){
+        showmsg(geterror());
+        return(false);
+      }
+      @tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+      if(@tota==''){
+        showmsg('未找到记录!');
+        rerun();
+        return(false);
+      }
+      autolist(@tota);
+      @selid=list_work();
+     runoutput();
+      rerun();
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

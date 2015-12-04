@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="6562      付款人开户行开户行多方协议号维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3"  COL="3" TYPE="%-55s" FUNCTIONS=
+    "T(6562                    付款人开户行多方协议号查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+ <!--系统变量定义 -->
+<ITEM NAME="#HTRMSEQ" TYPE="%-2s" FUNCTIONS="T($HTRMSEQ)"/>
+<ITEM NAME="#HEJFNO"  TYPE="%-6s" FUNCTIONS="T($HEJFNO=000000)"/>
+<ITEM NAME="#HCODE"   TYPE="%-1s" FUNCTIONS="T($HCODE)"/>
+<ITEM NAME="#KINBR"   TYPE="%-7s" FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#DSCPT"   TYPE="%3d"  FUNCTIONS="T(001)"/>
+<ITEM NAME="#TXTYPE"  TYPE="%-2s" FUNCTIONS="T(  )"/>
+<ITEM NAME="#TRMSEQ"  TYPE="%-2s" FUNCTIONS="T($TRMSEQ)"/>
+<ITEM NAME="#EJFNO"   TYPE="%-6d" FUNCTIONS="T($TXTNO)"/>
+<ITEM NAME="#TASKID"  TYPE="%-2s" FUNCTIONS="T(UC)"/>
+<ITEM NAME="#TMTYPE"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#TXNO"    TYPE="%-2s" FUNCTIONS="T(62)"/>
+<ITEM NAME="#PTYPE"   TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#MULTTX"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#CRDB"    TYPE="%-1s" FUNCTIONS="T(1)"/>
+<ITEM NAME="#APTYPE"  TYPE="%-1s" FUNCTIONS="T(l)"/>
+<ITEM NAME="#ACTNO"   TYPE="%-18s" FUNCTIONS="T(#PAYACTNO,1,18)"/>
+<ITEM NAME="#SUPIN1"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#SUPIN2"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#REASON"  TYPE="%-6s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#TLRNO"   TYPE="%-6s" FUNCTIONS="T($TLRNO)"/>
+<ITEM NAME="#NBCD"    TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#TRNMOD"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#SBTMOD"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#CURCD"   TYPE="%-3s" FUNCTIONS="T(RMB)"/>
+<ITEM NAME="#XCRT"    TYPE="%-8s" FUNCTIONS="T($XCRT)"/>
+<ITEM NAME="#APNO"    TYPE="%2d"  FUNCTIONS="T(09)"/>
+<ITEM NAME="#CURP"    TYPE="%1d"  FUNCTIONS="T(1)"/>
+<ITEM NAME="#OPNBR"   TYPE="%-7s"  FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#TXAMT"   TYPE="%-12s" FUNCTIONS="T(000000000000)" />
+<ITEM TYPE="%-1s" NAME="#QFLAG" FUNCTIONS=""/> 
+<!--屏幕输入内容 -->
+<ITEM LINE="6" COL="3" TYPE="%-12s" 	FUNCTIONS="T(收款协议号: )"/>
+ 
+<!--控制输入内容 --> 
+<ITEM LINE="6"   COL="15"  TYPE="%-7s"  NAME="#CASHXYNO"   DEVICE="KEYBOARD"  FUNCTIONS=""/>
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+ <ONCLICK>"{
+	dim @dbid as number;
+	dim @sqlstr as string;
+	dim @ret as number;
+	dim @xyno as string;
+	dim @payactno as string;	
+	dim @payname as string;	
+	dim @cashno as string;	
+	dim @cashactno as string;	
+	dim @cashname as string;	
+	dim @ywtype as string;	
+	list_init(17,74,5,1);
+	list_setcolcnt(9);
+	list_setcol(0,'多方协议号',61);
+	list_setcol(1,'付款人帐号',20);
+	list_setcol(2,'付款人户名',20);
+	list_setcol(3,'收款人开户行',13);
+	list_setcol(4,'收款人帐号',33);
+	list_setcol(5,'收款人户名',33);
+	list_setcol(6,'业务种类',9);
+	@dbid=rss_login();
+	if(@dbid &lt; 0){
+		showmsg('无法连接查询服务器');
+		return(false);
+	}
+	@sqlstr='select xyno,payactno,payname,cashno,cashactno,cashname,ywtype from lv_newxyh where brno='+chr(39)+$KINBR+chr (39)+' and cashxyno like '+chr(39)+#CASHXYNO+'%'+chr(39);
+	showmsg('信息传送中...',2);
+	@ret=rss_open(@dbid,@sqlstr);	
+	if(@ret!=0){
+		showmsg('查询数据库错误['+itoa(@ret,'%d')+']');
+		rss_logout(@dbid);
+		return(false);
+	}
+	while(true){
+		@ret=rss_fetch(@dbid,@xyno,@payactno,@payname,@cashno,@cashactno,@cashname,@ywtype);
+		if(@ret!=0){
+			break;
+		}
+		list_additem('',@xyno,@payactno,@payname,@cashno,@cashactno,@cashname,@ywtype);
+	}
+	rss_close(@dbid);
+	rss_logout(@dbid);
+	showfooter();
+	list_work();
+	list_del();
+	showall();
+ }"
+ </ONCLICK>
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST><PACKAGE SERVICE="dh65620">
+$APCTLHD#HTRMSEQ$HEJFNO#OPNBR#KINBR#TRMSEQ#EJFNO#TASKID#TMTYPE
+#APTYPE#TXNO#PTYPE#DSCPT$HCODE#ACTNO#TXTYPE#MULTTX#CRDB$SUPCD1$SUPCD2#REASON
+#TLRNO#NBCD#TRNMOD#SBTMOD#CURCD#XCRT#TXAMT
+#XYNO#PAYACTNO#OPTYPE#PAYNAME#CASHXYNO#CASHNO#CASHACTNO#CASHNAME#YWTYPE#YWTYPE1#YWTYPE2#YWTYPE3#YWTYPE4#YWTYPE5
+</PACKAGE></REQUEST>
+
+<RESPONSE>
+<PACKAGE>l65621#FILENAME#RXYNO#RPAYACTNO#ROPTYPE#RPAYNAME#RCASHXYNO#RCASHNO#RCASHACTNO#RCASHNAME#RYWTYPE#RYWTYPE1#RYWTYPE2#RYWTYPE3#RYWTYPE4#RYWTYPE5</PACKAGE> </RESPONSE> 
+<OUTPUT>
+<PACKAGE>
+002#RTYPE=1N220000A显示内容N505#SOPTYPE#RXYNO#RPAYACTNO#RPAYNAME#RCASHXYNO#RCASHNO#RCASHACTNO#RCASHNAME#RYWTYPE#RYWTYPE1#RYWTYPE2#RYWTYPE3#RYWTYPE4#RYWTYPE5
+</PACKAGE>
+<PACKAGE>
+003#RTYPE=1N220000A打印内容N505#SOPTYPE#RXYNO#RPAYACTNO#RPAYNAME#RCASHXYNO#RCASHNO#RCASHACTNO#RCASHNAME#RYWTYPE#RYWTYPE1#RYWTYPE2#RYWTYPE3#RYWTYPE4#RYWTYPE5
+</PACKAGE>
+<FORMAT NAME="N220000A">
+"02                        付款开户行多方协议号####
+03 ----------------------------------------------------------------------------
+04      协议  号码:############################################################
+05      付款  帐号:###################
+06      付款  姓名:############################################################
+07      收款协议号:############################################################
+08      收款  行号:############
+09      收款  帐号:################################
+10      收款  姓名:############################################################
+11      业务  种类:#####
+12      子业务种类:##### ##### ##### ##### #####
+"
+</FORMAT>
+</OUTPUT>
+</TRANSACTION>

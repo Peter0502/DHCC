@@ -1,0 +1,305 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mo_opn_cls_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mo_opn_cls_con ( struct mo_opn_cls_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mo_opn_cls_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->ac_no);
+	zip_tail(ps->cur_no);
+	zip_tail(ps->name);
+	zip_tail(ps->prdt_no);
+	zip_tail(ps->acc_hrt);
+	zip_tail(ps->cif_type);
+	zip_tail(ps->opn_br_no);
+	zip_tail(ps->tx_brno);
+	zip_tail(ps->tel);
+	zip_tail(ps->chk);
+	zip_tail(ps->auth);
+	zip_tail(ps->check_no);
+	zip_tail(ps->ct_ind);
+	zip_tail(ps->wrk_sts);
+}
+int Mo_opn_cls_Debug(struct mo_opn_cls_c *ps){
+	vtcp_log("mo_opn_cls_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mo_opn_cls_c.ac_no=[%s]\n",ps->ac_no);
+	vtcp_log("mo_opn_cls_c.ac_id=[%ld]\n",ps->ac_id);
+	vtcp_log("mo_opn_cls_c.ac_seqn=[%ld]\n",ps->ac_seqn);
+	vtcp_log("mo_opn_cls_c.cur_no=[%s]\n",ps->cur_no);
+	vtcp_log("mo_opn_cls_c.name=[%s]\n",ps->name);
+	vtcp_log("mo_opn_cls_c.prdt_no=[%s]\n",ps->prdt_no);
+	vtcp_log("mo_opn_cls_c.acc_hrt=[%s]\n",ps->acc_hrt);
+	vtcp_log("mo_opn_cls_c.cif_type=[%s]\n",ps->cif_type);
+	vtcp_log("mo_opn_cls_c.amt=[%f]\n",ps->amt);
+	vtcp_log("mo_opn_cls_c.opn_br_no=[%s]\n",ps->opn_br_no);
+	vtcp_log("mo_opn_cls_c.tx_date=[%ld]\n",ps->tx_date);
+	vtcp_log("mo_opn_cls_c.tx_brno=[%s]\n",ps->tx_brno);
+	vtcp_log("mo_opn_cls_c.trace_no=[%ld]\n",ps->trace_no);
+	vtcp_log("mo_opn_cls_c.tel=[%s]\n",ps->tel);
+	vtcp_log("mo_opn_cls_c.chk=[%s]\n",ps->chk);
+	vtcp_log("mo_opn_cls_c.auth=[%s]\n",ps->auth);
+	vtcp_log("mo_opn_cls_c.check_no=[%s]\n",ps->check_no);
+	vtcp_log("mo_opn_cls_c.ct_ind=[%s]\n",ps->ct_ind);
+	vtcp_log("mo_opn_cls_c.wrk_sts=[%s]\n",ps->wrk_sts);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mo_opn_cls_Sel(reply,mo_opn_cls_c,fmtstr,va_alist)
+char    *reply;
+struct  mo_opn_cls_c *mo_opn_cls_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mo_opn_cls_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mo_opn_cls_Fet_Sel( mo_opn_cls_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mo_opn_cls_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mo_opn_cls_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mo_opn_cls.* FROM mo_opn_cls WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_opn_cls_sel FROM :comm;
+	EXEC SQL DECLARE sel_mo_opn_cls CURSOR FOR mo_opn_cls_sel;
+
+	EXEC SQL OPEN sel_mo_opn_cls;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_opn_cls_Fet_Sel ( struct mo_opn_cls_c *mo_opn_cls_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mo_opn_cls INTO :mo_opn_cls_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mo_opn_cls error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mo_opn_cls finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_opn_cls_c);
+
+	return 0;
+}
+
+int Mo_opn_cls_Clo_Sel (){
+	EXEC SQL CLOSE sel_mo_opn_cls;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mo_opn_cls_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mo_opn_cls.* FROM mo_opn_cls WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_opn_cls_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mo_opn_cls CURSOR FOR mo_opn_cls_upd;
+
+	EXEC SQL OPEN upd_mo_opn_cls;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_opn_cls_Fet_Upd( struct mo_opn_cls_c *mo_opn_cls_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mo_opn_cls INTO :mo_opn_cls_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mo_opn_cls finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_opn_cls_c);
+
+	return 0;
+}
+
+int Mo_opn_cls_Upd_Upd( struct mo_opn_cls_c mo_opn_cls_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mo_opn_cls SET ac_no=:mo_opn_cls_c.ac_no,
+			ac_id=:mo_opn_cls_c.ac_id,
+			ac_seqn=:mo_opn_cls_c.ac_seqn,
+			cur_no=:mo_opn_cls_c.cur_no,
+			name=:mo_opn_cls_c.name,
+			prdt_no=:mo_opn_cls_c.prdt_no,
+			acc_hrt=:mo_opn_cls_c.acc_hrt,
+			cif_type=:mo_opn_cls_c.cif_type,
+			amt=:mo_opn_cls_c.amt,
+			opn_br_no=:mo_opn_cls_c.opn_br_no,
+			tx_date=:mo_opn_cls_c.tx_date,
+			tx_brno=:mo_opn_cls_c.tx_brno,
+			trace_no=:mo_opn_cls_c.trace_no,
+			tel=:mo_opn_cls_c.tel,
+			chk=:mo_opn_cls_c.chk,
+			auth=:mo_opn_cls_c.auth,
+			check_no=:mo_opn_cls_c.check_no,
+			ct_ind=:mo_opn_cls_c.ct_ind,
+			wrk_sts=:mo_opn_cls_c.wrk_sts
+	WHERE rowid=:mo_opn_cls_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mo_opn_cls_Del_Upd(struct mo_opn_cls_c mo_opn_cls_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mo_opn_cls WHERE rowid=:mo_opn_cls_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_opn_cls_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mo_opn_cls;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mo_opn_cls_Ins( struct mo_opn_cls_c mo_opn_cls_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mo_opn_cls VALUES (:mo_opn_cls_c.ac_no,
+			:mo_opn_cls_c.ac_id,
+			:mo_opn_cls_c.ac_seqn,
+			:mo_opn_cls_c.cur_no,
+			:mo_opn_cls_c.name,
+			:mo_opn_cls_c.prdt_no,
+			:mo_opn_cls_c.acc_hrt,
+			:mo_opn_cls_c.cif_type,
+			:mo_opn_cls_c.amt,
+			:mo_opn_cls_c.opn_br_no,
+			:mo_opn_cls_c.tx_date,
+			:mo_opn_cls_c.tx_brno,
+			:mo_opn_cls_c.trace_no,
+			:mo_opn_cls_c.tel,
+			:mo_opn_cls_c.chk,
+			:mo_opn_cls_c.auth,
+			:mo_opn_cls_c.check_no,
+			:mo_opn_cls_c.ct_ind,
+			:mo_opn_cls_c.wrk_sts);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_opn_cls error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

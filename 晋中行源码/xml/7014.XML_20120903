@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="7014   卡激活"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE UPLOOP="TRUE">
+		<ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+		"T(7014                             卡激活)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=7014)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(7014)"/>      <!---交易代码--->
+		
+		<!--输出变量--->
+		<ITEM LINE="7"  COL="15"  TYPE="%-15s" FUNCTIONS="T(卡    号:)" />		
+		<!--ITEM LINE="10"  COL="17"  TYPE="%-11s" FUNCTIONS="T(检查标志:)" DEVICE="MSR"  m($MSR2,1,19)/-->
+		<ITEM LINE="9"  COL="15"  TYPE="%-19s" FUNCTIONS="T(户    名:)" />	
+		<ITEM LINE="10"  COL="15"  TYPE="%-19s" FUNCTIONS="T(证件类型:)" />	
+		<ITEM LINE="11"  COL="15"  TYPE="%-19s" FUNCTIONS="T(证件号码:)" />	
+		<ITEM LINE="15"  COL="15"  TYPE="%-17s" FUNCTIONS="T(旧 密 码:)" />
+		<ITEM LINE="17"  COL="15"  TYPE="%-17s" FUNCTIONS="T(新 密 码:)" />
+		
+		<ITEM   NAME = "#TMPZJLX" TYPE="%-1s" FUNCTIONS="" />		
+		<ITEM   NAME = "#TMPZJHM" TYPE="%-20s" FUNCTIONS="" />
+		<ITEM   NAME = "#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+		<ITEM   NAME = "#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM   NAME = "#KEHUNAME" TYPE="%-60s" FUNCTIONS="" />
+			
+			 <ITEM NAME="#LDQFS" LINE="6"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+		 <ITEM LINE="6" COL="25" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取磁条方式"/>
+				<OPTION VALUE="1" TITLE="读取芯片方式"/>
+			</SELECT>
+		 <ONLOSTFOCUS>"{
+		    if(#DQFS=='1')
+		    {
+		    enable(#ACTNO1,false);
+		    enable(#ACTNO2,true);
+		    show(#ACTNO1,false);
+		    show(#ACTNO2,true);
+		    }
+		    if(#DQFS=='0')
+		    {
+		    enable(#ACTNO1,true);
+		    enable(#ACTNO2,false);
+		    show(#ACTNO1,true);
+		    show(#ACTNO2,false);
+		     
+		    }
+		    refresh();
+		  }"
+		 </ONLOSTFOCUS>
+		 </ITEM>
+		  <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="6" COL="25" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+		<ONLOSTFOCUS>
+		"{
+			#CARD_NO=#ACTNO1;
+		}"
+		</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="7"  COL="25" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+		<ONLOSTFOCUS>
+		"{
+			#CARD_NO=#ACTNO2;
+		}"
+		</ONLOSTFOCUS>
+		</ITEM>
+		
+		<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >		
+		  <ONLOSTFOCUS>
+					  "{
+						if(len(rtrim(#CARD_NO))!=19 )
+						{
+						   showmsg('卡号长度不正确,请重新输入!');
+						   return(false);
+						}                       
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						 //if(len(rtrim($MSR2))!=37)
+						//{
+						  // showmsg('刷卡错误,请重试!');
+						  // return(false);
+						//}
+						#MSR2BAK=$MSR2;
+						#MSR3BAK=$MSR3;
+						$MSR2='';
+						$MSR3='';
+						initfd();
+						commsend_001();
+						$FD16='9961';
+						$FD30=#CARD_NO;
+    				callserver();
+    				if($FD12!='0000'){
+    					showmsg(geterror());
+    					return(false);
+    				}	
+    				#TMPZJLX=delspace($FD67);
+    				#TMPZJHM=delspace($FD62);
+					#KEHUNAME=delspace($FD25);
+					#KHM=$FD25;
+    				//showmsg('#TMPZJLX = ['+#TMPZJLX+']');
+    				//showmsg('#TMPZJHM = ['+#TMPZJHM+']');
+					//showmsg('NAME = 25'+delspace($FD25)+'26'+$FD26+'27'+$FD27);
+					  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+       
+     <ITEM LINE="8"  COL="10" TYPE="%-60s" FUNCTIONS="T(---------------------------------------------------------------------------------)"/>  
+
+    <ITEM NAME="#KHM"  ENABLE="FALSE" INPUT="LABEL" LINE="9" COL="25" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+    <ITEM LINE="10" COL="25" TYPE="%-1s"  NAME="#ZJLX" DEVICE="KEYBOARD" INPUT="SELECT" VISABLE="TRUE" FUNCTIONS="V(NB)T(1)" >
+		<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口薄"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+		</SELECT>
+		  <ONLOSTFOCUS>
+		 "{
+		 		if(substr(#ZJLX,0,1) != #TMPZJLX)
+		 		{
+		 			showmsg('选择的证件类型不对');
+		 			return(false);
+		 		}
+			}"
+		  </ONLOSTFOCUS>					  		
+		</ITEM>		
+	<ITEM  LINE="11" COL="25"  NAME="#ZJHM" INPUT="TEXT" DEVICE="KEYBOARD" TYPE="%-24s" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>
+	"{
+				if( delspace(#ZJHM) != #TMPZJHM)
+		 		{
+		 			showmsg('输入的证件号码不对');
+		 			return(false);
+		 		}
+	//	showhelp(11,15,11,15,'证件类型和卡号不一致','请仔细检查确认！');
+	
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+		 
+		
+    
+     	
+     <ITEM LINE="13"  COL="10" TYPE="%-60s" FUNCTIONS="T(---------------------------------------------------------------------------------)"/>
+     
+		<ITEM  LINE="15"  COL="25" DEVICE="PINPAD"  INPUT="TEXT" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="V(NB)i()">
+		<ONLOSTFOCUS>
+      "{
+        // 直接在这里校验密码了
+        // 9317 密码检查
+        dim @baktxno as string;
+        if(substr(#CARD_NO,0,6)!='621223' and substr(#CARD_NO,0,6)!='621780')
+        {
+          @baktxno=$TXNO;
+       		initfd();
+       		commsend_001();
+       		$FD16='9317';
+       		$FD30=#CARD_NO;
+       		$FD79=getitems('#PASSWORD');	
+       		callserver();
+       		$TXNO=@baktxno;
+       		if($FD12!='0000'){
+       		  showmsg(geterror());
+       		  return (false);
+       		}
+        }
+        else if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')  //add by hxc 091121
+        {
+          @baktxno=$TXNO; 
+          initfd();
+        	commsend_001();
+        	$FD16='7007';
+        	$FD30=#CARD_NO;
+        	$FD68='4';   //#OPTION ='04'
+        	$FD79=getitems('#PASSWORD');	
+        	callagn();
+        	@baktxno=$TXNO; 
+        	if( $FD12 != '0000')
+        	{
+        		showmsg(geterror());
+        		return(false);
+        	}
+        }
+      }"
+    </ONLOSTFOCUS>
+    </ITEM>
+		
+	<ITEM  LINE="17" COL="25"  NAME="#NEW_PASSWORD" INPUT="TEXT" DEVICE="PINPAD" TYPE="%-6s" FUNCTIONS="I()i()V(NB)"/>
+	
+	<ITEM  NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+		
+		<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+			<ONCLICK>
+					"{ 
+							
+							initfd();
+							commsend_001();
+							$FD16='7014';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD80=#NEW_PASSWORD;
+							$FD75=#MSR2BAK;
+							$FD76=#MSR3BAK;
+							if($FD75=='')
+							{
+							$FD75= '0000000000000000000000000000000000000';
+              $FD76= '00000000000000000000000000000000000000000000000000000000000000000000';
+              }
+							callagn();
+							if($FD12 != '0000')
+							{		
+								showmsg(geterror());
+								return(false);
+							}
+							#CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+							
+							runoutput();
+							rerun();
+					}"
+			</ONCLICK>
+		</ITEM>
+		
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="屏显银行卡激活结果">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print(7, 20,'卡    号:[20 ]',#CARD_NO);
+		print(9, 20,'银行卡激活成功!');
+		print(11,20,'卡流水号:[16]',#CARD_TRACENO);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印银行卡激活客户凭单">
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码:7014');
+		print( 5,13,'交易名称:银行卡激活');
+		print(9, 20,'卡    号:[20]',#CARD_NO);
+		//应卡部要求加入客户姓名-20110505
+		print(10,20,'姓    名:[60]',#KEHUNAME);
+		print(11, 20,'银行卡激活成功!');
+		//print(13, 20,'卡流水号:[16]',#CARD_TRACENO);
+		//应卡部要求加入客户确认签字栏-20110505
+		print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		print(21,80,'客户签名:_____________________');
+		print(23,20,'备注:');
+		print(23,12,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[4]',$FD7);
+		print(23,5,'卡流水号:[16]',#CARD_TRACENO);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+
+</TRANSACTION>

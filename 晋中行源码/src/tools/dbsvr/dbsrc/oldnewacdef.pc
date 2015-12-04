@@ -1,0 +1,250 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"oldnewacdef_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int oldnewacdef_con ( struct oldnewacdef_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct oldnewacdef_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->oacno);
+	zip_tail(ps->nacno);
+	zip_tail(ps->acname);
+	zip_tail(ps->dscpt);
+}
+int Oldnewacdef_Debug(struct oldnewacdef_c *ps){
+	vtcp_log("oldnewacdef_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("oldnewacdef_c.oacno=[%s]\n",ps->oacno);
+	vtcp_log("oldnewacdef_c.nacno=[%s]\n",ps->nacno);
+	vtcp_log("oldnewacdef_c.acname=[%s]\n",ps->acname);
+	vtcp_log("oldnewacdef_c.dscpt=[%s]\n",ps->dscpt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Oldnewacdef_Sel(reply,oldnewacdef_c,fmtstr,va_alist)
+char    *reply;
+struct  oldnewacdef_c *oldnewacdef_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Oldnewacdef_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Oldnewacdef_Fet_Sel( oldnewacdef_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Oldnewacdef_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Oldnewacdef_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,oldnewacdef.* FROM oldnewacdef WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE oldnewacdef_sel FROM :comm;
+	EXEC SQL DECLARE sel_oldnewacdef CURSOR FOR oldnewacdef_sel;
+
+	EXEC SQL OPEN sel_oldnewacdef;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Oldnewacdef_Fet_Sel ( struct oldnewacdef_c *oldnewacdef_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_oldnewacdef INTO :oldnewacdef_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch oldnewacdef error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch oldnewacdef finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(oldnewacdef_c);
+
+	return 0;
+}
+
+int Oldnewacdef_Clo_Sel (){
+	EXEC SQL CLOSE sel_oldnewacdef;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Oldnewacdef_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,oldnewacdef.* FROM oldnewacdef WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE oldnewacdef_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_oldnewacdef CURSOR FOR oldnewacdef_upd;
+
+	EXEC SQL OPEN upd_oldnewacdef;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Oldnewacdef_Fet_Upd( struct oldnewacdef_c *oldnewacdef_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_oldnewacdef INTO :oldnewacdef_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH oldnewacdef finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(oldnewacdef_c);
+
+	return 0;
+}
+
+int Oldnewacdef_Upd_Upd( struct oldnewacdef_c oldnewacdef_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE oldnewacdef SET oacno=:oldnewacdef_c.oacno,
+			nacno=:oldnewacdef_c.nacno,
+			acname=:oldnewacdef_c.acname,
+			dscpt=:oldnewacdef_c.dscpt
+	WHERE rowid=:oldnewacdef_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Oldnewacdef_Del_Upd(struct oldnewacdef_c oldnewacdef_c , char * reply  ){
+
+	EXEC SQL DELETE FROM oldnewacdef WHERE rowid=:oldnewacdef_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Oldnewacdef_Clo_Upd( ){
+	EXEC SQL CLOSE upd_oldnewacdef;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Oldnewacdef_Ins( struct oldnewacdef_c oldnewacdef_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO oldnewacdef VALUES (:oldnewacdef_c.oacno,
+			:oldnewacdef_c.nacno,
+			:oldnewacdef_c.acname,
+			:oldnewacdef_c.dscpt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT oldnewacdef error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

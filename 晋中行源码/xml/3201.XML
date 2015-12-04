@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11100000000000000000000000000000" TITLE="7098 一般存款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	 //dim @ret as number;
+  //@ret = startinfoviewer('\n\n\n    账号：' + #ACTNO +'\n    凭证类型：' + #SVOCTYPE +'\n    姓名：' + #CUSTNAME +'\n    存款金额：' + #LTXAMT +'元');
+  //if(@ret !=0)
+  //{
+    //      return (false);
+  //}
+	
+	
+	
+	//与神码通讯开始 
+	dim @filename as string;
+	@filename='../tmp/'+$FD7+$FD10+'.fds';
+	savefds(@filename);
+	
+	if(#VOCTYPE=='020' or #VOCTYPE=='024' or #VOCTYPE=='027' or #VOCTYPE=='028' or #VOCTYPE=='029' or #VOCTYPE=='031' or #VOCTYPE=='032')
+	{
+
+		initfd();
+		commsend_001();
+		$FD16='7004';
+		//showmsg($FD16);
+		$FD30=#ACTNO;
+		//	showmsg($ACTNO);
+		//$FD79=#PASSWORD; 
+		//$FD21=substr($FD101,140,2);  当前默认只识别RMB
+		//showmsg('#LTXAMT = ['+#LTXAMT+']');
+		
+		$FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+		//showmsg($FD39);
+		
+		$FD75=#MSR2BAK;
+		$FD76=#MSR3BAK;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		 #CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+		 #TRAN_FEE=$FD40;
+		
+	}
+		initfd();
+		commsend_001();
+		loadfds(@filename);
+		//与神码通讯结束
+			commsend_001();
+			commsend_101();
+	  $FD118 = #CURCD+space(19)+space(16,'0');
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	if(($FD12!='0000') and ($FD12!='Z003') and (substr(#ACTNO,0,6)=='621223' or substr(#ACTNO,0,6)=='621780'))//卡交易核心处理失败往数码发送取消交易
+	{
+		#RESP_CODE=$FD12;
+		showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#ACTNO;
+		$FD39= itoa(atoi(#LTXAMT)*100,'%016f'); 
+		$FD43=#CARD_TRACENO;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		showmsg('存款失败!!...');
+		rerun();
+	}
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+}"
+</FIRSTWORK>
+
+	<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3201                            储蓄存款)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2201)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(3201)"/>      <!---交易代码--->
+  <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(储蓄存款)"/>  <!---交易名称--->
+  <ITEM NAME="#TRAN_FEE" TYPE="%16.2f" FUNCTIONS=""/>
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+ 	
+ 	 <IMPORT>SVACTINFO.IMP</IMPORT>
+ 
+
+  <!--输出变量--->
+  <ITEM NAME="#FD13"    TYPE="%-1s"  FUNCTIONS="T($FD13,1,1)"/>  <!---FD13域-打折的标志--->
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="储蓄存款">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 3,30,'储蓄存款');
+		print( 4,22,'账/卡 号:[19]',#ACTNO);
+		print( 5,22,'户    名:[60]',#CUSTNAME);
+		print( 6,22,'产品名称:[30]',#PRODNAME);
+		print( 7,22,'凭证类型:[30]',#SVOCTYPE);
+		print( 8,22,'凭证号码:[16]',#VOCNUM);
+		print( 9,22,'有无存折:[ 4]',#SNBFLAG);
+		print(10,22,'存款方式:[ 4]',#SCASHFLAG);
+		print(11,22,'交易金额:[21]',#LTXAMT);
+		print(12,22,'流 水 号:[ 6]',$FD4);
+	}"
+	</PRINT>
+	
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证(储蓄存款)">
+	CKPT|@actno|@custname|@txamt|@prodname|@opn_day|@brno|@custno|||||@avbal||||||@tx_type|||@sv_type||||||||||@id_type|@id_no|@br_name||@note_no||@acc_no|@tx_brno|@term|@term_type|@rate|
+	</PACKAGE>
+	<INIT>
+	"{
+		$KINDNO='00';
+	}"
+	</INIT>
+	<PRINT>"{
+		dim @txday  as string;
+		dim @txtime as string;
+		
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:[4]',#TXCD);
+		print( 5,13,'交易名称:[20]',#TXNAME);
+		print( 7,30,'\L0储蓄存款凭条\L1');
+		print( 9,20,'开 户 行:[5    ]                  交 易 行:[7]',@brno,@tx_brno);
+		print(10, 20,'账/卡 号:[20                    ]   户    名:[20                    ]',@actno,@custname);
+		print(11, 20,'储    种:[20                    ]   交易类型:[ 4    ]',@prodname,@tx_type);
+		if(len(@actno)==19 and substr(@actno,0,8)=='62178010' ){
+			print(12, 20,'存    期:[2 ][2 ] ',@term,@term_type);
+		}else{
+			print(12, 20,'存    期:[2 ][2 ]                   利    率:[ 7       ]%',@term,@term_type,@rate);
+		}
+		print(13, 20,'交易金额:[21  ]  余    额:[21                       ]',ltrim(comma(@txamt,16)),ltrim(comma(@avbal,16)));
+		print_sq();	
+		print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		print(21,80,'客户签名:_____________________');
+		
+		print(23,20,'备注:');
+		print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[4]',$FD7);
+		print(23,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<IMPORT>CXCZ.IMP</IMPORT>
+</TRANSACTION>

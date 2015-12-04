@@ -1,0 +1,11 @@
+drop table CIF_MERGE_LOG;
+create table CIF_MERGE_LOG
+(
+  CIF_NO_OLD NUMBER(8),
+  CIF_NO_NEW NUMBER(8),
+  TX_DATE    NUMBER(8),
+  TX_TIME    NUMBER(8),
+  TEL        VARCHAR2(4),
+  LOG_CNT    NUMBER(6)
+)
+;

@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1839      账户信息查询"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		refresh();
+		initfd();
+		commsend_001();
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+		commrecv_001();
+	}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM NAME="#TXNAME" TYPE="%-20s" FUNCTIONS="T(账户信息查询)"/>
+	<ITEM LINE="3" COL="10" TYPE="%-45s" FUNCTIONS="T(1839                      账户信息查询)"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1839)"/>
+  	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS = "T(账户信息查询)"/>
+	<ITEM LINE="7" COL="15" TYPE="%-10s" FUNCTIONS="T(操作类型：)"/>
+	<ITEM LINE="7" COL="25" NAME="#Oper" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE ="0" TITLE="0.查询对公账户信息" />
+			<OPTION VALUE ="1" TITLE="1.个人账户合法性检查" /> 
+		</SELECT>
+	<ONLOSTFOCUS>
+		"{
+			if(#Oper == '0')
+			{
+				showblock('BLOCK_2', false, false);
+				showblock('BLOCK_1', true, true);
+				
+			}
+			else
+			{
+				showblock('BLOCK_1', false, false);
+				showblock('BLOCK_2', true, true);
+			}
+	
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="BLOCK_1" LINE="9" COL="0" VISABLE="TRUE">
+	<ITEM LINE="0"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(账    号：)" />
+	<ITEM LINE="0"  COL="25" NAME="#Account1" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	</BLOCK>
+	<BLOCK NAME="BLOCK_2" LINE="9"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(账    号：)" />
+	<ITEM LINE="0"  COL="25"  NAME="#Account" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+		"{	
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="2"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(户    名：)" />
+	<ITEM LINE="2"  COL="25"  NAME="#AcctNm" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="4"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(身份证号：)" />
+	<ITEM LINE="4"  COL="25"  NAME="#ID" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V()" >
+		<ONLOSTFOCUS>
+			"{
+				if(len(#ID) != 0)
+				{
+					initfd();
+					commsend_001();
+					$FD16='1201';
+					$FD18='app';
+					$FD31=#ID;
+					callagnpbp();
+					if($FD12 != '0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+					showmsg('身份证校验成功');
+				}
+	  		}"
+	  	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(开户行号：)" />
+	<ITEM LINE="6"  COL="25"  NAME="#OpenBnkNo" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" >
+		<ONLOSTFOCUS>
+		"{
+				initfd();					
+				commsend_001();
+				$FD16='1101';
+				$FD18='pbp';
+				$FD59=#OpenBnkNo;
+				callagnpbp();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}    
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	</BLOCK>
+	<ITEM NAME="#AcctAttr" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T()">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="基本户"/>
+		<OPTION VALUE="2" TITLE="一般户"/>
+		<OPTION VALUE="3" TITLE="专用存款户"/>
+		<OPTION VALUE="4" TITLE="临时存款户"/>
+		<OPTION VALUE="5" TITLE="个人存款户（储蓄户）"/>
+		<OPTION VALUE="6" TITLE="协定（理财）户"/>
+		<OPTION VALUE="7" TITLE="公积金活期户（个人）"/>
+	</SELECT>
+	</ITEM>
+	<ITEM  NAME="#AcctType"  TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(2)V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="对公"/>
+			<OPTION VALUE="2" TITLE="个人"/>
+		</SELECT>
+	</ITEM>	
+	<ITEM LINE="20"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+ 	 "{
+		initfd();
+		commsend_001();
+		$FD16='2042';
+		$FD18='pbp';
+		$FD28='sxps';
+		$FD72=#Oper;
+		//如果个人账户合法性验证则#acctp映射为1
+		if(#Oper == '0')
+		{
+			$FD67 = '2';//业务类型对公；
+		}
+		else
+		{
+			$FD67 = '1';//业务类型个人；
+		}
+		if(#Oper == '0')
+		{
+			$FD30=#Account1;
+		}
+		else
+		{
+			$FD30=#Account;
+			$FD25=#AcctNm;
+			$FD31=#ID;
+			$FD58=#OpenBnkNo;
+		}
+		
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		#AcctAttr = $FD69;
+		#AcctType = $FD67;
+		//生成核心流水-start
+		dim @bak_fd81 as string;
+		@bak_fd81=$FD81;
+		$FD81=#TXNAME;
+		gethxtraceno();
+		$FD81=@bak_fd81;
+		//生成核心流水-end
+		runoutput();
+		rerun();
+		refresh();
+
+ 	 }"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+	
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+		"{
+			dim @acctp as string;
+			dim @acctattr as string;
+			dim @acctsts as string;
+			dim @acctnm as string;
+			dim @curcode as string;
+			dim @curtype as string;
+			
+			@acctnm = $FD25;			
+			
+			if($FD66 == '1')
+			{
+				@acctsts = '启用';
+			}
+			else
+			{
+				@acctsts = '未启用';
+			}
+			
+			
+			if(delspace($FD46) == 'CNY')
+			{
+				@curcode = '人民币';
+			}
+			else if(delspace($FD46) == 'USD')
+			{
+				@curcode = '美元';
+			}
+			else if(delspace($FD46) == 'HKD')
+			{
+				@curcode = '港币';
+			}
+			else if(delspace($FD46) == 'EUR')
+			{
+				@curcode = '欧元';
+			}
+			else if(delspace($FD46) == 'GBP')
+			{
+				@curcode = '英镑';
+			}
+			else if(delspace($FD46) == 'JPY')
+			{
+				@curcode = '日元';
+			}
+			else
+			{
+				@curcode = $FD46;
+			}
+			
+			if(delspace($FD47) == '0')
+			{
+				@curtype = '丙钞';
+			}
+			else if(delspace($FD47) == '2')
+			{
+				@curtype = '甲汇';
+			}
+			else if(delspace($FD47) == '3')
+			{
+				@curtype = '乙钞';
+			}
+			else if(delspace($FD47) == '4')
+			{
+				@curtype = '乙汇';
+			}
+			else if(delspace($FD47) == '6')
+			{
+				@curtype = '丙汇';
+			}
+			else
+			{
+				@curtype = $FD47;
+			}
+			
+			PrintTxHead();
+			
+			if(#Oper == '0')
+			{
+				print(4,  3,'账    号：[20]       账户名称：[32]',#Account1,@acctnm);
+				print(6,  3,'账户类型：[20]       账户性质：[32]',getseltitle(#AcctType,#AcctType), getseltitle(#AcctAttr,#AcctAttr));
+				print(8,  3,'开户日期：[20]       开户行号：[32]',$FD44,$FD58);
+				print(10, 3,'货币类型：[20]       钞汇种类：[20]',@curcode,@curtype);
+				print(12, 3,'账户状态：[20]       ',@acctsts);
+			}
+			else
+			{
+				print(4,  3,'账    号：[20]       账户名称：[32]',#Account,@acctnm);
+				print(6,  3,'账户类型：[20]       开户行号：[32]',getseltitle(#AcctType,#AcctType),$FD58);
+				print(8, 3,'身份证：[20]         账户状态：[20]',#ID,'账户状态正常');
+			}
+			
+			PrintTxTail();
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @acctp as string;
+		dim @acctattr as string;
+		dim @acctsts as string;
+		dim @acctnm as string;
+		dim @curcode as string;
+		dim @curtype as string;
+		
+		@acctnm = $FD25;
+		
+		if($FD66 == '1')
+		{
+			@acctsts = '启用';
+		}
+		else
+		{
+			@acctsts = '未启用';
+		}
+		
+		
+		if(delspace($FD46) == 'CNY')
+		{
+			@curcode = '人民币';
+		}
+		else if(delspace($FD46) == 'USD')
+		{
+			@curcode = '美元';
+		}
+		else if(delspace($FD46) == 'HKD')
+		{
+			@curcode = '港币';
+		}
+		else if(delspace($FD46) == 'EUR')
+		{
+			@curcode = '欧元';
+		}
+		else if(delspace($FD46) == 'GBP')
+		{
+			@curcode = '英镑';
+		}
+		else if(delspace($FD46) == 'JPY')
+		{
+			@curcode = '日元';
+		}
+		else
+		{
+			@curcode = $FD46;
+		}
+		
+		if(delspace($FD47) == '0')
+		{
+			@curtype = '丙钞';
+		}
+		else if(delspace($FD47) == '2')
+		{
+			@curtype = '甲汇';
+		}
+		else if(delspace($FD47) == '3')
+		{
+			@curtype = '乙钞';
+		}
+		else if(delspace($FD47) == '4')
+		{
+			@curtype = '乙汇';
+		}
+		else if(delspace($FD47) == '6')
+		{
+			@curtype = '丙汇';
+		}
+		else
+		{
+			@curtype = $FD47;
+		}
+		PrintTxHead();
+			
+		if(#Oper == '0')
+		{
+			print(4,  3,'账    号：[20]       账户名称：[32]',#Account1,@acctnm);
+			print(6,  3,'账户类型：[20]       账户性质：[32]',getseltitle(#AcctType,#AcctType), getseltitle(#AcctAttr,#AcctAttr));
+			print(8,  3,'开户日期：[20]       开户行号：[32]',$FD44,$FD58);
+			print(10, 3,'货币类型：[20]       钞汇种类：[20]',@curcode,@curtype);
+			print(12, 3,'账户状态：[20]       ',@acctsts);
+		}
+		else
+		{
+			print(4,  3,'账    号：[20]       账户名称：[32]',#Account,@acctnm);
+			print(6,  3,'账户类型：[20]       开户行号：[32]',getseltitle(#AcctType,#AcctType),$FD58);
+			print(8, 3,'身份证：[20]         账户状态：[20]',#ID,'账户状态正常');
+		}
+		
+		PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

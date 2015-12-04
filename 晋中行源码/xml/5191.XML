@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="1111000000000000000000000000000" TITLE="5191 承兑汇票查询查复查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+"T(5191                      承兑汇票查询查复查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=9598)"/>
+  <ITEM LINE="6"  COL="04" TYPE="%-12s"  FUNCTIONS="T(汇  票  号:)"/>
+  <ITEM LINE="6"  COL="16" NAME="#QVONUM"  TYPE="%16s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM LINE="8"  COL="04" TYPE="%-32s"  FUNCTIONS="T(收到查询日期:)"/>
+  <ITEM LINE="8"  COL="18" NAME="#QDATE1" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM LINE="8"  COL="27" TYPE="%-2S"   FUNCTIONS="T(到)"/>
+  <ITEM LINE="8"  COL="31" NAME="#QDATE2" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)"/>
+
+  <ITEM LINE="10"  COL="04" TYPE="%-10s"  FUNCTIONS="T(汇票金额:)"/>
+  <ITEM LINE="10"   COL="31"   TYPE="%-2s"   FUNCTIONS="T(到)"/>
+  <ITEM LINE="12"   COL="4" TYPE="%-10s"  FUNCTIONS="T(查询方式: )"/>
+  <ITEM LINE="12"   COL="32" TYPE="%-10s"  FUNCTIONS="T(回复方式: )"/>
+
+	<ITEM LINE="14"  COL="04" TYPE="%-14s" FUNCTIONS="T(查询地市名称:)"/>
+	<ITEM LINE="16"  COL="04" TYPE="%-32s" FUNCTIONS="T(回 复 日 期:)"/>
+	<ITEM LINE="16"   COL="26"   TYPE="%-2s"   FUNCTIONS="T(到)"/>
+	<ITEM LINE="18"  COL="04" TYPE="%-12s" FUNCTIONS="T(回 复 内 容:)"/>
+
+  <ITEM LINE="10"  COL="14" NAME="#TXAMT1"  TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T(00)"/>
+  <ITEM LINE="10"  COL="35" NAME="#TXAMT2"  TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS="T(00)">
+  <ONLOSTFOCUS>
+  	"{
+      if(#TXAMT1 > #TXAMT2){
+	       showmsg('第二个金额应大于第一个金额!');
+		   return(false);
+	  }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+     <ITEM LINE="12"  COL="15" NAME="#QMODE" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(%)V(1|2|3|%)">
+     <SELECT LINE="12" COL="15">
+	    <OPTION VALUE="%  全部" TITLE="%. 全部"/>
+      <OPTION VALUE="1　清算" TITLE="1. 清算" />
+      <OPTION VALUE="2  来人" TITLE="2. 来人" />
+   		<OPTION VALUE="3  邮寄" TITLE="2. 邮寄" />
+     </SELECT>
+     <ONLOSTFOCUS>
+	 </ONLOSTFOCUS>
+	 </ITEM>
+ 
+    <ITEM LINE="12"  COL="42" NAME="#RMODE" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(%)V(1|2|3|%)">
+     <SELECT LINE="12" COL="55">
+	    <OPTION VALUE="%  全部" TITLE="%. 全部"/>
+        <OPTION VALUE="1　清算" TITLE="1. 清算" />
+        <OPTION VALUE="2  来人" TITLE="2. 来人" />
+		<OPTION VALUE="3  邮寄" TITLE="2. 邮寄" />
+     </SELECT>
+     <ONLOSTFOCUS>
+	 </ONLOSTFOCUS>
+	 </ITEM>
+  <ITEM LINE="14"  COL="18" NAME="#QBRNAME"  TYPE="%-40s"   DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM LINE="16"  COL="17" NAME="#RDATE1" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM LINE="16"  COL="30" NAME="#RDATE2" TYPE="%-8s" DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="18"  COL="16" NAME="#RTXT"  TYPE="%-50s" DEVICE="KEYBOARD" FUNCTIONS="T()"/>  
+
+  <ITEM LINE="21" COL="65" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+
+<ONCLICK>
+"{
+	dim @sql as string;
+	dim @tota as string;
+	dim @line as string;
+	dim @file as file;
+	dim @filename as string;
+	dim @hphm as string;
+	dim @hpje as string;
+	dim @cxdshm as string;
+	dim @sdrq as string;
+	dim @cxfs as string;
+	dim @hfrq as string;
+	dim @hffs as string;
+	dim @hfnr as string;
+	
+	dim @f	as file;
+	@sql='select qvocnum,telamt,qbrname,qdate,case when qmode='+chr(39)+'1'+chr(39)+' then '+chr(39)+'清算'+chr(39)+' when qmode='+chr(39)+'2'+chr(39)+' then'+chr(39)+ '来人'+chr(39)+' else'+chr(39)+ '邮寄'+chr(39)+' end ,rdate,case when rmode='+chr(39)+'1'+chr(39)+' then '+chr(39)+'清算'+chr(39)+' when rmode='+chr(39)+'2'+chr(39)+' then'+chr(39)+ '来人'+chr(39)+' else '+chr(39)+'邮寄'+chr(39)+' end   ,rtxt from  seltelreg where 1=1 ';
+	if(''!=delspace(#QVONUM))
+	{@sql=@sql+' and qvocnum='+chr(39)+#QVONUM+chr(39);}
+	if(''!=delspace(#QDATE1))
+	{@sql=@sql+' and  qdate '+chr(62)+'='+#QDATE1;}
+	if(''!=delspace(#QDATE2))
+	{@sql=@sql+' and qdate '+chr(60)+'='+#QDATE2;}
+	if(''!=delspace(#TXAMT1))
+	{@sql=@sql+' and  telamt '+chr(62)+'='+#TXAMT1;}
+	if(''!=delspace(#TXAMT2))
+	{@sql=@sql+' and telamt '+chr(60)+'='+#TXAMT2;}
+	if(''!=delspace(#QMODE))
+	{@sql=@sql+' and qmode like '+chr(39)+#QMODE+chr(39);}
+	if(''!=delspace(#RMODE))
+	{@sql=@sql+' and rmode like '+chr(39)+#RMODE+chr(39);}
+	if(''!=delspace(#QBRNAME))
+	{@sql=@sql+' and qbrname= '+chr(39)+#QBRNAME+chr(39);}
+	if(''!=delspace(#RDATE1))
+	{@sql=@sql+' and  rdate '+chr(62)+'='+#RDATE1;}
+	if(''!=delspace(#RDATE2))
+	{@sql=@sql+' and rdate '+chr(60)+'='+#RDATE2;}
+	//showmsg(@sql);
+	$FD123=@sql;
+	$TXNO='9598';
+	commsend_001();
+	@tota=callserver();	
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}	
+	if(@tota==''){
+		showmsg('未找到记录!');
+		return(false);
+	}
+	list_init(18,78,4,1);
+	list_setcolcnt(8);
+	list_setcol(0,'汇票    号码',18);
+	list_setcol(1,'      汇票  金额',18);
+	list_setcol(2,'查询地市行名',22);
+	list_setcol(3,'收到查询日期',14);
+	list_setcol(4,'查询方式',4);
+	list_setcol(5,'回复日期',9);
+	list_setcol(6,'回复方式',10);
+	list_setcol(7,'回复内容',24);
+	savefiletxt('../tmp/'+$KINBR+$TTYNAME+'.dat',@tota); 
+	@filename = '../tmp/'+$KINBR+$TTYNAME+'.dat';
+	@f=openfile('../tmp/'+$KINBR+$TTYNAME+'.dat','r');
+	if(@f &lt; 0){
+		showmsg('打开回传文件错误!');
+		return(false);
+	}
+	while(true)
+	{
+		@line=readline(@f);
+		if(@line!=''){
+			@hphm=strfld(@line,'|',0);
+			@hpje=strfld(@line,'|',1);
+			@cxdshm=strfld(@line,'|',2);
+			@sdrq=strfld(@line,'|',3);
+			@cxfs=strfld(@line,'|',4);
+			@hfrq=strfld(@line,'|',5);
+			@hffs=strfld(@line,'|',6);
+			@hfnr=strfld(@line,'|',7);
+		}else{
+			break;
+		}
+		list_additem('',@hphm,@hpje,@cxdshm,@sdrq,@cxfs,@hfrq,@hffs,@hfnr);
+	}
+	list_work();
+	//list_del();
+	closefile(@f);
+	rerun();
+}"
+</ONCLICK>
+
+</ITEM>
+</VARIABLE>

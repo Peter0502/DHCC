@@ -1,0 +1,191 @@
+/*****************************************************
+* 文 件 名:  sp3621.pc
+* 功能描述： 事后监督差错查询     (前台:1011.XML)
+* 作    者:  刘杨  (开封写) 
+* 完成日期： 2004/08/29
+* 修 改 人:  xyy
+* 修改记录： 改造成适应新系统的事后监督主程序
+* 日    期:  2007-1-16 14:58
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include "public.h"
+#include "sherrmsg_c.h"
+
+int  sp3621()
+{
+    FILE *fp=NULL;
+    int     i = 0;
+    int     cnt;
+    long     row_num = 0;
+    /***以下定义的是老程序的tis部分***/
+    char    cBgday[9];
+    char    cEnday[9];
+    char    cShkinbr[6];
+    char    cShtlrno[5];
+    /***以上是老程序的tis部分***/
+    /***以下定义的是老程序的tos部分***/
+    char    cRownum[10];
+    char    cTxday [9];
+    char    cKinbr [6];
+    char    cTlrno [5];
+    char    cWssrno[7];
+    char    cTranname[26];
+    char    cErrseq[9];
+    /***以上是老程序的tos部分***/
+    char    cBuf[200];
+    char    cTmp[4];
+    char    filename [256];
+    struct  sherrmsg_c sherrmsg;
+	int ret=0;
+
+    memset(cBgday   , 0 , sizeof(cBgday));
+    memset(cEnday   , 0 , sizeof(cEnday));
+    memset(cTxday   , 0 , sizeof(cTxday));
+    memset(cKinbr   , 0 , sizeof(cKinbr));
+    memset(cTlrno   , 0 , sizeof(cTlrno));
+    memset(filename , 0 , sizeof(filename ));
+    memset(cWssrno  , 0 , sizeof(cWssrno));
+    memset(cTranname, 0 , sizeof(cTranname));
+    memset(cShkinbr , 0x00 , sizeof(cShkinbr));
+    memset(cShtlrno , 0x00 , sizeof(cShtlrno));
+    memset(cBuf     , 0 , sizeof(cBuf));
+    memset(&sherrmsg, 0x00 , sizeof(sherrmsg));
+    
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    
+    get_fd_data("0460",cBgday);
+    get_fd_data("0470",cEnday);
+    get_fd_data("0020",cShkinbr);
+    get_fd_data("0080",cShtlrno);
+    zip_space(cBgday);
+    zip_space(cEnday);
+    zip_space(cShkinbr);
+    zip_space(cShtlrno);
+    vtcp_log("[%s]%d]cBgday==[%s]",__FILE__,__LINE__,cBgday);
+    vtcp_log("[%s]%d]cEnday==[%s]",__FILE__,__LINE__,cEnday);
+    vtcp_log("[%s]%d]cShkinbr[%s]",__FILE__,__LINE__,cShkinbr);
+    vtcp_log("[%s]%d]cShtlrno[%s]",__FILE__,__LINE__,cShtlrno);
+    
+vtcp_log("%s,%d,strlen(cShkinbr)=[%d]",__FILE__,__LINE__,strlen(cShkinbr));
+    /*sprintf(cBuf, "select txday,kinbr,tlrno,wssrno,tranname,txname,oldinput,newinput,cErrseq from sherrmsg where ");*/
+    if(strlen(cBgday) != 0 && strlen(cEnday) !=0 && strlen(cShkinbr) == 0 && strlen(cShtlrno) == 0)
+      sprintf(cBuf,"txday >= '%s' and txday <= '%s'",cBgday,cEnday);
+    else if(strlen(cBgday) != 0 && strlen(cEnday) !=0 && strlen(cShkinbr) != 0 && strlen(cShtlrno) == 0)
+      sprintf(cBuf,"txday >= '%s' and txday <= '%s' and kinbr = '%s'",cBgday,cEnday,cShkinbr);
+    else if(strlen(cBgday) != 0 && strlen(cEnday) !=0 && strlen(cShkinbr) != 0 && strlen(cShtlrno) != 0)
+      sprintf(cBuf,"txday >= '%s' and txday <= '%s' and kinbr = '%s' and tlrno = '%s'",cBgday,cEnday,cShkinbr,cShtlrno);
+    else if(strlen(cBgday) == 0 && strlen(cEnday) ==0 && strlen(cShkinbr) != 0 && strlen(cShtlrno) != 0)
+      sprintf(cBuf,"kinbr = '%s' and tlrno = '%s'",cShkinbr,cShtlrno);
+    else if(strlen(cBgday) == 0 && strlen(cEnday) ==0 && strlen(cShkinbr) == 0 && strlen(cShtlrno) != 0)
+      sprintf(cBuf,"tlrno = '%s'",cShtlrno);
+    else if(strlen(cBgday) == 0 && strlen(cEnday) ==0 && strlen(cShkinbr) != 0 && strlen(cShtlrno) == 0)
+      sprintf(cBuf,"kinbr = '%s'",cShkinbr);
+    else if(strlen(cBgday) != 0 && strlen(cEnday) !=0 && strlen(cShkinbr) == 0 && strlen(cShtlrno) != 0)
+      sprintf(cBuf,"txday >= '%s' and txday <= '%s' and tlrno = '%s'",cBgday,cEnday,cShtlrno);
+    vtcp_log("[%s][%d]cBuf[%s]\n",__FILE__,__LINE__,cBuf);
+    ret=Sherrmsg_Dec_Sel(g_pub_tx.reply,cBuf);
+    if(ret)
+    {
+        sprintf( acErrMsg,"[%s][%d]查询差错登记簿错[%d]",__FILE__,__LINE__,ret);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    while(1)
+    {
+    memset(&sherrmsg, 0x00 , sizeof(struct sherrmsg_c));
+      memset(cTmp     ,0x00 , sizeof(cTmp));
+      memset(cErrseq     ,0x00 , sizeof(cErrseq));
+      row_num ++;
+      
+      ret=Sherrmsg_Fet_Sel(&sherrmsg,g_pub_tx.reply); 
+      if(ret == 100)
+          break;
+      else if(ret)
+       {
+              sprintf( acErrMsg,"[%s][%d]出错[%d]",__FILE__,__LINE__,ret);
+              strcpy( g_pub_tx.reply, "P015" );
+              set_zd_data(DC_GET_MSG,acErrMsg);
+              WRITEMSG
+              goto ErrExit;
+          }
+	memcpy(cTmp,sherrmsg.txname,sizeof(cTmp)-1);
+      
+      cnt = atoi(cTmp);
+      switch(cnt)
+      {
+        case 0:
+          memcpy(cErrseq,"暂无级别",sizeof(cErrseq));
+          break;
+        case 1:
+          memcpy(cErrseq,"一级错误",sizeof(cErrseq));
+          break;
+        case 2:
+          memcpy(cErrseq,"二级错误",sizeof(cErrseq));
+          break;
+        case 3:
+          memcpy(cErrseq,"三级错误",sizeof(cErrseq));
+          break;
+        case 4:
+          memcpy(cErrseq,"查询查复",sizeof(cErrseq));
+          break;
+        default:
+          vtcp_log("[%s][%d]差错级别错误![%d]",__FILE__,__LINE__,cnt);
+          return;
+      }
+      if(!i)
+      {
+            pub_base_AllDwnFilName( filename );
+            fp = fopen( filename,"w" );
+            if( fp==NULL )
+            {
+                sprintf(acErrMsg," open file [%s] error ",filename );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            /**显示列标题**/
+            fprintf( fp,"~行数|日期|机构|操作员|流水号|交易名称|错误描述|\n" );
+      }
+      i++;
+	sprintf(cRownum,"%ld",row_num);
+      fprintf(fp,"%s|%s|%s|%s|%s|%s|%s|\n",cRownum,sherrmsg.txday,sherrmsg.kinbr,sherrmsg.tlrno,sherrmsg.wssrno,sherrmsg.tranname,cErrseq);
+      vtcp_log("%s|%s|%s|%s|%s|%s|%s|\n",cRownum,sherrmsg.txday,sherrmsg.kinbr,sherrmsg.tlrno,sherrmsg.wssrno,sherrmsg.tranname,cErrseq);
+    }
+    Sherrmsg_Clo_Sel();
+    if( !i )
+	  {
+	  	strcpy( g_pub_tx.reply,"S049" );
+	  	goto ErrExit;
+	  }
+	  else
+	  {
+	  	fclose(fp);
+	  	set_zd_data(DC_FILE_SND,"1" );
+	  }
+OkExit:
+     strcpy( g_pub_tx.reply, "0000" );
+     sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+     WRITEMSG
+     set_zd_data(DC_REPLY,g_pub_tx.reply);
+     return 0;
+ErrExit:
+     if(memcmp(g_pub_tx.reply,"0000",4)==0)
+     {
+          memcpy(g_pub_tx.reply,"T063",4);
+     }     
+     sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+     WRITEMSG
+     set_zd_data(DC_REPLY,g_pub_tx.reply);
+     return 1; 
+}

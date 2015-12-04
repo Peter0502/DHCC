@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="L10 普通贷记业务录入)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+  #TXAMT15=itoa(#TX_AMT*100,'%16.0f');
+  $FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE1#VOCNUM1#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#ID_NO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+  #OPCD='10';
+	$FD21=#CUR_NO;    //货币标志
+	$FD44=$HDATE;
+	$FD66='1';        // 借贷标志
+	$FD30=#PAY_AC_NO; // 科目帐号
+	if(#ACTYPE=='7')
+	{
+		$FD68=#ACTYPE;    // 帐户类型 1活期帐号6内部帐户7科目
+	}
+	$FD40=$FD39;      // 交易金额
+	$FD67=#XZFLG;
+	#CT_IND=$FD67;
+	lvsend_123();
+	$FD118=space(66)+#ZFDBHWB;// add by chenchao 2011-8-1 11:16:41 为后台传值支付协议编号
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+        lvrecv_123();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5301                        普通贷记业务录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5841)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <!--<ITEM NAME="#OPCD"    TYPE="%2d"  FUNCTIONS="T(10)"/>--><!--同名ITEM liangq注-->
+  <ITEM NAME="#PKGNO"   TYPE="%3d"  FUNCTIONS="T(001)"/>
+  <!----
+  <IMPORT>TESTDATA.IMP</IMPORT>
+  ---->
+  <!-- 小额贷记基本信息录入 -->
+  <IMPORT>LVBASEMSG.IMP</IMPORT>
+  <!-- 附加域内容-->
+  <ITEM NAME="#BUFFER" TYPE="%-250s" FUNCTIONS=""/>
+  <ITEM NAME="#LW_IND" TYPE="%-1s" FUNCTIONS="T(1)"/>
+<!--业务委托书内容 -->
+<!-- <ITEM NAME="#VOCTYPE1"   TYPE="%-3s"  FUNCTIONS=""/> -->
+<ITEM LINE="21"  COL="1"  TYPE="%-11s"  NAME="#PZ1" INPUT="LABEL"  FUNCTIONS="T(凭证类型:)"/>
+<ITEM NAME="#VOCTYPE1"   TYPE="%-3s"   LINE="21" COL="12" INPUT="SELECT"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)T(005)">
+  <SELECT>
+    <OPTION VALUE="005 业务委托书"   TITLE="0.业务委托书"/>
+    <OPTION VALUE="006 储蓄转帐凭条" TITLE="1.储蓄转帐凭条"/>
+    <OPTION VALUE="299 其它凭证"     TITLE="1.其它凭证"/>
+ </SELECT>
+ <ONLOSTFOCUS>"{
+		if(#VOCTYPE1=='005')
+		{
+		   show(#VOCNUM1,true);
+		   show(#AA1,true);
+		}
+		else
+		{
+		   show(#VOCNUM1,false);
+		   show(#AA1,false);		
+		}
+		}"
+</ONLOSTFOCUS>
+</ITEM>
+  <ITEM NAME="#AA1" LINE="21" COL="31" TYPE="%12s"  FUNCTIONS="T(委托书编号:)"/>
+  <ITEM NAME="#VOCNUM1" LINE="21"  COL="43"  TYPE="%16d"  DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  <ONCLICK>"{
+  submit();
+  }"
+  </ONCLICK>
+</ITEM>
+</VARIABLE>
+
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(3,25, '5301 普通贷记往帐录入');
+		print(4,5, '委 托日 期:[08]             支付交易序号:[8]',$HDATE,#ORDERNO);
+		print(5,5, '接收行行号:[12]             业务类型:[10]',#AC_BR_NO,#YWTYPE_DES);
+		print(6,5, '付款人帐号 :[24]业务种类:[16]',#PAY_AC_NO,#CTXNUM);
+		print(7,5, '付款人名称 :[60]',#PAY_NAME);
+		print(8,5, '交 易 金 额:[21]',#UTX_AMT);
+		print(10,5,'收款人帐号:[32]',#CASH_AC_NO);
+		print(11,5,'收款人名称:[60]',#CASH_NAME);
+		print(12,5,'附      言:[60]',#BRF);
+		print(13,5,'流  水  号:[6] 操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+<!--打印信息 
+<RESPONSE>
+        <PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务委托书">
+          NOTHING
+        </PACKAGE>
+        <PRINT>"{
+              print(3,6,'委托人全称:[60]',#PAY_NAME);
+              print(4,6,'委托人帐号:[24]',#PAY_AC_NO);
+              print(5,6,'委托人开户行名称:[60]',$BRNAME);
+              print(6,6,'收款人全称:[60]',#CASH_NAME);
+              print(7,6,'收款人帐号:[32]',#CASH_AC_NO);
+              print(8,6,'收款人开户行名称:[60]',$FD96);
+             }"
+        </PRINT>
+</RESPONSE>
+-->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    
+		print( 5, 20,'机构名称:[30]',$BRNAME);  
+		print( 5, 2,'代码:5301');
+		print( 5, 13,'交易:普通贷记往帐录入');
+
+		print( 7,20, '支付交易序号:[8       ]                      委托日期:[8       ]',#ORDERNO,$HDATE);
+		print( 8,20, '接收行 行 号:[12          ]                  业务类型:[10        ]',#AC_BR_NO,#YWTYPE_DES);
+		print( 9,20, '收款人开户行:[12          ]',#CASH_OPN_BR_NO);
+		print(10,20, '付款人 帐 号:[24                      ]      业务种类:[16]',#PAY_AC_NO,#CTXNUM);
+		print(11,20, '付款人 名 称:[60                                                          ]',#PAY_NAME);
+		print(12,20, '交 易  金 额:[21                   ]',#UTX_AMT);
+		print(13,20, '收款人 帐 号:[32                              ]',#CASH_AC_NO);
+		print(14,20, '收款人 名 称:[60                                                          ]',#CASH_NAME);
+		print(15,20, '附        言:[60                                                          ]',#BRF);
+		
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+      }"
+  </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

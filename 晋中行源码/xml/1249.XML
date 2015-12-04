@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100000000000000000000000000" TITLE="1249  支付凭证状态银行确认"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{ 
+}"
+</COMMSEND>
+<COMMRECV>"{
+  commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+  "T(1249                       支付凭证状态银行确认)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1249)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-12s" FUNCTIONS="T(支付凭证状态银行确认)"/><!---交易名称--->
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(1249)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <BLOCK LINE="2" COL="8" >
+  <ITEM LINE="6" COL="8" TYPE="%-10s" FUNCTIONS="T(银行编码: )"/>
+  <ITEM LINE="6" COL="18" TYPE="%-16s" NAME="#BR_NO" INPUT="TEXT" FUNCTIONS="V(NB)T(007)"/>
+  
+  <ITEM LINE="7" COL="8" TYPE="%-10s"  FUNCTIONS="T(财政编码: )"/>
+  <ITEM LINE="7" COL="18" TYPE="%-16s" NAME="#FIN_CODE" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  
+  <ITEM LINE="8" COL="8" TYPE="%-10s" FUNCTIONS="T(单据类型: )"/>
+  <ITEM LINE="8" COL="18" TYPE="%-1s" NAME="#PAY_NOTE_TYPE" INPUT="SELECT" FUNCTIONS="V(NB)">
+    <SELECT>
+      <OPTION VALUE="1"  TITLE="1.直接支付" />
+      <OPTION VALUE="2"  TITLE="2.授权支付" />
+      <OPTION VALUE="3"  TITLE="3.公务卡" />
+    </SELECT>
+  </ITEM>
+  
+  <ITEM LINE="9" COL="8" TYPE="%-10s" FUNCTIONS="T(凭 证 号: )"/>
+  <ITEM LINE="9" COL="18" TYPE="%-16s" NAME="#NOTE_NO" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        initfd();
+        commsend_001();
+        $FD33 = #NOTE_NO;
+        $FD67 = #PAY_NOTE_TYPE;
+        $FD59 = #FIN_CODE;
+        $FD60 = #BR_NO;
+        $FD16 = '1250';
+        calltips(); //调用财税系统交易
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        #CASH_AC_NO= delspace($FD31);    //返回收款人账号
+        #CT_IND=delspace($FD71);         //付款方式
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM TYPE="%24s" NAME="#CASH_AC_NO" FUNCTIONS="" />
+  <ITEM TYPE="%1s" NAME="#CT_IND" FUNCTIONS="" />
+  <ITEM LINE="10" COL="8" TYPE="%-10s" FUNCTIONS="T(确认类型: )"/>
+  <ITEM LINE="10" COL="18" TYPE="%-2s" NAME="#PAY_STS" INPUT="SELECT" FUNCTIONS="V(NB)">
+    <SELECT>
+      <OPTION VALUE="02"  TITLE="支付确认" />
+      <OPTION VALUE="04"  TITLE="清算确认" />
+    </SELECT>
+    <ONLOSTFOCUS>
+    "{
+         if(#PAY_STS=='02')
+         { 
+            setitems('#LOP_TIME','支付时间:');
+            show(#LOP_TIME,true);
+            show(#OP_TIME,true);
+            show(#OP_TIME_FORMAT,true);
+         }
+         else  if(#PAY_STS=='04')
+         {
+            setitems('#LOP_TIME','清算时间:');
+            show(#LOP_TIME,false);
+            show(#OP_TIME,false);
+            show(#OP_TIME_FORMAT,false);
+         }
+         else
+         {
+            showmsg('确认类型异常,请联系科技人员!');
+            return (false);
+         }
+         refresh();
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="11" COL="8" TYPE="%-10s" FUNCTIONS="T(付款方式: )"/>
+  <ITEM LINE="11" COL="18" TYPE="%-1s" NAME="#PAY_TYPE" INPUT="SELECT" FUNCTIONS="V(NB)">
+    <SELECT>
+      <OPTION VALUE="1"  TITLE="行内支付" />
+      <OPTION VALUE="2"  TITLE="大额支付" />
+      <OPTION VALUE="3"  TITLE="小额支付" />
+    </SELECT>
+    <ONLOSTFOCUS>
+    "{
+         //if( #PAY_TYPE=='2' or #PAY_TYPE=='3' )
+         //{
+         //    show(#ZFXH,true);
+         //    show(#ZFNUM,true);
+         //    show(#ZFDATE,true);
+         //    show(#ZFRQ,true);
+         //}
+         //else 
+         //{
+         //    show(#ZFXH,false);
+         //    show(#ZFNUM,false);
+         //    show(#ZFDATE,false);
+         //    show(#ZFRQ,false);
+         //}
+         //if( #PAY_TYPE == '1' and #CT_IND != '1') 如果行内支付２⑶曳窍纸瓞检查收款人账号是否为本行的
+         //{
+         //    initfd();
+         //    commsend_001();
+         //    $FD16 = '2492';
+         //    $FD30 = #CASH_AC_NO;
+         //    callserver(); 
+         //    if($FD12!='0000')
+         //    {
+         //       showmsg(geterror());
+         //       return(false);
+         //    }
+         //}
+         if( #PAY_STS == '02' )
+         {
+             dim @flag as string;
+    
+             initfd();
+             commsend_001();
+             $FD61 = #NOTE_NO;
+             $FD59 = #FIN_CODE;
+             $FD58 = #BR_NO;
+             $FD16 = '2493';
+             callserver(); 
+             if($FD12!='0000'){
+             	showmsg(geterror());
+             	return(false);
+             }
+             @flag=delspace($FD71);
+            // showmsg('是否支付='+@flag);           
+             if( @flag == '2' )
+             {
+             	showmsg('该凭证未做支付，不能支付确认!');
+             	return(false);
+             }
+         }
+         
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="14" COL="8"  TYPE="%-14s" NAME="#LOP_TIME" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(支付/清算时间:)"/>
+  <ITEM LINE="14" COL="22" TYPE="%-20s" NAME="#OP_TIME" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="14" COL="44" TYPE="%-28s" NAME="#OP_TIME_FORMAT" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(格式:yyyy-mm-dd hh:mm:ss)"/>
+  </BLOCK>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+ 
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+    "{
+        dim @tota as string; 
+        dim @filename as string; 
+        initfd();
+        commsend_001();
+        $FD16=#TXNO;
+        $FD21=#PAY_STS;
+        $FD58=#BR_NO;
+        $FD59=#FIN_CODE;
+        $FD68=#PAY_NOTE_TYPE;
+        $FD61=#NOTE_NO;
+        $FD63=#OP_TIME;
+        //$FD62=#PAYEEBK;      
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        //显示凭证
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        call('fview '+@filename); 
+    }"
+  </ONCLICK> 
+   </ITEM> 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+    NOTHING
+  </PACKAGE>
+    <PRINT>
+    "{
+      
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印保单凭证" LINESPACE="24" >
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+  
+
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="111000000" TITLE="8012 IC卡柜面现金充值"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>
+   "{
+    //与神码通讯开始 
+    dim @filename as string;
+    @filename='../tmp/'+$FD7+$FD10+'.fds';
+    savefds(@filename);
+    if(#VOCTYPE=='020')
+    {
+      dim @shuju as string;
+      dim @update as string;
+      initfd();
+      commsend_001();
+      $FD16='7705';
+      #ACTNO='6217800109002989';
+      $FD30=#ACTNO;
+      $FD79=#PASSWORD;
+      $FD75=#MSR2BAK;
+      $FD76=#MSR3BAK;          
+      //$FD21='CNY';
+      showmsg('#CURCD1='+#CURCD1);
+      $FD21=#CURCD1;  //$FD21=substr($FD101,140,2);  当前默认只识别RMB 
+      $FD39= itoa(val(#LTXAMT,100),'%016.2f');  // 交易金额
+      $FD42=itoa(val(#ICLAVBAL,100),'%016.2f');    //电子现金卡上的余额
+      // 应用交易计数器 IC_ATC 和 应用密文 IC_AC
+      @shuju= initiccard();
+      if(strfld(@shuju,'|',0)!='9000')
+      {
+      	showmsg('函数initiccard返回值有误!');
+      	retyrn(false);
+      }
+      showmsg(strfld(@shuju,'|',0));
+      #ICJSQ=strfld(@shuju,'|',1); 
+      #ICMW=strfld(@shuju,'|',2);
+      #ICSEQID=strfld(@shuju,'|',3); 
+//      showmsg('应用JSQ='+#ICJSQ);       
+//      showmsg('应用密文#ICMW='+#ICMW);
+//      showmsg('IC卡序列号#ICSEQID='+#ICSEQID);
+      $FD35=#ICSEQID; 
+      $FD36=#ICJSQ;
+      $FD59=#ICMW;
+      if(chkiccard()!='0000')
+        {
+          showmsg('往神码发交易前，不允许拔卡!');
+          //goitem('#ACTNO');
+          return(false);
+        }
+      callagn();
+//      if($FD12!='0000')
+//      {
+//        showmsg(geterror());
+//        return(false);
+//      }
+      #CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));  
+//      showmsg('报错开始!');
+      @update=updateiccard('04DA9F790a0000000850006F94ABF1,04DC010C42703C9F61123635333132323139383630373135343431349F62010057136217800109002658D30122200004400284000F5F200848414E204348414F9F1F00260D27E7');
+     showmsg('报错开始!');
+    }
+    initfd();
+    commsend_001();
+    loadfds(@filename);
+    //与神码通讯结束
+    commsend_001();
+    commsend_101();
+    $FD118 = #CURCD1+space(19)+space(16,'0');
+   }"
+  </COMMSEND>
+  <COMMRECV>
+   "{
+    commrecv_001();
+    if(($FD12!='0000') and ($FD12!='Z003') and (substr(#ACTNO,0,6)=='621223'))//卡交易核心处理失败往数码发送取消交易
+    {
+      #RESP_CODE=$FD12;
+      showmsg(geterror());
+      initfd();
+      commsend_001();
+      $FD16='7777';
+      $FD12=#RESP_CODE;
+      $FD30=#ACTNO;
+      $FD39= itoa(atoi(#LTXAMT)*100,'%016f'); 
+      $FD43=#CARD_TRACENO;
+      callagn();
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+      showmsg('现金充值失败!!...');
+      rerun();
+    }   
+    //往银联发送交易处理结果通知
+    //initfd();
+    //commsend_001();
+    //$FD16='7767';
+    //$FD43=#CARD_TRACENO;                     //原交易流水
+    //$FD21=#CURCD1;                                //币种
+    //$FD39= itoa(val(#LAVBAL,100),'%016.2f');  //交易金额
+    // $FD12=#RESP_CODE;                        //响应码
+    //callagn();
+    //if($FD12!='0000')
+    //{
+    //  showmsg(geterror());
+    //  return(false);
+    //}
+   }"
+  </COMMRECV>
+  <FIRSTWORK>
+   "{
+    #PIC='';
+   }"
+  </FIRSTWORK>
+  <VARIABLE UPLOOP="TRUE">
+    <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+     "T(8012                           IC卡现金充值)"/>
+    <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+     "T(─────────────────────────────────────)"/>
+    <ITEM NAME="#TXNO"         TYPE="%-4s"   FUNCTIONS="T($TXNO=2201)"/>
+    <ITEM NAME="#MSGTYPE"      TYPE="%-5s"   FUNCTIONS="T($MSGTYPE=03001)"/>
+    <ITEM NAME="#TXCD"         TYPE="%4s"    FUNCTIONS="T(8012)"/>      <!---交易代码--->
+    <ITEM NAME="#TXNAME"       TYPE="%-18s"  FUNCTIONS="T(IC卡柜面现金充值)"/>  <!---交易名称--->
+    <ITEM NAME="#CARD_TRACENO" TYPE="%-16s"  FUNCTIONS=""/><!---发往神码交易后返回的流水--->
+    <ITEM NAME="#RESP_CODE"    TYPE="%-4s"   FUNCTIONS=""/>
+    <ITEM NAME="#MSR2BAK"      TYPE="%-37s"  FUNCTIONS=""/>
+    <ITEM NAME="#MSR3BAK"      TYPE="%-104s" FUNCTIONS=""/>
+    <ITEM NAME="#ICSEQID"      TYPE="%-3s"   FUNCTIONS=""/><!---IC卡序列号--->
+    <ITEM NAME="#ICJSQ"        TYPE="%-4s"   FUNCTIONS=""/>             <!--应用交易计数器-->
+    <ITEM NAME="#ICMW"         TYPE="%-16s"  FUNCTIONS=""/>             <!--应用交易密文-->     
+    <ITEM LINE="6"  COL="9"    TYPE="%-10s"  FUNCTIONS="T( IC 卡 号:)"/>
+    <ITEM LINE="6"  COL="49"   TYPE="%-10s"  FUNCTIONS="T(帐户序号:)" NAME="#LACSEQ" VISABLE="TRUE"  />
+    <ITEM LINE="7"  COL="49"   TYPE="%-10s"  FUNCTIONS="T(照    片:)"/> 
+    <ITEM LINE="7"  COL="59"   LINES="160"   FUNCTIONS="" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" />
+    <ITEM LINE="8"  COL="9"    TYPE="%-16s"  FUNCTIONS="T(【产品信息】)" VISABLE="TRUE" />
+    <ITEM LINE="9"  COL="7"    TYPE="%-70s"  VISABLE="TRUE" FUNCTIONS=
+     "T(------------------------------------------------------------------)"/>      
+    <ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="ICC" LINE="6"  COL="19" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)M($MSR2,1)">
+      <ONLOSTFOCUS>
+       "{
+        dim @baktxno as string;
+        dim @tagvalue as string;
+        if(substr(#ACTNO,0,6)!='621780')
+        {
+          showmsg('刷卡错误,请重试!');
+          // return(false);
+        } 
+        @tagvalue= ictagvalue('9f79');
+        if(strfld(@tagvalue,'|',0)!='9000')
+        {
+        	showmsg('函数ictagvalue返回值有误!');
+        	return(false);
+        }
+        #ICLAVBAL=strfld(@tagvalue,'|',1);
+        showmsg('电子现金#ICLAVBAL='+delspace(#ICLAVBAL));
+        #ICAVBAL=val(#ICLAVBAL,0.01);
+        #MSR2BAK=$MSR2;
+        #MSR3BAK=$MSR3;
+        $MSR2='';
+        $MSR3='';
+        @baktxno=$TXNO;
+        $TXNO='9951'; 
+//        $FD101=#ACTNO+space(157);
+        $FD101='6212239102900001431'+space(157);
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        setitems('#ACTNO24#ACTSEQ#RTXAMT#VOCTYPE#VOCNUM#DESC10#NBFLAG#CUSTNAME#AVBAL#CURCD#CASHFLAG#DSCPT#ACTTYPE#ACTSEQ_2#PRODNAME',$FD101);
+        commrecv_101();
+        #AVBAL=delspace(itoa(val(substr($FD101,134,16),0.01),'%17.2f')); //卡余额--实际上是要IC卡的电子现金余额
+        #PRODNAME=delspace(substr($FD101,161,30));
+        // 卡户的判断条件是: 101-1域长度为19并且101-E域不为空
+        if( (len(delspace(substr($FD101,0,24)))==19)  and atoi(substr($FD101,24,4))!=0 )
+        {
+          #ACTSEQ=substr($FD101,24,4);
+          show(#ACTSEQ,true);
+          show(#LACSEQ,true);
+          //return(true);
+        }
+        else
+        {
+          #NBFLAG='1';
+          #CASHFLAG='1';
+          showblock('ACTINFO',true,true);
+          show(#ACTSEQ,false);
+          show(#LACSEQ,false);
+          //show(#S_NBCD,true);
+          //show(#NBFLAG,true);
+          //enable(#NBFLAG,true);
+        }   
+       }"
+      </ONLOSTFOCUS>
+    </ITEM>
+    <ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="6"  COL="59" TYPE="%4d"   FUNCTIONS="" >
+      <ONLOSTFOCUS>
+       "{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9846'; //根据显示账号查询户名和余额[存款]
+        #ACTNO='6212239102900001431';
+        $FD101=#ACTNO+space(24-len(#ACTNO))+#ACTSEQ+space(153);
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+        commrecv_101();
+        #AVBAL=delspace(itoa(val(substr($FD101,134,16),0.01),'%17.2f'));
+        #PRODNAME=delspace(substr($FD101,161,30));
+        #NBFLAG='0';
+        #CASHFLAG='1';
+        //show(#S_NBCD,true);
+        //show(#NBFLAG,true);
+        showblock('ACTINFO',true,true); 
+       }"
+      </ONLOSTFOCUS>
+    </ITEM>
+    <!-- 显示图片信息 start-->
+    <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" /> <!---卡号 call_96641用到--->
+    <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="" >   <!---图片设置--->
+      <ONLOSTFOCUS>
+       "{
+//        #LYACNO=#ACTNO;
+        #LYACNO='6212239102900001431';
+        call_96641(); //根据账卡号获取客户信息
+       }"
+      </ONLOSTFOCUS>
+    </ITEM>
+    <!--added by liuyong 2009-9-15 显示图片信息 end-->
+    <ITEM NAME="#ACTNO24"    TYPE="%-24s"  FUNCTIONS=""/>  
+    <!--ITEM NAME="#TXAMT15"    TYPE="%17.2f" FUNCTIONS=""/-->
+    <ITEM NAME="#DESC10"     TYPE="%-10s"  FUNCTIONS=""/>
+    <ITEM NAME="#DSCPT"      TYPE="%-3s"   FUNCTIONS=""/>
+    <ITEM NAME="#ACTTYPE"    TYPE="%-1s"   FUNCTIONS=""/>
+    <ITEM NAME="#ACTSEQ_2"   TYPE="%-4s"   FUNCTIONS=""/>
+    <!--以上变量在commrecv_101中用到-->
+    <BLOCK NAME="ACTINFO" LINE="10" COL="5" VISABLE="FALSE">
+      <ITEM LINE="1"  COL="4"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+      <ITEM LINE="1"  COL="44" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+      <ITEM LINE="2"  COL="4"  TYPE="%-10s" FUNCTIONS="T(现金余额:)"/>
+      <ITEM LINE="2"  COL="44" TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>      
+      <ITEM LINE="4"  COL="4"  TYPE="%-10s" FUNCTIONS="T(凭证类型:!)"/>
+      <ITEM LINE="4"  COL="44" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+      <ITEM LINE="5"  COL="4"  TYPE="%-14s" FUNCTIONS="T(电子现金余额:)"/>
+      <!--ITEM LINE="5"  COL="4"  TYPE="%-10s" FUNCTIONS="T(无折标志:!)"  NAME="#S_NBCD" INPUT="LABEL"/-->
+      <!--ITEM LINE="5"  COL="44" TYPE="%-10s" FUNCTIONS="T(现转标志:!)"/-->
+      <ITEM LINE="6"  COL="2"  TYPE="%-70s" FUNCTIONS=
+       "T(------------------------------------------------------------------)"/>
+      <ITEM LINE="8"  COL="4"  TYPE="%-10s" FUNCTIONS="T(充值金额:)"/>
+      <!--ITEM LINE="8"  COL="44" TYPE="%-10s" FUNCTIONS="T(密    码:)"/-->
+      <!---------------------------------------------------->
+      <ITEM NAME="#CUSTNAME"   LINE="1"  COL="14" TYPE="%-28s" FUNCTIONS="J(#CUSTNAME30)"/>
+      <ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+      <ITEM NAME="#CURCD"      TYPE="%-2s"  FUNCTIONS="" >
+        <ONLOSTFOCUS>
+         "{
+          show(#CURCD1,true);
+          enable(#CURCD1,true);
+         }"
+        </ONLOSTFOCUS>
+      </ITEM>
+      <ITEM NAME="#CURCD1"    LINE="1"  COL="54" TYPE="%-2s" INPUT="SELECT" FUNCTIONS="T(01)" ENABLE="FALSE">
+        <SELECT>
+          <OPTION VALUE="01" TITLE="0.人民币"/>
+        </SELECT>
+      </ITEM>
+      <ITEM NAME="#AVBAL"    LINE="2"  COL="14" TYPE="%-21s" FUNCTIONS=""/>
+      <ITEM NAME="#PRODNAME" LINE="2"  COL="54" TYPE="%-20s" FUNCTIONS=""/>
+      <ITEM NAME="#VOCTYPE"  LINE="4"  COL="14" TYPE="%-3s"  FUNCTIONS="" INPUT="SELECT"  ENABLE="FALSE">
+        <SELECT>
+          <OPTION VALUE="010" TITLE="0.储蓄活期存折"/>
+          <OPTION VALUE="020" TITLE="0.储蓄卡"/>
+        </SELECT>
+      </ITEM>
+      <ITEM NAME="#SVOCTYPE"  TYPE="%-30s"  FUNCTIONS="S(#VOCTYPE,#VOCTYPE)"/>
+      <ITEM NAME="#VOCNUM"    LINE="4"      COL="54" TYPE="%16d"  FUNCTIONS=""/>
+      <ITEM LINE="5" COL="18" NAME="#ICAVBAL"  TYPE="%17.2f" FUNCTIONS=""/>
+      <ITEM NAME="#ICLAVBAL" TYPE="%17s" FUNCTIONS=""/>
+      <!--ITEM LINE="5" COL="18" TYPE="%-16s"  NAME="#ICLAVBAL" FUNCTIONS="X(#ICAVBAL)"/>
+      <ITEM NAME="#ICAVBAL"   TYPE="%17.2f" FUNCTIONS="J(#ICLAVBAL)"/-->
+      <ITEM NAME="#NBFLAG"    TYPE="%-1s"   FUNCTIONS="" >
+        <!--SELECT>
+          <OPTION VALUE="0" TITLE="0.无折"/>
+          <OPTION VALUE="1" TITLE="1.有折"/>
+        </SELECT-->
+      </ITEM>
+      <ITEM NAME="#CASHFLAG"  TYPE="%-1s"  FUNCTIONS="" >
+        <!--SELECT>
+          <OPTION VALUE="1" TITLE="0.现金"/>
+        </SELECT-->
+      </ITEM>
+      <ITEM NAME="#TXAMT"    LINE="8"  COL="14" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="V(000001,100000)J(#LTXAMT)"/>
+      <ITEM NAME="#LTXAMT"   TYPE="%-21s" FUNCTIONS="X(#TXAMT)"/>
+      <ITEM NAME="#LTXAMT1"  TYPE="%17.2f" FUNCTIONS="E(#TXAMT+#ICAVBAL)">
+        <ONLOSTFOCUS>
+         "{ 
+          showmsg(itoa(#LTXAMT1,'%17.2f'));
+          if(#LTXAMT1 &gt; 1000)
+          {
+            showmsg('IC卡电子金额总数不能超过1000元，请从新输入!');
+          //  return(false);
+          }
+         }"
+        </ONLOSTFOCUS>
+      </ITEM>
+      <ITEM NAME="#PASSWORD"  TYPE="%6d"   FUNCTIONS=""/>
+      <ITEM NAME="#SNBFLAG"   TYPE="%-4s"  FUNCTIONS="S(#NBFLAG,#NBFLAG)"/>
+      <ITEM NAME="#SCASHFLAG" TYPE="%-4s"  FUNCTIONS="S(#CASHFLAG,#CASHFLAG)"/>
+    </BLOCK>
+    <!--输出变量--->
+    <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+  <REQUEST>
+  </REQUEST>
+  <RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="IC卡现金充值">
+      NOTHING
+    </PACKAGE>
+    <PRINT>
+     "{
+      print( 3,30,'IC卡现金充值');
+      print( 4,22,'IC卡  号:[19]',#ACTNO);
+      print( 5,22,'户    名:[60]',#CUSTNAME);
+      print( 6,22,'产品名称:[30]',#PRODNAME);
+      print( 7,22,'凭证类型:[30]',#SVOCTYPE);
+      print( 8,22,'凭证号码:[16]',#VOCNUM);
+      //print( 9,22,'有无存折:[ 4]',#SNBFLAG);
+      print(10,22,'存款方式:[ 4]',#SCASHFLAG);
+      print(11,22,'交易金额:[21]',#LTXAMT);
+      print(12,22,'流 水 号:[ 6]',$FD4);
+     }"
+    </PRINT>
+  </RESPONSE>
+  <RESPONSE>
+    <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证(IC卡现金充值)">
+      CKPT|@actno|@custname|@txamt|@prodname|@opn_day|@brno|@custno|||||@avbal||||||@tx_type|||@sv_type||||||||||@id_type|@id_no|@br_name||@note_no||@acc_no|@tx_brno|@term|@term_type|@rate|
+    </PACKAGE>
+    <INIT>
+     "{
+      $KINDNO='00';
+     }"
+    </INIT>
+    <PRINT>
+     "{
+      dim @txday  as string;
+      dim @txtime as string;      
+      @txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+      @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);   
+      print( 5,20,'机构名称:[30]',$BRNAME);
+      print( 5, 2,'代码:[4]',#TXCD);
+      print( 5,13,'交易名称:[20]',#TXNAME);
+      print( 7,30,'\L0储蓄存款凭条\L1');
+      print( 9,20,'开 户 行:[5    ]                  交 易 行:[7]',@brno,@tx_brno);
+      print(10, 20,'IC卡  号:[20                    ]   户    名:[20                    ]',@actno,@custname);
+      print(11, 20,'储    种:[20                    ]   交易类型:[ 4    ]',@prodname,@tx_type);
+      print(12, 20,'存    期:[2 ][2 ]                   利    率:[ 7       ]%',@term,@term_type,@rate);
+      print(13, 20,'交易金额:[21  ]  余    额:[21                       ]',ltrim(comma(@txamt,16)),ltrim(comma(@avbal,16)));
+      print_sq(); 
+      print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+      print(21,80,'客户签名:_____________________');      
+      print(23,20,'备注:');
+      print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+      print(23,5,'柜员:[4]',$FD7);
+      print(23,5,'流水号:[6]',$FD4);
+     }"
+    </PRINT>
+  </RESPONSE>
+</TRANSACTION>

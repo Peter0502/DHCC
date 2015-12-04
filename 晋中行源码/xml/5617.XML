@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="5617 承兑质押与保证金的关联"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		initfd();
+        $MSGTYPE='03001';
+       	$FD32 = #BZACTNO;
+       	$FD33 = #CDXYNUM;
+		$FD67 = #CZCODE;
+//		$FD100 = #CD100;
+        $FD100 = getitems('#FD100_1#FD100_2#FD100_3#FD100_4#FD100_5#FD100_6#FD100_7#FD100_8#FD100_9#FD100_10');
+		commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(5617                     承兑质押与保证金的关联)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4354)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="9"   COL="15"   TYPE="%-13s" FUNCTIONS="T(操  作  码:)"/>
+  <ITEM LINE="11"  COL="15"   TYPE="%-13s" FUNCTIONS="T(保证金帐号:)"/>
+  <ITEM LINE="13"  COL="07"   TYPE="%-20s" FUNCTIONS="T(新票的承兑协议编号:)"/>
+
+  <ITEM TYPE="%-2s" NAME="#CURCD"  FUNCTIONS="T(01)"/>  <!-- 9910,$FD21 -->
+
+  <ITEM LINE="9"  COL="28" TYPE="%-1s" NAME="#CZCODE" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+    <SELECT LINE="0" COL="0">
+        <OPTION VALUE="0" TITLE="建立"/>
+        <OPTION VALUE="1" TITLE="删除"/>
+    </SELECT>
+  </ITEM>
+  <ITEM NAME="#CZNAME" TYPE="%-10s" FUNCTIONS="S(#CZCODE,#CZCODE)"/>
+
+<!-- 定义callserver返回但界面不用的变量 -->
+  <ITEM TYPE="%-2s" NAME="#CURCD"  FUNCTIONS="T(01)"/>
+  <ITEM TYPE="%-16s" NAME="#FD100_1"  FUNCTIONS=""/>
+  <ITEM TYPE="%-16s" NAME="#FD100_2"  FUNCTIONS=""/>
+  <ITEM TYPE="%-16s" NAME="#FD100_3"  FUNCTIONS=""/>
+  <ITEM TYPE="%-16s" NAME="#FD100_4"  FUNCTIONS=""/>
+  <ITEM TYPE="%-8s"  NAME="#FD100_5"  FUNCTIONS=""/>
+  <ITEM TYPE="%-2s"   NAME="#FD100_6"   FUNCTIONS=""/>
+  <ITEM TYPE="%-2s"   NAME="#FD100_7"   FUNCTIONS=""/>
+  <ITEM TYPE="%-10s"  NAME="#FD100_8"   FUNCTIONS=""/>
+  <ITEM TYPE="%-10s"  NAME="#FD100_9"   FUNCTIONS=""/>
+  <ITEM TYPE="%-16s" NAME="#FD100_10"  FUNCTIONS=""/>
+
+  <ITEM LINE="11"  COL="28" TYPE="%-24s"  NAME="#BZACTNO"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        initfd();
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $MSGTYPE='03001';
+        $TXNO='9910';
+        $FD21 = #CURCD;
+        $FD32 = #BZACTNO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        if($FD23!='131')
+        {
+            showmsg('所输账号非保证金账号!');
+            return(false);
+        }
+
+        #BZJNAME = $FD82;
+        setitems('#FD100_1#FD100_2#FD100_3#FD100_4#FD100_5#FD100_6#FD100_7#FD100_8#FD100_9#FD100_10',$FD100);
+		#CD100 = $FD100;
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="13"  COL="28" TYPE="%-20s"  NAME="#CDXYNUM"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#CD100" TYPE="%-112s" FUNCTIONS=""/>
+  <ITEM TYPE="%-50s" NAME="#BZJNAME" FUNCTIONS=""/>
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容" >
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print( 7, 24,'保证金帐号关联-[4]',#CZNAME);
+        print( 8,  6,'保证金帐号:[24]',#BZACTNO);
+        print( 9,  6,'余额:[16]',ltrim(comma(#FD100_4,16)));
+        print(10,  6,'户名:[50]',#BZJNAME);
+        print(11,  6,'承兑协议编号:[20]',#CDXYNUM);
+        print(12,  6,'出票人帐号:[24]',$FD30);
+        print(13,  6,'出票人名称:[50]',$FD25);
+        print(14,  6,'流水号:[6]',$FD4);
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);  
+	print( 5,2,'代码:5617');
+	print( 5,13,'交易:保证金帐号关联');
+	
+	print( 7,20,'操  作  码:[4]',#CZNAME);
+	print( 8,20,'保证金帐号:[24]',#BZACTNO);
+	print( 9,20,'余额:[16]',ltrim(comma(#FD100_4,16)));
+	print(10,20,'户名:[50]',#BZJNAME);
+	print(11,20,'承兑协议编号:[20]',#CDXYNUM);
+	print(12,20,'出票人帐号:[24]',$FD30);
+	print(13,20,'出票人名称:[50]',$FD25);
+	
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+    }"
+    </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

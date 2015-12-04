@@ -1,0 +1,151 @@
+/******************************************************************************
+*交易名称：前台柜员抹帐记录统计                                               *
+*函数名称：sp3634()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:  
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-10 17:10                                             *
+*修改日期：                                                                   *
+*数据库表:        sherrmsg                                                    *
+******************************************************************************/
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "sherrmsg_c.h"
+#include "shjd_xdtl_main_c.h"
+#include "tlrctl_c.h"
+#include "bctl_c.h"
+EXEC SQL INCLUDE sqlca;
+int sp3634()
+{
+	int ret=0,count=0;
+	long num = 0;
+	int i = 0;
+	struct sherrmsg_c sherrmsg;
+	struct shjd_xdtl_main_c shjd_xdtl_main;
+	struct tlrctl_c tlrctl;
+	struct bctl_c bctl;
+	long lBday=0,lEday=0;
+	char ctlrno[7];    /**注意这里以后要改xyy**/
+	char ckinbr[5];    /**注意这里以后要改xyy**/
+	char cbr_name[21];
+	char ctlr_name[21];
+	FILE *fp=NULL;
+	char filename[256];
+	memset(filename,0x00,sizeof(filename));
+	memset(&sherrmsg,0x00,sizeof(struct sherrmsg_c));
+	memset(&shjd_xdtl_main,0x00,sizeof(struct shjd_xdtl_main_c));
+	memset(&tlrctl,0x00,sizeof(struct tlrctl_c));
+	memset(&bctl,0x00,sizeof(struct bctl_c));
+	memset(ctlrno,0x00,sizeof(ctlrno));
+	memset(ckinbr,0x00,sizeof(ckinbr));
+	memset(cbr_name,0x00,sizeof(cbr_name));
+	memset(ctlr_name,0x00,sizeof(ctlr_name));
+	vtcp_log("[%s][%d] dh394000开始喽\n",__FILE__,__LINE__);
+  pub_base_sysinit();
+  /***这里从前台得到数值***/
+  get_zd_long("0440",&lBday);
+  get_zd_long("0450",&lEday);
+  EXEC SQL DECLARE c1 CURSOR FOR select count(*),tlrno,kinbr from shjd_xdtl_main where txday > :lBday and txday < :lEday and hcode= '1'	group by tlrno,kinbr order by count(*) desc;
+  EXEC SQL OPEN  c1;
+	if(sqlca.sqlcode!=0)
+	{
+      sprintf( acErrMsg,"[%s][%d][%s]此行不存在",__FILE__,__LINE__,ckinbr);
+      strcpy( g_pub_tx.reply, "P015" );
+      set_zd_data(DC_GET_MSG,acErrMsg);
+      WRITEMSG
+      goto ErrExit;
+	}
+	num = 0;
+	i = 0;
+	while(1)
+	{
+			memset(ctlrno,0x00,sizeof(ctlrno));
+			memset(ckinbr,0x00,sizeof(ckinbr));
+			memset(cbr_name,0x00,sizeof(cbr_name));
+			memset(ctlr_name,0x00,sizeof(ctlr_name));
+			count = 0;
+			EXEC SQL FETCH  c1 INTO :count,:ctlrno,ckinbr;
+			if(sqlca.sqlcode!=0)
+			{
+				if(i == 0)
+				{
+					  vtcp_log("[%s][%d] i ===[%d]",__FILE__,__LINE__,i);
+					  sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+      			goto ErrExit;
+				 }
+				break;
+			}
+			i++;
+			vtcp_log("[%s][%d]count==[%d]",__FILE__,__LINE__,count);
+			vtcp_log("[%s][%d]ctlrno==[%s]",__FILE__,__LINE__,ctlrno);
+			vtcp_log("[%s][%d]ckinbr==[%s]",__FILE__,__LINE__,ckinbr);
+			EXEC SQL select name INTO :ctlr_name from tlrctl where tlrno=:ctlrno;
+			if(sqlca.sqlcode != 0)
+			{
+      			sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+      			goto ErrExit;
+			}
+			EXEC SQL select brname INTO :cbr_name from bctl where brno=:ckinbr;
+			if(sqlca.sqlcode != 0)
+			{
+      			sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+      			goto ErrExit;
+			}
+	 		if( !num )
+			{
+				pub_base_AllDwnFilName( filename );
+				fp = fopen( filename,"w" );
+				if( fp==NULL )
+				{
+						sprintf(acErrMsg," open file [%s] error ",filename );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+      			goto ErrExit;
+				}
+			/**显示列标题**/
+			fprintf( fp,"~机构号|机构名称|柜员号|柜员名称|记录数|\n" );
+			}	
+			fprintf( fp, "%s|%s|%s|%s|%ld|\n",ckinbr,cbr_name,ctlrno,ctlr_name,count);
+			num++;	
+		}
+	EXEC SQL close  c1;
+	if( !num )
+	{
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data( DC_FILE_SND,"1" );
+	}		
+OkExit:
+	     strcpy( g_pub_tx.reply, "0000" );
+	     sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+	     WRITEMSG
+	     set_zd_data(DC_REPLY,g_pub_tx.reply);
+	     return 0;
+ErrExit:
+	     if(memcmp(g_pub_tx.reply,"0000",4)==0)
+	     {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+	     sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+	     WRITEMSG
+	     set_zd_data(DC_REPLY,g_pub_tx.reply);
+	     return 1;
+}

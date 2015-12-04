@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1836  参数版本查询下载"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<FIRSTWORK>
+		"{
+		}"
+	</FIRSTWORK>
+	<COMMSEND>
+		"{
+		refresh();
+		initfd();
+		commsend_001();
+		}"
+	</COMMSEND>
+	<COMMRECV>
+	"{
+		commrecv_001();
+	}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T(1836                         参数版本查询下载)"/>
+		<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+		<ITEM TYPE="%-30s" NAME="#TXNAME" FUNCTIONS="T(参数版本查询下载)"/>
+		<ITEM LINE="5" COL="26" TYPE="%-14s" NAME="#UpList"  FUNCTIONS="T(版本信息查看)" INPUT="BUTTON"  >			     	            
+			<ONCLICK>
+				"{
+					initfd();
+					commsend_001();
+					$FD16='2312';
+					$FD18='pbp';
+					$FD28='sxps';
+					callagnpbp();
+					if($FD12!='0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+					dim @filename as string;
+					dim @buffer as string;
+					dim @line     as string;
+					dim @flag     as string;
+					dim @sel      as string;
+					dim @cnt      as number;
+					dim @idx      as number;
+					dim @fp       as file;
+					dim @selid    as number;
+					
+					
+					@filename='../tmp/'+$KINBR+$TTYNAME;
+					@fp = openfile(@filename);
+					if (@fp &lt; 0)
+					{
+						showmsg("获取参数版本信息失败！");
+						return(false);
+					}
+					//初始化列表
+					list_init(15, 75, 6, 1);
+					list_setcolcnt(5);
+					list_setcol(0, '     ', 10);
+					list_setcol(1, '参数名称', 10);
+					list_setcol(2, '参数代码', 20);
+					list_setcol(3, '当前版本', 10);
+					list_setcol(4, '最新版本', 10);
+					@sel = '   √ ';
+					//添加记录
+					@cnt = 0;
+					readline(@fp);
+					while(true)
+					{
+						@line = readline(@fp);
+						if (@line == '')
+						{
+							break;
+						}
+						if (delspace(strfld(@line, '|', 2)) != delspace(strfld(@line, '|', 3)))
+						{
+							@flag = @sel;
+						}
+						else
+						{
+							@flag = '';
+						}
+						list_additem('', @flag, delspace(strfld(@line, '|', 0)), delspace(strfld(@line, '|', 1)), delspace(strfld(@line, '|', 2)), delspace(strfld(@line, '|', 3)), delspace(strfld(@line, '|', 4)));
+						@cnt=@cnt+1;
+						//showmsg(itoa(@cnt));
+					}
+					list_additem('','','','','','   更新');
+					closefile(@fp);
+					
+					while(true)
+					{
+						@selid=list_work();
+						if ( @selid &lt; 0 )
+						{
+							list_del();
+							refresh();
+							break;
+						}
+						else if ( @selid &lt; @cnt)
+						{
+							if (list_gettext(@selid, 0) == @sel)
+							{
+								list_settext(@selid, 0, '');
+							}
+							else
+							{
+								list_settext(@selid, 0, @sel);
+							}
+						}
+						else if ( @selid &gt; @cnt-1 )
+						{
+							@line='';
+							@idx = 0;
+							while(@idx &lt; @cnt)
+							{
+								@flag= list_gettext(@idx, 0);
+								if (@flag == delspace(@sel))
+								{
+									@line = @line+list_gettext(@idx, 2)+'+';
+								}
+								@idx = @idx + 1;
+					
+							}
+							if (len(@line) &gt; 0)
+							{
+								@line = substr(@line, 0, len(@line)-1);
+								showmsg(@line);
+							}
+							else
+							{
+								showmsg('无可下载参数数据');
+								return(true);
+								refresh();	
+							}
+							initfd();
+							commsend_001();
+							$FD16='1506';
+							$FD18='pbp';
+							$FD28='sxps';
+							$FD95=@line;
+							callagnpbp();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return(false);
+							}
+							
+							runoutput();
+							rerun();
+							refresh();
+						}
+					}
+				}"
+			</ONCLICK>
+		</ITEM>
+	</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+		"{
+			PrintTxHead();
+			
+			print(12,30,'参数下载成功');
+			
+			PrintTxTail();
+		}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

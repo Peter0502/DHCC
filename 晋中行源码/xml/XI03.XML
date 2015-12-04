@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="4819 卡写磁条"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+<!--  注意：各个配置项的COL 属性最好是奇数, 这样可以避免出现乱码。                  -->
+<!--        另外, 每个汉字的开始列号也最好是奇数, 每个字符串的长度也最好是偶数。    -->
+<VARIABLE UPLOOP="FALSE">
+<!--12345678901234567890123456789012345678901234567890123456789012345678901234567890-->
+<!--         1         2         3         4         5         6         7         8-->
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+  "T(4819                             卡写磁条)"/>
+  <ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+  <!--  公共变量的定义. -->
+  <ITEM NAME="#HEJFNO"  TYPE="%-6s"  FUNCTIONS="T($HEJFNO=000000)T($CCHED=0)"/>
+  <ITEM NAME="#HTRMSEQ" TYPE="%-2s"  FUNCTIONS="T($HTRMSEQ)"/>
+  <ITEM NAME="#HCODE"   TYPE="%-1s"  FUNCTIONS="T($HCODE)"/>
+  <ITEM NAME="#TRMSEQ"  TYPE="%-2s"  FUNCTIONS="T($TRMSEQ)"/>
+  <ITEM NAME="#EJFNO"   TYPE="%-6s"  FUNCTIONS="T($TXTNO)"/>
+  <ITEM NAME="#TASKID"  TYPE="%-2s"  FUNCTIONS="T(UC)"/>
+  <ITEM NAME="#TMTYPE"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TXTYPE"  TYPE="%-2s"  FUNCTIONS="T()"/>
+  <ITEM NAME="#APTYPE"  TYPE="%-1s"  FUNCTIONS="T(c)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-2s"  FUNCTIONS="T(65)"/>
+  <ITEM NAME="#DSCPT"   TYPE="%-3s"  FUNCTIONS="T(004)"/>		
+  <ITEM NAME="#PTYPE"   TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#MULTTX"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#CRDB"    TYPE="%-1s"  FUNCTIONS="T(1)"/>
+  <ITEM NAME="#TRNMOD"  TYPE="%-1s"  FUNCTIONS="T(1)"/>
+  <ITEM NAME="#SBTMOD"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TLRNO"   TYPE="%-6s"  FUNCTIONS="T($TLRNO)"/>
+  <!---
+  --->
+  <ITEM NAME="#CURCD"   TYPE="%-3s"  FUNCTIONS="T(RMB)"/>
+  <ITEM NAME="#NBCD"    TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#XCRT"    TYPE="%-8s"  FUNCTIONS="T($XCRT)"/>
+  <ITEM NAME="#REASON"  TYPE="%-6s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SUPIN1"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#SUPIN2"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TXAMT"   TYPE="%-12s" FUNCTIONS="T(0)"/>
+  
+  <!---输入项定义--->
+  <ITEM LINE="10"  COL="25" TYPE="%-10s"  FUNCTIONS="T(卡顺序号: )"/>
+  
+  <ITEM NAME="#OPNBR4"  TYPE="%4d"   FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#OPNBR"   TYPE="%-7s"  FUNCTIONS="T(#OPNBR4)"/>
+
+<ITEM NAME="#UNIONPAY"  TYPE="%-6s"  FUNCTIONS="T(622421)"/>
+<ITEM NAME="#KFAREA"    TYPE="%-2s"  FUNCTIONS="T(71)"/>
+<ITEM LINE="10"  COL="35" NAME="#CARDORDNO" TYPE="%10d" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+//	if(#TLRNO != '000080')
+//	{
+//		showmsg('此交易只允许总行管理柜员80做!');
+//		return(false);
+//	}
+  }"
+  </ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#ACTNO"       TYPE="%18s"   FUNCTIONS="T(#UNIONPAY+#KFAREA+#CARDORDNO)"/><!---卡号前十八位--->
+<ITEM NAME="#TYPE"        TYPE="%-1s"   FUNCTIONS="T(1)"/><!---写磁工作方式:1--集体 2--单独 --->
+<ITEM NAME="#CHECKBIT"    TYPE="%-1s"   FUNCTIONS="T( )"/><!---卡校验位--->
+<ITEM NAME="#CERTIFTYPE"  TYPE="%2s"    FUNCTIONS="T(01)"/><!---证件类型--备用--->
+<ITEM NAME="#CERTIFNUM"   TYPE="%-20s"  FUNCTIONS="T(00000000000000000000)"/><!---证件号码--备用--->
+<ITEM NAME="#PASSWD"      TYPE="%6d"    FUNCTIONS="T()"/><!---密码--备用--->
+
+<!---返回变量--->
+<!-- note 由于郑商要求开商磁道格式与其一致-->
+<ITEM NAME="#MSR2"    TYPE="%-37s"     FUNCTIONS="T()"/><!---第二磁道郑商标准-->
+<ITEM NAME="#MSR3"    TYPE="%-104s"    FUNCTIONS="T()"/><!---第三磁道郑商标准-->
+<ITEM NAME="#CARDNO"  TYPE="%-19s"     FUNCTIONS="T()"/><!---卡号--->
+
+<ITEM LINE="21"       COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+	dim @tota   as string;
+	dim @msr2   as string;
+	dim @msr3   as string;
+	dim @cardno as string;
+	@tota ='';
+
+	@tota = callserver();
+	if(substr(@tota,36,1) == 'E')
+	{
+		showmsg(substr(@tota,44,20));
+		return(false);
+	}
+	else
+	{
+		@msr2   = substr(@tota,44,37);
+		#MSR2   = @msr2;
+		@msr3   = substr(@tota,81,104);
+		#MSR3   = @msr3;
+		@cardno = substr(@tota,185,19);
+		#CARDNO = @cardno;
+		runoutput();
+		showhelp(5,29,14,21,'写磁成功','卡号为:'+@cardno+chr(10)+'      请继续下一张卡!');
+		//#CARDORDNO = itoa(atoi(#CARDORDNO)+1,'%010d');
+		#CARDORDNO = itoa(val(#CARDORDNO)+1,'%010.0f');
+		enable(#CARDORDNO,true);
+		goitem(#CARDORDNO);
+	}
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+
+<REQUEST><PACKAGE SERVICE="dh48190">
+$APCTLHD$HTRMSEQ$HEJFNO#OPNBR$KINBR#TRMSEQ#EJFNO#TASKID#TMTYPE#APTYPE#TXNO#PTYPE#DSCPT
+$HCODE#ACTNO#TXTYPE#MULTTX#CRDB$SUPCD1$SUPCD2#REASON#TLRNO#NBCD#TRNMOD#SBTMOD#CURCD#XCRT#TXAMT
+#TYPE#CHECKBIT#CERTIFTYPE#CERTIFNUM$XPASS
+</PACKAGE></REQUEST>
+
+<RESPONSE>
+<PACKAGE>C48191#MSR2#MSR3#CARDNO</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+<PACKAGE>
+004$HCODE=0C481900B请划磁条N305#MSR2#MSR3
+</PACKAGE>
+<FORMAT NAME="C481900B">
+"00#####################################
+01########################################################################################################
+"
+</FORMAT>
+</OUTPUT>
+</TRANSACTION>

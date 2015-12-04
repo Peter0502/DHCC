@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100010000000000000000000000" TITLE="4682       理财产品限额及收益率参数维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+				//rerun();      
+				
+        //return(true);
+  
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-58s" FUNCTIONS= "T(4682                   理财产品限额及收益率参数维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+<!--屏幕输入内容 --> 
+ <ITEM LINE="06"      COL="7"   TYPE="%-12s"     FUNCTIONS="T(操作  类型:!)"/> 
+ <ITEM LINE="06"      COL="40"  TYPE="%-13s"     FUNCTIONS="T(适用  客户:!)"/> 
+ <ITEM LINE="08"      COL="7"   TYPE="%-12s"     FUNCTIONS="T(产品  编号: )"/>
+ 
+ <!--控制输入内容 --> 
+ <ITEM LINE="06"   COL="20"  NAME="#OPTYPE" TYPE="%1d"  INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(1)V(1|2)">
+       <SELECT LINE="6" COL="23">
+         <!--OPTION VALUE="0" TITLE="查询"/-->
+         <OPTION VALUE="1" TITLE="新增"/>
+         <OPTION VALUE="2" TITLE="修改"/>
+         <!--OPTION VALUE="3" TITLE="删除"/-->
+       </SELECT>	
+       <ONLOSTFOCUS>
+ 			"{
+ 					
+ 				 if($KINBR!='01002')
+ 			 	{
+ 			 		showmsg('此交易只有黄河银行营业部有权使用!');
+          return(false);
+ 			 	}
+ 			 	
+ 			 	
+ 			 
+ 	}"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#DYOPTYPE" TYPE="%-6s"  FUNCTIONS="S(#OPTYPE,#OPTYPE)"/>
+ <ITEM    NAME="#JUMP1"    TYPE="%-1d"    FUNCTIONS="j(#OPTYPE=0,T{1}T{0})G(1,#OK)"/>
+ <ITEM    NAME="#JUMP2"    TYPE="%-1d"    FUNCTIONS="j(#OPTYPE=3,T{1}T{0})G(1,#OK)"/>
+ <ITEM NAME="#SPACE1"  TYPE="%1s" FUNCTIONS="T()"/> 
+ 
+ <ITEM LINE="06"  COL="52"  NAME="#CIF_TYPE" TYPE="%1s"    DEVICE="KEYBOARD" FUNCTIONS="T(1)V(1|2)">
+    	<SELECT LINE="06" COL="53">       
+       <OPTION VALUE="1" TITLE="个人"/>
+       <OPTION VALUE="2" TITLE="公司"/>
+    </SELECT>
+    <ONLOSTFOCUS>
+			  "{
+			  		dim @tota as string;
+ 						dim @sql as string;
+ 						dim @file as file;
+            dim @filename as string;
+            dim @line as string;
+ 						dim @csts as string;
+ 						@csts='0';
+ 						
+         	 	showblock('MODIFY',true,true);
+					 	resetblock('MODIFY');
+					 	//reset();
+            refresh();
+            
+  				}"
+ 				 </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="08"   COL="20"  TYPE="%-12s"  NAME="#CPNO"  VISABLE="TRUE" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)T()">
+ 	<ONLOSTFOCUS>
+ 		 "{
+ 		 				dim @tota as string;
+ 						dim @sql as string;
+ 						dim @file as file;
+            dim @filename as string;
+            dim @line as string;
+ 						dim @csts as string;
+ 						dim @xuhao as string;
+ 						dim @numb as number;
+ 						dim @ciftp as string;
+ 						
+ 						@csts='0';
+ 						@xuhao = '' ;
+ 						@numb= 0;						
+ 						 
+ 							commsend_001();
+        			$FD16='9598';		 
+        			#CPNO = rtrim(#CPNO);
+         			 @sql='select prot_name,area,prot_type,issue_type,cif_type,raise_beg,raise_end,plan_date,limit,term,concentrate_acno,redemption_acno,cls_date,sts 
+         			 		 from financing_products_parm  where  prot_code='+chr(39)+#CPNO+chr(39)+'';
+         			 
+         			$FD123=rtrim(@sql);
+         			@tota=callserver();  
+         			
+         			if($FD12!='0000')
+        			{
+                showmsg(geterror());
+                return(false);
+        			}
+   						if(@tota==''){
+                showmsg('无此理财产品编号,不能做此交易.');
+                return(false);
+        			}
+        			#CPMC = strfld(@tota,'|',0);
+        			@ciftp = strfld(@tota,'|',4);
+        			
+        			if(#CIF_TYPE!='0' and #CIF_TYPE!=@ciftp)
+        			{
+        				showmsg('客户类型超范围');
+                return(false);	//20110821-232300
+        			}
+        			
+        			$FD123='';
+        			@tota='';
+        			
+ 						if( #OPTYPE=='1' )
+           {
+           		enable(#LCSEQN,false);
+           		commsend_001();
+        			$FD16='9598';		 
+         			
+         			@sql='select max(seqn) from financing_lvl_rate  where  prot_code='+chr(39)+#CPNO+chr(39)+'and cif_type='+chr(39)+#CIF_TYPE+chr(39)+'';  
+         			$FD123=rtrim(@sql);
+         			@tota=callserver();  
+         			//showmsg(@tota);
+         			if($FD12!='0000')
+        			{
+                showmsg(geterror());
+                return(false);
+        			}
+   						if(@tota==''){
+   						  //赋值给序号字段
+   						  @numb = 1;
+   						  #LCSEQN = itoa(@numb);  						  
+   						  //showmsg('xuhao= '+#LCSEQN);
+        			}
+        			else
+        			{
+        					@xuhao = strfld(@tota,'|',0);
+        					@numb = atoi(@xuhao)+1;
+        					#LCSEQN = itoa(@numb);
+        					//showmsg('strfld= '+strfld(@tota,'|',0));
+        					//@xuhao = @xuhao + 1 ;	
+        					//showmsg('xuhao= '+itoa(@xuhao,'%d'));
+        					//showmsg('LCSEQN= '+#LCSEQN);
+        			}
+        			show(#LCSEQN,true); 
+           		$FD123='';
+        			@tota='';
+        			
+           }
+           if( #OPTYPE=='2' )
+           {
+             enable(#LCSEQN,true);
+             
+            }
+             
+ 						
+      }"
+ 				 </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM LINE="8"      COL="40"  TYPE="%-12s"     FUNCTIONS="T(参数  序号: )"/>
+ <ITEM LINE="8"   COL="52"  TYPE="%3s"  NAME="#LCSEQN"   DEVICE="KEYBOARD"   FUNCTIONS="" > 
+ <ONLOSTFOCUS>
+ "{
+ 						dim @tota as string;
+ 						dim @sql as string;
+ 						dim @file as file;
+            dim @filename as string;
+            dim @line as string;
+ 						dim @csts as string;
+ 						dim @xuhao as number;
+ 						@csts='0';
+ 						@xuhao = 0 ;
+ 						
+ 						#LCSEQN=delspace(#LCSEQN);
+ 						
+ 						if( #OPTYPE=='2' )
+           {
+         			commsend_001();
+        			$FD16='9598';		 
+         			 @sql='select seqn,repay_plan_rate,prot_plan_rate,repay_real_rate,prot_real_rate,beg_bal,max_bal,add_amt,trustee_fee_rate,sts 
+         			 		 from financing_lvl_rate  where  prot_code='+chr(39)+#CPNO+chr(39)+'and seqn='+chr(39)+#LCSEQN+chr(39)+'and cif_type='+chr(39)+#CIF_TYPE+chr(39)+'';
+         			 
+         			$FD123=rtrim(@sql);
+         			@tota=callserver();  
+         			
+         			if($FD12!='0000')
+        			{
+                showmsg(geterror());
+                return(false);
+        			}
+   						if(@tota==''){
+                showmsg('此理财产品无此参数序号');
+                return(false);
+        			}
+              
+   						//#SEQN=strfld(@tota,'|',0);
+              #repay_plan_rate = val(strfld(@tota,'|',1));
+              #prot_plan_rate = val(strfld(@tota,'|',2));
+              #repay_real_rate = val(strfld(@tota,'|',3));
+              #prot_real_rate = val(strfld(@tota,'|',4));
+              #beg_bal = val(strfld(@tota,'|',5));
+              #max_bal = val(strfld(@tota,'|',6));
+              #add_amt = val(strfld(@tota,'|',7));
+              #trustee_fee_rate = val(strfld(@tota,'|',8));
+              
+              //#sts=atoi(strfld(@tota,'|',8));
+             //#term1=strfld(@tota,'|',9);
+             //#GJ_ACNO1=strfld(@tota,'|',10);
+             //#DF_ACNO1=strfld(@tota,'|',11);
+             //#cls_date=strfld(@tota,'|',12);
+             //#YWSTS1=strfld(@tota,'|',13); 
+              
+   						//show(#CPMC,true);
+         			// resetblock('MODIFY');  
+         			refresh();	 
+         			
+           }
+   }"
+ </ONLOSTFOCUS>
+ </ITEM>
+
+<BLOCK NAME="MODIFY" LINE="8" COL="7"  VISABLE="FALSE" >
+ 
+ <ITEM LINE="2"      COL="0"  TYPE="%-28s"     FUNCTIONS="T(客户持有到期计划年化收益率:)"/>
+ <ITEM LINE="2"      COL="39" TYPE="%2s"     	 FUNCTIONS="T(％)"/> 
+ <ITEM LINE="3"      COL="0" TYPE="%-28s"      FUNCTIONS="T(产品投资计划年化收益率:)"/>
+ <ITEM LINE="3"      COL="39" TYPE="%2s"     	 FUNCTIONS="T(％)"/> 
+ 
+ <ITEM LINE="4"      COL="0"  TYPE="%-28s"     FUNCTIONS="T(客户持有到期实际年化收益率:)"/>
+ <ITEM LINE="4"      COL="39" TYPE="%2s"     	 FUNCTIONS="T(％)"/> 
+ <ITEM LINE="5"      COL="0" TYPE="%-28s"      FUNCTIONS="T(产品投资实际年化收益率:)"/> 
+ <ITEM LINE="5"      COL="39" TYPE="%2s"     	 FUNCTIONS="T(％)"/> 
+ <ITEM LINE="6"      COL="0" TYPE="%-28s"      FUNCTIONS="T(托管及其他费率:)"/> 
+ <ITEM LINE="6"      COL="39" TYPE="%2s"     	 FUNCTIONS="T(％)"/>  
+ <ITEM LINE="7"      COL="0"  TYPE="%-14s"     FUNCTIONS="T(认购起点金额:)"/>
+ <ITEM LINE="8"      COL="0" TYPE="%-14s"      FUNCTIONS="T(认购上限金额:)"/>
+ <ITEM LINE="9"      COL="0"  TYPE="%-14s"     FUNCTIONS="T(认购递增金额:)"/>
+ 
+
+ <ITEM  TYPE="%-60s"  NAME="#CPMC" DEVICE="KEYBOARD"   FUNCTIONS="V()"/> 
+
+ <ITEM LINE="2"   COL="29"  TYPE="%10.6f"  NAME="#repay_plan_rate"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/> 
+ <ITEM LINE="3"   COL="29"  TYPE="%10.6f"  NAME="#prot_plan_rate"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="4"   COL="29"  TYPE="%10.6f"  NAME="#repay_real_rate"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="5"   COL="29"  TYPE="%10.6f"  NAME="#prot_real_rate"    DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="6"   COL="29"  TYPE="%10.6f"  NAME="#trustee_fee_rate"  DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="7"   COL="29"  TYPE="%16.2f"  NAME="#beg_bal"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/> 
+ <ITEM LINE="8"   COL="29"  TYPE="%16.2f"  NAME="#max_bal"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ <ITEM LINE="9"   COL="29"  TYPE="%16.2f"  NAME="#add_amt"   DEVICE="KEYBOARD"  FUNCTIONS="V(NB)"/>
+ 
+ <ITEM   										 TYPE="%8s"    NAME="#date1"   FUNCTIONS=""/>
+ <ITEM   TYPE="%8s"  NAME="#raise_beg1"     FUNCTIONS="V()T($HDATE)"/> 
+ <ITEM   TYPE="%8s"  NAME="#raise_end1"     FUNCTIONS="V()T($HDATE)">
+ <ONLOSTFOCUS>
+ "{
+ 		
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <!--ITEM   TYPE="%-8s"  NAME="#plan_date1"   DEVICE="KEYBOARD"  FUNCTIONS="V()T()"/>
+ 
+ <ITEM   NAME="#limit1"   TYPE="%17.2f" DEVICE="KEYBOARD" FUNCTIONS=""/>
+ <ITEM   TYPE="%-3s"  NAME="#term1"  DEVICE="KEYBOARD"  FUNCTIONS="V()">
+ 
+ </ITEM>
+ 
+ <ITEM  TYPE="%-20s"  NAME="#GJ_ACNO1"    DEVICE="KEYBOARD"  FUNCTIONS="V()">
+ 
+ </ITEM>
+ <ITEM  TYPE="%-60s"  NAME="#PAYNAME1"  ENABLE="FALSE"   DEVICE="KEYBOARD"  FUNCTIONS="T()"/--> 
+  <ITEM   TYPE="%-19s"  NAME="#DF_ACNO1"      FUNCTIONS="V()"/>
+ <ITEM NAME="#AC_NO"   TYPE="%-21s" FUNCTIONS=""/>
+ <ITEM NAME="#AC_SEQN"   TYPE="%-4s" FUNCTIONS=""/>
+ <ITEM NAME="#ID_TYPE"     TYPE="%-1s"        FUNCTIONS=""/>
+ 
+
+ <!--ITEM NAME="#YWTYPE"   TYPE="%-12s"  FUNCTIONS="j(#YWTYPE1?,T{#YWTYPE1}T{#YWTYPE12_1})"/--> 
+ <ITEM NAME="#SPACE2"  TYPE="%1s" FUNCTIONS="T()"/>
+ <!--ITEM LINE="10"  COL="12"  NAME="#YWSTS1" TYPE="%1d" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(0|1|2|3|4|*)">
+    <SELECT>
+       <OPTION VALUE="0" TITLE="募集期"/>
+       <OPTION VALUE="1" TITLE="募集失败"/>
+       <OPTION VALUE="2" TITLE="募集完成"/>
+       <OPTION VALUE="3" TITLE="到期处理中"/>
+       <OPTION VALUE="4" TITLE="到期入账完成"/>
+       <OPTION VALUE="*" TITLE="作废"/>
+    </SELECT>
+</ITEM-->
+ <!--ITEM NAME="#SYWSTS1"       TYPE="%-14s"   FUNCTIONS="S(#YWSTS1,#YWSTS1)"/-->
+
+ <ITEM   TYPE="%-60s"  NAME="#FILLER1"     FUNCTIONS="T()"/>
+ </BLOCK>
+ 
+
+
+<ITEM NAME="#SERVER"  TYPE="%-7s" FUNCTIONS="T($ORKINBR=#OPNBR)T($TTSKID=UP)"/>
+<ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#OK" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+  	
+    commsend_001();
+    $FD16='4682';
+    $FD67=#OPTYPE;
+    
+    $FD74=#CPNO;
+    $FD68=#CIF_TYPE; 
+    $FD52=#LCSEQN;
+    
+    $FD58=itoa(#repay_plan_rate,'%10.6f');     
+    $FD59=itoa(#prot_plan_rate,'%10.6f');      
+    $FD60=itoa(#repay_real_rate,'%10.6f');     
+    $FD61=itoa(#prot_real_rate,'%10.6f');      
+    $FD63=itoa(#trustee_fee_rate,'%10.6f');
+    $FD41=itoa(#beg_bal,'%16.2f');             
+    $FD42=itoa(#max_bal,'%16.2f');             
+    $FD43=itoa(#add_amt,'%16.2f');
+		
+
+    if(  #OPTYPE == '5' ) //!=3
+   {
+      $FD25=#CPMC;         
+			//$FD89=#AERA1;         
+			//$FD90=#PROT_TYPE1;    
+			//$FD69=#ISSUE_TYPE1;   
+			    
+
+
+      $FD25=#CPMC;
+    //$FD89=#AERA1;
+    //$FD90=#PROT_TYPE1;
+    //$FD69=#ISSUE_TYPE1;
+    //$FD68=#CIF_TYPE;
+    // $FD27=#YWTYPE;
+    //$FD44=#raise_beg1;
+    //$FD45=#raise_end1;
+    //$FD46=#plan_date1;
+   // $FD39=itoa(#limit1);
+    //$FD52=#term1;
+   // $FD30=#GJ_ACNO1;
+   // $FD33=#DF_ACNO1;
+    
+    if( #OPTYPE == '2' )
+    {
+	    //$FD70=#if_recede;
+  	  //$FD47=#recede_date;
+    	//$FD65=#cls_date;
+    }
+    //$FD71=#YWSTS1;
+    //$FD81=#FILLER1;
+  }
+  
+  
+   // showmsg('$FD39='+$FD39);
+    callserver();
+    if($FD12!='0000'){
+    	showmsg(geterror());
+    	return(false);
+    }
+    
+   runoutput();
+   rerun();
+   return(true);
+        
+        
+ }"
+ </ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功" CHECK="#OPTYPE?0">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        print(5, 25,'理财产品收益参数维护 [4]成功',getseltitle(#OPTYPE,#OPTYPE));
+        print(7, 25,'理财产品编号:[13],序号[4]',#CPNO,#LCSEQN);
+        
+       // print(8, 20,'理财产品状态:[14]',getseltitle(#YWSTS1,#YWSTS1));
+    }"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印理财产品收益参数维护凭证 " CHECK="#OPTYPE?0" LINESPACE="24">
+    NOTHING
+</PACKAGE>
+<PRINT>"{
+        dim @txtime as string; 
+        @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        $KINDNO = '00';
+        
+        print( 5,10,'机构名称:[30]',$BRNAME);
+        print( 5,5,'代码:4682');
+        print( 5,5,'交易:理财产品收益率等参数维护');
+       // print( 6,40,'理财产品收益率及限额参数 [4]成功',getseltitle(#OPTYPE,#OPTYPE));
+        print( 7,10,'理财产品编号:[13]',#CPNO);
+        print( 8,10,'理财产品名称:[60       ]',#CPMC);
+        print( 9,10,'适用客户类型:[8]      理财产品序号:[5       ]',getseltitle(#CIF_TYPE,#CIF_TYPE),#LCSEQN);
+        print(11,10,'客户持有到期计划年化收益率：[11]％',itoa(#repay_plan_rate,'%10.6f'));
+        print(12,10,'产品投资计划年化收益率：    [11]％',itoa(#prot_plan_rate,'%10.6f'));
+        print(13,10,'客户持有到期实际年化收益率：[11]％',itoa(#repay_real_rate,'%10.6f'));
+        print(14,10,'产品投资实际年化收益率：    [11]％',itoa(#prot_real_rate,'%10.6f'));
+        print(15,10,'托管及其他费率:    [11]％',itoa(#trustee_fee_rate,'%10.6f'));
+        
+        print(17,10,'认购起点金额:[17](元)',itoa(#beg_bal,'%16.2f'));
+        print(18,10,'认购上限金额:[17](元)',itoa(#max_bal,'%16.2f'));
+        print(19,10,'认购递增份额:[17](元)',itoa(#add_amt,'%16.2f'));
+        
+        //print( 9,10,'归集户账号:[19                 ]',#GJ_ACNO1);
+        //print(10,10,'归集户名称:[60          ]',#PAYNAME1);
+       // print(12,10,'认购开始日:[8 ]             认购结束日:[8]',#raise_beg1,#raise_end1);
+        //认购划款日、产品成立日、产品实际到期日 理财期限、认购限额、产品状态
+       // print(20,10,'备    注:[60]',#FILLER1);
+        print(21,10,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(21,5,'柜员:[6]',$FD7);
+        print(21,5,'流水号:[6]',substr($FD126,2,6));
+        print(23,10,'\B0备注:【[10]】成功\B1',getseltitle(#OPTYPE,#OPTYPE));
+        
+    }"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

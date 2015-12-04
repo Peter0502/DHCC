@@ -1,0 +1,29 @@
+#ifndef __hvcstab_CH__
+#define __hvcstab_CH__
+struct hvcstab_c{
+	char      rowid[20];
+	char      brno[13];
+	char      brname[61];
+	char      txday[9];
+	char      txtime[9];
+	char      aptype[2];
+	char      txcd[3];
+	char      sendday[9];
+	char      apflg[33];
+	char      payname[61];
+	char      paycertif[23];
+	char      cashbrno[13];
+	char      cashbrtype[2];
+	char      cashname[61];
+	char      cashactno[41];
+	char      cashertype[3];
+	char      cashcode[21];
+	char      cashcertif[23];
+	char      txamt[19];
+	char      cashdate[9];
+	char      cfrom[21];
+	char      cashtype[3];
+	char      txtypeno[11];
+	char      expand[21];
+};
+#endif 

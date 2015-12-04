@@ -1,0 +1,155 @@
+<TRANSACTION RIGHTS="11111111110000000000000000000000"  TITLE="5563    三方协议验证与撤销登记簿查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+   // initfd();
+    commsend_001();
+    $FD44=#ENTRUSTDATE;     //委托日期
+    $FD25=#SENDORGCODE;     //发起机构代码    
+    $FD87=#VCNO;            //验证撤销序号
+    
+}"
+</COMMSEND>
+
+<COMMRECV>
+"{
+commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+"T(5563                  三方协议验证与撤销登记簿查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5581)"/>
+<ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+  dim @selid        as number;
+	dim @sendorgcode  as string;
+	dim @entrustdate  as string;
+	dim @vcno         as string;
+	dim @vcsign       as string;
+	dim @taxorgcode   as string;
+	dim @taxpayname   as string;
+	dim @taxpaycode   as string;
+	dim @payopbkcode  as string;
+	dim @paybkcode    as string;
+	dim @payacct      as string;
+	dim @protocolno   as string;
+	dim @vcresult     as string;
+	dim @addword      as string;
+		
+	if(#DOLIST == '1')
+	{
+	    @selid=list_work();
+	    if(@selid &lt; 0)
+	    {
+		     list_del();
+		     rerun();
+		     return(true);
+	    }
+      @selid=list_getselid();
+      if(@selid &lt; 0)
+      {
+         list_del();
+         rerun();
+         return(true);
+      }
+
+	    @sendorgcode=rtrim(list_gettext(@selid,0));
+	    @entrustdate=rtrim(list_gettext(@selid,1));
+	    @vcno=rtrim(list_gettext(@selid,2));
+	    @vcsign=rtrim(list_gettext(@selid,3));
+	    @taxorgcode=ltrim(list_gettext(@selid,4));
+	    @taxpayname=rtrim(list_gettext(@selid,5));
+	    @taxpaycode=ltrim(list_gettext(@selid,6));
+	    @payopbkcode=rtrim(list_gettext(@selid,7));
+	    @paybkcode=ltrim(list_gettext(@selid,8));	    
+      @payacct=ltrim(list_gettext(@selid,9));
+      @protocolno=ltrim(list_gettext(@selid,10));
+      @vcresult=rtrim(list_gettext(@selid,11));
+      @addword=rtrim(list_gettext(@selid,12));
+	       
+	     //三方协议验证与撤销登记簿信息
+	    open('5563_1.XML','#SENDORGCODE='+@sendorgcode+';#ENTRUSTDATE='+@entrustdate+';#VCNO='+@vcno+';#VCSIGN='+@vcsign+';#TAXORGCODE='+@taxorgcode+';#TAXPAYNAME='+@taxpayname+';#TAXPAYCODE='+@taxpaycode+';#PAYOPBKCODE='+@payopbkcode+';#PAYBKCODE='+@paybkcode+';#PAYACCT='+@payacct+';#PROTOCOLNO='+@protocolno+';#VCRESULT='+@vcresult+';#ADDWORD='+@addword+';'); 
+
+		showfooter();
+		return(true);
+	}
+	list_del();
+	#DOLIST='';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM LINE="7"   COL="11" TYPE="%-13s" FUNCTIONS="T(委 托  日 期:)"/>
+<ITEM LINE="8"   COL="11" TYPE="%-13s" FUNCTIONS="T(录 入  机 构:)"/>
+<ITEM LINE="9"  COL="11" TYPE="%-13s" FUNCTIONS="T(验证撤销序号:)"/>
+<!---------2009-7-30 16:52 添加如下输入项-------------------->
+<ITEM LINE="10"  COL="11" TYPE="%-13s" FUNCTIONS="T(纳税 人 名称:)"/>
+<ITEM LINE="11"  COL="11" TYPE="%-13s" FUNCTIONS="T(纳税 人 代码:)"/>
+<ITEM LINE="12"  COL="11" TYPE="%-13s" FUNCTIONS="T(三方协议号码:)"/>
+
+<ITEM NAME="#SENDORGTYPE" TYPE="%1s" FUNCTIONS=""/><!--征收机关类型 -->
+
+<ITEM NAME="#INIT" TYPE="%-1s" FUNCTIONS="">
+    <ONLOSTFOCUS>"{
+        if($KINBR=='10001'){
+            enable(#LRBRNO,true);
+        }
+    "}</ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM LINE="7"  COL="24" NAME="#ENTRUSTDATE" TYPE="%-8d"  DEVICE="KEYBOARD" FUNCTIONS="T()D()"/> 
+<ITEM LINE="8"   COL="24" NAME="#LRBRNO" TYPE="%-5s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T($KINBR)V(NB)"/>
+<ITEM LINE="9"  COL="24" NAME="#VCNO"        TYPE="%-8s"  DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+
+<ITEM LINE="10"  COL="24" NAME="#PAYNAME"        TYPE="%-50s"  DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+<ITEM LINE="11"  COL="24" NAME="#PAYCODE"        TYPE="%-20s"  DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+<ITEM LINE="12"  COL="24" NAME="#CFXNO"          TYPE="%-50s"  DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+
+<ITEM LINE="20" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>
+"{
+	dim @tota as string;
+	initfd();
+	commsend_001();
+	$FD44=#ENTRUSTDATE;     //委托日期    
+	$FD87=#VCNO;            //验证撤销序号
+	$FD91=#LRBRNO;
+	// @tota=callserver();  chengbo 20090619 HS
+	$FD26=#PAYNAME;
+	$FD30=#PAYCODE;
+	$FD27=#CFXNO;
+	@tota=calltips();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	
+	autolist(@tota);	
+	#DOLIST='1';
+}"
+</ONCLICK>
+</ITEM>     
+</VARIABLE>
+
+<REQUEST>        
+</REQUEST>      
+<RESPONSE>       
+<PACKAGE>        
+</PACKAGE>          
+</RESPONSE>      
+</TRANSACTION>   

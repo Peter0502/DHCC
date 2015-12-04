@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="7016 卡挂失编号查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+
+	<VARIABLE UPLOOP="TRUE">
+	  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7016                          卡挂失编号查询)"/>
+    <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"      TYPE="%-4s"  FUNCTIONS="T($TXNO=7016)"/>
+	 <ITEM NAME="#MSGTYPE"   TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=1400)"/> 
+	 
+   <!-- 输入变量 -->
+    <BLOCK NAME="COMMON" LINE="7" COL="10">
+		<ITEM NAME="#TXCD"      TYPE="%4s"   FUNCTIONS="T(#TXCD=7016)"/>		<!---交易代码--->
+	  
+	  <ITEM NAME="#TXNAME"    TYPE="%-12s" FUNCTIONS="T(挂失编号查询)"/> <!---交易名称--->
+		
+		<!--ITEM NAME="#LACTNO" LINE="7"  COL="11"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(帐    号: )"/-->
+		
+		<ITEM LINE="1" COL="10" TYPE="%-10s" FUNCTIONS="T(卡     号:)"/>
+	  <ITEM NAME="#CARD_NO" INPUT="TEXT" LINE="1" COL="21" TYPE="%-19s" FUNCTIONS="V(NB)">
+	  <ONGOTFOCUS>"{
+ 	  	#CARD_NO = '';
+        show(#CARD_NO,true);  	  
+	  	#LOST_NO = '';
+        show(#LOST_NO,true);
+     	  	
+	  }"
+	  </ONGOTFOCUS>
+		<ONLOSTFOCUS>"{
+			
+			if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+       {
+        	 show(#LOST_NO,true);
+       } else if(len(rtrim(#CARD_NO)) &lt; 19)
+        {
+  	      showmsg('卡号长度应为19位，请重新输入!');
+  	      return(false);
+  	    } 
+        
+		 initfd();
+		 commsend_001();
+		 $FD16='7016';
+		 $FD30=#CARD_NO;
+		 callagn();
+		if($FD12!='0000'){
+	    showmsg(geterror());
+	    return(false);
+    	}
+		#LOST_NO=$FD60;
+		show(#LOST_NO,true);	
+		//showmsg('#LOST_NO = ['+#LOST_NO +']');	 
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM LINE="2"  COL="9"  TYPE="%-40s" FUNCTIONS=
+   		"T(--------------------------------------------------)"/>
+   		
+  <ITEM LINE="7" COL="10" INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(挂失编号:)"/>
+  
+	<ITEM NAME="#LOST_NO" INPUT="LABEL" LINE="7" COL="21" TYPE="%-10s" VISABLE="FALSE"  FUNCTIONS=""/>
+    
+</BLOCK>
+  <ITEM LINE="21" COL="65" INPUT="BUTTON" TYPE="%-6s" FUNCTIONS="T(确 定)"/>
+  <ONCLICK>"{
+  	rerun();
+  }"
+  </ONCLICK>	 	
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="挂号编号查询">
+	NOTHING
+	</PACKAGE>
+
+</RESPONSE>
+
+
+</TRANSACTION>

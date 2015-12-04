@@ -1,0 +1,41 @@
+#ifndef __kh_reg_CH__
+#define __kh_reg_CH__
+struct kh_reg_c{
+	char      rowid[20];
+	char      br_no[6];
+	char      out_ac_no[20];
+	long      out_ac_id;
+	long      out_ac_seqn;
+	long      tx_date;
+	long      nat_date;
+	char      out_prdt_no[4];
+	char      out_ac_id_type[2];
+	double    kh_amt;
+	double    intst;
+	char      intst_ac_no[20];
+	long      intst_ac_seqn;
+	char      in_ac_no[20];
+	long      in_ac_id;
+	long      in_ac_seqn;
+	char      tel[7];
+	char      auth_tel[7];
+	double    auth_code;
+	long      trace_no;
+	long      tx_time;
+	char      brf[21];
+	long      tt_no;
+	char      low_bo[37];
+	char      zf_name1[9];
+	char      pub_no1[19];
+	char      zf_name2[9];
+	char      pub_no2[19];
+	char      fl_print[2];
+	char      flag_intst[2];
+	char      tel_intst[7];
+	long      trace_no_intst;
+	long      tx_date_intst;
+	char      id_type_intst[2];
+	char      id_no_intst[21];
+	char      name_intst[61];
+};
+#endif 

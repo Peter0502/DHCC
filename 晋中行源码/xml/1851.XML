@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1851 统一支付系统状态查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<FIRSTWORK RERUN="TRUE">
+"{
+	 dim @tota as string;
+	 initfd();
+	 commsend_001();
+	 $FD16='1001';
+	 $FD18='pbp';
+	 @tota=callagnpbp();
+	 @tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+	 if(@tota =='')
+          {
+                showmsg('读取回传文件失败！');
+                return(false);
+          }
+	 setsel(#SYSCODE,@tota,'v4o1t8o1');
+}"
+</FIRSTWORK>
+<COMMSEND>
+"{
+
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS="T( 1851                          系统状态查询)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1851)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(系统状态查询)"/>
+  	<ITEM NAME="#Status" TYPE="%-13s"/> 	
+  	<ITEM NAME="#TrnEnd" TYPE="%-13s"/>
+  	  	
+  	<ITEM TYPE="%-10s" NAME="#WorkDate"/>  	
+  	<ITEM TYPE="%-10s" NAME="#PreWorkDate"/> 
+  		
+  	<ITEM TYPE="%-10s" NAME="#ClearDate"/>
+  	<ITEM TYPE="%-10s" NAME="#ClearRound"/>
+  	
+  	<ITEM TYPE="%-10s" NAME="#ExchgDate"/>
+  	<ITEM TYPE="%-10s" NAME="#ExchgRound"/>
+  	
+  	<ITEM TYPE="%-10s" NAME="#WorkRound"/>
+  	<ITEM TYPE="%-10s" NAME="#RoundNum"/>
+  	<ITEM TYPE="%-10s" NAME="#SysDt"/>
+  	<ITEM TYPE="%-10s" NAME="#PreDt"/>
+  	
+  	<ITEM TYPE="%-10s" NAME="#NextDt"/>
+  	<ITEM TYPE="%-10s" NAME="#LoginSts"/>
+	<BLOCK NAME="block_in" LINE="6" VISABLE="TRUE">
+		<ITEM LINE="0"  COL="20" TYPE="%-11s" FUNCTIONS="T(系统类型：)"/>
+		<ITEM LINE="0"  COL="31" NAME="#SYSCODE" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(sxps)V(NB)">
+			<SELECT>
+			</SELECT>
+		</ITEM>
+		<ITEM LINE="2"  COL="20" TYPE="%-11s" FUNCTIONS="T(查询模式：)"/>
+		<ITEM LINE="2"  COL="31" NAME="#QryMode" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="本地查询"/>
+			</SELECT>
+		</ITEM>
+	</BLOCK>
+  <ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>
+	"{
+		initfd();
+	    	commsend_001();
+	    	$FD16='1306';
+	    	$FD18='pbp';
+	    	$FD28=#SYSCODE; 
+	    	$FD67=#QryMode;			    
+	    
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+	   	if(#SYSCODE=='sxps')
+	   	{
+	     		if(delspace($FD36) == '10')
+	     		{
+	     			#Status='正常';
+	     		}
+	     		else if(delspace($FD36) == '02')
+	     		{
+	     			#Status='停运';
+	     		}
+	     		else
+	     		{
+	     			#Status='状态未知';
+	     		}
+	     		
+	     		#TrnEnd=$FD68;
+	     
+	     		#WorkDate=$FD44;
+	     		#PreWorkDate=$FD47;
+
+	     
+	     		#ClearDate=$FD45;
+	     		#ClearRound=itoa(atoi($FD54));
+	     
+	     		#ExchgDate=$FD46;
+	     		#ExchgRound=itoa(atoi($FD55));
+	     
+	     		#WorkRound=$FD52;
+	     		#RoundNum=itoa(atoi($FD53));
+	     		
+	     		#SysDt=$FD29;
+	     		#PreDt=$FD85;
+	     		#NextDt=$FD86;
+	     		
+	     		if(delspace($FD73) == '1')
+	     		{
+	     			#LoginSts='已签到';
+	     		}
+	     		else if(delspace($FD73) == '0')
+	     		{
+	     			#LoginSts='已签退';
+	     		}
+	     		else
+	     		{
+	     			#LoginSts='状态未知';
+	     		}
+	     		
+	     		//生成核心流水-start
+			dim @bak_fd81 as string;
+			@bak_fd81=$FD81;
+			$FD81=#TXNAME;
+			gethxtraceno();
+			$FD81=@bak_fd81;
+			//生成核心流水-end
+	     
+	     		runoutput();	  
+	     		return(true);
+	    }
+	    else
+	    {
+	    	showmsg('所选系统无法识别');
+	    	return(true);
+	    }
+
+	 }"
+	 </ONCLICK>
+	</ITEM>
+</VARIABLE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="显示内容" >
+NOTHING
+</PACKAGE>
+		<PRINT>
+		"{
+		    		PrintTxHead();
+		    		
+		 				
+					print( 3,3, '系统状态： [20]  未决标志：[20]', #Status, #TrnEnd);
+					print( 4,3, '工作日期： [20]  工作场次：[20]', #WorkDate, #WorkRound);
+					print( 5,3, '清算日期： [20]  清算场次：[20]', #ClearDate, #ClearRound);
+					print( 6,3, '交换日期： [20]  交换场次：[20]', #ExchgDate, #ExchgRound);
+					print( 7,3, '前一日期： [20]  最大场次：[20]', #PreDt, #RoundNum);
+					print( 8,3, '登录状态:  [20]  ', #LoginSts);
+				
+				PrintTxTail();
+		}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

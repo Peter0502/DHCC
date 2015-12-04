@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="L11 通存业务复核)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	//发送给卡系统 Begin Add By hxc 100603
+		dim @txno_bak as string;
+   if(substr(#PAY_AC_NO,0,6) == '621223' or substr(#PAY_AC_NO,0,6) == '621780')
+  {
+    dim @filename as string;
+	  @filename='../tmp/'+'5306'+$FD7+'.fds';
+	  savefds(@filename);
+	  //showmsg('savefds(@filename);');
+    @txno_bak=$FD16;
+    initfd();
+    commsend_001();
+    $FD16='6930';
+    $FD30=#PAY_AC_NO;
+    $FD79=#DRAW_PWD;
+    $FD75=$MSR2;
+    $FD76=$MSR3;
+    $FD39=itoa(val(#UTX_AMT,100),'%016.0f');
+    $FD31=#CASH_AC_NO;
+    $FD73='10006935';       //小额交易代码
+    $FD81='小额通存业务录入';
+    callagn();
+    $FD16=@txno_bak;
+    if($FD12!='0000')
+    {
+       showmsg(geterror());
+       return (false);
+    }
+    #TRAN_FEE = val($FD40);
+    #CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+    loadfds(@filename);
+  }
+	//发送给卡系统 End Add By hxc 100603
+	
+		$FD39 = itoa( #TX_AMT*100,'%016.0f');
+		call_9986();
+	$FD44=$HDATE;
+  commsend_001();
+
+	$FD21=#CUR_NO;    //货币标志
+	$FD93='9';
+	$FD99='2';
+	$FD44=$HDATE;
+	$FD66='1';        // 借贷标志
+	$FD30=#ACTNO24; // 科目帐号
+	if(#ACTYPE=='7')
+	{
+		$FD68=#ACTYPE;    // 帐务类型 1帐号 7科目
+	}	
+	$FD40=$FD39;      // 交易金额
+
+  #TXAMT15=itoa(#TX_AMT*100,'%16.0f');
+  $FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#ID_NO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+  lvsend_123();
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+        lvrecv_123();
+        setitems('#FD9_AUTH_NO#FD9_AUTH_PWD#FD9_FEE_IND',$FD9);
+    //卡交易核心处理失败往数码发送取消交易 Begin Add By hxc 100603
+    if(($FD12!='0000') and ($FD12!='Z003') and ($FD12!='Z201') and ((substr(#PAY_AC_NO,0,6) == '621223') or (substr(#PAY_AC_NO,0,6) == '621780')))
+	{
+		#RESP_CODE=$FD12;
+	  showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#PAY_AC_NO;
+		$FD43=#CARD_TRACENO;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		showmsg('小额通存业务复核失败!!...');
+	  rerun();
+	}
+  //卡交易核心处理失败往数码发送取消交易 End Add By hxc 100603
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5306                        通存业务复核)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5846)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <ITEM NAME="#PKGNO"   TYPE="%3d"  FUNCTIONS="T(003)"/>
+  <ITEM NAME="#OPCD"    TYPE="%2d"  FUNCTIONS="T(30)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(5306)"/>
+<ITEM NAME="#TRAN_FEE"     TYPE="%16.2f" FUNCTIONS=""/>
+ <ITEM NAME="#CARD_TRACENO" TYPE="%-16s"  FUNCTIONS=""/>
+ <ITEM NAME="#RESP_CODE"    TYPE="%-4s"   FUNCTIONS=""/>
+  <!-- 小额贷记基本信息录入 -->
+  <IMPORT>LVBASECHK.IMP</IMPORT>
+  <ITEM NAME="#GOOK" TYPE="%1s" FUNCTIONS="j(#TXNUM=00100,T{0}T{1})G(0,#OK)"/>
+  <!-- 附加域内容-->
+  <ITEM NAME="#BUFFER" TYPE="%-250s" FUNCTIONS=""/>
+	<ITEM NAME="#LW_IND" TYPE="%-1s" FUNCTIONS="T(1)"/>
+  <ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  <ONCLICK>"{
+  submit();
+  }"
+  </ONCLICK>
+</ITEM>
+<ITEM NAME="#TXNAME"     TYPE="%-24s" FUNCTIONS="T(小额实时贷记业务手续费)"/>
+</VARIABLE>
+
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(2,5, '                  实时贷记往帐复核');
+		print(4,5, '委 托 日 期:[8]         支付交易序号:[8]',$HDATE,#ORDERNO);
+		print(5,5, '接收行行号:[12]',#AC_BR_NO);
+		print(6,5, '付款人帐号 :[24]',#PAY_AC_NO);
+		print(7,5, '付款人名称 :[60]',#PAY_NAME);
+		print(8,5, '交 易 金 额:[21]',#UTX_AMT);
+		print(10,5,'收款人帐号:[32]',#CASH_AC_NO);
+		print(11,5,'收款人名称:[60]',#CASH_NAME);
+		print(12,5,'附      言:[60]',#BRF);
+		print(13,5,'流  水  号:[6]                    操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+<!----
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+	$KINDNO='00';
+	dim @txtime as string;
+	@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+	print( 5,20,'机构名称:[30]',$BRNAME);  
+	print( 5,2,'代码:5306');
+	print( 5,13,'交易:小额通存往帐复核');
+	
+	print( 7,20, '接收行 行 号:[12          ]                         支付交易序号:[8       ]',#AC_BR_NO,#ORDERNO);
+	print( 8,20, '付款人 帐 号:[24                      ]             交 易  金 额:[21]',#PAY_AC_NO,#UTX_AMT);
+	print( 9,20, '付款人 名 称:[60]',#PAY_NAME);
+	print(10,20, '收款人 帐 号:[32]',#CASH_AC_NO);
+	print(11,20, '收款人 名 称:[60]',#CASH_NAME);
+	print(12,20, '附        言:[60]',#BRF);
+	printacdtl_1();
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+      }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+ 	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5,2,'代码:5306');
+	print( 5,13,'交易:小额通存往帐复核');
+	
+	printacdtl_1();
+	print(lineno()+1,15,'支付交易序号:[8       ]',#ORDERNO);
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+---->
+<IMPORT>MBFEFEE.IMP</IMPORT>
+<!--打印信息 -->
+</TRANSACTION>

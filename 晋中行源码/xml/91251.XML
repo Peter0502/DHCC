@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="91251 打印个人存款证明"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD16='8215';
+	$FD90=#VTYPE;
+	$FD60=#PRT_NO;
+	$FD68=delspace(#PRT_TYPE);       // 打印类型
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(91251                        打印个人存款证明)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8215)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="5"  COL="5"  TYPE="%-10s" FUNCTIONS="T(帐    号:)"/>
+  <ITEM LINE="6"  COL="5"  TYPE="%-10s" FUNCTIONS="T(开户日期:)"/>
+  <ITEM LINE="6"  COL="47" TYPE="%-10s" FUNCTIONS="T(到期日期:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="8"  COL="5"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="8"  COL="47" TYPE="%-10s" FUNCTIONS="T(帐户状态:)"/>
+  <ITEM LINE="9"  COL="5"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="10" COL="5"  TYPE="%-10s" FUNCTIONS="T(凭证类型:)"/>
+  <ITEM LINE="10" COL="47" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  
+  <ITEM NAME="#AC_NO"      LINE="5"  COL="15" TYPE="%-24s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#OPN_DATE"   LINE="6"  COL="15" TYPE="%-8s"  INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#END_DATE"   LINE="6"  COL="57" TYPE="%-8s"  INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#NAME"       LINE="7"  COL="15" TYPE="%-10s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#PRDT_NAME"  LINE="8"  COL="15" TYPE="%-30s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#AC_STS"     LINE="8"  COL="57" TYPE="%-12s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#BAL"        LINE="9"  COL="15" TYPE="%-20s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#NOTE_TYPE"  LINE="10" COL="15" TYPE="%-20s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#NOTE_NO"    LINE="10" COL="57" TYPE="%-20s" INPUT="LABEL" FUNCTIONS=""/>
+  <ITEM NAME="#ID_NO"      TYPE="%-20s" FUNCTIONS=""/>
+  
+  <ITEM LINE="11" COL="5"  TYPE="%-70s" FUNCTIONS=
+   "T(───────────客户基本信息──────────────────)"/>
+  <ITEM LINE="12" COL="5"  TYPE="%-10s" FUNCTIONS="T(打印位置:)"/>
+  <ITEM LINE="12" COL="15" NAME="#PRT_TYPE"  INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="首页及第一行"/>
+		<OPTION VALUE="2" TITLE="第二行"/>
+		<OPTION VALUE="3" TITLE="第三行"/>
+		<OPTION VALUE="4" TITLE="第四行"/>
+		<OPTION VALUE="5" TITLE="第五行"/>
+	</SELECT>
+  </ITEM>
+  <ITEM LINE="13" COL="5"  TYPE="%-10s" FUNCTIONS="T(凭证号码:)">
+  <ONLOSTFOCUS>
+  "{
+     if(#PRT_TYPE !='1' )
+     {
+     enable(#PRT_NO,false);
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#VTYPE"    TYPE="%3d" FUNCTIONS="T(109)" /> <!--凭证种类需要确定后修改-->
+  <ITEM LINE="13" COL="15" NAME="#PRT_NO" INPUT="TEXT"   TYPE="%16d"  FUNCTIONS="V(NB)"/>
+  
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="49"  TYPE="%-6s" FUNCTIONS="T(返  回)" INPUT="BUTTON">
+	<ONCLICK>"{
+	close();
+	}"
+ 	</ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(打  印)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="18" CHECK="#PRT_TYPE=1">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		dim @txdate  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		@txdate=substr($HDATE,6,2)+'/'+substr($HDATE,4,2)+'/'+substr($HDATE,0,4);
+	
+		print( 17,80,'\B0[8       ]\B1',$HDATE);
+		print( 21,29,'\B0[10      ]\B1                           \B0[20                ]\B1',#NAME,#ID_NO);
+		print( 22,45,'\B0[10]\B1',@txdate);
+		print( 23,24,'\B0[4   ]\B1        \B0[2 ]\B1          \B0[2 ]\B1',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+		print( 24,24,'\B0[20]\B1',#ID_NO);
+		
+		print( 30,12,'[20               ]    [20           ]    [20]  [8]',#AC_NO,#PRDT_NAME,#BAL,#OPN_DATE);
+		
+		print( 60,72,'\B0[4   ]\B1',$BRNAME);
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="33" CHECK="#PRT_TYPE=2">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		
+	  print( 20,12,'[20               ]    [20           ]    [20]  [8]',#AC_NO,#PRDT_NAME,#BAL,#OPN_DATE);
+	  
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="33" CHECK="#PRT_TYPE=3">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		
+	  print( 21,12,'[20               ]    [20           ]    [20]  [8]',#AC_NO,#PRDT_NAME,#BAL,#OPN_DATE);
+	  
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="33"  CHECK="#PRT_TYPE=4">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+	
+		print( 22,12,'[20               ]    [20           ]    [20]  [8]',#AC_NO,#PRDT_NAME,#BAL,#OPN_DATE);
+	
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="33"  CHECK="#PRT_TYPE=5">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+	
+		print( 23,12,'[20               ]    [20           ]    [20]  [8]',#AC_NO,#PRDT_NAME,#BAL,#OPN_DATE);
+	
+		}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

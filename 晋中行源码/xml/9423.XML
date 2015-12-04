@@ -1,0 +1,169 @@
+
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9423 自助机具柜员钱箱查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD21=#BZTYPE;
+	$FD64=#TLRNO;
+	$FD91=#BRNO;
+	$FD40=getitems('#TOTAMT');
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	#SHFLAG=1;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(9423                    自助机具柜员钱箱查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=8423)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <BLOCK NAME="COMM" LINE="0" COL="7">
+  <ITEM LINE="9"  COL="21" TYPE="%-9s" FUNCTIONS="T(机构号:)"/>
+  <ITEM LINE="11" COL="21" TYPE="%-9s" FUNCTIONS="T(柜员号:)"/>
+  <ITEM LINE="13" COL="21" TYPE="%-9s" FUNCTIONS="T(币  种:!)"/>
+  <ITEM LINE="15" COL="21" TYPE="%-9s" VISABLE="FALSE" FUNCTIONS="T(金  额:)"/>
+  <ITEM NAME="#BRNO"   INPUT="LABEL"  LINE="9"  COL="29" TYPE="%-5s" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#TLRNO"  INPUT="TEXT" LINE="11" COL="29" TYPE="%-7s" >
+  	<ONLOSTFOCUS>
+  	"{
+  		dim @tota  as string;
+      dim @tota1  as string;
+      commsend_001();
+			$FD16='9598';
+			$FD123='select tel from com_tel where lvl=9 and tel='+chr(39)+#TLRNO+chr(39);
+      @tota=callserver();
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return(false);
+      }
+      @tota1=strfld(@tota,'|',0);
+      
+      if(@tota1!=#TLRNO)
+      {
+      	  showmsg('此交易只提供自助机具柜员钱箱查询！');
+      	  return(false);
+      }
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#BZTYPE" INPUT="SELECT" LINE="13" COL="29" TYPE="%-2s" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+
+		<!----现在只留人民币选项
+		<OPTION VALUE="12" TITLE="0.英镑"/>
+		<OPTION VALUE="13" TITLE="0.港元"/>
+		<OPTION VALUE="14" TITLE="0.美元"/>
+		<OPTION VALUE="15" TITLE="0.瑞士法郎"/>
+		<OPTION VALUE="27" TITLE="0.日元"/>
+		<OPTION VALUE="28" TITLE="0.加元"/>
+		<OPTION VALUE="29" TITLE="0.澳元"/>
+		<OPTION VALUE="38" TITLE="0.欧元"/>
+		---->
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#TOTAMT" INPUT="TEXT" LINE="15" COL="29" VISABLE="FALSE" TYPE="%17.2f" FUNCTIONS=""/>
+  </BLOCK>
+
+  <ITEM NAME="#SHFLAG" TYPE="%1s"  FUNCTIONS=""/>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<!----
+---->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="柜员券别信息" CHECK="#SHFLAG=1">
+QBSL|@br_no|@tel|@cur_no|@cash_ac_no|@bal|@ys_bal|@t10000|@t5000|@t2000|@t1000|@t500|@t200|@t100|@t50|@t20|@t10|@t5|@t2|@t1|
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 2,15,'全部券别信息如下:');
+		print( 4,15,'百元张数: [6]     伍拾元张数: [6]',@t10000,@t5000);
+		print( 6,15,'贰拾元张数: [6]       拾元张数: [6]',@t2000,@t1000);
+		print( 8,15,'伍元张数: [6]       贰元张数: [6]',@t500,@t200);
+		print(10,15,'壹元张数: [6]       伍角张数: [6]',@t100,@t50);
+		print(12,15,'贰角张数: [6]       壹角张数: [6]',@t20,@t10);
+		print(14,15,'伍分张数: [6]       贰分张数: [6]',@t5,@t2);
+		print(16,15,'壹分张数: [6]       库存余额：[20]',@t1,@bal);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="柜员券别信息" CHECK="#SHFLAG=0">
+QBSL|@br_no|@tel|@cur_no|@cash_ac_no|@bal|@ys_bal|@t10000|@t5000|@t2000|@t1000|@t500|@t200|@t100|@t50|@t20|@t10|@t5|@t2|@t1|
+</PACKAGE>
+	<PRINT>
+	"{
+	  dim @p2000  as string;
+	  dim @p1000  as string;
+	  dim @p500   as string;
+	  dim @p200   as string;
+	  dim @p100   as string;
+	  dim @p50    as string;
+	  dim @p20    as string;
+	  dim @p10    as string;
+	  
+		if(@t2000=='0') {@p2000='**';} else {@p2000=substr(@t2000,0,4)+'**';}
+		if(@t1000=='0') {@p1000='**';} else {@p1000=substr(@t1000,0,4)+'**';}
+		if(@t500 =='0') {@p500 ='**';} else {@p500 =substr(@t500 ,0,4)+'**';}
+		if(@t200 =='0') {@p200 ='**';} else {@p200 =substr(@t200 ,0,4)+'**';}
+		if(@t100 =='0') {@p100 ='**';} else {@p100 =substr(@t100 ,0,4)+'**';}
+		if(@t50  =='0') {@p50  ='**';} else {@p50  =substr(@t50  ,0,4)+'**';}
+		if(@t20  =='0') {@p20  ='**';} else {@p20  =substr(@t20  ,0,4)+'**';}
+		if(@t10  =='0') {@p10  ='**';} else {@p10  =substr(@t10  ,0,4)+'**';}
+		@bal = @bal+'万';
+		
+		print( 2,15,'余额输入不正确,部分信息如下:');
+		print( 4,15,'百元张数: [6]     伍拾元张数: [6]',@t10000,@t5000);
+		print( 6,13,'贰拾元张数: [6]       拾元张数: [6]',@p2000,@p1000);
+		print( 8,15,'伍元张数: [6]       贰元张数: [6]',@p500,@p200);
+		print(10,15,'壹元张数: [6]       伍角张数: [6]',@p100,@p50);
+		print(12,15,'贰角张数: [6]       壹角张数: [6]',@p20,@p10);
+		print(14,15,'伍分张数: [6]       贰分张数: [6]',@t5,@t2);
+		print(16,15,'壹分张数: [6]       库存余额：[20]',@t1,@bal);
+	}"
+	</PRINT>
+<!--
+<PACKAGE DEVICE="SCREEN" DESC="柜员券别信息" CHECK="#SHFLAG=0">
+QBSL|@br_no|@tel|@cur_no|@cash_ac_no|@bal|@ys_bal|@t10000|@t5000|
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 7,15,'余额输入不正确,大面值券别信息如下:');
+		print( 9,15,'百元张数:[6]     伍拾元张数:[6]',@t10000,@t5000);
+	}"
+	</PRINT>
+-->	
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="柜员券别信息" CHECK="#SHFLAG=1">
+QBSL|@br_no|@tel|@cur_no|@cash_ac_no|@bal|@ys_bal|@t10000|@t5000|@t2000|@t1000|@t500|@t200|@t100|@t50|@t20|@t10|@t5|@t2|@t1|
+</PACKAGE>
+	<PRINT>
+	"{
+		print( 6,15,'全部券别信息如下:');
+		print( 8,15,'百元张数: [6]     伍拾元张数: [6]',@t10000,@t5000);
+		print( 10,15,'贰拾元张数: [6]    拾元张数: [6]',@t2000,@t1000);
+		print(12,15,'伍元张数: [6]       贰元张数: [6]',@t500,@t200);
+		print(14,15,'壹元张数: [6]       伍角张数: [6]',@t100,@t50);
+		print(16,15,'贰角张数: [6]       壹角张数: [6]',@t20,@t10);
+		print(18,15,'伍分张数: [6]       贰分张数: [6]',@t5,@t2);
+		print(20,15,'壹分张数: [6]       库存余额：[20]',@t1,@bal);
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

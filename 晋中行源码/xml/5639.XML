@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100000000000000000000000000" TITLE="5639 财政集中支付垫款户信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+   
+}"
+</COMMSEND>
+<COMMRECV>"{
+  commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+  "T(5639                  财政集中支付垫款户信息维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5629)"/>
+  <ITEM NAME="#TXNAME" TYPE="%-12s" FUNCTIONS="T(财政集中支付垫款户信息维护)"/><!---交易名称--->
+  <ITEM NAME="#TXNUMBER" TYPE="%-4s" FUNCTIONS="T(5629)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM  TYPE="%-16s" NAME="#AC_NO_O"  FUNCTIONS=""/>
+  <ITEM TYPE="%-50s"  NAME="#AC_NAME_O"  FUNCTIONS=""/>
+  
+  <BLOCK LINE="5" COL="10" >
+ 
+  <ITEM LINE="6" COL="8" TYPE="%-10s"  FUNCTIONS="T(财政编码: )"/>
+  <ITEM LINE="6" COL="18" TYPE="%-16s" NAME="#FIN_CODE" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+  
+  <ITEM LINE="7" COL="8" TYPE="%-10s" FUNCTIONS="T(支付类型: )"/>
+  <ITEM LINE="7" COL="18" TYPE="%-2s" NAME="#PAY_TYPE" INPUT="SELECT" FUNCTIONS="V(NB)">
+    <SELECT>
+      <OPTION VALUE="1"  TITLE="直接支付" />
+      <OPTION VALUE="2"  TITLE="授权支付" />
+    </SELECT>
+   </ITEM>
+  
+
+  <ITEM LINE="8" COL="8" TYPE="%-10s"  FUNCTIONS="T(账    号: )"/>
+  <ITEM LINE="8" COL="18" TYPE="%-16s" NAME="#AC_NO" INPUT="TEXT" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        dim @tota as string; 
+        dim @filename as string; 
+        initfd();
+        commsend_001();
+        $FD16='1252';
+        $FD67=#PAY_TYPE;
+        $FD59=#FIN_CODE;
+        $FD32=#AC_NO;
+       
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        setitems('#AC_NAME',$FD83);
+        setitems('#AC_NAME_O',$FD83);
+     }" 
+    </ONLOSTFOCUS>
+    </ITEM>
+  
+  <ITEM LINE="9" COL="8" TYPE="%-10s"  FUNCTIONS="T(户    名: )"/>
+  <ITEM LINE="9" COL="18" TYPE="%-50s" NAME="#AC_NAME" INPUT="TEXT" FUNCTIONS=""/>
+  
+  </BLOCK>
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <!--<ONCLICK>
+    "{
+        dim @tota as string; 
+        dim @filename as string; 
+        dim @msg as string;
+        dim @a as number;
+        
+     
+        
+        if( #AC_NAME==#AC_NAME_O)
+        {
+           showmsg('没有做任何修改!');
+           return (false);
+        }
+        
+         @msg='垫款账号、户名必须跟内部账户信息严格保持一致！确认修改？   ';
+         @a=msgbox(@msg,'警告','cancel|ok');
+         if(@a!=1)
+         {
+            return(false);
+         }
+        // 必须先修改核心  然后是 tips系统的 ，核心系统需要授权
+        
+         initfd();
+        commsend_001();
+        $TXNO='6823';
+        $FD16='6823';
+        $FD67=#PAY_TYPE;
+        $FD59=#FIN_CODE;
+        $FD32=#AC_NO;
+        $FD83=#AC_NAME;
+        
+        // showmsg($FD83);
+        showmsg('更新核心系统！');
+        //return(false);
+        
+        @tota=callserver();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        
+        //  print_sq 获取授权信息
+        
+        dim @auth_no as string;
+        dim @auth as string;
+        dim @auth_num as string;
+        dim @f as file;
+        dim @line as string;
+        dim @fd34 as string;
+        dim @b as string;
+        dim @fd68 as string;
+        
+        savefds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+        @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','a');
+        closefile(@f);
+        @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','r');
+        @line=readline(@f);
+        @b=substr(@line,0,1);
+        if(@b=='b')
+        {
+          if(substr(@line,1,1)=='1')
+          {
+             @auth_num=substr(@line,8,7);
+             @auth_no=substr(@line,1,7);
+             initfd();
+             commsend_001();
+             $FD14=@auth_no;
+             $FD28=@auth_num;
+             $FD20='3';
+             $FD16='9555';
+             setnomsg();
+             callserver();
+             setmsg();
+            if($FD12 != '0000')
+            {
+              //print(lineno()+1,20,'3取得授权信息失败!');
+              loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+              closefile(@f);
+              @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');
+              writeline(@f,' ');
+              closefile(@f);
+              return(false);
+            }
+            @fd34=$FD34;
+            @fd68=$FD68;
+            loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+            if(@fd68 != '0')
+            {
+              //print(lineno()+1,15,'授权流水号:[7]  授权码:[7]   授权柜员:[8]',@auth_num,@auth_no,@fd34);
+            }
+        }
+        if(substr(@line,1,1)=='3')//第2种授权方式
+        {
+              @auth_num=substr(@line,8,7);
+              @auth_no=substr(@line,1,7);
+              initfd();
+              commsend_001();
+              $FD14=@auth_no;
+              $FD20='2';
+              $FD16='9555';
+              setnomsg();
+              callserver();
+              setmsg();
+              if($FD12 !='0000')
+              {
+                //  print(lineno()+1,20,'2取得授权信息失败!');
+                  showmsg(lineno()+1,20,'2取得授权信息失败!');
+                  closefile(@f);
+                  @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');
+                  writeline(@f,' ');
+                  closefile(@f);
+                  loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+                  return(false);
+              }
+              @fd34=$FD34;
+              @fd68=$FD68;
+              loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+              if(@fd68 != '0')
+              {
+                  // print(lineno()+1,15,'授权流水号:[7]  授权码:[7]   授权柜员:[6]',@auth_num,@auth_no,@fd34);
+              }
+          }
+        }
+        else if(@b=='a')
+        {
+          @auth=substr(@line,1,6);
+          @auth_num=substr(@line,7,7);
+          initfd();
+          commsend_001();
+          $FD14=@auth_num;
+          $FD20='1';
+          $FD16='9555';
+          setnomsg();
+          callserver();
+          setmsg();
+          if($FD12 !='0000'){
+            //print(lineno()+1,20,'1取得授权信息失败!');
+            showmsg(lineno()+1,20,'1取得授权信息失败!');
+            loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+            closefile(@f);
+            @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');
+            writeline(@f,' ');
+            closefile(@f);
+            return(false);
+          }
+          @fd68=$FD68;
+          loadfds('../tmp/'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'.tmp');//保存fd变量
+          if(@fd68 != '0')
+          {
+            //print(lineno()+1,15,'授权流水号:[7]  授权柜员:[6] ',@auth_num,@auth);
+          }
+        }
+        
+        closefile(@f);
+        @f=openfile('../tmp/tmp'+$KINBR+'-'+$TLRNO+'-'+$TTYNAME+'-'+$TXNO+'.tmp','w');
+        writeline(@f,' ');
+        closefile(@f);
+       
+  
+        //  end 授权
+        
+        
+        initfd();
+        commsend_001();
+        $TXNO='5629';
+        $FD16='5629';
+        $FD67=#PAY_TYPE;
+        $FD59=#FIN_CODE;
+        $FD32=#AC_NO;
+        $FD83=#AC_NAME;
+        
+        $FD60=@auth_num;// 授权流水号
+        $FD61=@auth;    // 授权柜员  
+        
+        //showmsg('更新财税系统！'+@auth_num+@auth);
+        showmsg('更新财税系统！');
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        
+        showmsg('维护成功!');
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        call('fview '+@filename);  
+
+    }"
+  </ONCLICK>--> 
+  <ONCLICK>
+  	 "{
+        dim @tota as string; 
+        dim @filename as string; 
+        dim @msg as string;
+        dim @a as number;
+  	       initfd();
+        commsend_001();
+        $TXNO='5629';
+        $FD16='5629';
+        $FD67=#PAY_TYPE;
+        $FD59=#FIN_CODE;
+        $FD32=#AC_NO;
+        $FD83=#AC_NAME;
+        
+        //$FD60=@auth_num;// 授权流水号
+        //$FD61=@auth;    // 授权柜员  
+        
+        //showmsg('更新财税系统！'+@auth_num+@auth);
+        showmsg('更新财税系统！');
+        @tota=calltips();
+        if( $FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        
+        showmsg('维护成功!');
+        @filename='../tmp/'+$KINBR+$TTYNAME+#TXNO;
+        savefiletxt(@filename,@tota); 
+        call('fview '+@filename);
+        }"  
+
+   </ITEM> 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN"  DESC="交易完成">  
+    NOTHING
+  </PACKAGE>
+    <PRINT>
+    "{
+      
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印凭证" LINESPACE="24" >
+NOTHING
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+  
+
+}"
+</PRINT>
+</RESPONSE>
+
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1439      账户信息查询"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		refresh();
+		initfd();
+		commsend_001();
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+		commrecv_001();
+	}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM NAME="#TXNAME" TYPE="%-20s" FUNCTIONS="T(账户信息查询)"/>
+	<ITEM LINE="3" COL="10" TYPE="%-45s" FUNCTIONS="T(1439                      账户信息查询)"/>
+	<ITEM LINE="4" COL="3"  TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+	<ITEM LINE="7" COL="15" TYPE="%-10s" FUNCTIONS="T(操作类型：)"/>
+	<ITEM LINE="7" COL="25" NAME="#Oper" TYPE="%-4s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)V(NB)">
+		<SELECT>
+			<OPTION VALUE ="0" TITLE="0.查询对公账户信息" />
+			<OPTION VALUE ="1" TITLE="1.个人账户合法性检查" /> 
+		</SELECT>
+	<ONLOSTFOCUS>
+		"{
+			if(#Oper == '0')
+		  {
+		  	showblock('BLOCK_2', false, false);
+				showblock('BLOCK_1', true, true);
+				
+			}
+			else
+			{
+				showblock('BLOCK_1', false, false);
+				showblock('BLOCK_2', true, true);
+			}
+	
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<BLOCK NAME="BLOCK_1" LINE="9" COL="0" VISABLE="TRUE">
+	<ITEM LINE="0"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(账    号：)" />
+	<ITEM LINE="0"  COL="25" NAME="#Account1" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	</BLOCK>
+	<BLOCK NAME="BLOCK_2" LINE="9"  COL="0" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(账    号：)" />
+	<ITEM LINE="0"  COL="25"  NAME="#Account" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+		"{
+				///*核心短交易*/
+		/*		initfd();
+				commsend_001();
+				$FD16='1404';
+				$FD18='pbp';
+				$FD30=#Account;
+				$FD73='00001000';
+				callagnpbp();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#AcctNm=$FD25;
+				enable(#AcctNm, false);
+			*/	
+		}"
+	</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="2"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(户    名：)" />
+	<ITEM LINE="2"  COL="25"  NAME="#AcctNm" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="4"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(身份证号：)" />
+	<ITEM LINE="4"  COL="25"  NAME="#ID" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	<ITEM LINE="6"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(开户行号：)" />
+	<ITEM LINE="6"  COL="25"  NAME="#OpenBnkNo" TYPE="%-18s" INPUT="TEXT" FUNCTIONS="T()V(NB)" />
+	</BLOCK>
+	
+
+	<ITEM LINE="20"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+	<ONCLICK>
+ 	 "{
+		initfd();
+		commsend_001();
+		$FD16='2042';
+		$FD18='pbp';
+		$FD72=#Oper;
+		//如果个人账户合法性验证则#acctp映射为1,查平台表，否则更新表
+		if(#Oper == '0')
+		{
+			$FD67 = '2';//业务类型对公；
+		}
+		else
+		{
+			$FD67 = '1';//业务类型个人；
+		}
+		$FD58=#OpenBnkNo;
+		if(#Oper == '0')
+		{
+			$FD30=#Account1;
+		}
+		else
+		{
+			$FD30=#Account;
+			$FD25=#AcctNm;
+			$FD31=#ID;
+		}
+		
+		callagnpbp();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		
+		runoutput();
+
+ 	 }"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+	
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+		"{
+			dim @acctp as string;
+			dim @acctattr as string;
+			dim @acctsts as string;
+			dim @acctnm as string;
+			
+			@acctnm = $FD25;
+			
+			if($FD67 == '1')
+			{
+				@acctp = '基本户';
+			}
+			else if($FD67 == '2')
+			{
+				@acctp = '一般户';
+			}
+			else if($FD67 == '3')
+			{
+				@acctp = '预算单位专户';
+			}
+			else if($FD67 == '4')
+			{
+				@acctp = '非预算单位专户';
+			}
+			else if($FD67 == '5')
+			{
+				@acctp = '临时户';
+			}
+			else
+			{
+				@acctp = '其他户';
+			}
+			
+			if($FD66 == '1')
+			{
+				@acctsts = '启用';
+			}
+			else
+			{
+				@acctsts = '未启用';
+			}
+			
+			if($FD69 == '1')
+			{
+				@acctattr = '人民币单位账户';
+			}
+			else
+			{
+				@acctattr = '外币单位账户';
+			}
+			
+			PrintTxHead();
+			
+			if(#Oper == '0')
+			{
+			print(4,  3,'账    号：[20]       账户名称：[32]',#Account1,@acctnm);
+			print(6,  3,'账户类型：[20]       账户性质：[32]',@acctp, @acctattr);
+			print(8,  3,'开户日期：[20]       开户行号：[32]',$FD44,$FD58);
+			print(10, 3,'企业代码证：[20]     开户许可证：[20]',$FD31,$FD38);
+			print(12, 3,'账户状态：[20]       ',@acctsts);
+			}
+			else
+			{
+			print(4,  3,'账    号：[20]       账户名称：[32]',#Account,@acctnm);
+			print(6,  3,'账户类型：[20]       账户性质：[32]',@acctp, @acctattr);
+			print(8,  3,'开户日期：[20]       开户行号：[32]',$FD44,$FD58);
+			print(10, 3,'身份证：[20]         账户状态：[20]',$FD31,@acctsts);
+			}
+			
+			PrintTxTail();
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(1, 30, '账户信息查询');
+		print(2,2,'--------------------------------------------------------------------------');
+		print(4, 3,'账    号:[20]       账户名称：[32]',#Account,#AcctNm   );
+		print(6, 3,'账户类型:[20]       账户性质：[32]','0','基本户');
+		print(8, 3,'开户日期:[20]       开户行号：[32]','20130408','6220002220006185678');
+		print(10, 3,'货币代码:[20]       钞汇类型：[20]','人民币','丙钞');
+		print(12, 3,'企业代码证:[20]     开户许可证:[20]','1','J3114000048302');
+		print(17,3,'操作柜员:[6]   平台日期:[10]  平台流水号:[20]', '1101', '20140428', '0418');
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+
+
+</TRANSACTION>

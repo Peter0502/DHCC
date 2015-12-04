@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="4515 贷款对帐单打印"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <!--
+<COMMSEND>"{
+	commsend_001();
+	$MSGTYPE='03001';
+	$TXNO='3316';
+	$FD16='3316';
+	$FD44=#STDAY;
+	$FD45=#ENDAY;
+	$FD67=#JYLX;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+//		showmsg('tota=['+@tota+']');
+
+}"
+</COMMRECV>
+-->
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4515                            贷款对帐单打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+  <ITEM NAME="#PGLINES" TYPE="%2d" FUNCTIONS="T($PGLINES=10)"/>
+  <ITEM NAME="#PLINES" TYPE="%2d" FUNCTIONS="T($PLINES=10)"/>
+  <ITEM LINE="7"   COL="05" TYPE="%-14s" FUNCTIONS="T(交易类型!:)"/>
+  <ITEM LINE="9"   COL="05" TYPE="%-14s" FUNCTIONS="T(贷款账号 :)"/>
+  <ITEM LINE="11"  COL="05" TYPE="%-60s" FUNCTIONS="T(------------------------------------------------------------)" />
+  <ITEM LINE="13"  COL="05" TYPE="%-14s" FUNCTIONS="T(贷款户名 :)"/>
+  <ITEM LINE="15"  COL="05" TYPE="%-14s" FUNCTIONS="T(起始日期 :)"/>
+  <ITEM LINE="17"  COL="05" TYPE="%-14s" FUNCTIONS="T(终止日期 :)"/>
+
+  <ITEM LINE="20"  COL="05" TYPE="%-34s" FUNCTIONS="T(起始日期等于终止日期，打印对帐回单!)" NAME="#MSG" INPUT="LABEL" VISABLE="FALSE"/>
+
+
+  <ITEM NAME="#JYLX" 	INPUT="SELECT" 	LINE="7"   COL="15	" TYPE="%-1s" 	FUNCTIONS="T(*)">
+  <SELECT>
+  <OPTION TITLE="全部    " VALUE="*"/>
+  <OPTION TITLE="本金    " VALUE="0"/>
+  <OPTION TITLE="表内利息" VALUE="1"/>
+  <OPTION TITLE="表外利息" VALUE="2"/>
+  <OPTION TITLE="复利    " VALUE="3"/>
+  </SELECT>
+  </ITEM>
+
+  <ITEM NAME="#CON0"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+	show(#MSG,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PAGE" TYPE="%3d" FUNCTIONS="T(000)"/>
+    <ITEM NAME="#PAGES" TYPE="%3d" FUNCTIONS="T(001)"/>
+    <ITEM NAME="#LINE" TYPE="%2d" FUNCTIONS="T(00)"/>
+
+    <ITEM NAME="#PGLS" TYPE="%2d" FUNCTIONS="T(10)"/>
+
+
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="9"   COL="15	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+ "{
+		show(#MSG,false);
+
+		$MSGTYPE='03001';
+        $TXNO='9976';
+        $FD2=$OPNBR;
+        $FD3=$KINBR;
+        $FD5=$HDATE;
+        $FD6='';
+        $FD7=$TLRNO;
+        $FD8='';
+        $FD9='';
+        $FD10=$TTYNAME;
+        $FD16='9976';
+        $FD17='';
+        $FD31=#ACTNO;
+
+        callserver();
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+
+		#NAME=$FD25;
+
+		show(#NAME,true);
+		enable(#NAME,false);
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#NAME" 	INPUT="TEXT" 	LINE="13"    COL="15	" TYPE="%-60s" 	FUNCTIONS="" />
+
+  <ITEM NAME="#STDAY" 	INPUT="TEXT" 	LINE="15"    COL="15	" TYPE="%-8s" 	    FUNCTIONS="T($HDATE)D()" />
+  <ITEM NAME="#ENDAY" 	INPUT="TEXT" 	LINE="17"    COL="15	" TYPE="%-8s" 	    FUNCTIONS="T($HDATE)D()" />
+
+  <ITEM NAME="#PASSWD"  TYPE="%-6s"     />
+  <ITEM NAME="#WSSRNO"  TYPE="%-6s"     />
+  <ITEM NAME="#ODATE"   TYPE="%-10s"    />
+  <ITEM NAME="#OAVBAL"  TYPE="%-21s"    />
+
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+  dim @tota as string;
+  dim @lines as number;
+  dim @i as number;
+
+	commsend_001();
+	$MSGTYPE='03001';
+	$TXNO='3316';
+	$FD16='3316';
+	$FD44=#STDAY;
+	$FD45=#ENDAY;
+	$FD67=#JYLX;
+
+
+	@tota = callserver();
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+
+//总页数没有计算
+//@lines = 0;
+//	@lines=strfldcnt(@tota,chr(10));
+//	showmsg('pages=['+itoa(@lines, '%03d')+']');
+	
+		runoutput(@tota);
+
+	}"</ONCLICK>
+	</ITEM>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+
+
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+
+
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="38" DESC="请打印贷款帐户余额对帐回单">
+DZHD|@actno|@name|@avbal|@txday
+</PACKAGE>
+<INIT>
+"{
+	#ODATE=substr(@txday,0,4)+'/'+substr(@txday,4,2)+'/'+substr(@txday,6,2);
+	#OAVBAL='￥'+ltrim(comma(@avbal,19));
+}"
+</INIT>
+<PRINT>
+"{
+print( 3,3,'                                          \H0商业银行贷款帐户余额对帐回单\H1');
+print( 5,3,'   ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓');
+print( 6,3,'   ┃ 户    名:[60                                              ]┃ 帐    号:[19               ]       ┃',@name,@actno);
+print( 7,3,'   ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━┫');
+print( 8,3,'   ┃                                                                                                            ┃');
+print( 9,3,'   ┃                                                                                                            ┃');
+print(10,3,'   ┃     你户至 [10      ] (日期) 止账户余额为(借方/贷方)  [21                 ] 元，是否相符，请核对后将回单联 ┃',#ODATE,#OAVBAL);
+print(11,3,'   ┃                                                                                                            ┃');
+print(12,3,'   ┃ 盖章后于一周内返回我行，若未返回，我行将视为对帐无误。谢谢合作。                                           ┃');
+print(13,3,'   ┃                                                                                                            ┃');
+print(14,3,'   ┃                                                                                                            ┃');
+print(15,3,'   ┃                                                                                                            ┃');
+print(16,3,'   ┃                                                                                                            ┃');
+print(17,3,'   ┃                                                                                                            ┃');
+print(18,3,'   ┃                                                                                  商业银行                  ┃');
+print(19,3,'   ┃                                                                                  [8     ]                  ┃',$HDATE);
+print(20,3,'   ┃                                                                                                            ┃');
+print(21,3,'   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="38" DESC="请打印贷款帐户对帐单">
+DDZD|@actno|@brno|@add_ind|@tx_amt|@tx_date|@tx_time|@hst_cnt|@brf|@tel|@bal|@add_ind|@name|@page_cnt|@note_no|@mdm_name|@cif_type|@ln_tx_type|@d_amt|@c_amt|@dc_flag
+</PACKAGE>
+<INIT>"{
+ #LINE='00';
+//$PBLINE='00';
+}"
+</INIT>
+<PRINT>"{
+
+ if(#LINE=='10')
+ {
+	print(11+val(#LINE),0,' -------------------------------------------------------------------------------------------------------------------');
+	#LINE='00';
+	#PAGES=itoa(val(#PAGES)+1, '%03d');
+ }
+ if(#LINE=='00')
+ {
+	print( 3,0,'                                                商业银行对帐单');
+	print( 4,0,' 机构名称: [28                          ]                                                     打印日期: [10     ] ', $BRNAME, substr($HDATE, 0, 4)+'-'+substr($HDATE, 4, 2)+'-'+substr($HDATE, 6, 2));
+	print( 5,0,' 帐    号: [19                ]', #ACTNO);
+	print( 6,0,' 户    名: [60                                              ]                                            页数: [3 ]',#NAME ,#PAGES );
+	print( 7,0,' -------------------------------------------------------------------------------------------------------------------');
+	print( 8,0,'  交易日期 │     摘要            │ 柜员 │金额类型│  借方发生额        │   贷方发生额      │    余         额');
+	print( 9,0,' -------------------------------------------------------------------------------------------------------------------');
+ }
+ print(10+val(#LINE),0,' [10     ]  [20   ]   [4 ]  [12        ]   [22         ]  [22           ]  [22           ]  ', substr(@tx_date, 0, 4)+'-'+substr(@tx_date, 4, 2)+'-'+substr(@tx_date, 6, 2),
+ @brf, @tel, @ln_tx_type, '￥'+ltrim(comma(@d_amt, 20)),'￥'+ltrim(comma(@c_amt, 20)), '￥'+ltrim(comma(@bal, 20)) );
+ #LINE=itoa(val(#LINE)+1,'%02.0f');
+
+}"</PRINT>
+<DONE>"{
+print(11+val(#LINE),0,' -------------------------------------------------------------------------------------------------------------------');
+}"
+</DONE>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,214 @@
+/*************************************************************
+* 文 件 名: gD132.pc
+* 功能描述：将呆帐准备金 131 的余额 转到 304 中
+*	          都是清算中心的户
+**************************************************************/
+#define MYRETERR if(ret){ \
+        sprintf(acErrMsg,"sql erro!! [%d]",ret); \
+        WRITEMSG \
+		    return 1; \
+	}
+#define EXTERN
+#include "public.h"
+#include "com_parm_c.h"
+#include "com_branch_c.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+gD132()
+{
+	int ret=0;
+
+    ret=sql_begin(); /*打开事务*/
+	MYRETERR
+    /**------- 初始化全局变量 --------**/		
+	pub_base_sysinit();
+
+    if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		return 1;
+	}
+	strcpy(g_pub_tx.tel,"9999");	/* 批量不会判断发生额为负 */
+	set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+
+		ret=dzzbj_ybzbj();
+		if( ret ) 
+		{
+			goto ErrExit;
+		}
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"日终昨日余额处理成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	strcpy(g_pub_tx.reply,"G009");
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"日终昨日余额处理失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+int dzzbj_ybzbj()
+{
+	int ret=0;
+	FILE *fp2=NULL;
+	char filename1[64];
+	char tmp_cxamt[21],vstr[67],vstr_qs[67],vstr1[67],vstr1_qs[67],tmp_cxamt_qs[21];
+	long num_cnt=1;
+	int	pgcnt=1;
+	struct com_parm_c g_com_parm;
+	struct mdm_ac_rel_c g_mdm_ac_rel;
+	struct in_mst_c		g_in_mst;
+	struct com_branch_c com_branch_c;
+
+	memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+	memset(vstr,0x00,sizeof(vstr));
+
+	sprintf(filename1,"%s/report/%5s/gD132.txt",getenv("HOME"),QS_BR_NO);
+		fp2 = fopen( filename1,"a" ); 
+	if( fp2==NULL )
+	{
+		sprintf(acErrMsg," open file [%s] error ",filename1 );
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"S047" );
+		return 1;
+	}
+    ret = Com_branch_Dec_Sel( g_pub_tx.reply,
+        "br_type ='4' and wrk_sts!='*' order by br_no" );
+    MYRETERR
+   	while (1) 
+   	{
+		memset(&com_branch_c,'\0',sizeof(com_branch_c));
+        ret = Com_branch_Fet_Sel( &com_branch_c , g_pub_tx.reply );
+        if( ret==100 ) break;
+        MYRETERR
+
+		memset(tmp_cxamt,0x00,sizeof(tmp_cxamt));
+		memset(vstr,0x00,sizeof(vstr));
+		memset(&g_com_parm,0x00,sizeof(struct com_parm_c));
+
+		/* 按机构取呆帐准备金帐户 */
+		ret=Com_parm_Sel(g_pub_tx.reply,&g_com_parm,"parm_code='DZACT' and parm_seqn='%s'",com_branch_c.br_no);
+		MYRETERR
+
+		memset(&g_mdm_ac_rel,'\0',sizeof(g_mdm_ac_rel));
+		ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no='%s'",g_com_parm.val);
+		MYRETERR
+
+		memset(&g_in_mst,'\0',sizeof(g_in_mst));
+		ret=In_mst_Sel(g_pub_tx.reply,&g_in_mst,"ac_id=%ld and ac_seqn=%d",g_mdm_ac_rel.ac_id,g_mdm_ac_rel.ac_seqn);
+		MYRETERR
+
+		strcpy(g_pub_tx.tx_br_no,QS_BR_NO);
+		strcpy(g_pub_tx.opn_br_no,QS_BR_NO);
+		strcpy( g_pub_tx.tx_code,"D132");
+		strcpy(g_pub_tx.cur_no,"01");
+		strcpy(g_pub_tx.hst_ind,"1"); /*日间入明细*/
+		g_pub_tx.ct_ind[0]='2';
+		g_pub_tx.svc_ind=9001;
+		strcpy(g_pub_tx.brf,"呆帐准备转一般");
+		strcpy( g_pub_tx.note_type,"" );
+		strcpy( g_pub_tx.beg_note_no,"" );
+		strcpy( g_pub_tx.no_show,"0" );
+
+		strcpy( g_pub_tx.ac_id_type,"9" );
+		strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+		strcpy(g_pub_tx.ac_wrk_ind,"000");
+		strcpy( g_pub_tx.prt_ind,"0" ); /*不登折*/
+
+		strcpy( g_pub_tx.ac_no,g_mdm_ac_rel.ac_no);
+		g_pub_tx.ac_id=g_in_mst.ac_id;
+		set_zd_long( DC_TRACE_CNT,++num_cnt );
+		g_pub_tx.tx_amt1=0-g_in_mst.bal;
+		g_pub_tx.add_ind[0]='0';/*借*/
+		ret = pub_acct_trance();
+		if (ret != 0)
+		{
+			sprintf(acErrMsg, "调用存取款主控失败!!");
+			WRITEMSG
+			return(ret);
+		}
+
+			set_zd_double("1208",g_pub_tx.tx_amt1);
+			set_zd_data("120A",g_pub_tx.brf);
+			set_zd_data("1205",g_pub_tx.ct_ind); 
+			set_zd_data("1204",g_pub_tx.cur_no);
+			ret = pubf_acct_proc("A016");/*调用登记会计流水*/
+        	if(ret!=0)
+        	{
+            	sprintf(acErrMsg,"会计记帐不成功!!");
+            	WRITEMSG
+            	return (ret);
+        	}
+
+
+        	/*贷方记帐 一般准备金 30400 */
+		memset(&g_com_parm,0x00,sizeof(struct com_parm_c));
+		ret=Com_parm_Sel(g_pub_tx.reply,&g_com_parm,"parm_code='YBACT' and parm_seqn='%s'",com_branch_c.br_no);
+		MYRETERR
+		memset(&g_mdm_ac_rel,'\0',sizeof(g_mdm_ac_rel));
+		ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no='%s'",g_com_parm.val);
+		MYRETERR
+
+		strcpy( g_pub_tx.ac_no,g_com_parm.val);
+		g_pub_tx.ac_id=g_mdm_ac_rel.ac_id;
+		set_zd_long( DC_TRACE_CNT,++num_cnt );
+		g_pub_tx.add_ind[0]='1';/*贷*/
+		ret=pub_acct_trance();
+		if( ret ) 
+		{
+			vtcp_log("[%s][%d]记贷方分户不成功!",__FILE__,__LINE__);
+			return(ret);
+		}
+
+			set_zd_double("1218",g_pub_tx.tx_amt1);
+			set_zd_data("121A",g_pub_tx.brf);
+			set_zd_data("1215",g_pub_tx.ct_ind); 
+			set_zd_data("1214",g_pub_tx.cur_no);
+			ret = pubf_acct_proc("A017");
+        	if (ret != 0)
+        	{
+            	sprintf(acErrMsg,"贷方会计记帐不成功!!");
+            	WRITEMSG
+            	return (ret);
+       		}
+
+    		memset(vstr1,0x00,sizeof(vstr1));
+       		sprintf( tmp_cxamt, "%.2f" ,g_pub_tx.tx_amt1);
+    		pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+			numtomoney( g_pub_tx.tx_amt1, vstr);	/* 大写金额 */
+			strcat(vstr,"    ￥");
+			strcat(vstr,  tmp_cxamt);
+			sprintf(vstr1,"%-66s",vstr);
+
+fprintf(fp2, "\n\n\n\n\n\n\n\n\n");
+fprintf(fp2,"                           晋中银行   呆帐准备金划转一般准备金传票\n");
+fprintf(fp2,"               ----------------------------------------------------------\n");
+fprintf(fp2, "\n");
+fprintf(fp2, "       营业机构: %s                          交易日期: %ld          流水号: %ld\n",QS_BR_NO,g_pub_tx.tx_date,g_pub_tx.trace_no);
+fprintf(fp2, "      ┌──────┬─────────────┬──────┬────────────┐\n");
+fprintf(fp2, "      │(借)方科目号│13101                     │对方科目(贷)│304                     │\n");
+fprintf(fp2, "      ├──────┼─────────────┴──────┴────────────┤\n");
+fprintf(fp2, "      │金额  (大写)│%s│\n",vstr1);
+fprintf(fp2, "      ├─┬────┴────────────┬──┬─────────────────┤\n");
+fprintf(fp2, "      │明│   科       目(借):13101          │摘  │                                  │\n");
+fprintf(fp2, "      │细│                                  │    │     呆帐准备金划转一般准备金     │\n");
+fprintf(fp2, "      │分│   对 方 科 目(贷):304            │要  │                                  │\n");
+fprintf(fp2, "      │类│                                  │    │                                  │\n");
+fprintf(fp2, "      └─┴─────────────────┴──┴─────────────────┘\n");
+fprintf(fp2, "\n\n\n\n\n\n\n\n\n");
+		if(pgcnt==2){
+			fprintf(fp2, "\f");
+			pgcnt=0;
+		}
+		pgcnt++;
+	}
+	Com_branch_Clo_Sel();
+	fclose(fp2);
+
+	return 0;
+}

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111000000000000000000000000000" TITLE="4545 抵押物品待出库查询打印 "
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+	list_init(11,70,8,5);
+	list_setcolcnt(6);
+	list_setcol(0,'抵质押品编号',20);
+	list_setcol(1,'抵质押品名称',60);
+	list_setcol(2,'抵质押金额',17);
+	list_setcol(3,'抵质押价值',17);
+	list_setcol(4,'抵押物状态',20);
+	list_setcol(5,'质押存单号',20);
+}"
+</FIRSTWORK>
+
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(4545                            抵押物品待出库查询打印)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+
+  <ITEM LINE="5"   COL="05" TYPE="%-8s" FUNCTIONS="T(合同号 :)"/>
+  <ITEM LINE="8"  COL="05" TYPE="%-70s" NAME="#IN_FO" FUNCTIONS="T(------------------------------抵押品信息------------------------------)"/>
+
+  <ITEM NAME="#HTH" 	INPUT="TEXT" 	LINE="5"    COL="13" TYPE="%-20s"  FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#A1" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+  	dim @tota as string;
+	dim @line as string;
+  	dim @f as file;
+  	dim @gaga_id as string;
+  	dim @gaga_type as string;
+  	dim @tot_amt as string;
+	dim @tot_value as string;
+	dim @name as string;
+	dim @gaga_sts as string;
+	dim @sts_name as string;
+	dim @filename as string;
+	dim @amt1 as number;
+	dim @amt2 as number;
+	dim @bill_no as string;
+
+	list_clear();
+
+	commsend_001();
+	$FD16='4541';
+	$FD65='4543';
+	$FD37=#HTH;
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+
+	@filename='../tmp/'+$KINBR+$TTYNAME+'_4545';;
+	@f=openfile(@filename,'w');
+	if(@f &lt; 0)
+	{
+		showmsg('打开回传文件错误');
+		return(false);
+	}
+	writestr(@f,@tota);
+	closefile(@f);
+	@f=openfile(@filename,'r');
+	if(@f &lt; 0)
+	{
+		showmsg('打开回传文件错误');
+		return(false);
+	}
+	while(true)
+	{
+		@line=readline(@f);
+		if(@line!='')
+		{
+			@gaga_id=strfld(@line,'|',0);
+			@name=strfld(@line,'|',1);
+			@amt1=val(strfld(@line,'|',2));
+			@amt2=val(strfld(@line,'|',3));
+			@sts_name=strfld(@line,'|',4);
+			@bill_no=strfld(@line,'|',5);
+		}else
+		{
+			break;
+		}
+		@tot_amt=ltrim(itoa(@amt1,'%17.2f'));  //认定价值
+		@tot_value=ltrim(itoa(@amt2,'%17.2f'));//评估价值
+		list_additem('',@gaga_id,@name,@tot_amt,@tot_value,@sts_name,@bill_no);
+	}
+	closefile(@f);
+  	list_work();
+  	#CPBAL = val($FD42,0.01);
+  	#EV_BAL = val($FD43,0.01);
+  	
+  	list_show();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#CPBAL" 	 TYPE="%17.2f" 	FUNCTIONS=""/>
+  <ITEM NAME="#EV_BAL" 	 TYPE="%17.2f" 	FUNCTIONS=""/>
+  <ITEM NAME="#S_CPTYPE" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#PASSWD"  TYPE="%-6s" />
+
+  <ITEM LINE="21" COL="59" NAME="#OKEXIT" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONLOSTFOCUS>"{
+  	runoutput();
+  	  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" LINESPACE="38" DESC="显示内容">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+print(7,27,'    ★操作成功★ ');
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	$KINDNO = '00';
+	dim @txtime  as string;
+	dim @f as file;
+	dim @line as string;
+  	dim @gaga_id as string;
+  	dim @gaga_type as string;
+	dim @name as string;
+	dim @filename as string;
+	dim @amt1 as string;
+	dim @amt2 as string;
+	dim @sts_name as string;
+	dim @bill_no as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	@filename='../tmp/'+$KINBR+$TTYNAME+'_4545';
+	print( 4,12,'机构名称:[30]',$BRNAME);
+	print( 4, 5,'交易代码:4545');
+	print( 4, 5,'交易:抵质押物品出库查询打印');
+	print( 5,12,'合 同 号:[20]',#HTH);
+	print( 6,12,'他项总金额:[17]评估总价值:[17]',ltrim(comma(itoa(#TMP_AMT,'%17.2f'))),ltrim(comma(itoa(#TMP_VALUE,'%17.2f'))));
+	
+
+	@f=openfile(@filename,'r');
+	if(@f &lt; 0)
+	{
+		showmsg('打开回传文件错误');
+		return(false);
+	}
+
+	while(true)
+	{
+		@line=readline(@f);
+		if(@line!='')
+		{
+			@gaga_id=strfld(@line,'|',0);
+			@name=strfld(@line,'|',1);
+			@amt1=val(strfld(@line,'|',2));
+			@amt2=val(strfld(@line,'|',3));
+			@sts_name=strfld(@line,'|',4);
+			@bill_no=strfld(@line,'|',5);
+		}else
+		{
+			break;
+		}
+		print(lineno()+1,12,'描述:[60]状态:[10]',@name,@sts_name);
+		print(lineno()+1,12,'编号:([17])抵质押金额:[12]价值:[12] 质押账号:[20]',@gaga_id,itoa(@amt1,'%12.2f'),itoa(@amt2,'%12.2f'),@bill_no);
+	}
+	closefile(@f);
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

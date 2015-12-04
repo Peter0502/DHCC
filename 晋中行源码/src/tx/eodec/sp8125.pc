@@ -1,0 +1,269 @@
+/*************************************************
+* 文 件 名:  sp8125.c
+* 功能描述： 小区查询打印。
+*
+* 作    者:
+* 完成日期：
+*************************************************/
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "sub_dd_mst_c.h"
+#include "xqdz_c.h"
+#include "sub_dd_mst_hst_c.h"
+EXEC SQL INCLUDE sqlca.h;
+
+EXEC SQL BEGIN DECLARE SECTION;
+	long ex_xq_no=0;
+	char ex_xq_no1[11];
+	char ex_ac_no[25];
+	char comm[1024];
+	double ex_sum_bal=0.00;
+	long   ex_xq_num=0;
+	short	syb_ind;
+EXEC SQL END   DECLARE SECTION;
+long 	tot_cnt=0;
+double  tot_bal=0.00;
+sp8125()
+{
+	FILE  *fp=NULL;
+	struct xqdz_c sXqdz;
+	struct sub_dd_mst_c s_sub_dd_mst;
+	char  ac_no[20], range[2], prt_flag[2],xqno[11],filename[100];
+	char	ac_sts_name[21];
+	char	intst_name[21];
+	char	rate_type_name[21];
+	long  start_date=0,end_date=0;
+	double dSum_amt=0.0;
+	long   count=0;
+	char  c_lp_num[11];
+	char  c_dy_num[11];
+	char  c_fj_num[11];
+	char  tmpstr[256];
+
+	memset(ac_no,0x00,sizeof(ac_no));
+	memset(range,0x00,sizeof(range));
+	memset(prt_flag,0x00,sizeof(prt_flag));
+	memset(xqno,0x00,sizeof(xqno));
+	memset(filename,0x00,sizeof(filename));
+	memset(c_lp_num,0x00,sizeof(c_lp_num));
+	memset(c_dy_num,0x00,sizeof(c_dy_num));
+	memset(c_fj_num,0x00,sizeof(c_dy_num));
+	memset(tmpstr,0x00,sizeof(tmpstr));
+
+	memset(comm,0,sizeof(comm));
+	memset(ex_ac_no,0,sizeof(ex_ac_no));
+	pub_base_sysinit();
+
+	get_zd_data("0300",g_pub_tx.ac_no);
+	get_zd_long("0460",&start_date);
+	get_zd_long("0470",&end_date);
+	get_zd_data("0710",range);
+	get_zd_data("0720",prt_flag);
+	get_zd_data("0860",ex_xq_no1);
+	get_zd_data("0870",c_lp_num);
+	get_zd_data("0880",c_dy_num);
+	get_zd_data("0730",c_fj_num);
+	vtcp_log(" %s, %d, 账号[%s] 小区编号[%s] 日期[%ld]-[%ld] ",__FILE__,__LINE__,g_pub_tx.ac_no,ex_xq_no1,start_date,end_date);
+
+	/* 生成下传全路经文件名 */
+	pub_base_AllDwnFilName(filename);
+	fp = fopen(filename, "w");
+	if (fp == NULL) {
+	    sprintf(acErrMsg, "open file error [%s]", filename);
+	    WRITEMSG
+	    strcpy(g_pub_tx.reply, "S047");
+	    goto ErrExit;
+	}
+	pub_base_old_acno(g_pub_tx.ac_no);
+
+	memcpy(ex_ac_no,g_pub_tx.ac_no,sizeof(ex_ac_no)-1);
+	vtcp_log(" %s, %d, range[%s] prt_flag[%s] ",__FILE__,__LINE__,range,prt_flag);
+	if(range[0]=='1')
+	{
+		if(strlen(ex_xq_no1)>0)
+		{
+			sprintf(comm,"select to_number(xq_num),count(*),sum(bal) from sub_dd_mst where ac_no='%s' and xq_num='%s' group by xq_num order by to_number(xq_num)", ex_ac_no,ex_xq_no1);
+		}
+		else
+		{
+			sprintf(comm,"select to_number(xq_num),count(*),sum(bal) from sub_dd_mst where ac_no='%s' group by xq_num order by to_number(xq_num)", ex_ac_no);
+		}
+		vtcp_log(" %s, %d, com[%s]",__FILE__,__LINE__,comm);
+		EXEC SQL PREPARE tmp_xq_no FROM :comm;
+		if (sqlca.sqlcode)
+		{
+			vtcp_log(" %s, %d, prepare error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+			strcpy(g_pub_tx.reply,"D101" );
+		    	goto ErrExit;
+		}
+		EXEC SQL DECLARE group_xq_no CURSOR FOR tmp_xq_no;
+		EXEC SQL OPEN group_xq_no;
+		if (sqlca.sqlcode)
+		{
+			vtcp_log(" %s, %d, open ac_ac_rel error[%d] ",__FILE__,__LINE__,sqlca.sqlcode);
+			strcpy(g_pub_tx.reply,"D102" );
+		    	goto ErrExit;
+		}
+		while(1)
+		{
+			ex_xq_no=0;
+			ex_sum_bal=0.00;
+			ex_xq_num=0;
+			EXEC SQL FETCH group_xq_no INTO :ex_xq_no :syb_ind,:ex_xq_num :syb_ind,:ex_sum_bal :syb_ind;
+			if (sqlca.sqlcode&&sqlca.sqlcode!=1403)
+			{
+				sprintf(acErrMsg,"Fet ac_ac_rel error!!! %d\n",sqlca.sqlcode);
+				WRITEMSG
+				strcpy (g_pub_tx.reply,"D103");
+				goto ErrExit;
+			}else if(sqlca.sqlcode==1403)
+			{
+				break;
+			}
+			if(tot_cnt ==0 )
+			{
+				fprintf(fp,"~小区编号|小区名称|子户数量|余额小计|\n");
+			}
+			zip_space(ex_ac_no);
+			tot_cnt+=ex_xq_num;
+			tot_bal+=ex_sum_bal;
+			memset(&sXqdz,0,sizeof(sXqdz));
+			g_reply_int=Xqdz_Sel(g_pub_tx.reply,&sXqdz,"xqdz100 ='%s' and xqdz101='%ld'",g_pub_tx.ac_no,ex_xq_no);
+			if(g_reply_int==100){
+
+				vtcp_log("[%s][%d],应答码[%d],查询小区xqdz100[%s],xqdz101[%ld]",__FILE__,__LINE__,g_reply_int,g_pub_tx.ac_no,ex_xq_no);
+				vtcp_log("[%s][%d]该小区号在xqdz表中无记录!",__FILE__,__LINE__);
+			}
+			else	if(g_reply_int)
+			{
+				sprintf(acErrMsg,"[%s][%d]查询小区表错误! %s,小区[%d]",__FILE__,__LINE__,g_pub_tx.ac_no,ex_xq_no);
+				WRITEMSG
+				strcpy (g_pub_tx.reply,"SN23");
+				goto ErrExit;
+			}
+			fprintf(fp,"%d|%s|%ld|%.2f|\n",ex_xq_no,sXqdz.xqdz15,ex_xq_num,ex_sum_bal);
+		}
+		if(tot_cnt>0)
+		{
+			fprintf(fp,"共%ld户|余额合计:|%.2f元|",tot_cnt,tot_bal);
+		}
+	}
+	else if(range[0]=='2')/* 查询小区内账户明细 */
+	{
+		/*memset(&sXqdz,0,sizeof(sXqdz));
+		g_reply_int=Xqdz_Sel(g_pub_tx.reply,&sXqdz,"xqdz100 ='%s' and xqdz101='%s'",g_pub_tx.ac_no,ex_xq_no1);
+		if(g_reply_int)
+		{
+			sprintf(acErrMsg,"[%s][%d]查询小区表错误! %s,小区[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no,ex_xq_no1);
+			WRITEMSG
+			strcpy (g_pub_tx.reply,"SN23");
+			goto ErrExit;
+		}*/
+		sprintf(tmpstr,"ac_no='%s'",g_pub_tx.ac_no);
+		vtcp_log("小区编号:[%s] 楼盘编号:[%s] 单元编号:[%s] 房间编号:[%s]",ex_xq_no1,c_lp_num,c_dy_num,c_fj_num);
+		if(strlen(ex_xq_no1))
+		{
+			sprintf(tmpstr,"%s and xq_num='%s'",tmpstr,ex_xq_no1);
+		}
+
+		if(strlen(c_lp_num))
+		{
+			sprintf(tmpstr,"%s and lp_num='%s'",tmpstr,c_lp_num);
+		}
+
+		if(strlen(c_dy_num))
+		{
+			sprintf(tmpstr,"%s and dy_num='%s'",tmpstr,c_dy_num);
+		}
+
+		if(strlen(c_fj_num))
+		{
+			sprintf(tmpstr,"%s and fj_num='%s'",tmpstr,c_fj_num);
+		}
+		strcat(tmpstr," order by xq_num,lp_num,dy_num,fj_num,sub_ac_seqn");
+		vtcp_log(" wherelist is [%s] [%s] [%d]",tmpstr,__FILE__,__LINE__);
+		g_reply_int= Sub_dd_mst_Dec_Sel(g_pub_tx.reply,tmpstr);
+		if(g_reply_int)
+		{
+			sprintf(acErrMsg,"[%s][%d]查询小区表错误! %s,小区[%s]\n",__FILE__,__LINE__,g_pub_tx.ac_no,ex_xq_no1);
+			WRITEMSG
+			strcpy (g_pub_tx.reply,"D101");
+			goto ErrExit;
+		}
+		while(1)
+		{
+			memset(&s_sub_dd_mst,0,sizeof(s_sub_dd_mst));
+			g_reply_int = Sub_dd_mst_Fet_Sel(&s_sub_dd_mst,g_pub_tx.reply);
+			if(g_reply_int == 100)
+			{
+				break;
+			}else if(g_reply_int)
+			{
+				sprintf(acErrMsg,"查询sub_dd_mst错误! %s,小区[%s]\n",g_pub_tx.ac_no,ex_xq_no1);
+				WRITEMSG
+				strcpy (g_pub_tx.reply,"D102");
+				goto ErrExit;
+			}
+			if(tot_cnt==0)
+			{
+				fprintf(fp,"~二级账户|账户户名|余额|利息积数|账户状态|计息类型|利率类型|利率|开户日期|起息日期|上笔发生日期|明细笔数|小区编号|楼盘编号|单元编号|房间编号|\n");
+			}
+
+			memset(ac_sts_name,0,sizeof(ac_sts_name));
+			if(s_sub_dd_mst.ac_sts[0]=='1')
+			{
+				strcpy(ac_sts_name,"正常");
+			}else if(s_sub_dd_mst.ac_sts[0]=='*')
+			{
+				strcpy(ac_sts_name,"销户");
+			}else{
+				strcpy(ac_sts_name,"异常状态");
+			}
+			memset(intst_name,0,sizeof(intst_name));
+			if(s_sub_dd_mst.intst_type[0]=='0')
+			{
+				strcpy(intst_name,"不计息");
+			}else{
+				strcpy(intst_name,"按季计息");
+			}
+			memset(rate_type_name,0,sizeof(rate_type_name));
+			if(s_sub_dd_mst.rate_type[0]=='0')
+			{
+				strcpy(rate_type_name,"活期利率");
+			}else{
+				strcpy(rate_type_name,"优惠利率");
+			}
+			tot_cnt++;
+			tot_bal+=s_sub_dd_mst.bal;
+			vtcp_log("%s,%d,fprint1111",__FILE__,__LINE__);
+
+			fprintf(fp,"%s|%s|%.2lf|%.2lf|%s|%s|%s|%.5lf|%ld|%ld|%ld|%ld|%d|%d|%d|%d|\n",\
+				s_sub_dd_mst.sub_ac_no,s_sub_dd_mst.name,s_sub_dd_mst.bal,\
+				s_sub_dd_mst.intst_acm,ac_sts_name,\
+				intst_name,rate_type_name,s_sub_dd_mst.rate,s_sub_dd_mst.opn_date,\
+				s_sub_dd_mst.ic_date,s_sub_dd_mst.lst_date,\
+				s_sub_dd_mst.hst_cnt,s_sub_dd_mst.xq_num,s_sub_dd_mst.lp_num,s_sub_dd_mst.dy_num,s_sub_dd_mst.fj_num);
+			vtcp_log("%s,%d,fprint1112",__FILE__,__LINE__);
+			}
+		Sub_dd_mst_Clo_Sel();
+		if(tot_cnt>0)
+		{
+			fprintf(fp,"小区合计:|共%ld户|余额合计:|%.2f元|",tot_cnt,tot_bal);
+		}
+	}
+OkExit:
+	fclose(fp);
+	set_zd_data(DC_FILE_SND, "1");
+	strcpy(g_pub_tx.reply,"0000");
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	if(fp != NULL)
+	{
+		fclose(fp);
+	}
+	fp=NULL;
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

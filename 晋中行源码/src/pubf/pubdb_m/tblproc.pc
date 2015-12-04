@@ -1,0 +1,2539 @@
+#include "find_debug.h" 
+/**********************************************************************
+    程序名:tblproc.ec			
+-----------------------------------------------------------------------
+    本程序包含数据库操作处理函数。
+**********************************************************************/
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include <varargs.h>
+#define EXTERN
+#include "public.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+#include "dd_mst_c.h"
+#include "td_mst_c.h"
+#include "in_mst_c.h"
+#include "ln_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "gl_sub_c.h"
+
+char *zip_tail(char *s);
+static void zip_struct(struct gl_sub_c*);
+
+char *key_strcat(char *,char *);
+static  char    str[3000];
+extern int NUM;
+extern char *get_env_info(char *infoname);
+
+int insertdata(char *tbname,char *fiedlist,char *datalist)
+{
+	char commline[1024];
+
+	MEMSET_DEBUG(commline,0,sizeof(commline));
+	if(fiedlist[0]!=NULL) 
+	{
+		sprintf(commline,"INSERT INTO %s (%s) VALUES %s",tbname,fiedlist,datalist);
+	}
+	else 
+	{
+		sprintf(commline,"INSERT INTO %s VALUES %s",tbname,datalist);
+	}
+	EXEC SQL EXECUTE IMMEDIATE :commline;
+
+	if (sqlca.sqlcode) 
+	{
+		strcpy(g_pub_tx.reply, "D101");
+		vtcp_log("[%s][%d]数据插入表错误！%d [%s]",__FILE__,__LINE__,sqlca.sqlcode,commline);
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+/************删除指定表记录************/
+int deldb(char *tbname,char *tbwhere)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char cSql[1024];
+	EXEC SQL  END  DECLARE SECTION;
+
+	MEMSET_DEBUG( cSql, 0x00, sizeof( cSql ) );
+	
+	if(tbwhere==NULL) {
+		sprintf(cSql,"delete from %s",tbname); 
+	}
+	else {
+		sprintf(cSql,"delete from %s  where ",tbname);
+		key_strcat(cSql,tbwhere);
+	}
+
+	EXEC SQL PREPARE cu_del FROM :cSql;
+	if( sqlca.sqlcode ) 
+	{
+		vtcp_log ( "[%s][%d]参数错误!! [%d] [%s]", __FILE__,__LINE__,sqlca.sqlcode, cSql );
+		strcpy(g_pub_tx.reply, "D101");
+	    return 1;
+	}
+
+	EXEC SQL EXECUTE cu_del;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403) 
+	{
+		vtcp_log( "删除表执行失败!! [%d] [%s]", sqlca.sqlcode, cSql );
+		strcpy(g_pub_tx.reply, "D101");
+	    return 1;
+    }
+
+	return 0;
+}
+/******************************************
+*	函数名称		:删除或更改数据库内容
+*	作者			:jack
+*	日期			:2001/12/24
+*	功能描述		:删除或更改数据库内容
+*	函数原型		:sql_execute(fmtstr,va_alist)
+*	入口参数		:fmtstr		char*	:带格式的字符串
+*					 va_alist			:数据列表
+*	出口参数		:无
+*	返回			:0 成功 1 失败
+*	修改人			:
+*	修改日期		:
+*	修改内容		:
+*******************************************/
+int sql_execute( fmtstr, va_alist )
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char delcomm[3072];
+	char tmpstr[3072];
+	struct dd_mst_c	dd_mst;
+	struct td_mst_c	td_mst;
+	struct in_mst_c	in_mst;
+	struct ln_mst_c	ln_mst;
+	struct mdm_ac_rel_c	mdm_ac_rel;
+EXEC	SQL	END		DECLARE	SECTION;
+	int ret =0;
+	char	*ptr,*tmpchar;
+	char	*wherptr;
+	char	wherelist[912];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( delcomm , fmtstr , ap );
+	
+	EXEC SQL PREPARE sql_del FROM :delcomm;
+	if(sqlca.sqlcode)
+	{
+		 vtcp_log("[%s][%d]参数错误!! %d [%s]",__FILE__,__LINE__,sqlca.sqlcode,delcomm);
+		strcpy( g_pub_tx.reply,"D103" );
+		return 1;
+	}
+	EXEC SQL EXECUTE sql_del;
+	if(sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		vtcp_log("删除表执行失败!! %s %d",delcomm,sqlca.sqlcode);
+		strcpy( g_pub_tx.reply,"D103" );
+		return -1;
+	}
+	va_end(ap);
+
+	strcpy( tmpstr,delcomm );
+	pub_reg_rec_file( tmpstr );
+	/*** hao *** #20050701# *** 党的生日献礼加班修改版 ***/
+vtcp_log("hao%d#%s --- look [%s]", __LINE__, __FILE__, delcomm);
+	ptr=strstr(delcomm,"dd_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	tmpchar=ptr-1;
+	if( ptr!=NULL && ptr[6]==' ' && tmpchar[0]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+		{
+			wherptr=strstr(delcomm,"WHERE");
+		}
+
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("%d#%s hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__,  __LINE__, __FILE__, wherelist);
+		ret=Dd_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Dd_mst_Dec_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Dd_mst_Fet_Upd1(&dd_mst,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处应更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Fet_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Dd_mst_Upd_Upd(dd_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Upd_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Dd_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"td_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[6]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Td_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Dd_mst_Dec_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Td_mst_Fet_Upd1(&td_mst,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处以更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Fet_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Td_mst_Upd_Upd(td_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Upd_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Td_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"in_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[6]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=In_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行In_mst_Dec erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=In_mst_Fet_Upd1(&in_mst,g_pub_tx.reply);
+			if( ret==1403 || ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行In_mst_Fet erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=In_mst_Upd_Upd(in_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行In_mst_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		In_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"mdm_ac_rel");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[10]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL ){
+			strcpy(wherelist,"1=1");
+		}else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Mdm_ac_rel_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Dec erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Mdm_ac_rel_Fet_Upd1(&mdm_ac_rel,g_pub_tx.reply);
+			/****Modified by SSH,2007.1.27,1403已经由dbs函数转换成100了***/
+			if( ret==1403||ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Fet erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Mdm_ac_rel_Upd_Upd(mdm_ac_rel,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Mdm_ac_rel_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"ln_mst");
+vtcp_log("~~hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[6]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else
+			strcpy(wherelist,(wherptr+5));
+vtcp_log("~~hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Ln_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+vtcp_log("~~ look %d#%s Dec ret[%d] ", __LINE__, __FILE__, ret);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行In_mst_Dec erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Ln_mst_Fet_Upd1(&ln_mst,g_pub_tx.reply);
+vtcp_log("~~fetch %d ~ %s ln_mst.rowid = [%s] ret[%d]", __LINE__, __FILE__, ln_mst.rowid, ret);
+			/*if( ret==1403 ) break;*/ /*为什么又1403了? gujy 20060824*/
+			if(ret == 100)break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Ln_mst_Fet erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Ln_mst_Upd_Upd(ln_mst,g_pub_tx.reply);
+vtcp_log("~~upd %d ~ %s ln_mst.rowid = [%s] ret[%d]", __LINE__, __FILE__, ln_mst.rowid, ret);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Ln_mst_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Ln_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	vtcp_log(">>>>>>>>>>>>>>>>>>>>>>>>>>AAAAAAAAAAA");
+	return (0);
+
+}
+/******************************************
+*	函数名称		:删除或更改数据库内容
+*	作者			:jack
+*	日期			:2001/12/24
+*	功能描述		:删除或更改数据库内容
+*	函数原型		:sql_execute_ur(fmtstr,va_alist)
+*	入口参数		:fmtstr		char*	:带格式的字符串
+*					 va_alist			:数据列表
+*	出口参数		:无
+*	返回			:<0:失败 >=0:成功,返回操作记录个数
+*	修改人			:jack
+*	修改日期		:
+*	修改内容		:
+*******************************************/
+int sql_execute_ur( fmtstr, va_alist )
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char delcomm[1024];
+	char tmpstr[1024];
+	struct dd_mst_c	dd_mst;
+	struct td_mst_c	td_mst;
+	struct in_mst_c	in_mst;
+	struct ln_mst_c	ln_mst;
+	struct mdm_ac_rel_c	mdm_ac_rel;
+EXEC	SQL	END		DECLARE	SECTION;
+	int ret =0;
+	char	*ptr,*tmpchar;
+	char	*wherptr;
+	char	wherelist[912];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( delcomm , fmtstr , ap );
+	
+	EXEC SQL PREPARE sql_del_ur FROM :delcomm;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("[%s][%d]参数错误!! %d [%s]",__FILE__,__LINE__,sqlca.sqlcode,delcomm);
+		strcpy( g_pub_tx.reply,"D103" );
+		return 1;
+	}
+	EXEC SQL EXECUTE sql_del_ur;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("[%s][%d]删除表执行失败!! %s %d",__FILE__,__LINE__,delcomm,sqlca.sqlcode);
+		strcpy( g_pub_tx.reply,"D103" );
+		return -1;
+	}
+	va_end(ap);
+
+	strcpy( tmpstr,delcomm );
+	pub_reg_rec_file( tmpstr );
+	/*** hao *** #20050701# *** 党的生日献礼加班修改版 ***/
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, delcomm);
+	ptr=strstr(delcomm,"dd_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	tmpchar=ptr-1;
+	if( ptr!=NULL && ptr[6]==' ' && tmpchar[0]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+		{
+			wherptr=strstr(delcomm,"WHERE");
+		}
+
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else
+			strcpy(wherelist,(wherptr+5));
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Dd_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Dd_mst_Dec_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Dd_mst_Fet_Upd1(&dd_mst,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处以更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Fet_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Dd_mst_Upd_Upd(dd_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Upd_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Dd_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"td_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[6]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Td_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Dd_mst_Dec_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Td_mst_Fet_Upd1(&td_mst,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处以更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Fet_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Td_mst_Upd_Upd(td_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Dd_mst_Upd_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Td_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"in_mst");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[6]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=In_mst_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行In_mst_Dec erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=In_mst_Fet_Upd1(&in_mst,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处以更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行In_mst_Fet erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=In_mst_Upd_Upd(in_mst,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行In_mst_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		In_mst_Clo_Upd1();
+
+		return 0;
+	}
+
+	ptr=strstr(delcomm,"mdm_ac_rel");
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, ptr);
+	if( ptr!=NULL && ptr[10]==' ')
+	{
+		wherptr=strstr(delcomm,"where");
+		if( wherptr==NULL )
+			wherptr=strstr(delcomm,"WHERE");
+		if( wherptr==NULL )
+			strcpy(wherelist,"1=1");
+		else{
+			wherelist[0]='\0';
+			key_strcat(wherelist,(wherptr+5));
+		}	
+vtcp_log("hao ---hao --- look %d#%s [%s]", __LINE__, __FILE__, wherelist);
+		ret=Mdm_ac_rel_Dec_Upd1(g_pub_tx.reply,wherelist);
+		if( ret )
+		{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Dec erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+		}
+		while(1)
+		{
+			ret=Mdm_ac_rel_Fet_Upd1(&mdm_ac_rel,g_pub_tx.reply);
+			/*if( ret==1403 ) break;  此处以更该为100*/
+			if( ret==100 ) break;
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Fet erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+			ret=Mdm_ac_rel_Upd_Upd(mdm_ac_rel,g_pub_tx.reply);
+			if( ret )
+			{
+			sprintf(acErrMsg,"执行Mdm_ac_rel_Upd erro!! %s %d",wherelist,ret);
+			WRITEMSG
+			return -1;
+			}
+		}
+		Mdm_ac_rel_Clo_Upd1();
+
+		return 0;
+	}
+
+	vtcp_log(">>>>>>>>>>>>>>>>>>>>>>>>>>AAAAAAAAAAA");
+
+	return (sqlca.sqlerrd[2]);
+}
+/******************************************
+*	函数名称		:删除或更改数据库内容
+*	作者			:jack
+*	日期			:2001/12/24
+*	功能描述		:删除或更改数据库内容
+*	函数原型		:sql_count(fmtstr,va_alist)
+*	入口参数		:fmtstr		char*	:带格式的字符串
+*					 va_alist			:数据列表
+*	出口参数		:无
+*	返回			:0 成功 1 失败
+*	修改人			:
+*	修改日期		:
+*	修改内容		:
+*******************************************/
+int sql_count( tabname , fmtstr , va_alist )
+char *tabname;
+char *fmtstr;
+va_dcl
+{
+vtcp_log("[%s][%d]sql_count() Begin!\n",__FILE__,__LINE__);
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	int		recnum=0;
+	short 	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf(countcomm,"select count(*) from  %s where ", tabname );
+	key_strcat(countcomm,wherelist);
+	vtcp_log("sql_count[%s]",countcomm);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbcount FROM :countcomm;
+	if (sqlca.sqlcode<0)
+	{
+		sprintf(acErrMsg,"prepare error comm[%s] %d",countcomm, sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Cu_Tbcount CURSOR FOR Tbcount;
+
+	EXEC SQL OPEN Cu_Tbcount;
+	if (sqlca.sqlcode <0 )
+	{
+		vtcp_log("open error3 %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbcount;
+		strcpy ( g_pub_tx.reply , "D101" );
+		return -1;
+	}
+	EXEC SQL FETCH Cu_Tbcount INTO :recnum;
+	if (sqlca.sqlcode<0 )
+	{
+		vtcp_log("fetch error2 %s %d",tabname , sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	/*if ( flag) recnum =0;*/
+	EXEC SQL CLOSE Cu_Tbcount;
+	if (sqlca.sqlcode<0)
+	{
+		vtcp_log("close error1 %s %d",tabname , sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+
+	return recnum;
+}
+
+/***** add by xxx 20050616 *****/
+int distinct_sel( tabname, field, diststring, fmtstr, va_alist)
+char *tabname;
+char *field;
+char *diststring;
+char *fmtstr;
+va_dcl
+{
+	int		ret;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = distinct_dec_sel( tabname, field, "%s", wherelist );
+	if (ret) return ret;
+
+	ret = distinct_fet_sel( diststring );
+	if (ret) return ret;
+
+	distinct_clo_sel();
+
+	return 0;
+}
+int distinct_dec_sel( tabname, field, fmtstr, va_alist)
+char *tabname;
+char *field;
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	selcomm[1024];
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( selcomm, "select distinct %s from %s where %s", field, tabname, wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Cur_Dist FROM :selcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s", tabname, sqlca.sqlcode, wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Dist_Cur CURSOR FOR Cur_Dist;
+
+	EXEC SQL OPEN Dist_Cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d", tabname, sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbcount;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	return 0;
+}
+int distinct_fet_sel( diststring )
+char *diststring;
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	tmpstr[512];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	EXEC SQL FETCH Dist_Cur INTO :tmpstr;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	pub_base_strpack(tmpstr);
+	strcpy(diststring, tmpstr);
+
+	return 0;
+}
+int distinct_clo_sel()
+{
+	EXEC SQL CLOSE Dist_Cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+/***** add by xxx end *****/
+
+/***** add by xxx 20050616 *****/
+int distinct_sel2( tabname, field, diststring, fmtstr, va_alist)
+char *tabname;
+char *field;
+char *diststring;
+char *fmtstr;
+va_dcl
+{
+	int		ret;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = distinct_dec_sel2( tabname, field, "%s", wherelist );
+	if (ret) return ret;
+
+	ret = distinct_fet_sel2( diststring );
+	if (ret) return ret;
+
+	distinct_clo_sel2();
+
+	return 0;
+}
+int distinct_dec_sel2( tabname, field, fmtstr, va_alist)
+char *tabname;
+char *field;
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	selcomm[1024];
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( selcomm, "select distinct %s from %s where %s", field, tabname, wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Cur_Dist2 FROM :selcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s", tabname, sqlca.sqlcode, wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Dist_Cur2 CURSOR FOR Cur_Dist2;
+
+	EXEC SQL OPEN Dist_Cur2;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d", tabname, sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbcount;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	return 0;
+}
+int distinct_fet_sel2( diststring )
+char *diststring;
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	tmpstr[512];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	EXEC SQL FETCH Dist_Cur2 INTO :tmpstr;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	pub_base_strpack(tmpstr);
+	strcpy(diststring, tmpstr);
+
+	return 0;
+}
+int distinct_clo_sel2()
+{
+	EXEC SQL CLOSE Dist_Cur2;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+/***** add by xxx end *****/
+
+int count_distinct( tabname ,field , fmtstr , va_alist )
+char *tabname;
+char *field;
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	int		recnum;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( countcomm , "select count(distinct %s) from  %s where ", field,tabname );
+	key_strcat(countcomm,wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Cur_Distinct FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+EXEC SQL DECLARE Distinct_Cur CURSOR FOR Cur_Distinct;
+
+	EXEC SQL OPEN Distinct_Cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		EXEC SQL CLOSE Cu_Tbcount;
+		return -1;
+	}
+	EXEC SQL FETCH Distinct_Cur INTO :recnum;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL CLOSE Distinct_Cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return recnum;
+}
+
+int sql_max_int ( tabname , fiedname , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	int		recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	int ret=0;
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select max(%s) from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+
+	sprintf( acErrMsg, "countcomm=[%s]",countcomm );
+	WRITEMSG
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbmaxint FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL DECLARE Cu_maxint CURSOR FOR Tbmaxint;
+
+	EXEC SQL OPEN Cu_maxint;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		ret=sqlca.sqlcode;
+		EXEC SQL CLOSE Cu_maxint;
+		strcpy(g_pub_tx.reply, "D101");
+		return ret;
+	}
+
+	EXEC SQL FETCH Cu_maxint INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0;
+
+	EXEC SQL CLOSE Cu_maxint;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return recnum;
+
+}
+
+int sql_min_string ( tabname , fiedname , minstring , len , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+char	*minstring;
+int		len;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	char	tmpstr[512];
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select min(%s) from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbminchar FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL DECLARE Cu_minchar CURSOR FOR Tbminchar;
+
+	EXEC SQL OPEN Cu_minchar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_minchar;
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL FETCH Cu_minchar INTO :tmpstr :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	if ( flag ) MEMSET_DEBUG(minstring,0,len);
+
+	EXEC SQL CLOSE Cu_minchar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	strncpy ( minstring , tmpstr , len );
+	minstring[len] = '\0';
+
+	return 0;
+
+}
+
+int sql_min_long ( tabname , fiedname , minlong , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+long	*minlong;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	long	tmplong;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select min(%s) from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbminlong FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL DECLARE Cu_minlong CURSOR FOR Tbminlong;
+
+	EXEC SQL OPEN Cu_minlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_minchar;
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL FETCH Cu_minlong INTO :tmplong :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	if ( flag ) tmplong=0;
+
+	EXEC SQL CLOSE Cu_minlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	*minlong=tmplong;
+
+	return 0;
+
+}
+int sql_sum_long ( tabname , fiedname , sumlong , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+long	*sumlong;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sumcomm[1024];
+	long	tmpsum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	flag = 0;
+	sprintf(sumcomm,"select sum(%s) from  %s where ",fiedname,tabname);
+	key_strcat(sumcomm,wherelist);
+	vtcp_log(sumcomm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbsumlong FROM :sumcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL DECLARE Cu_sumlong CURSOR FOR Tbsumlong;
+
+	EXEC SQL OPEN Cu_sumlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_sumlong;
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL FETCH Cu_sumlong INTO :tmpsum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	if ( flag ) tmpsum=0;
+
+	EXEC SQL CLOSE Cu_sumlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	*sumlong = tmpsum ;
+
+	return 0;
+
+}
+/**************************************************/
+int Chk_Sql_Err(char *opt,char *tbl)
+{
+	if(sqlca.sqlcode) {
+		if(strlen(opt)&&strlen(tbl)) {
+			printf("%s table %s error.error code = %d.\n",opt,tbl,sqlca.sqlcode);
+		}
+		else {
+			printf("rdsql error.error code = %d.\n",sqlca.sqlcode);
+		}
+
+		/*set_zd_data("1210",sqlerr(tbl,sqlca.sqlcode));*/
+	}
+	return sqlca.sqlcode;
+}
+
+int sql_max_long ( tabname , fiedname , maxlong , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+long	*maxlong;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[2048];
+	long	recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select max(%s) from %s where ",fiedname,tabname);
+	vtcp_log("[%s][%d]countcomm==[%s]\n",__FILE__,__LINE__,countcomm);
+	key_strcat(countcomm,wherelist);
+	vtcp_log("[%s][%d]countcomm==[%s]\n",__FILE__,__LINE__,countcomm);
+	/**
+	sprintf(acErrMsg,"[%s]",countcomm);
+	WRITEMSG
+	**/
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbmaxlong FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	sprintf(acErrMsg,"[%s]",countcomm);
+	WRITEMSG
+
+	EXEC SQL EXECUTE Tbmaxlong into :recnum :flag;
+	if( sqlca.sqlcode )
+	{
+		vtcp_log("execute erro %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	vtcp_log("[%s][%d]flag===[%d]  recnum===[%ld]\n",__FILE__,__LINE__,flag,recnum);
+	if ( flag ) recnum=0;
+/***
+	EXEC SQL DECLARE Cu_maxlong CURSOR FOR Tbmaxlong;
+	EXEC SQL OPEN Cu_maxlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_maxlong;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	EXEC SQL FETCH Cu_maxlong INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0;
+
+	EXEC SQL CLOSE Cu_maxlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+****/
+	*maxlong=recnum;
+	sprintf(acErrMsg,"数据库结果[%ld]",recnum);
+	WRITEMSG
+	sprintf(acErrMsg,"数据库结果[%ld]",*maxlong);
+	WRITEMSG
+
+	return 0;
+
+}
+int sql_max_long_xier ( tabname , fiedname , maxlong , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+long	*maxlong;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[2048];
+	long	recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select max(%s) from %s where ",fiedname,tabname);
+	vtcp_log("[%s][%d]countcomm==[%s]\n",__FILE__,__LINE__,countcomm);
+	key_strcat(countcomm,wherelist);
+	vtcp_log("[%s][%d]countcomm==[%s]\n",__FILE__,__LINE__,countcomm);
+	/**
+	sprintf(acErrMsg,"[%s]",countcomm);
+	WRITEMSG
+	**/
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbmaxlong FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	sprintf(acErrMsg,"[%s]",countcomm);
+	WRITEMSG
+
+	
+	EXEC SQL DECLARE Cu_maxlong CURSOR FOR Tbmaxlong;
+	EXEC SQL OPEN Cu_maxlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_maxlong;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	EXEC SQL FETCH Cu_maxlong INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0;
+
+	EXEC SQL CLOSE Cu_maxlong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	*maxlong=recnum;
+	sprintf(acErrMsg,"数据库结果[%ld]",recnum);
+	WRITEMSG
+	sprintf(acErrMsg,"数据库结果[%ld]",*maxlong);
+	WRITEMSG
+
+	return 0;
+
+}
+int sql_sum_double ( tabname , fiedname , sumdouble , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+double	*sumdouble;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	double	recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf(countcomm,"select sum(%s) from %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+	flag = 0;
+vtcp_log("countcomm'%s'",countcomm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbsumdouble FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"prepare error [%s] %d",countcomm, sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Cu_sumdouble CURSOR FOR Tbsumdouble;
+
+	EXEC SQL OPEN Cu_sumdouble;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_sumdouble;
+		strcpy ( g_pub_tx.reply , "D101" );
+		return -1;
+	}
+	EXEC SQL FETCH Cu_sumdouble INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0.00;
+
+	EXEC SQL CLOSE Cu_sumdouble;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	*sumdouble=recnum;
+
+	return 0;
+
+}
+int sql_unique_string (tabname,fiedname,unistring,len,fmtstr, va_alist )
+char	*tabname;
+char	*fiedname;
+char	*unistring;
+int		len;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	char	tmpstr[512];
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select unique %s from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbunichar FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL DECLARE Cu_Tbunichar CURSOR FOR Tbunichar;
+	EXEC SQL OPEN Cu_Tbunichar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbunichar;
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL FETCH Cu_Tbunichar INTO :tmpstr :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	if ( flag ) unistring[0]='\0';
+
+	EXEC SQL CLOSE Cu_Tbunichar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	strncpy ( unistring , tmpstr , len );
+	unistring[len]='\0';
+
+	return 0;
+}
+sql_database()
+{
+/****Modified by SSH,20090922,支持远程连接数据库****/
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+	char	sql_dbname[16];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	memset(sql_username,0x00,sizeof(sql_username));
+	memset(sql_passwd,0x00,sizeof(sql_passwd));
+
+	/****修改成新加密方式 20120604
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	****/
+	memcpy(sql_username,get_env_info("DB_USER"),sizeof(sql_username));
+	memcpy(sql_passwd,get_env_info("DB_PASSWD"),sizeof(sql_passwd));
+	vtcp_log("[%s][%d]  DB_USER==[%s] DB_PASSWD==[%s]",__FILE__,__LINE__,sql_username,sql_passwd);
+	if(getenv("DB_NAME")!=NULL){
+		strcpy(sql_dbname,getenv("DB_NAME"));
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd using :sql_dbname;
+		
+	}else{
+		EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	}
+	if(sqlca.sqlcode)
+	{
+		return -1;
+	}
+	return (0);
+}
+sql_close()
+{
+	return (0);
+}
+sql_drop()
+{
+    return (0);
+}
+sql_begin()
+{
+
+	return (0);
+}
+sql_commit()
+{
+	vtcp_log(" COMMIT WORK ");
+	EXEC SQL COMMIT WORK;
+	if ( sqlca.sqlcode )
+	{
+		vtcp_log ( "commit work error [%d]",sqlca.sqlcode );
+		strcpy ( g_pub_tx.reply , "H063" );
+		return (1);
+	}
+
+	return (0);
+}
+sql_rollback()
+{
+	EXEC SQL ROLLBACK WORK;
+	if ( sqlca.sqlcode )
+	{
+		vtcp_log ( "rollback work error [%d]",sqlca.sqlcode );
+		strcpy ( g_pub_tx.reply , "0200" );
+		return (1);
+	}
+
+	return (0);
+}
+int sql_max_string ( tabname , fiedname , maxstring , len , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+char	*maxstring;
+int		len;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1000];
+	char	tmpstr[100];
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[800];
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select max(%s) from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+
+sprintf(acErrMsg,"[%s]",countcomm);
+WRITEMSG
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbmaxchar FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL DECLARE Cu_Tbmaxchar CURSOR FOR Tbmaxchar;
+	EXEC SQL OPEN Cu_Tbmaxchar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbmaxchar;
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+
+	EXEC SQL FETCH Cu_Tbmaxchar INTO :tmpstr :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	if ( flag ) MEMSET_DEBUG(maxstring,0,len);
+
+sprintf(acErrMsg,"[%s] [%d]",tmpstr,flag);
+WRITEMSG
+
+	EXEC SQL CLOSE Cu_Tbmaxchar;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return (-1);
+	}
+	strncpy ( maxstring , tmpstr , len );
+	maxstring[len] = '\0';
+sprintf(acErrMsg,"[%s] [%d]",tmpstr,len);
+WRITEMSG
+	return 0;
+}
+
+Search_Sql(char comm[800],char tabname[40],char comm_t[800],char up_str[7])
+{
+	char	comm_t1[800];
+	char	comm_t2[800];
+	char	acErrMsg[400];
+	int		i,j;
+
+	pub_base_strpack(comm);
+
+	MEMSET_DEBUG( comm_t1,0x00,800 );
+	strncpy(up_str,comm,6);
+	up_str[6]='\0';
+	strncpy(comm_t1,comm+6,strlen(comm)-6);
+	pub_base_strpack(comm_t1);
+	if ( !strcmp(up_str,"delete") || !strcmp(up_str,"DELETE"))
+	{
+		strncpy(comm_t2,comm_t1+4,strlen(comm_t1)-4);
+		pub_base_strpack(comm_t2);
+		strcpy(comm_t1,comm_t2);
+	}
+	i=0;
+	for ( i=0 ; i<strlen(comm_t1) ; i++)
+	{
+		tabname[i]=comm_t1[i];
+		if ( comm_t1[i] == ' ' ) break;
+	}
+	tabname[i]='\0';
+	strncpy(comm_t,comm_t1+i,strlen(comm_t1)-i);
+	comm_t[strlen(comm_t1)-i]='\0';
+	pub_base_strpack(comm_t);
+
+	return 0;
+}
+Search_Where(char *comm,char *wherelist )
+{
+	int	i;
+	char	comm_t1[800];
+	pub_base_strpack(comm);
+	for ( i=0 ; i<strlen(comm) ; i++) {
+		if ( comm[i]=='w' || comm[i]=='W' ) {
+			if ( !strncmp("where",comm+i,5) || !strncmp("WHERE",comm+i,5))
+			{
+				strcpy(wherelist,comm+i+5);
+				break;
+			}
+		}
+	}
+	return 0;
+}
+int rzzb()
+{
+
+	return 0;
+}
+
+int bbrjb_Dec_Sel(char *sql,char *reply)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+		char sqlselect[4096];
+    EXEC SQL END DECLARE SECTION;
+
+    MEMSET_DEBUG(sqlselect, 0x0, sizeof(sqlselect));
+    strcpy(sqlselect,sql);
+	EXEC SQL prepare dp_ud from :sqlselect;
+	if (sqlca.sqlcode != 0)
+	{
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		printf("sql = [%s]\n",sqlselect);
+		sprintf(acErrMsg,"sql = [%s]\n",sqlselect);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL declare cur_zz cursor for dp_ud;
+
+	EXEC SQL open cur_zz;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"OPEN cur_zz error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+int bbrjb_Fet_Sel(struct gl_mst_c *gl_mst_c, struct com_item_c *com_item_c,
+				  char *reply)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_mst_c rzz;
+		struct com_item_c rkm;
+		short z1,z2,z3,z4,z5,z6,z7;
+    EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL fetch cur_zz
+	into :rzz.date,:rzz.br_no,:rzz.cur_no,:rzz.acc_hrt,:rzz.dc_ind,
+		:rkm.acc_name,
+		:rzz.ldd_bal:z1,:rzz.lcd_bal:z2,:rzz.rdd_amt:z3,:rzz.rcd_amt:z4,
+		:rzz.dr_bal:z5,:rzz.cr_bal:z6 ;
+    if (sqlca.sqlcode&&sqlca.sqlcode!=1403)
+	{
+		sprintf(acErrMsg,"Fet mo_cli_log erro!!! %d",sqlca.sqlcode);
+		WRITEMSG 
+		strcpy (reply,"D103"); 
+		return sqlca.sqlcode; 
+	} 
+	else if ( sqlca.sqlcode == 1403 ) 
+	{ 
+		sprintf(acErrMsg,"Fet mo_cli_log erro!!! %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy (reply,"D104"); 
+		return sqlca.sqlcode; 
+	}
+
+	strcpy(rzz.br_no,pub_base_strpack( rzz.br_no )); 
+	strcpy(rzz.acc_hrt,pub_base_strpack( rzz.acc_hrt )); 
+	strcpy( rzz.cur_no,"01" ); 
+	if( z1 ) rzz.ldd_bal=0.00; 
+	if( z2 ) rzz.lcd_bal=0.00; 
+	if( z3 ) rzz.rdd_amt=0.00; 
+	if( z4 ) rzz.rcd_amt=0.00; 
+	if( z5 ) rzz.dr_bal=0.00; 
+	if( z6 ) rzz.cr_bal=0.00;
+
+    MEMCPY_DEBUG(gl_mst_c,&rzz,sizeof(struct gl_mst_c));
+	MEMCPY_DEBUG(com_item_c,&rkm, sizeof(struct com_item_c));
+
+    return 0;
+}
+int bbrjb_Fet2_Sel(struct gl_mst_c *gl_mst_c, struct com_item_c *com_item_c,
+				  char *reply)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_mst_c rzz;
+		struct com_item_c rkm;
+		short z1,z2,z3,z4,z5,z6,z7;
+    EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL fetch cur_zz
+	into :rzz.date,:rzz.br_no,:rzz.cur_no,:rkm.acc_no,:rzz.dc_ind,
+		:rkm.acc_name,
+		:rzz.ldd_bal:z1,:rzz.lcd_bal:z2,:rzz.rdd_amt:z3,:rzz.rcd_amt:z4,
+		:rzz.dr_bal:z5,:rzz.cr_bal:z6 ;
+    if (sqlca.sqlcode&&sqlca.sqlcode!=1403)
+	{
+		sprintf(acErrMsg,"Fet mo_cli_log erro!!! %d",sqlca.sqlcode);
+		WRITEMSG 
+		strcpy (reply,"D103"); 
+		return sqlca.sqlcode; 
+	} 
+	else if ( sqlca.sqlcode == 1403 ) 
+	{ 
+		sprintf(acErrMsg,"Fet mo_cli_log erro!!! %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy (reply,"D104"); 
+		return sqlca.sqlcode; 
+	}
+
+	strcpy(rzz.br_no,pub_base_strpack( rzz.br_no )); 
+	strcpy(rzz.acc_hrt,pub_base_strpack( rzz.acc_hrt )); 
+	strcpy( rzz.cur_no,"01" ); 
+	if( z1 ) rzz.ldd_bal=0.00; 
+	if( z2 ) rzz.lcd_bal=0.00; 
+	if( z3 ) rzz.rdd_amt=0.00; 
+	if( z4 ) rzz.rcd_amt=0.00; 
+	if( z5 ) rzz.dr_bal=0.00; 
+	if( z6 ) rzz.cr_bal=0.00;
+
+    MEMCPY_DEBUG(gl_mst_c,&rzz,sizeof(struct gl_mst_c));
+	MEMCPY_DEBUG(com_item_c,&rkm, sizeof(struct com_item_c));
+
+    return 0;
+}
+
+int bbrjb_Clo_Sel()
+{
+	EXEC SQL CLOSE cur_zz;
+
+	return 0;
+}
+
+int sql_max_double ( tabname , fiedname , maxdouble , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+double	*maxdouble;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1000];
+	double	recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select max(%s) from  %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbmaxdouble FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname , sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL DECLARE Cu_maxdouble CURSOR FOR Tbmaxdouble;
+
+	EXEC SQL OPEN Cu_maxdouble;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_maxdouble;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	EXEC SQL FETCH Cu_maxdouble INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0;
+
+	EXEC SQL CLOSE Cu_maxdouble;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	*maxdouble=recnum;
+	return 0;
+
+}
+
+March_mst_Dec_Sel_W ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+	char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT * FROM march_mst WHERE  ");
+	key_strcat(comm,wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE march_mst_sel FROM :comm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log(comm);
+	  	sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( reply , "D101" ); 
+		return sqlca.sqlcode; 
+	} 
+	
+	EXEC SQL DECLARE sel_march_mst CURSOR FOR march_mst_sel; 
+	
+	EXEC SQL OPEN sel_march_mst; 
+	if (sqlca.sqlcode) 
+	{ 
+		sprintf(acErrMsg,"OPEN march_mst error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( reply , "D102" ); 
+		return sqlca.sqlcode; 
+	} 
+	
+	return 0; 
+}
+
+Pos_fee_mst_Dec_Sel_W ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+	char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+
+	char    wherelist[800]; 
+	
+	va_list ap; 
+	va_start(ap); 
+	vsprintf ( wherelist , fmtstr , ap ); 
+	va_end(ap); 
+	
+	sprintf ( comm ," SELECT * FROM pos_fee_mst WHERE %s ");
+	key_strcat(comm,wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE pos_fee_mst_sel FROM :comm; 
+	if (sqlca.sqlcode) 
+	{ 
+		vtcp_log(comm); 
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG 
+		strcpy ( reply , "D101" ); 
+		return sqlca.sqlcode; 
+	} 
+	EXEC SQL DECLARE sel_pos_fee_mst CURSOR  FOR pos_fee_mst_sel; 
+	
+	EXEC SQL OPEN sel_pos_fee_mst; 
+	if (sqlca.sqlcode) 
+	{ 
+		sprintf(acErrMsg,"OPEN pos_fee_mst error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( reply , "D102" ); 
+		return sqlca.sqlcode; 
+	} 
+	return 0; 
+}
+
+/**------------- hao ---hao ------------**/
+int distinct_long_dec_sel( tabname, field, fmtstr, va_alist)
+char *tabname;
+char *field;
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	selcomm[1024];
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+	va_list ap;
+
+	va_start(ap);
+	vsprintf( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( selcomm, "select distinct %s from %s where ", field, tabname);
+	key_strcat(selcomm,wherelist);
+
+	vtcp_log("hao -- look aaaaaa --selcomm=[%s]",selcomm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Cur_Dist_long FROM :selcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s", tabname, sqlca.sqlcode, wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Dist_Cur_long CURSOR FOR Cur_Dist_long;
+
+	EXEC SQL OPEN Dist_Cur_long;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d", tabname, sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbcount;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+
+	return 0;
+}
+int distinct_long_fet_sel( distlong )
+long *distlong;
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	long	tmplong=0;
+EXEC	SQL	END		DECLARE	SECTION;
+
+	EXEC SQL FETCH Dist_Cur_long INTO :tmplong;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	*distlong=tmplong;
+
+	return 0;
+}
+int distinct_long_clo_sel()
+{
+	EXEC SQL CLOSE Dist_Cur_long;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %d", sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return 0;
+}
+
+/*计算符合条件的记录个数和一个金额的合计*/
+/*add by xxxxxxxx 20040814*/
+/*返回值：记录个数*/
+int sql_count_sum_double ( tabname , fiedname , sumdouble , fmtstr , va_alist )
+char	*tabname;
+char	*fiedname;
+double	*sumdouble;
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	double	recnum;
+	short	flag;
+	char	countcomm1[1024];
+	int		recnum1;
+	short 	flag1;
+EXEC	SQL	END		DECLARE	SECTION;
+	char	wherelist[1024];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf(countcomm,"select sum(%s) from %s where ",fiedname,tabname);
+	key_strcat(countcomm,wherelist);
+	flag = 0;
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbsumdouble_count FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"prepare error [%s] %d",countcomm, sqlca.sqlcode);
+		WRITEMSG
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Cu_sumdouble_count CURSOR FOR Tbsumdouble_count;
+
+	EXEC SQL OPEN Cu_sumdouble_count;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_sumdouble_count;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+	EXEC SQL FETCH Cu_sumdouble_count INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag ) recnum=0.00;
+
+	EXEC SQL CLOSE Cu_sumdouble_count;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	*sumdouble=recnum;
+
+	sprintf(countcomm1,"select count(*) from  %s where ", tabname);
+	key_strcat(countcomm1,wherelist);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tbcount_sum FROM :countcomm1;
+	if (sqlca.sqlcode<0)
+	{
+		sprintf(acErrMsg,"prepare error comm[%s] %d",countcomm1, sqlca.sqlcode);
+		WRITEMSG
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Cu_Tbcount_sum CURSOR FOR Tbcount_sum;
+
+	EXEC SQL OPEN Cu_Tbcount_sum;
+	if (sqlca.sqlcode <0 )
+	{
+		vtcp_log("open error3 %s %d",tabname , sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_Tbcount_sum;
+		strcpy(g_pub_tx.reply, "D101");
+		return -1;
+	}
+	EXEC SQL FETCH Cu_Tbcount_sum INTO :recnum1:flag1;
+	if (sqlca.sqlcode<0 )
+	{
+		vtcp_log("fetch error2 %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	if ( flag1 ) recnum1  =0;
+	EXEC SQL CLOSE Cu_Tbcount_sum;
+	if (sqlca.sqlcode<0)
+	{
+		vtcp_log("close error1 %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	return recnum1;
+}
+
+/******************************************
+*	函数名称		:删除或更改数据库内容
+*	作者			:jack
+*	日期			:2001/12/24
+*	功能描述		:删除或更改数据库内容
+*	函数原型		:sql_execute2(fmtstr,va_alist)
+*	入口参数		:fmtstr		char*	:带格式的字符串
+*					 va_alist			:数据列表
+*	出口参数		:无
+*	返回			:0 成功 1 失败
+*	修改人			: jack
+*	修改日期		:
+*	修改内容		: 不操作dd_mst等表
+*******************************************/
+int sql_execute2( fmtstr, va_alist )
+char *fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char delcomm[2048];
+	char tmpstr[2048];
+	struct dd_mst_c	dd_mst;
+	struct td_mst_c	td_mst;
+	struct in_mst_c	in_mst;
+	struct mdm_ac_rel_c	mdm_ac_rel;
+EXEC	SQL	END		DECLARE	SECTION;
+	int ret =0;
+	char	*ptr,*tmpchar;
+	char	*wherptr;
+	char	wherelist[2048];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( delcomm , fmtstr , ap );
+	
+	vtcp_log( "delcomm[%s]", delcomm );
+	EXEC SQL PREPARE sql_del2 FROM :delcomm;
+	if(sqlca.sqlcode)
+	{
+		vtcp_log("[%s][%d]参数错误!! %d [%s]",__FILE__,__LINE__,sqlca.sqlcode,delcomm);
+		strcpy( g_pub_tx.reply,"D103" );
+		return 1;
+	}
+	EXEC SQL EXECUTE sql_del2;
+	if(sqlca.sqlcode==1403)
+	{
+		vtcp_log("删除表执行失败!! %s %d",delcomm,sqlca.sqlcode);
+		strcpy( g_pub_tx.reply,"D104" );
+		return 100;
+	}
+	else if(sqlca.sqlcode!=0 && sqlca.sqlcode!=1403)
+	{
+		vtcp_log("删除表执行失败!! %s %d",delcomm,sqlca.sqlcode);
+		strcpy( g_pub_tx.reply,"D103" );
+		return -1;
+	}
+	va_end(ap);
+
+	return (0);
+}
+
+
+
+int sql_diff_items ( tabname ,items,min,max,count,buf, fmtstr , va_alist )
+char	*tabname;
+char    *items;
+int 	min;
+int 	max;
+int 	count;
+char    *buf;              
+char	*fmtstr;
+va_dcl
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	short	flag;
+	
+EXEC	SQL	END		DECLARE	SECTION;
+	struct MY_STRUCT{
+		char num[8];
+	};
+	char	wherelist[1024];
+	int ret=0;
+	
+	char my_struct[1024];
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+	sprintf(countcomm,"select %s from  %s where ",items,tabname);
+	key_strcat(countcomm,wherelist);
+
+	sprintf( acErrMsg, "countcomm=[%s]",countcomm );
+	WRITEMSG
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Tb_diff FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("prepare error %s %d %s",tabname,sqlca.sqlcode,wherelist);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL DECLARE my_cur CURSOR FOR Tb_diff;
+
+	EXEC SQL OPEN my_cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",tabname , sqlca.sqlcode);
+		ret=sqlca.sqlcode;
+		EXEC SQL CLOSE my_cur;
+		strcpy(g_pub_tx.reply, "D101");
+		return ret;
+	}
+
+	EXEC SQL FETCH my_cur INTO :buf;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+
+	EXEC SQL CLOSE my_cur;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d",tabname , sqlca.sqlcode);
+		strcpy(g_pub_tx.reply, "D101");
+		return sqlca.sqlcode;
+	}
+	return 0;
+
+}
+
+
+/****从某一个表中提取字段sql语句的内容采用格式select min(),max(),count(),******/
+/****add by liuyue 20091015*****/
+
+int Diff_items_Dec_Sel ( reply ,tabname,items, fmtstr , va_alist )
+char    *reply;
+char	*tabname;
+char	*items;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT %s FROM %s WHERE  ",items,tabname);
+	strcat(comm,wherelist);
+	vtcp_log("[%s][%d]cWherelist===[%s]\n",__FILE__,__LINE__,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE Diff_items_sel FROM :comm;
+	if (sqlca.sqlcode){
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return 101;
+	}
+	EXEC SQL DECLARE sel_Diff_items CURSOR FOR Diff_items_sel;
+
+	EXEC SQL OPEN sel_Diff_items;
+	vtcp_log("%s,%d 打开select游标",__FILE__,__LINE__);
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN Diff_items error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return 102;
+	}
+	vtcp_log("%s,%d 打开select游标",__FILE__,__LINE__);
+	return 0;
+}
+
+int Diff_items_Fet_Sel ( char *rst_buf , char * reply )
+{
+	vtcp_log("[%s][%d]\n",__FILE__,__LINE__);
+	int   ret;
+	char  num_data[8];
+	 struct mystruct
+	 {
+		char  min[9];
+		char  max[9];
+		int   count;
+		char  buf[6];
+	} ;
+	
+	struct mystruct *Diff_items_c;
+	
+	
+	
+	MEMSET_DEBUG(num_data,0x00,sizeof(num_data));
+	vtcp_log("[%s][%d]sizeof(diff)==[%d],sizeof(*dif)==[%d]\n"
+		,__FILE__,__LINE__,sizeof(Diff_items_c),sizeof(*Diff_items_c));
+	MEMSET_DEBUG(Diff_items_c,0x00,sizeof(*Diff_items_c));
+	vtcp_log("[%s][%d]\n",__FILE__,__LINE__);
+	
+	vtcp_log("[%s][%d]\n",__FILE__,__LINE__);
+	EXEC SQL FETCH sel_Diff_items INTO :Diff_items_c;
+	vtcp_log("[%s][%d]\n",__FILE__,__LINE__);
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch Diff_items error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		return 104;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch Diff_items finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		return 100;
+	}
+	vtcp_log("[%s][%d]\n",__FILE__,__LINE__);
+	vtcp_log("[%s][%d]Diff_items_c==[%s]\n",__FILE__,__LINE__,(char *)Diff_items_c);
+	
+	sprintf(rst_buf,"%.5s",Diff_items_c->buf);
+	
+	
+	strcat(rst_buf,Diff_items_c->min);
+	
+	strcat(rst_buf,Diff_items_c->max);
+	
+	sprintf(num_data,"%04d",Diff_items_c->count);
+	
+	strcat(rst_buf,num_data);
+	
+	
+	
+	vtcp_log("[%s][%d]rst_buf===[%s]\n",__FILE__,__LINE__,rst_buf);
+
+	return 0;
+}
+
+int Diff_items_Clo_Sel (){
+	vtcp_log("%s,%d find 游标关闭",__FILE__,__LINE__);
+	EXEC SQL CLOSE sel_Diff_items;
+	return 0;
+}
+
+
+/***add by liuyue 20061021  资产负债类报表时候需要**/
+int sql_exec_sum_double ( sumdouble , cWherelist   )
+double	*sumdouble;
+char	*cWherelist;
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	countcomm[1024];
+	double	recnum;
+	short	flag;
+EXEC	SQL	END		DECLARE	SECTION;
+	
+	MEMCPY_DEBUG(countcomm,cWherelist,strlen(cWherelist));
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE ZCFZ FROM :countcomm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(acErrMsg,"prepare error [%s] %d",countcomm, sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	EXEC SQL DECLARE Cur_czfz CURSOR FOR ZCFZ;
+
+	EXEC SQL OPEN Cur_czfz;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("open error %s %d",  sqlca.sqlcode);
+		EXEC SQL CLOSE Cu_sumdouble;
+		strcpy ( g_pub_tx.reply , "D101" );
+		return -1;
+	}
+	EXEC SQL FETCH Cur_czfz INTO :recnum :flag;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("fetch error %s %d", sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode; 
+	}
+	if ( flag ) recnum=0.00;
+
+	EXEC SQL CLOSE Cur_czfz;
+	if (sqlca.sqlcode)
+	{
+		vtcp_log("close error %s %d" , sqlca.sqlcode);
+		strcpy ( g_pub_tx.reply , "D101" );
+		return sqlca.sqlcode;
+	}
+	*sumdouble=recnum;
+
+	return 0;
+
+}
+/***add by martin 20061028  子报表函数用**/
+int RPT_Gl_Dec_Sel ( reply , tab1, tab2, fmtstr , va_alist )
+char *tab1;
+char *tab2;
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT %s.rowid,%s.* FROM %s,%s  WHERE  ",tab1,tab1,tab1,tab2);
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE rpt_gl_sel FROM :comm;
+
+	if (sqlca.sqlcode){
+		vtcp_log(comm);
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D101" );
+		return CM_SQLCODE;
+	}
+
+	EXEC SQL DECLARE sel_rpt_gl CURSOR FOR rpt_gl_sel;
+	EXEC SQL OPEN sel_rpt_gl;
+
+	
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN gl_sub error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int RPT_Gl_Fet_Sel ( struct gl_sub_c *gl_sub_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_rpt_gl INTO :gl_sub_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch gl_sub error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch gl_sub finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(gl_sub_c);
+
+	return 0;
+}
+
+int RPT_Gl_Clo_Sel (){
+	EXEC SQL CLOSE sel_rpt_gl;
+	return 0;
+}
+static void zip_struct(struct gl_sub_c* ps){
+        zip_tail(ps->rowid);
+        zip_tail(ps->br_no);
+        zip_tail(ps->cur_no);
+        zip_tail(ps->acc_hrt);
+        zip_tail(ps->dc_ind);
+        zip_tail(ps->up_acc_hrt);
+}

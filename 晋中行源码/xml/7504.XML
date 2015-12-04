@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110001" TITLE="7504 柜员交接"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD25=#GYMC;
+	$FD67=#JJLX;
+	$FD92=#DFGY;
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	if($FD12 == '0000')
+	 {
+		 showmsg('交易成功!');
+	 }
+}"
+</COMMRECV>
+<FIRSTWORK >"{
+	dim @txno_bak as string;
+	dim @tota as string;
+	@txno_bak=$TXNO;
+	$TXNO='9902';
+	commsend_001();
+	@tota=callserver();	
+	$TXNO=@txno_bak;
+	}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7504                           柜员交接)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5504)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="7" COL="5">
+  <ITEM LINE="2" COL="0"  TYPE="%-10s" FUNCTIONS="T(交接类型:!)"/>
+  <ITEM LINE="4" COL="0"  TYPE="%-60s" FUNCTIONS="T(------------------------------------------------------------:)"/>
+  <ITEM LINE="5" COL="0"  TYPE="%-8s"  FUNCTIONS="T(对方柜员)"/>
+  <ITEM LINE="6" COL="0"  TYPE="%-10s" FUNCTIONS="T(柜员名称)"/>
+  <ITEM LINE="5" COL="20" TYPE="%-10s" NAME="#SHOWMM" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(对方密码)"/>
+
+  <ITEM NAME="#JJLX" INPUT="SELECT" LINE="2" COL="10" TYPE="%-1s" FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="1.付出"/>
+		<OPTION VALUE="2" TITLE="2.收入"/>
+		<OPTION VALUE="3" TITLE="3.收回"/>
+	</SELECT>
+   	<ONLOSTFOCUS>
+	"{
+		if(#JJLX == '2')
+		{
+			show(#SHOWMM,true);
+			enable(#SHOWMM,true);
+			show(#DFMM,true);
+			enable(#DFMM,true);
+		}else{
+			show(#SHOWMM,false);
+			enable(#SHOWMM,false);
+			show(#DFMM,false);
+			enable(#DFMM,false);
+		}
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+  <ITEM NAME="#DFGY" INPUT="TEXT" LINE="5" COL="10" TYPE="%4s" FUNCTIONS=""/>
+  <!----当收入时，要求付出方输密码---->
+  <ITEM NAME="#DFMM" INPUT="TEXT" LINE="5" COL="30" TYPE="%6d" VISABLE="FALSE" FUNCTIONS="i()"/>
+
+  <ITEM NAME="#TMEP" TYPE="%1s" FUNCTIONS="">
+    <ONLOSTFOCUS>
+ "{	initfd();
+ 	dim @tota as string;
+	commsend_001();
+ 	$FD16='9962';
+	$FD92=#DFGY;
+	$FD70=#JJLX;
+	if(#JJLX == '2')
+	{
+		$FD79=#DFMM;
+	}
+	callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+	#GYMC=delspace($FD25);
+	show(#GYMC,true);
+ }"
+ </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#GYMC" LINE="6" COL="10" TYPE="%-50s" FUNCTIONS=""/>
+  </BLOCK>
+  
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#JJLX,#JJLX)"/>
+    
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON"> 
+	<ONCLICK>"{
+		dim @tota as string;
+		dim @selid as number;
+		dim @f as file;
+		@tota='0';
+		commsend_001();
+		$FD25=#GYMC;
+  	$FD67=#JJLX;
+	  $FD92=#DFGY;
+	  @tota=callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		if(len(@tota)!=0)
+		{
+		 @f=openfile('../tmp/柜员交接处理['+$TLRNO+']','w');
+     writeline(@f,@tota);
+     closefile(@f);
+     call('fview ../tmp/柜员交接处理['+$TLRNO+']');
+    }
+    else
+    {
+     runoutput();
+    }
+	}"
+ 	</ONCLICK>
+ 	</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="柜员交接">
+NOTHING
+</PACKAGE>
+  <PRINT>"{
+          print( 3,30,'[7      ]   [30]',$KINBR,$BRNAME);
+          print( 4,30,'柜员交接(收入)');          
+	  			print( 5,  15,'交易日期:[8]',$HDATE);  
+	  			print( 6,  15,'流水号码:[6]',$FD4);
+	  			print( 7,  15,'操作员号:[4]',$FD7);	  
+	  			print( 8,  15,'交接类型:[20 ]',#NAME2);
+	  			print( 9,  15,'对方柜员:[16 ]',#DFGY);
+	  			print( 10, 15,'柜员名称:[16 ]',#GYMC);
+	  			print( 11, 15,'交接金额:[16 ]',itoa(val($FD43,0.01),'%16.2f'));
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="25">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+                    $KINDNO='00';
+                    dim @txtime  as string;
+                    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+                    print( 5, 20,'机构名称:[30]',$BRNAME);
+                    print( 5, 2,'代码:7504');
+                    print( 5, 13,'交易:柜员交接');
+	            print( 7, 20,'交易日期:[8]',$HDATE);  
+	            print( 8, 20,'流水号码:[6]',$FD4);
+		    print( 9, 20,'操作员号:[4]',$FD7);	  
+	       	    print( 10, 20,'交接类型:[20 ]',#NAME2);
+	     	    print( 11, 20,'对方柜员:[16 ]',#DFGY);
+		    print( 12, 20,'柜员名称:[16 ]',#GYMC);
+	            print( 13, 20,'交接金额:[16 ]',ltrim(itoa(val($FD43,0.01),'%16.2f')));
+                    print( 24,20,'备注:')
+                    print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                    print( 24,5,'柜员:[4]',$FD7);
+                    print( 24,5,'流水号:[6]',$FD4);
+
+ 	}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

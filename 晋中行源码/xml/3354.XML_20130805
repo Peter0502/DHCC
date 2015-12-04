@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3354  银联柜面通存款撤销"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3"  COL="3"  TYPE="%-54S" FUNCTIONS=
+"T(3354                        银联柜面通存款撤销)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#MSGTYPE"    TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE=" 6" COL="15" TYPE="%-15s" FUNCTIONS="T(读取  方式:)"/>
+<ITEM LINE=" 8" COL="15" TYPE="%-15s" FUNCTIONS="T(卡      号:)"/>
+<ITEM LINE="10" COL="15" TYPE="%-15s" FUNCTIONS="T(原交易币种:)"/>
+<ITEM LINE="12" COL="15" TYPE="%-15s" FUNCTIONS="T(原交易金额:)"/>
+<ITEM LINE="14" COL="15" TYPE="%-15s" FUNCTIONS="T(原交易流水:)"/>
+<ITEM LINE="16" COL="15" TYPE="%-15s" FUNCTIONS="T(原交易日期:)"/>
+<ITEM NAME="#ICSEQID"      TYPE="%-3s"   FUNCTIONS=""/><!---IC卡序列号--->
+<ITEM LINE="6" COL="27" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+			<OPTION VALUE="2" TITLE="无卡人工输入"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+"{
+	if('0' == #DQFS)
+	{ enable(#ACTNO1,true);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,true);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,false);
+		
+	}
+	else if('1' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,true);
+		enable(#AC_NO_NO,false);
+		show(#ACTNO1,false);
+		show(#ACTNO2,true);
+		show(#AC_NO_NO,false);
+		
+	}
+	else if('2' == #DQFS)
+	{
+	
+		enable(#ACTNO1,false);
+		enable(#ACTNO2,false);
+		enable(#AC_NO_NO,true);
+		show(#ACTNO1,false);
+		show(#ACTNO2,false);
+		show(#AC_NO_NO,true);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#CASH_ACCT"  TYPE="%-19s"  FUNCTIONS="" />
+<ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="8" COL="27" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" />
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="8"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)"/>
+<ITEM NAME="#AC_NO_NO"   INPUT="TEXT" LINE="8" COL="27" TYPE="%-20s" VISABLE="FALSE" FUNCTIONS="V(NB)I()"/>
+<ITEM NAME="#AC_NO" TYPE="%-20s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+   dim @tota as string;
+   dim @shuju as string;
+	if('0' == #DQFS)
+	{
+		#AC_NO=#ACTNO1;
+		if('' == $MSR2)
+		{
+			showmsg('二磁道信息为空,请注意账户介质是否为卡或是确定卡是否为可用!');
+			return(false);
+		}
+	}
+	else if('1' == #DQFS)
+	{
+		#AC_NO=#ACTNO2;
+		if('' == $MSR2)
+		{
+			showmsg('二磁道信息为空,请注意账户介质是否为卡或是确定卡是否为可用!');
+			return(false);
+		}
+		@shuju=initiccard('01','000000000000');
+		#ICSEQID=strfld(@shuju,'|',4);
+	}
+	else if('2' == #DQFS)
+	{
+		#AC_NO=#AC_NO_NO;
+	}
+	if('621223' == substr(#AC_NO,0,6) or '621780' == substr(#AC_NO,0,6))
+	{
+		showmsg('本行卡不允许做该交易!');
+		return(false);
+	}
+	//查询柜员现金
+	
+	initfd();
+	commsend_001();
+	$FD16 = '9930';
+	$FD68 = '7';
+	$FD21 = '01';
+	@tota=callserver();
+	if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#CASH_ACCT=$FD31;
+	showmsg('#CASH_ACCT='+#CASH_ACCT);
+	
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#CUR_NO"   TYPE="%-3s"   INPUT="SELECT" LINE="10" COL="27" FUNCTIONS="T(156)V(NB)">
+	<SELECT>
+		<OPTION VALUE="156" TITLE="01.人民币"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#O_TX_AMT" INPUT="TEXT" LINE="12" COL="27" TYPE="%12.2f"  FUNCTIONS="V(000000000300,999999999999)">
+<ONLOSTFOCUS>
+"{
+	if(#O_TX_AMT &gt; 200000.00 )
+	{
+		showmsg('存款单笔金额20上限!请注意哦');
+		return(false);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#O_SW_TRACE_NO" INPUT="TEXT" LINE="14" COL="27" TYPE="%012d" FUNCTIONS="V(NB)T()" />
+<ITEM NAME="#O_TX_DATE"  TYPE="%8d"   INPUT="TEXT" LINE="16"  COL="27"    ENABLE="FALSE"  FUNCTIONS="T($HDATE)D()V(NB)"/>
+<ITEM NAME="#TEL_BAL"     TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#TX_TRACE"   TYPE="%012d" FUNCTIONS="" />
+<ITEM LINE="21" COL="60"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONLOSTFOCUS>
+"{
+	<!--发往核心调用授权交易-->
+	
+	initfd();
+	commsend_001();
+	$FD16='3369';
+	callserver();
+	if($FD12 !='0000')
+	{
+	showmsg(geterror());
+	return(false);
+	}
+	showmsg('撤销授权成功!!...');
+	//发往银联撤销交易
+	initfd();
+	commsend_001();
+	$FD16='7833';
+	if(#DQFS== '1')
+	{
+	$FD23='0'+#ICSEQID;
+	}
+	$FD40=itoa(#O_TX_AMT*100,'%012.0f');
+	$FD85=#O_TX_DATE;
+	$FD43=#O_SW_TRACE_NO;
+	$FD30=#AC_NO;
+	$FD31=#CASH_ACCT;
+	$FD75=$MSR2;
+	$FD76=$MSR3;
+	$FD94=#DQFS;
+	if(#DQFS== '2')
+	{
+	$FD94='0';
+	}
+	callagn();
+	#TX_TRACE=$FD52;
+	if('CF09' == $FD12)
+	{
+			showmsg('银联处理中心收不到发卡方应答,发起存款撤销冲正！');
+			initfd();
+			commsend_001();
+			$FD16='7834';
+			$FD58=#TX_TRACE;
+			$FD85=$HDATE;
+			$FD30=delspace(#AC_NO);
+			callagn();
+		if('0000' != $FD12)
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			showmsg('撤销交易应答超时，已被冲正！');
+			return(false);
+	}
+	if('H036' == $FD12)
+	{
+		showmsg('该交易原交易未成功，不能发撤销交易！');
+		return(false);
+	}
+	if('H038' == $FD12)
+	{
+		showmsg('原交易已经被撤销，不能再撤销！');
+		return(false);
+	}
+	else if('H136' == $FD12)
+	{
+		showmsg('原交易是通过存款确认成功的交易，不能撤销！');
+		return(false);
+	}
+	else if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		//showmsg('存款撤销交易核心失败，请做存款撤销冲正交易(3357).');
+		return(false);
+	}
+	#SW_TRACE_NO=$FD52;
+	runoutput();
+	rerun();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通存款撤销成功，按任意键继续">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 5,30,'银联柜面通存款撤销');
+	print( 7,20,'原交易日期:[8 ]',#O_TX_DATE);
+	print( 8,20,'原交易水号:[12]',#O_SW_TRACE_NO);
+	print( 9,20,'交易  帐号:[20]',#AC_NO);
+	print(10,20,'原交易金额:[16]',#O_TX_AMT);
+	print(11,20,'平台流水号:[12]',#SW_TRACE_NO);
+	print(12,20,'核心流水号:[6]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="银联柜面通存款撤销成功，请打印业务专用凭证(1/2打印纸)">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'交易代码:3354');
+	print( 5,15,'交易名称:银联柜面通存款撤销');
+ 	print( 7,20,'卡      号: [24]',#AC_NO);
+	print( 8,20,'原交易日期: [8 ]',#O_TX_DATE);
+	print( 9,20,'原交易流水: [12]',#O_SW_TRACE_NO);
+	print(10,20,'原交易金额: [16]',#O_TX_AMT);
+	print(11,20,'平台流水号: [12]',#SW_TRACE_NO);
+	print_sq();
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+	print(24,05,'柜员:[4]',$FD7);
+	print(24,5 ,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

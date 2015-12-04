@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="2320 身份证核查结果维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	if(#HCJG=='00'){
+          #HCSM = '公民身份号码与姓名一致，且存在照片';      			
+ 			}else if(#HCJG=='01'){
+ 			 		#HCSM = '公民身份号码与姓名一致，但不存在照片';
+ 			}else if(#HCJG=='02'){
+ 			 		#HCSM = '公民身份号码存在，但与姓名不匹配';
+ 			}else if(#HCJG=='03'){
+ 			 		#HCSM = '公民身份号码不存在';
+ 			}else if(#HCJG=='04'){
+ 			 		#HCSM = '其他错误';
+ 			}else if(#HCJG=='05'){
+ 			 		#HCSM = '公民身份信息无法核实';
+ 			}else if(#HCJG=='06'){
+ 			 		#HCSM = '公民身份信息虚假';
+ 			}else if(#HCJG=='07'){
+ 			 		#HCSM = '三年及三年以上不动户';
+ 			}
+	initfd();
+	commsend_001();
+	$FD16='1320';
+	$FD62=#ZJHM;
+	$FD68=#ZJLX;
+	$FD22=#HCJG;
+	$FD58=#GDDH;
+	$FD59=#PHONE;
+	//$FD88=#ADDR;  88域长度为10，太短
+	$FD26=#ADDR;
+	$FD73=#POST_CODE;
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(2320                        身份证核查结果维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1320)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="06" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:)"/>
+  <ITEM NAME="#ZJLX" LINE="06" COL="18" TYPE="%1s"   INPUT="SELECT" FUNCTIONS="T(1)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="身份证"/>
+			<OPTION VALUE="2" TITLE="户口薄"/>
+			<OPTION VALUE="3" TITLE="护照  "/>
+			<OPTION VALUE="4" TITLE="军官证"/>
+			<OPTION VALUE="5" TITLE="回乡证"/>
+			<OPTION VALUE="6" TITLE="士兵证"/>
+			<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+			<OPTION VALUE="E" TITLE="临时身份证"/>
+			<OPTION VALUE="F" TITLE="外国人居留证"/>
+			<OPTION VALUE="G" TITLE="警官证"/>
+			<OPTION VALUE="H" TITLE="其他证件"/>
+			<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+		</SELECT>
+	</ITEM>
+  <ITEM LINE="7" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件号码:)"/>
+  <ITEM NAME="#ZJHM" LINE="7" COL="18" TYPE="%-18s" INPUT="TEXT"   FUNCTIONS="T()V(NB)">
+  	<ONLOSTFOCUS>
+  	"{
+			showmsg('如存在多个客户号请先做客户号合并');
+      dim @tota  as string;
+      dim @tota1  as string;
+  		initfd();
+  		commsend_001();
+  		$FD16='9804';
+  		$FD67=#ZJLX;
+  		$FD62=#ZJHM;
+  		callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+  		#CIFNO=$FD28;
+  		#KHMC =delspace($FD25);
+  		//添加
+  		commsend_001();
+  		$FD16='9222';
+  		callserver();
+  		if($FD12!='0000')
+  		{
+  			showmsg(geterror());
+  			return(false);
+  		}
+  		#GDDH=$FD81;
+  		#PHONE=$FD83;
+  		#ADDR=$FD82;
+  		#POST_CODE=$FD86;
+  		refresh();
+  		
+  		initfd();
+  		commsend_001();
+  		$FD16='9598';
+  		$FD123='select country from cif_sfhc_inf where cif_no='+chr(39)+#CIFNO+chr(39);
+       @tota=callserver();
+        if($FD12!='0000')
+        {
+            showmsg(geterror());
+            return(false);
+        }
+        @tota1=strfld(@tota,'|',0);
+        if( (substr(@tota1,0,1)=='0') and ((substr(@tota1,1,1) == '0') or (substr(@tota1,1,1) == '1') or (substr(@tota1,1,1) == '2') or (substr(@tota1,1,1) == '3') or (substr(@tota1,1,1) == '4') or (substr(@tota1,1,1) == '5')  or (substr(@tota1,1,1) == '6') or (substr(@tota1,1,1) == '7')) )
+        {
+            showmsg('此客户证件信息已经做过维护');
+        }
+
+        if( (substr(@tota1,0,1)=='0') and ((substr(@tota1,1,1) == '0') or (substr(@tota1,1,1) == '1')) )
+        {
+            showmsg('此客户证件信息已经维护成功，禁止维护！');
+            return(false);
+        }
+        if( (substr(@tota1,0,1)=='0') and (substr(@tota1,1,1) == '7') )
+        {
+            showmsg('此客户已经被维护为三年及三年以上不动户，如要维护，请做2322交易！');
+            return(false);
+        }
+    //    #HCJG=@tota1;
+    //    if(#HCJG=='00' or #HCJG=='01')
+    //			{
+    //			initfd();
+    // 			commsend_001();
+    //	  			$FD16='3369';
+    //	  			callserver();
+    //	  			if($FD12 !='0000')
+    //	  			{
+    //	  			 	showmsg(geterror());
+    //	   				return(false);
+    //	  			}
+    //	  		}
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(客户号码:)"/>
+  <ITEM NAME="#CIFNO" LINE="8" COL="18" TYPE="%-8s"   INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>    
+  <ITEM LINE="9" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(客户名称:)"/>
+  <ITEM NAME="#KHMC" LINE="9" COL="18" TYPE="%-50s"   INPUT="TEXT" ENABLE="FALSE" FUNCTIONS=""/>    
+  <ITEM LINE="10" COL="8" TYPE="%62s" FUNCTIONS="T(--------------------------------------------------------------)"/>
+  <ITEM LINE="11" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(核查结果:)"/>
+  <ITEM NAME="#HCSM" TYPE="%-40s" />
+  <ITEM NAME="#HCJG" LINE="11" COL="18" TYPE="%2s"   INPUT="SELECT" FUNCTIONS="T(00)">    
+  	<SELECT>
+  		<OPTION VALUE="00" TITLE="公民身份号码与姓名一致，且存在照片"/>
+  		<OPTION VALUE="01" TITLE="公民身份号码与姓名一致，但不存在照片"/>
+  		<OPTION VALUE="02" TITLE="公民身份号码存在，但与姓名不匹配"/>
+  		<OPTION VALUE="03" TITLE="公民身份号码不存在"/>
+  		<OPTION VALUE="04" TITLE="其他错误"/>
+  		<OPTION VALUE="05" TITLE="公民身份信息无法核实"/>
+		<OPTION VALUE="06" TITLE="公民身份信息虚假"/>
+		<!-- <OPTION VALUE="07" TITLE="三年及三年以上不动户"/> -->
+ 	</SELECT>
+ 	<ONLOSTFOCUS>
+ 		"{
+ 			if(#HCJG=='00'){
+          #HCSM = '公民身份号码与姓名一致，且存在照片';      			
+ 			}else if(#HCJG=='01'){
+ 			 		#HCSM = '公民身份号码与姓名一致，但不存在照片';
+ 			}else if(#HCJG=='02'){
+ 			 		#HCSM = '公民身份号码存在，但与姓名不匹配';
+ 			}else if(#HCJG=='03'){
+ 			 		#HCSM = '公民身份号码不存在';
+ 			}else if(#HCJG=='04'){
+ 			 		#HCSM = '其他错误';
+ 			}else if(#HCJG=='05'){
+ 			 		#HCSM = '公民身份信息无法核实';
+ 			}else if(#HCJG=='06'){
+ 			 		#HCSM = '公民身份信息虚假';
+ 			}else if(#HCJG=='07'){
+ 			 		#HCSM = '三年及三年以上不动户';
+ 			}
+ 			
+ 		}"
+ 	</ONLOSTFOCUS>
+  </ITEM>
+ <!--- <ITEM NAME="#HCSM" TYPE="%-40s" FUNCTIONS="S(#HCJG,#HCJG)"/>--->
+  <ITEM LINE="12" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(固定电话:)"/>
+  <ITEM LINE="12" COL="18" TYPE="%-13s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#GDDH"/>
+  <ITEM LINE="12" COL="35" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(客户手机:)"/>
+  <ITEM LINE="12" COL="45" TYPE="%-13s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#PHONE"/>
+  
+  <ITEM LINE="13" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(联系地址:)" />
+  <ITEM LINE="13" COL="18" TYPE="%-60s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#ADDR"/>
+  <ITEM LINE="14" COL="08" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(邮政编码:)" />
+  <ITEM LINE="14" COL="18" TYPE="%-6s" INPUT="TEXT"  FUNCTIONS="T()" NAME="#POST_CODE"/>
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="交易成功">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print(8,20,'身份证验证信息维护成功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,10,'机构名称:[30]',$BRNAME); 
+		print( 5, 2,'代码:2320'); 
+		print( 5,5,'交易:身份证核查结果维护'); 
+		
+		print( 8,10,'客户号:[8]',#CIFNO);
+		print( 9,10,'客户名称:[50]',#KHMC);
+		print(10,10,'核查结果:[40]',#HCSM);
+		print(11,10,'固定电话:[14]     客户手机:[14]',#GDDH,#PHONE);
+		print(12,10,'联系地址:[50]',#ADDR);
+		print(13,10,'邮政编码:[6]',#POST_CODE);
+
+		print(18,10,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(18,5,'柜员:[6]',$FD7);
+		print(18,5,'流 水 号:[ 6]',$FD4);
+		//print(18,5,'流水号:[6]',substr($FD126,2,6));
+		print(18,10,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

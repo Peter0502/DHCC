@@ -1,0 +1,354 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"patotab_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int patotab_con ( struct patotab_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct patotab_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->brno);
+	zip_tail(ps->brname);
+	zip_tail(ps->txday);
+	zip_tail(ps->txtime);
+	zip_tail(ps->aptype);
+	zip_tail(ps->txcd);
+	zip_tail(ps->sendday);
+	zip_tail(ps->apflg);
+	zip_tail(ps->paybrno);
+	zip_tail(ps->paybrtype);
+	zip_tail(ps->payname);
+	zip_tail(ps->payactno);
+	zip_tail(ps->paycode);
+	zip_tail(ps->payertype);
+	zip_tail(ps->paycertif);
+	zip_tail(ps->cashbrno);
+	zip_tail(ps->cashbrtype);
+	zip_tail(ps->cashname);
+	zip_tail(ps->cashactno);
+	zip_tail(ps->cashcode);
+	zip_tail(ps->cashertype);
+	zip_tail(ps->cashcertif);
+	zip_tail(ps->txamt);
+	zip_tail(ps->paydate);
+	zip_tail(ps->cashdate);
+	zip_tail(ps->dscpt);
+	zip_tail(ps->paytype);
+	zip_tail(ps->crdno);
+	zip_tail(ps->txtypeno);
+	zip_tail(ps->expand);
+}
+int Patotab_Debug(struct patotab_c *ps){
+	vtcp_log("patotab_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("patotab_c.brno=[%s]\n",ps->brno);
+	vtcp_log("patotab_c.brname=[%s]\n",ps->brname);
+	vtcp_log("patotab_c.txday=[%s]\n",ps->txday);
+	vtcp_log("patotab_c.txtime=[%s]\n",ps->txtime);
+	vtcp_log("patotab_c.aptype=[%s]\n",ps->aptype);
+	vtcp_log("patotab_c.txcd=[%s]\n",ps->txcd);
+	vtcp_log("patotab_c.sendday=[%s]\n",ps->sendday);
+	vtcp_log("patotab_c.apflg=[%s]\n",ps->apflg);
+	vtcp_log("patotab_c.paybrno=[%s]\n",ps->paybrno);
+	vtcp_log("patotab_c.paybrtype=[%s]\n",ps->paybrtype);
+	vtcp_log("patotab_c.payname=[%s]\n",ps->payname);
+	vtcp_log("patotab_c.payactno=[%s]\n",ps->payactno);
+	vtcp_log("patotab_c.paycode=[%s]\n",ps->paycode);
+	vtcp_log("patotab_c.payertype=[%s]\n",ps->payertype);
+	vtcp_log("patotab_c.paycertif=[%s]\n",ps->paycertif);
+	vtcp_log("patotab_c.cashbrno=[%s]\n",ps->cashbrno);
+	vtcp_log("patotab_c.cashbrtype=[%s]\n",ps->cashbrtype);
+	vtcp_log("patotab_c.cashname=[%s]\n",ps->cashname);
+	vtcp_log("patotab_c.cashactno=[%s]\n",ps->cashactno);
+	vtcp_log("patotab_c.cashcode=[%s]\n",ps->cashcode);
+	vtcp_log("patotab_c.cashertype=[%s]\n",ps->cashertype);
+	vtcp_log("patotab_c.cashcertif=[%s]\n",ps->cashcertif);
+	vtcp_log("patotab_c.txamt=[%s]\n",ps->txamt);
+	vtcp_log("patotab_c.paydate=[%s]\n",ps->paydate);
+	vtcp_log("patotab_c.cashdate=[%s]\n",ps->cashdate);
+	vtcp_log("patotab_c.dscpt=[%s]\n",ps->dscpt);
+	vtcp_log("patotab_c.paytype=[%s]\n",ps->paytype);
+	vtcp_log("patotab_c.crdno=[%s]\n",ps->crdno);
+	vtcp_log("patotab_c.txtypeno=[%s]\n",ps->txtypeno);
+	vtcp_log("patotab_c.expand=[%s]\n",ps->expand);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Patotab_Sel(reply,patotab_c,fmtstr,va_alist)
+char    *reply;
+struct  patotab_c *patotab_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Patotab_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Patotab_Fet_Sel( patotab_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Patotab_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Patotab_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,patotab.* FROM patotab WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE patotab_sel FROM :comm;
+	EXEC SQL DECLARE sel_patotab CURSOR FOR patotab_sel;
+
+	EXEC SQL OPEN sel_patotab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Patotab_Fet_Sel ( struct patotab_c *patotab_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_patotab INTO :patotab_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch patotab error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch patotab finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(patotab_c);
+
+	return 0;
+}
+
+int Patotab_Clo_Sel (){
+	EXEC SQL CLOSE sel_patotab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Patotab_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,patotab.* FROM patotab WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE patotab_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_patotab CURSOR FOR patotab_upd;
+
+	EXEC SQL OPEN upd_patotab;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Patotab_Fet_Upd( struct patotab_c *patotab_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_patotab INTO :patotab_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH patotab finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(patotab_c);
+
+	return 0;
+}
+
+int Patotab_Upd_Upd( struct patotab_c patotab_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE patotab SET brno=:patotab_c.brno,
+			brname=:patotab_c.brname,
+			txday=:patotab_c.txday,
+			txtime=:patotab_c.txtime,
+			aptype=:patotab_c.aptype,
+			txcd=:patotab_c.txcd,
+			sendday=:patotab_c.sendday,
+			apflg=:patotab_c.apflg,
+			paybrno=:patotab_c.paybrno,
+			paybrtype=:patotab_c.paybrtype,
+			payname=:patotab_c.payname,
+			payactno=:patotab_c.payactno,
+			paycode=:patotab_c.paycode,
+			payertype=:patotab_c.payertype,
+			paycertif=:patotab_c.paycertif,
+			cashbrno=:patotab_c.cashbrno,
+			cashbrtype=:patotab_c.cashbrtype,
+			cashname=:patotab_c.cashname,
+			cashactno=:patotab_c.cashactno,
+			cashcode=:patotab_c.cashcode,
+			cashertype=:patotab_c.cashertype,
+			cashcertif=:patotab_c.cashcertif,
+			txamt=:patotab_c.txamt,
+			paydate=:patotab_c.paydate,
+			cashdate=:patotab_c.cashdate,
+			dscpt=:patotab_c.dscpt,
+			paytype=:patotab_c.paytype,
+			crdno=:patotab_c.crdno,
+			txtypeno=:patotab_c.txtypeno,
+			expand=:patotab_c.expand
+	WHERE rowid=:patotab_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Patotab_Del_Upd(struct patotab_c patotab_c , char * reply  ){
+
+	EXEC SQL DELETE FROM patotab WHERE rowid=:patotab_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Patotab_Clo_Upd( ){
+	EXEC SQL CLOSE upd_patotab;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Patotab_Ins( struct patotab_c patotab_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO patotab VALUES (:patotab_c.brno,
+			:patotab_c.brname,
+			:patotab_c.txday,
+			:patotab_c.txtime,
+			:patotab_c.aptype,
+			:patotab_c.txcd,
+			:patotab_c.sendday,
+			:patotab_c.apflg,
+			:patotab_c.paybrno,
+			:patotab_c.paybrtype,
+			:patotab_c.payname,
+			:patotab_c.payactno,
+			:patotab_c.paycode,
+			:patotab_c.payertype,
+			:patotab_c.paycertif,
+			:patotab_c.cashbrno,
+			:patotab_c.cashbrtype,
+			:patotab_c.cashname,
+			:patotab_c.cashactno,
+			:patotab_c.cashcode,
+			:patotab_c.cashertype,
+			:patotab_c.cashcertif,
+			:patotab_c.txamt,
+			:patotab_c.paydate,
+			:patotab_c.cashdate,
+			:patotab_c.dscpt,
+			:patotab_c.paytype,
+			:patotab_c.crdno,
+			:patotab_c.txtypeno,
+			:patotab_c.expand);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT patotab error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

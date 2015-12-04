@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="2319 账户迁移到新客户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	dim @savefile as string;
+	dim @acno as string;
+	dim @rowcnt as number;
+
+  	@rowcnt = list_getrowcnt();
+	#ROWCNT=itoa(@rowcnt);
+	//howmsg('#ROWCNT'+#ROWCNT);
+
+	while(@rowcnt>0)
+	{
+		@rowcnt=@rowcnt-1;
+		@acno=list_gettext(@rowcnt,0);
+		#ACNOLN=#ACNOLN+@acno+'|';
+	}
+
+	@savefile='../tmp/'+$KINBR+$TTYNAME;
+	setvfile(true,true);
+	list_save(@savefile);
+	initfd();
+	commsend_001();
+	$FD28=#CIFNO;
+	$FD30=#ACNO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<FIRSTWORK>
+	"{
+		list_init(7,70,10,5);//在左上角第8行第5列初始化一个占据屏幕6行70列的列表框，在当前列表框内显示不开的数据，可以自动拖动显示
+		list_setcolcnt(4);
+		list_setcol(0, '账号', 20);
+		list_setcol(1, '客户名称', 60);
+		list_setcol(2, '证件类型', 10);
+		list_setcol(3, '证件号码', 20);
+
+	}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(2319                        账户迁移到新客户)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5577)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+	<ITEM LINE="5" COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(──────────────新客户信息──────────────────)"/>
+   <ITEM LINE="6" COL="10" NAME="#LCIFNO" TYPE="%-10s" FUNCTIONS="T(新客户号:)" />
+   <ITEM LINE="6" COL="40" TYPE="%-10s" FUNCTIONS="T(新客类型:)" />
+   <ITEM LINE="7" COL="10" TYPE="%-10s" FUNCTIONS="T(客户姓名:)" />
+   <ITEM LINE="8" COL="10" TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+   <ITEM LINE="8" COL="42" TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+   <ITEM LINE="6" COL="20" NAME="#CIFNO"  TYPE="%8d"   INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	<ONLOSTFOCUS>
+	"{
+	  dim @tota as string;
+	  initfd();	
+	  commsend_001();
+	 	$FD16='9755';
+		$FD28=#CIFNO;
+		@tota=callserver();	
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#CIFTYPE=delspace($FD72);
+		enable(#CIFTYPE,false);
+		#NAME=delspace($FD26);
+		enable(#NAME,false);
+		setsel(#NIDTYPE,@tota,'o5t20o1v1o2');
+		#NIDTYPE=$FD93;
+		#NIDNO=delspace($FD63);
+		//initfd();
+		//commsend_001();
+		//$FD16='9848';
+		//$FD29=#CIFNO;
+		//callserver();
+		//if($FD12!='0000')
+		//{
+		//	showmsg(geterror());
+		//	return(false);
+		//}
+		//#NAME=delspace($FD25);
+		//enable(#NAME,false);
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="6" COL="50" NAME="#CIFTYPE" TYPE="%1s"  INPUT="SELECT" FUNCTIONS="V(NB)">
+		<SELECT>
+			<OPTION VALUE="1" TITLE="1.个人"/>
+			<OPTION VALUE="2" TITLE="2.公司"/>
+		<!--
+			<OPTION VALUE="3" TITLE="机构"/>
+			<OPTION VALUE="4" TITLE="同业"/>
+		-->
+		</SELECT>
+	</ITEM>
+	<ITEM NAME="#NAME" LINE="7" COL="20" TYPE="%-58s" INPUT="TEXT" FUNCTIONS="T()" />
+	<ITEM LINE="8" COL="20" NAME="#NIDTYPE"  TYPE="%-1s" FUNCTIONS="V(NB)" INPUT="SELECT" >
+	<ONSELECT>
+	"{
+		//证件号码
+		initfd();
+		commsend_001();
+		$FD16='9756';
+		$FD28=#CIFNO;
+		$FD68=#NIDTYPE;
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		#NIDNO=$FD62;
+		enable(#NIDNO,false);
+	}"
+		</ONSELECT>
+	</ITEM>
+	<ITEM LINE="8" COL="52" NAME="#NIDNO"  TYPE="%-19s" FUNCTIONS="T()" INPUT="TEXT">
+	<ONLOSTFOCUS>
+	"{
+		#FLAG='1';
+		goitem(#ACNO);
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="9" COL="3"  TYPE="%74s" FUNCTIONS=
+   "T(──────────────账户对应信息────────────────)"/>
+   
+	<ITEM LINE="18" COL="10" NAME="#LACNO"  TYPE="%-10s" FUNCTIONS="T(账     号:)" />
+	<ITEM LINE="18" COL="20" NAME="#ACNO"   TYPE="%-19s" DEVICE="KEYBOARD" INPUT="TEXT" >
+		<ONGOTFOCUS>
+                  "{
+                 list_show();
+	         }"	
+		</ONGOTFOCUS>
+		<ONLOSTFOCUS>
+		"{
+		  if(delspace(#ACNO)!=''){
+			dim @mess as string;
+			dim @rowcnt as number;
+			dim @acno as string;
+
+		  	@rowcnt=list_getrowcnt();
+
+		  	while(@rowcnt>0)
+		  	{
+		  		@rowcnt=@rowcnt-1;
+		  		@acno=list_gettext(@rowcnt,0);
+		  		if(delspace(@acno)==#ACNO)
+		  		{
+		  			showmsg('账号重复，请核查');
+		  			return(false);
+		  		}
+		  	}
+	  	
+			initfd();
+			commsend_001();
+			$FD16='9646';
+			$FD30=#ACNO;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false)
+			}
+			#OIDTYPE=$FD71;
+			#OIDNO=$FD63;
+			//客户名不同不能迁移
+			initfd();
+			commsend_001();
+			$FD16='8116';
+			$FD37=#ACNO;
+			@mess=callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			#ONAME=strfld(@mess,'|',12);
+//			enable(#ONAME,false);
+//			enable(#OIDTYPE,false);
+//			enable(#OIDNO,false);
+//			refresh();
+			//showmsg(#NAME);
+			//showmsg(#ONAME);
+			if(#NAME!=#ONAME)
+			{
+				showmsg('客户号和账号分属不同名称的客户!')
+				return(false);
+			}
+			//客户号相同不用迁移
+		     } else {
+                           return(true);
+                     
+                     }	
+		}
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="19" COL="10" NAME="#LONAME" TYPE="%-10s" FUNCTIONS="T(客户名称:)" />
+	<ITEM LINE="19" COL="20" NAME="#ONAME"  TYPE="%-58s" FUNCTIONS="T()" INPUT="TEXT" />
+	<ITEM LINE="20" COL="10" NAME="#LONIDTYPE" TYPE="%-10s" FUNCTIONS="T(证件类型:)" />
+	<ITEM LINE="20" COL="20" NAME="#OIDTYPE"  TYPE="%-1s"   FUNCTIONS="T()" INPUT="SELECT" >
+		<SELECT>
+			<OPTION VALUE="1" TITLE="0.身份证      "/>
+			<OPTION VALUE="2" TITLE="1.户口簿      "/>		
+			<OPTION VALUE="3" TITLE="2.护照        "/>		
+			<OPTION VALUE="4" TITLE="3.军人证      "/>		
+			<OPTION VALUE="5" TITLE="4.回乡证      "/>	
+			<OPTION VALUE="G" TITLE="5.警官证      "/> 
+			<OPTION VALUE="8" TITLE="7.企业代码证  "/>		
+			<OPTION VALUE="9" TITLE="8.组织机构号  "/>		
+			<OPTION VALUE="A" TITLE="9.营业执照    "/>			
+			<OPTION VALUE="B" TITLE="a.经营许可证  "/>
+			<OPTION VALUE="C" TITLE="b.事业法人证书"/>
+			<OPTION VALUE="H" TITLE="c.其他证件"/>
+		</SELECT>
+	</ITEM>
+	<ITEM LINE="20" COL="42" NAME="#LOIDNO" TYPE="%-10s" FUNCTIONS="T(证件号码:)" />
+	<ITEM LINE="20" COL="52" NAME="#OIDNO"  TYPE="%-19s" FUNCTIONS="T()" INPUT="TEXT">
+	<ONLOSTFOCUS>
+	"{
+	  	dim @selid as number;
+                if(#ACNO!=''){
+		@selid=atoi(#SELID);
+	  	if(#FLAG=='1')
+	  	{
+		  	list_additem('',#ACNO,#ONAME,#OIDTYPE,#OIDNO);
+	  	}
+	  	else
+	  	{
+	  		list_settext(@selid,0,delspace(#ACNO));
+	  		list_settext(@selid,1,delspace(#ONAME));
+	  		list_settext(@selid,2,#OIDTYPE);
+	  		list_settext(@selid,3,#OIDNO);
+	  	}
+		}
+	  	#ACNO='';
+		#ONAME='';
+		#OIDTYPE='';
+		#OIDNO='';
+		show(#ACNO,true);
+		show(#ONAME,true);
+		show(#OIDTYPE,true);
+		show(#OIDNO,true);
+		
+	  	@selid=list_work();
+		#SELID=itoa(@selid);
+	  	if(@selid &lt; 0)
+		{
+			list_del();
+			rerun();
+			return(true);
+		}
+		else
+		{
+			//#SELID=@selid;
+			//showmsg('#SELID='+(#SELID)+' selid='+itoa(@selid));
+			goitem(#ACNO);
+		}
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+  <ITEM NAME="#ACNOLN" TYPE="%-100s" FUNCTIONS="T()"/>
+  <ITEM NAME="#ROWCNT" TYPE="%1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SELID" TYPE="%1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#FLAG" TYPE="%-1s" FUNCTIONS="T()"/>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#ADD" LINE="21" COL="20" TYPE="%-6s" FUNCTIONS="T(增  加)" INPUT="BUTTON">
+  <ONCLICK>
+	  "{
+	  	dim @rowcnt as number;
+			list_work();
+	  	@rowcnt = list_getrowcnt();
+	  	if(@rowcnt==5)
+	  	{
+	  		showmsg("最多只能5条记录");
+	  		return(false);
+	  	}
+	
+	  	#FLAG='1';//标志为1，表示增加操作
+	  	goitem(#ACNO);
+	  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="40" TYPE="%-6s" FUNCTIONS="T(修  改)" INPUT="BUTTON">
+  <ONCLICK>
+  "{
+  	dim @rowcnt as number;
+	dim @selid as number;
+
+	@selid=atoi(#SELID);
+  	@rowcnt=list_getrowcnt();
+  	if(@rowcnt==0)
+  	{
+  		showmsg('没有能修改的记录');
+  		return(false);
+  	}
+	  	
+  	#FLAG='2';//标志为2，表示修改
+	#ACNO=list_gettext(@selid,0);
+	#ONAME=list_gettext(@selid,1);
+	#OIDTYPE=list_gettext(@selid,2);
+	#OIDNO=list_gettext(@selid,3);
+//	showmsg(itoa(@selid)+#ACNO);
+  	goitem(#ACNO);
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="账户迁移成功">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		dim @rowcnt as number;
+		dim @i as number;
+		dim @acno as string;
+
+		@rowcnt=atoi(#ROWCNT);
+		@i=11;
+		
+		$KINDNO='00';
+		print( 5, 25,'账  户  迁  移  成  功!');
+		print(10, 22,'新客户号:[24]',#CIFNO);
+
+		while(@rowcnt>0)
+		{
+			@rowcnt=@rowcnt-1;
+			@acno=strfld(#ACNOLN,'|',@rowcnt);
+			print(@i, 22,'迁移账号:[24]',@acno);
+			@i=@i+1;
+		}
+		
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印账户迁移凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @cif as string;
+		dim @rowcnt as number;
+		dim @i as number;
+		dim @j as number;
+		dim @acno as string;
+
+		@rowcnt=atoi(#ROWCNT);
+		@i=9;
+		@cif=itoa(#CIFNO,'%d');
+		$KINDNO = '00';
+	if($REPRINT=='true')
+	{
+		reprint_nx();
+	}	
+		print( 5,12,'机构名称:[30]',$BRNAME); 
+		print( 5, 5,'代码:[4]',$TXNO); 
+		print( 5,5,'交易:账户迁移到新客户'); 
+		print( 7,12,'客 户 号:[8]',#CIFNO);
+		print( 8,12,'客户名称:[60]',#NAME);
+		while(@rowcnt>0)
+		{
+			@rowcnt=@rowcnt-1;
+			@acno=strfld(#ACNOLN,'|',@rowcnt);
+			print(@i, 12,'账    号:[19]',@acno);
+			@i=@i+1;
+		}
+//		print( 9,12,'账    号:[19]',#ACNO);
+		print(18,12,'交易日期:[8]',$HDATE);
+		print(18,5,'柜员:[6]',$FD7);
+		print(18,5,'流水号:[6]',substr($FD126,2,6));
+		print(19,12,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

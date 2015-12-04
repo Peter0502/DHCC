@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9126 查询个人存款证明"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	$FD16='8216';
+	$FD30=#LACTNO1;
+	$FD31=#LACTNO2;
+	$FD32=#LACTNO3;
+	$FD33=#LACTNO4;
+	$FD37=#LACTNO5;
+
+	$FD89='114';
+	$FD58=#VOCNUM;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+    "T(9126                          打印个人存款证明)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8216)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <BLOCK NAME="COMMON" LINE="7" COL="15">
+  <ITEM LINE="0" COL="0" TYPE="%-8s" FUNCTIONS="T(证件类型)"/>
+  <ITEM LINE="1" COL="0" TYPE="%-8s" FUNCTIONS="T(证 件 号)"/>
+  <ITEM LINE="0" COL="9" NAME="#YID_TYPE"  INPUT="SELECT"  TYPE="%1s"    FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="6" TITLE="士兵证"/>
+		<OPTION VALUE="7" TITLE="港澳居民来往通行证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="经营许可证"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="事业法人证书"/>
+		<OPTION VALUE="C" TITLE="工商核准号"/>
+		<OPTION VALUE="D" TITLE="其他证件"/>
+		<OPTION VALUE="E" TITLE="临时身份证"/>
+		<OPTION VALUE="F" TITLE="外国人居留证"/>
+		<OPTION VALUE="G" TITLE="警官证"/>
+		<OPTION VALUE="H" TITLE="其他证件"/>
+		<OPTION VALUE="I" TITLE="台湾同胞来往通行证"/>
+	</SELECT>
+   </ITEM>
+   <ITEM NAME="#YSID_TYPE"   TYPE="%-20s"      FUNCTIONS="S(#YID_TYPE,#YID_TYPE)"/>
+   
+   	<!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+   <ITEM LINE="1" COL="9" NAME="#YID_NO" INPUT="TEXT"   TYPE="%-19s"  FUNCTIONS="">
+   	<ONLOSTFOCUS>
+   		"{
+   			//add 20131030 wudawei start 调用身份核查
+  		  dim @res as string;  		 
+				if(#YID_TYPE=='1' or #YID_TYPE=='2')
+				{
+				//得到户名
+				  initfd();
+  			  commsend_001();
+			    $FD16='1712';
+			    $FD68=#YID_TYPE;
+			    $FD62=#YID_NO;
+			    callserver();
+					if($FD12 != '0000')
+					{		
+					showmsg(geterror());
+					return(false);
+					}  
+					//showmsg($FD26);
+					
+					@res = idcheck(#YID_NO,$FD26);
+					#HCJGBL = strfld(@res,'|',1);
+					@res =  strfld(@res,'|',0);
+					if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+					{
+							showmsg('身份核查结果不通过，不能继续办理！');
+							return(false);
+					}
+					#CUSTNAME   = delspace($FD26);
+				}
+				//add 20131030 end				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  LINE="2" COL="0"   TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+  
+	<ITEM LINE="3"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="4"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号1: )"  />
+  <ITEM LINE="5"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号2: )"  />
+  <ITEM LINE="6"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号3: )"  />
+  <ITEM LINE="7"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号4: )"  />
+  <ITEM LINE="8"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(帐/卡 号5: )"  />
+  <ITEM LINE="9"  COL="0"   TYPE="%-10s"   FUNCTIONS="T(凭证类型:!)"/>
+  <ITEM LINE="10" COL="0"   TYPE="%-10s"   FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="11" COL="0"   TYPE="%-10s"   FUNCTIONS="T(日    期:)"/>
+  <ITEM LINE="12" COL="0"   TYPE="%-10s"   FUNCTIONS="T(英文名称:)"/>  
+ 	<ITEM LINE="3"  COL="9" NAME="#CUSTNAME"  TYPE="%-60s" FUNCTIONS="J(#CUSTNAME30)"/>
+ 	<ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+  <ITEM LINE="4"  COL="9" NAME="#LACTNO1"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+ 	<ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO1) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO1;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="5"  COL="9" NAME="#LACTNO2"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO2) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO2;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="6"  COL="9" NAME="#LACTNO3"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO3) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO3;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="9" NAME="#LACTNO4"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO4) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO4;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8"  COL="9" NAME="#LACTNO5"   INPUT="TEXT" TYPE="%-19s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+	"{  	
+		dim @id as string; 	 
+		if(len(#LACTNO5) != 0 )
+		{
+		  initfd();
+		  commsend_001();
+	    $FD16='1718';
+	    $FD30=#LACTNO5;
+	    $FD63=#YID_NO;
+	    callserver();
+			if($FD12 != '0000')
+			{		
+			showmsg(geterror());
+			return(false);
+			}  
+		}				
+   	}"
+   	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="9"  COL="9" NAME="#VOCTYPE" TYPE="%-4s"  FUNCTIONS="0027">
+	<SELECT>
+		<OPTION VALUE="0114" TITLE="0.个人存款证明"/>
+	</SELECT>
+  </ITEM>
+
+  <ITEM LINE="10"  COL="9" TYPE="%16d" NAME="#VOCNUM" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+	<ONLOSTFOCUS>"{
+		commsend_001();
+		$FD16=9782;
+		if(#VOCTYPE=='0020')
+		{
+			$FD116=#VOCTYPE+#CARDNO+space(112)+#VOCNUM;
+		}
+		else
+		{
+			$FD116=#VOCTYPE+space(131)+#VOCNUM;
+		}
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="11" COL="9" NAME="#RQ" TYPE="%-8s" INPUT="TEXT" ENABLE="false"  FUNCTIONS="T($HDATE)D()"/>
+	<ITEM LINE="12" COL="9" NAME="#KHYWM" TYPE="%-19s" INPUT="TEXT" FUNCTIONS=""/>
+  </BLOCK>
+  <!--输出变量--->
+  
+  
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+    
+  <ITEM LINE="23" COL="58" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+  
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="交易成功">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(7,20,'交易成功!');
+		
+		print( 9,10,'客户名称:[50]',#CUSTNAME);
+		print(10,10,'证件号码:[20]',#YID_NO);
+		print(11,10,'凭证号码:[18]',#VOCNUM);
+		print(12,10,'帐号1:[20]',#LACTNO1);
+		print(13,10,'帐号2:[20]',#LACTNO2);
+		print(14,10,'帐号3:[20]',#LACTNO3);
+		print(15,10,'帐号4:[20]',#LACTNO4);
+		print(16,10,'帐号5:[20]',#LACTNO5);
+		
+		print(19,10,'流 水 号:[ 6]',$FD4);
+
+	}"
+	</PRINT>
+</RESPONSE>
+
+
+<!----PRINTER---->
+  <RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印存款证明">
+  NOTHING
+  </PACKAGE>
+
+  <PRINT>
+  "{
+        dim @txtime  as string;
+        dim @yyyy as string;
+        dim @mm as string;
+        dim @dd as string;
+        dim @bzje1 as string;
+        dim @bzje2 as string;
+        dim @rmb1 as string;
+        dim @rmb2 as string;
+        dim @rmb3 as string;
+        dim @rmb4 as string;
+        dim @rmb5 as string;
+        
+        dim @line1   as number;
+        dim @line2   as number;
+        dim @counter as number;
+        dim @tmpstr  as string;
+        dim @sfeeamt  as string;
+        
+				@txtime=substr($HDATE,6,2)+'/'+substr($HDATE,4,2)+'/'+substr($HDATE,0,4);
+
+				
+				@yyyy=substr($HDATE,0,4);
+				@mm = substr($HDATE,4,2);
+				@dd = substr($HDATE,6,2);
+
+				if($FD21=='01')
+				{
+					@rmb1='人民币';
+				}
+				if($FD22=='01')
+				{
+					@rmb2='人民币';
+				}
+				if(rtrim($FD23)=='01')
+				{
+					@rmb3='人民币';
+				}
+				if(rtrim($FD24)=='01')
+				{
+					@rmb4='人民币';
+				}
+				if(rtrim($FD58)=='01')
+				{
+					@rmb5='人民币';
+				}
+				
+				print( 11,80,'[24]',$HDATE);
+				
+        print( 12,19,'[10]',#CUSTNAME);
+        print( 12,20,'[24]',#YID_NO);
+        print( 12,23,'[4]',@yyyy);
+        print( 12,24,'[2]',@mm);
+        print( 12,25,'[2]',@dd);
+        
+        print( 15,24,'[24]',@txtime);
+        print( 15,31,'[24]',#KHYWM);
+        
+        print( 16,13,'[24]',#YID_NO);
+        
+        print( 19,15,'[20] ',$FD30);
+        print( 19,17,'[20] ',$FD25);
+        print( 19,19,'[6][12] ',@rmb1,val(itoa($FD39),0.01));
+        print( 19,21,'[8] ',$FD44);
+        
+        print( 17,10,'[20] ',$FD31);
+        print( 17,30,'[20] ',$FD26);
+        print( 17,50,'[6][12] ',@rmb2,val(itoa($FD40),0.01));
+        print( 17,70,'[8] ',$FD45);
+        
+        print( 18,10,'[20] ',$FD32);
+        print( 18,30,'[20] ',$FD27);
+        print( 18,50,'[6][12] ',@rmb3,val(itoa($FD41),0.01));
+        print( 18,70,'[8] ',$FD46);
+        
+        print( 19,10,'[20] ',$FD33);
+        print( 19,30,'[20] ',$FD38);
+        print( 19,50,'[6][12] ',@rmb4,val(itoa($FD42),0.01));
+        print( 19,70,'[8] ',$FD47);
+        
+       // print( 20,10,'[20] ',$FD37);
+      // print( 20,30,'[20] ',$FD62);
+      //  print( 20,50,'[6][12] ',@rmb5,val(itoa($FD43),0.01));
+      //  print( 20,70,'[8] ',$FD28);
+        
+      //  print( 24,65,'[30]',$BRNAME);
+
+ }"
+  </PRINT>
+  </RESPONSE>
+
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,10,'机构名称:[30]',$BRNAME); 
+		print( 5, 2,'代码:9126'); 
+		print( 5,5,'交易:个人存款证明打印'); 
+		
+		print( 9,10,'客户名称:[50]',#CUSTNAME);
+		print(10,10,'证件号码:[20]',#YID_NO);
+		print(11,10,'凭证号码:[18]',#VOCNUM);
+		print(12,10,'帐号1:[20]',#LACTNO1);
+		print(13,10,'帐号2:[20]',#LACTNO2);
+		print(14,10,'帐号3:[20]',#LACTNO3);
+		print(15,10,'帐号4:[20]',#LACTNO4);
+		print(16,10,'帐号5:[20]',#LACTNO5);
+		
+   // print_sq(); 
+		
+		print(18,10,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(18,5,'柜员:[6]',$FD7);
+		print(18,5,'流 水 号:[ 6]',$FD4);
+		print(18,10,'备注:');
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,145 @@
+/******************************************************************************
+*交易名称：事后监督差错通知书补打                                             *
+*函数名称：sp3636()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-12 9:35                                              *
+*修改日期：                                                                   *
+*数据库表:                                                                    *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "xdtl_main_c.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "global_c.h"
+#include "tlrctl_c.h"
+EXEC SQL INCLUDE sqlca;
+int sp3636()
+{ 
+	FILE *fp;
+	char filename[100]; 
+	int	ret=0,i=0;
+	char txday[9];
+	char tlrno[7];/**注意这里以后是要改的xyy**/
+	char wssrno[7];
+	char  cTmp[11];
+	char cTbsdy[9];
+	
+	char cckinbr[6];
+	char ccday[9];
+	char ccwssrno[7];
+	char cctlrno[7];
+	char shtlrno[7];
+	char errseq[3];
+	char cerrseq[9];
+  struct global_c global;
+	memset(txday,0x00,sizeof(txday));
+	memset(tlrno,0x00,sizeof(tlrno));
+	memset(wssrno,0x00,sizeof(wssrno));
+	memset(&global,0x00,sizeof(struct global_c));
+	memset(filename,0x00,sizeof(filename));
+	memset(cTmp    ,0x00,sizeof(cTmp));
+	memset(cTbsdy  ,0x00,sizeof(cTbsdy));
+
+	memset(cckinbr,0x00,sizeof(cckinbr));
+	memset(ccday,0x00,sizeof(ccday));
+	memset(ccwssrno,0x00,sizeof(ccwssrno));
+	memset(cctlrno,0x00,sizeof(cctlrno));
+	memset(shtlrno,0x00,sizeof(shtlrno));
+	memset(errseq,0x00,sizeof(errseq));
+	memset(cerrseq,0x00,sizeof(cerrseq));
+  pub_base_sysinit();
+  get_fd_data("0440",txday);
+  get_fd_data("0550",cTmp);
+  get_fd_data("0170",wssrno);
+  zip_space(cTmp);
+  memcpy(tlrno,cTmp,sizeof(tlrno)-1);
+  vtcp_log("[%s][%d]txday===[%s]",__FILE__,__LINE__,txday);
+  vtcp_log("[%s][%d]tlrno===[%s]",__FILE__,__LINE__,tlrno);
+  vtcp_log("[%s][%d]wssrno==[%s]",__FILE__,__LINE__,wssrno);
+	ret=Global_Sel(g_pub_tx.reply,&global,"1=1");
+	ERR_DEAL
+	memcpy(cTbsdy,global.global_tbsdy,sizeof(cTbsdy)-1);
+	vtcp_log("[%s][%d]cTbsdy==[%s]",__FILE__,__LINE__,cTbsdy);
+	EXEC SQL update sherrmsg set errmsg='11111' where txday= :cTbsdy and tlrno= :tlrno and wssrno= :wssrno;
+	if(sqlca.sqlcode!=0)
+	{
+		    vtcp_log("[%s][%d]定义游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+        sprintf( acErrMsg,"[%s][%d]定义游标报错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+	}
+	EXEC SQL commit;	
+	EXEC SQL select kinbr,txday,sdtlrno,errseq INTO :cckinbr,:ccday,:shtlrno,:errseq from sherrmsg 
+		where txday=:global.global_tbsdy and tlrno=:tlrno and wssrno=:wssrno;
+	if(sqlca.sqlcode!=0)
+	{
+		    vtcp_log("[%s][%d]定义游标报错[%d]!",__FILE__,__LINE__,sqlca.sqlcode);
+        sprintf( acErrMsg,"[%s][%d]定义游标报错[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+        strcpy( g_pub_tx.reply, "P015" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+	}
+	vtcp_log("[%s][%d]cckinbr==[%s]",__FILE__,__LINE__,cckinbr);
+	vtcp_log("[%s][%d]ccday====[%s]",__FILE__,__LINE__,ccday);
+	vtcp_log("[%s][%d]shtlrno==[%s]",__FILE__,__LINE__,shtlrno);
+	vtcp_log("[%s][%d]errseq===[%s]",__FILE__,__LINE__,errseq);
+	i=atoi(errseq);
+	switch(i)
+	{
+		case 0:
+			memcpy(cerrseq,"暂无级别",sizeof(cerrseq));
+			break;
+		case 1:
+			memcpy(cerrseq,"一级错误",sizeof(cerrseq));
+			break;
+		case 2:
+			memcpy(cerrseq,"二级错误",sizeof(cerrseq));
+			break;
+		case 3:
+			memcpy(cerrseq,"三级错误",sizeof(cerrseq));
+			break;
+		case 4:
+			memcpy(cerrseq,"查询差错",sizeof(cerrseq));
+			break;
+		default:
+		goto ErrExit;
+	}
+	pub_base_AllDwnFilName( filename );
+	fp=fopen(filename,"w");
+	if(!fp)
+	{
+		sprintf(acErrMsg," open file [%s] error ",filename );
+		WRITEMSG
+		strcpy( g_pub_tx.reply,"S047" );
+		goto ErrExit;
+	}
+	fprintf(fp,"fp3061|%s|%s|%s|%s|%s|%s|\n",cckinbr,ccday,shtlrno,cerrseq,tlrno,wssrno);
+	fclose(fp);
+	set_zd_data(DC_FILE_SND,"1" );
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+

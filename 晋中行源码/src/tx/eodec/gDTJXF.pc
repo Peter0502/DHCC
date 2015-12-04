@@ -1,0 +1,286 @@
+/*************************************************************
+* 文 件 名:   gDTJXF.pc
+* 功能描述：  IC卡脱机消费 
+* 作    者: 	wzw
+* 完成日期:   2012-4-7
+**************************************************************/
+#define ERR_DEAL   if(ret) { WRITEMSG  goto ErrExit;} 
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "trace_log_c.h"
+#include "com_parm_c.h"
+#include "mdm_ac_rel_c.h"
+#include "com_branch_c.h"
+int sub_cr_acct(char * cr_ac_no,double amt,char *brf,char * br_no,char * ct_ind);
+int sub_dr_acct(char * dr_ac_no,double amt,char *brf,char * br_no,char * ct_ind);
+gDTJXF()
+{
+	int ret=0;
+	int retBrno=0;
+	int i = 0;
+	double Tx_Amt=0.00;
+	char cAcc_no[9];
+	char cAcno[25];
+	char cFilenameMX[100];
+	char tmpstr[1024];
+	char fldstr[10][100];
+	struct com_sys_parm_c	sCom_sys_parm;
+	struct com_parm_c sCom_parm;
+	struct mdm_ac_rel_c sMdm_ac_rel;
+  struct com_branch_c  sCom_branch; 
+	FILE	*fpMX = NULL;
+	char sLst2Day[9];
+	char cdate[9];
+	
+	memset(cAcc_no,0x00,sizeof(cAcc_no));
+	memset(cAcno,0x00,sizeof(cAcno));
+	memset(fldstr,0x0,sizeof(fldstr));
+	memset(tmpstr,0x00,sizeof(tmpstr));
+	memset(cFilenameMX,0x00,sizeof(cFilenameMX));
+	memset(&sCom_parm,0x00,sizeof(sCom_parm));
+	memset(&sCom_sys_parm,0x00,sizeof(sCom_sys_parm));
+	memset(&sMdm_ac_rel,0x00,sizeof(sMdm_ac_rel));
+	memset(sLst2Day,0x00,sizeof(sLst2Day));
+	memset(cdate,0x00,sizeof(cdate));
+
+	pub_base_sysinit();
+	ret=sql_begin(); /*打开事务*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if(pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"取主机流水号错 [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret){
+		sprintf(acErrMsg,"查询公共参数表错误!");
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"O005");
+		goto ErrExit;
+	}
+	/*计算日期取系统日期的前2日*/
+	
+		long tmpdate=0;
+		tmpdate = pub_base_daynumSUB(sCom_sys_parm.sys_date,2);/***计算系统日期的前2天日期***/
+		vtcp_log("%s,%d,sys_date=[%ld],tmpdate=[%ld]",__FILE__,__LINE__,sCom_sys_parm.sys_date,tmpdate);
+		sprintf(sLst2Day,"%8ld",tmpdate);
+		vtcp_log("%s,%d,sLst2Day=[%s]",__FILE__,__LINE__,sLst2Day);
+		
+	ret=pub_base_GetParm_Str( "ICACC",1, cAcc_no );
+		ERR_DEAL
+
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type='4' and br_no!='10001'");
+	if(ret)
+	{
+		strcpy(acErrMsg,"定义机构游标出错!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		vtcp_log("脱机消费帐务合并");
+		i=0;
+		Tx_Amt=0.00;
+		memset(&sCom_branch,0x0,sizeof(sCom_branch));
+		ret=Com_branch_Fet_Sel(&sCom_branch,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+			strcpy(acErrMsg,"读取机构游标出错!");
+			WRITEMSG
+			goto ErrExit;
+		}
+		sprintf(cFilenameMX,"%s/offlinefiles/OFFLINE%sCUPS.txt",getenv("CUPSFILEPATH"),sLst2Day);
+		fpMX = fopen(cFilenameMX,"r");
+		if(fpMX == NULL){
+			vtcp_log("%s,%d 读取文件%s错误!\n",__FILE__,__LINE__,cFilenameMX);
+			strcpy(g_pub_tx.reply,"S047");
+			goto OkExit;
+			}
+		while(1)
+		{
+		memset(tmpstr,0x00,sizeof(tmpstr));
+		memset(fldstr,0x00,sizeof(fldstr));
+		fgets(tmpstr,1024,fpMX);
+		vtcp_log("%s,%d 该笔记录内容为[%s]!\n",__FILE__,__LINE__,tmpstr);
+		if(feof(fpMX))
+		{
+		if (Tx_Amt > 0)
+			{
+					ret=Com_parm_Sel(g_pub_tx.reply, &sCom_parm, "parm_code='%s' and parm_seqn=11",sCom_branch.br_no);
+					ERR_DEAL
+					/**借：IC卡电子现金账户22501科目**/
+					ret=sub_dr_acct(sCom_parm.val,Tx_Amt,"IC卡脱机消费",sCom_branch.br_no,"2");
+						ERR_DEAL
+					/**贷：银联清算过渡科目41404**/
+					ret=sub_cr_acct("41404",Tx_Amt,"IC卡脱机消费",sCom_branch.br_no,"2");
+			}
+				vtcp_log("%s,%d 机构[%s]已经把文件遍历了一遍!\n",__FILE__,__LINE__,sCom_branch.br_no);
+				fclose(fpMX);
+				break; 
+		}
+		for(i=0;i<9;i++)
+		{
+			ret=pub_base_cut_str(tmpstr,fldstr[i],"|",i+1);
+				ERR_DEAL
+			pub_base_strpack(fldstr[i]);
+		}
+/*-	fldstr[0] 卡系统流水号 
+		fldstr[1] 卡号
+		fldstr[2] 终端编号
+		fldstr[3] 终端流水号
+		fldstr[4] 币种
+		fldstr[5] 交易金额
+		fldstr[6] 交易日期
+		fldstr[7] 交易时间
+		fldstr[8] 机构号
+*/
+		/*if(atol(fldstr[6])>g_pub_tx.tx_date)
+		{
+			continue;
+		}*/
+
+		/*ret=Mdm_ac_rel_Sel(g_pub_tx.reply, &sMdm_ac_rel, "ac_no='%s'",fldstr[1]);
+			ERR_DEAL*/
+			vtcp_log("%s,%d sCom_branch.br_no为%ssMdm_ac_rel.opn_br_no为%s\n",__FILE__,__LINE__,sCom_branch.br_no,fldstr[8]);
+		
+		if(strcmp(sCom_branch.br_no,fldstr[8]) == 0 )
+			{
+				Tx_Amt=Tx_Amt+atof(fldstr[5]);
+				vtcp_log("%s,%d 机构[%s]统计了一笔明细!现在金额为[%17.2f]!\n",__FILE__,__LINE__,sCom_branch.br_no,Tx_Amt);
+			}
+		}
+	}
+		Com_branch_Clo_Sel();
+
+OkExit:
+	sql_commit();   /*--提交事务--*/
+    strcpy(g_pub_tx.reply,"0000");
+    sprintf(acErrMsg,"脱机消费帐务处理成功[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 0;
+    
+ErrExit:
+	if(fpMX != NULL)
+		fclose(fpMX);
+	sql_rollback();/*--事务回滚--*/
+	  strcpy(g_pub_tx.reply,"H034");
+    sprintf(acErrMsg,"脱机消费帐务处理失败[%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data(DC_REPLY,g_pub_tx.reply);
+    return 1;
+}
+
+/**科目贷记**/
+int sub_cr_acct(char * cr_ac_no,double amt,char *brf,char * br_no,char * ct_ind)
+{
+	int ret=0;
+	vtcp_log("贷方记帐科目[%s][%.2lf]",cr_ac_no,amt);
+	strcpy( g_pub_tx.tx_code, "TJXF");
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+	strcpy(g_pub_tx.ac_wrk_ind,"000000011");
+	strcpy(g_pub_tx.hst_ind,"1");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,ct_ind );
+	strcpy( g_pub_tx.add_ind,"1" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,cr_ac_no );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	g_pub_tx.tx_amt1=amt;
+	strcpy( g_pub_tx.brf,brf);
+	strcpy( g_pub_tx.no_show,"0");
+	strcpy( g_pub_tx.sub_tx_code, "A017");
+	
+	/*** 调用会计分录自动记 ***/
+	ret=pub_acct_trance();
+	if( ret ) goto ErrExit;
+	
+	/* 进行会计记帐 */
+	set_zd_data("1214","01" );
+	set_zd_data("1215",ct_ind );
+	set_zd_double("1218",amt);
+	ret = pubf_acct_proc("A017");
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"会计记帐不成功!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_data("1204","" );
+	set_zd_data("1205","" );
+	set_zd_double("1208",0.00 );
+	set_zd_data("1214","" );
+	set_zd_data("1215","" );
+	set_zd_double("1218",0.00 );
+	strcpy( g_pub_tx.add_ind,"" );
+	
+	return 0;
+ErrExit:
+	return 1;
+}
+/**科目借记**/
+int sub_dr_acct( char *dr_ac_no,double amt,char *brf,char * br_no,char * ct_ind)
+{
+	int ret=0;
+	vtcp_log("借方记帐科目[%s][%.2lf]",dr_ac_no,amt);
+	strcpy( g_pub_tx.tx_code, "TJXF");
+	strcpy(g_pub_tx.tx_br_no,br_no);
+	strcpy(g_pub_tx.opn_br_no,br_no);
+	strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+	strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+	strcpy(g_pub_tx.cur_no,"01");
+	strcpy(g_pub_tx.ac_wrk_ind,"000000011");
+	strcpy(g_pub_tx.hst_ind,"1");
+	g_pub_tx.svc_ind=9001;
+	strcpy( g_pub_tx.ct_ind,ct_ind );
+	strcpy( g_pub_tx.add_ind,"0" );
+	strcpy( g_pub_tx.prdt_code,"" );
+	strcpy( g_pub_tx.ac_no,dr_ac_no );
+	g_pub_tx.ac_id=0;
+	g_pub_tx.ac_seqn=0;
+	g_pub_tx.tx_amt1=amt;
+	strcpy( g_pub_tx.brf,brf );
+	strcpy( g_pub_tx.no_show,"0" );
+	strcpy( g_pub_tx.sub_tx_code, "A016");
+	
+	/*** 调用会计分录自动记 ***/
+	ret=pub_acct_trance();
+	if( ret ) goto ErrExit;
+
+	/* 进行会计记帐 */
+	set_zd_data("1204","01" );
+	set_zd_data("1205",ct_ind );
+	set_zd_double("1208",amt);
+	ret = pubf_acct_proc("A016");
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"会计记帐不成功!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_data("1204","" );
+	set_zd_data("1205","" );
+	set_zd_double("1208",0.00 );
+	set_zd_data("1214","" );
+	set_zd_data("1215","" );
+	set_zd_double("1218",0.00 );
+	strcpy(g_pub_tx.beg_note_no,"");
+	strcpy( g_pub_tx.add_ind,"" );
+	
+	return 0;
+ErrExit:
+	return 1;
+}

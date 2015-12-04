@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100" TITLE="5364 大小额机构专用内部帐号查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+	$FD2 = #BR_NO;
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+<ITEM LINE="3"  COL="3" TYPE="%-46s" FUNCTIONS=
+"T(5364                        大小额机构专用内部帐号查询)"/>
+<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+
+<ITEM NAME="#MSGTYPE"   TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM NAME="#TXNO"      TYPE="%-4s"    FUNCTIONS="T($TXNO=5838)"/>
+
+<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	dim @selid as number;
+	dim @ldxml as string;
+	dim @filename as string;
+	dim @tota as string;
+	dim @CMTNO as string;
+	if(#DOLIST !='')
+	{
+		while(true)
+		{
+			@selid=list_work();
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+			initfd();
+			commsend_001();
+		}
+	}
+	list_del();
+	#DOLIST='';
+}"
+</ONLOSTFOCUS>
+</ITEM>	
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+	showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+<!---输入要素--->
+
+<ITEM LINE="10"  COL="15" TYPE="%-10s"  FUNCTIONS="T(行     号:)"/>
+
+<!---输入项定义--->
+<ITEM NAME="#BR_NO" LINE="10" COL="25" TYPE="%-5s" INPUT="TEXT" FUNCTIONS="T($KINBR)V(NB)"/>
+
+<ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+<ONCLICK>"{
+	dim @tota as string;
+	dim @offset as number;
+	dim @cnt as number;
+	dim @packlen as number;
+	dim @flag as string;
+	dim @id as number;
+	list_init(17,78,5,1);
+	list_setcolcnt(6);
+	list_setcol(0,'帐           号',24);
+	list_setcol(1,' 顺序号 ',8);
+	list_setcol(2,'  户     名  ',50);
+	initfd();
+
+	commsend_001();
+	$FD2 = #BR_NO;
+	@tota=callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	if(substr(@tota,36,1)=='E')
+	{
+		showmsg(substr(@tota,36,5) +'  '+substr(@tota,44,40))
+		list_del();
+		return(true);
+	}
+	if(autolist(@tota))
+	{
+		list_work();
+	}
+
+	#DOLIST='1';
+	}"
+</ONCLICK>
+</ITEM>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>

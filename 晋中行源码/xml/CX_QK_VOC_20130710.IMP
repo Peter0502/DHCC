@@ -1,0 +1,183 @@
+<!--储蓄取款凭条-->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24"  DESC="请打印业务专用凭证(储蓄取款)" CHECK="#ACT_LX=1">  
+QKPT|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|@mtr_date|@term|@term_type|@rate|@av_bal|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no||@acc_hrt|
+</PACKAGE>
+<INIT>
+"{
+$KINDNO='00';
+}"
+</INIT>
+<PRINT>
+"{ 
+dim @txamt  as string;
+dim @avbal  as string;
+dim @txday  as string;
+dim @txtime as string; //交易时间
+
+@txamt  =ltrim(comma(@tx_amt1,16));
+@avbal  =ltrim(comma(@av_bal,16));
+@txday  =substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+@txtime =substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+//定期截取前4个字
+if(@term != '')
+{
+@title = substr(@title,0,8);
+}
+
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:[4]',#TXCD);
+	print( 5,13,'交易:[20]',#TXNAME);
+	if(#TXCD == '3204' and #VOCTYPE == '016')
+	{
+		print( 7,30,'\L0储蓄取款凭条               一本通子帐户销户\L1');
+	}
+	else
+	{
+		print( 7,30,'\L0储蓄取款凭条\L1');
+	}
+	print( 9, 20,'开 户 行:[5    ]                  交 易 行:[7       ]',@opn_br_no,$KINBR);
+	print(10, 20,'帐    号:[20                    ]   户    名:[20                    ]',@ac_no,@name);
+	if(#XKTYPE=='0')
+	{
+	print(11, 20,'储    种:[20                    ]   交易类型:[12          ]',@title,'正常销卡');
+	}
+	if(#XKTYPE=='1')
+	{
+	print(11, 20,'储    种:[20                    ]   交易类型:[12          ]',@title,'损坏销卡');
+	}
+	if(#XKTYPE=='2')
+	{
+	print(11, 20,'储    种:[20                    ]   交易类型:[12          ]',@title,'挂失销卡');
+	}
+	if(#XKTYPE=='')
+	{
+	print(11, 20,'储    种:[20                    ]   交易类型:[12          ]',@title,@memo);
+	}
+	print(12, 20,'存    期:[2 ][2 ]                   利    率:[5    ]%',@term,@term_type,rtrim(@rate));
+	print(13, 20,'交易金额:[21                     ]  余    额:[21                       ]',@txamt,@avbal);
+	if((#TXCD == '3204' or #TXCD == '3202') and #SELFYN == '0')
+	{
+		print(14,20,'代理人姓名:[20]',#AGENTNAME);
+		print(15,20,'代理人证件类型:[20                  ]',#SATCETYPE);
+		print(16,20,'代理人证件号码:[20                  ]',#ATCENUM);
+	}
+	print_sq();
+	print(19,80,'\H0本人已确认银行打印记录正确无误\H1');
+	print(21,80,'客户签名:_____________________');
+        print(23,20,'备注:');
+	print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(23,5,'柜员:[4]',$FD7);
+	print(23,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<!--对公取款凭条-->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24"  DESC="请打印业务专用凭证(对公取款)" CHECK="#ACT_LX=2">  
+QKPT|@ac_no|@name|@tx_amt1|@title|@opn_date|@opn_br_no|@cif_no|||||@av_bal|@email|@zy|@deac_type|@cur_name|@tx_code|@memo|@ac_no1||@ct_name|@ac_seqn|@ic_date|@prt_line|@prdt_no||@brf|@tmp_ac_no|@tmp_tx_name|@tel|@id_name|@id_no|@br_name|@br_tele|@note_no||@acc_hrt
+</PACKAGE>
+<INIT>
+"{
+$KINDNO='00';
+}"
+</INIT>
+<PRINT>
+"{
+dim @txamt  as string;
+dim @avbal  as string;
+dim @txday  as string;
+dim @txtime as string; //交易时间
+
+if(substr(ltrim(@tx_amt1),len(ltrim(@tx_amt1))-7,1)=='.')
+{
+@txamt='￥'+ltrim(comma(substr(@tx_amt1,0,len(@tx_amt1)-4),16));
+}else{
+@txamt='￥'+ltrim(comma(@tx_amt1,16));
+}
+if(substr(ltrim(@av_bal),len(ltrim(@av_bal))-7,1)=='.')
+{
+@avbal='￥'+ltrim(comma(substr(@av_bal,0,len(@av_bal)-4),16));
+}else{
+@avbal='￥'+ltrim(comma(@av_bal,16));
+}
+
+@txtime =substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+//added by lyz	
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:[4]',#TXCD);
+	print( 5,13,'交易:[20]',#TXNAME);
+	print( 7,30,'\L0对公取款凭条\L1');
+
+	print(9,20,'取款帐号:[19]   取款户名:[60]',@ac_no,@name);
+	if(len(@ac_no) &lt;= 7)  //科目
+	{
+		print(10,20,' ');
+	}
+	else
+	{	
+		print(10,20,'帐户余额:[16]',@avbal);
+	}
+	print(11,20,'交易摘要:[20]',@brf);
+	printacdtl_1();
+	print_sq();
+	
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<!-- 储蓄原存单 -->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="11" DESC="请打印原存单" CHECK="#ACT_LX=3"><!---根据现在的存单格式，只能用利息清单的内容--->
+LXQD|@ac_no|@name|@tx_amt|@title|@opn_date|@opn_br_no|@av_bal|@all_inter|@in_tax|@tax_rate|@tax_inter|@after_inter|@c_txamt|@zero_amt|@inst_type|@memo|@ac_seqn|@term||@brf|@ac_no1||@mtr_date||@rate|@prdt_no|
+</PACKAGE>
+<INIT>
+"{
+$KINDNO='00';
+}"
+</INIT>
+<PRINT>
+"{
+dim @txamt as string;
+dim @avbal as string;     //部提或销户后余额
+dim @interest as string;  //总利息
+dim @taxamt as string;    //利息税
+dim @realint as string;   //实付利息
+dim @realbal as string;   //实付本息
+if(@memo == '销户')
+{
+	@avbal = ltrim(comma(@zero_amt,16));
+}
+else
+{
+	@avbal = ltrim(comma(@av_bal,16));
+}
+@txamt    = ltrim(comma(@tx_amt,16));
+@interest = ltrim(comma(@all_inter,16));
+@taxamt   = ltrim(comma(@in_tax,16));
+@realint  = ltrim(comma(@after_inter,16));
+@realbal  = ltrim(comma(@c_txamt,16));
+
+if(@memo == '部提')
+{
+	print(24,47,'\L0已部提\L1');
+	print(26, 4,'部提流水号: [6     ]   支取操作员: [4]',$FD4,$TLRNO);
+	print(28, 4,'交易日期:[8       ]    交易金额:[16              ] 利息:[10        ] 利息税:[10        ]', $HDATE,@txamt,@interest,@taxamt);
+	print(30,25,'实付本息:[16         ] 新帐号: [19]',@realbal,@ac_no1);
+}
+else
+{
+	print(24,47,'\L0已销户\L1');
+	print(26, 4,'销户流水号: [6     ]   支取操作员: [4]',$FD4,$TLRNO);
+	print(28, 4,'交易日期:[8       ]    交易金额:[16              ] 利息:[10        ] 利息税:[10        ]', $HDATE,@txamt,@interest,@taxamt);
+	print(30,25,'实付本息:[16         ]',@realbal);
+}
+
+}"
+</PRINT>
+</RESPONSE>

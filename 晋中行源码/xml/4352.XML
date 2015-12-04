@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="8888 客户保证金存款"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD39=itoa(#DEPOSITAVL*100,'%016.0f');
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(8888                        保证金存款)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4352)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->	
+  <ITEM LINE="8" COL="12" TYPE="%-13s" FUNCTIONS="T(承兑协议编号:)"/>
+  <!---根据协议编号联动出出两个变量----->
+  <ITEM LINE="10" COL="12" TYPE="%-13s" FUNCTIONS="T(保证金帐号:)"/>
+  <ITEM LINE="12" COL="12" TYPE="%-15s" FUNCTIONS="T(保证金帐户余额:)"/>
+  
+  <ITEM LINE="14" COL="12" TYPE="%-10s" FUNCTIONS="T(存入金额:)"/>
+  
+  <ITEM NAME="#MONEY" TYPE="%-17s" FUNCTIONS=""/>
+  <ITEM NAME="#PROTOCOL" INPUT="TEXT" LINE="8" COL="25" TYPE="%-16s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+  	initfd();
+  	commsend_001();
+  	$FD16='9909';
+  	$FD33=#PROTOCOL;
+  	callserver();
+  	if($FD12!='0000')
+  	{
+  		showmsg(geterror());
+  		return (false);
+  	}
+  	#ACCOUNTNO=delspace($FD32);
+  	#MONEY = substr($FD100,32,16);
+	// #MONEY = delspace(#MONEY);
+	#MONEY=substr(#MONEY,0,14)+'.'+substr(#MONEY,14,2);
+  	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4352)"/>
+  <ITEM NAME="#ACCOUNTNO"    INPUT="TEXT"  LINE="10" COL="25" TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#ACCOUNTNOAVL" INPUT="TEXT"  LINE="12" COL="27" TYPE="%-21s" FUNCTIONS="X(#MONEY)"/>
+  <ITEM NAME="#DEPOSITAVL"   INPUT="TEXT"  LINE="14" COL="22" TYPE="%16.2f" FUNCTIONS=""/>
+  
+  
+   
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+<PACKAGE>
+000$9999=9P120000A显示内容N505$FD2$FD3$FD32FD26#DEPOSITAVL
+</PACKAGE>
+<FORMAT NAME="P120000A">
+"8                                   客户保证金存款
+ 9          代理  机构:######
+ 10          发送  机构:######
+ 11          保证金帐户:########################
+ 12          帐户  名称:##################################################
+ 13          存入  金额:#####################
+"
+</FORMAT>
+</OUTPUT>
+</TRANSACTION>

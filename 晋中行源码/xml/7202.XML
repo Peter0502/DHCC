@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7202 对内现金收付"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+	commsend_001();
+	if(#CZM=='1')
+	{
+	        if($KINBR=='10001')
+                {
+                        $FD2=#DFJG;
+                }else{
+                        $FD2='10001';
+                }
+
+	}
+	$FD44=#PZHM;
+	$FD45=#PZH;//新增凭证号，也就是现金调拨单的号码
+	$FD46=#FQHM;//封签号码 记录付出流水
+	$FD67=#CZM;
+	$FD25=#JGMC;
+	$FD91=#DFJG;
+	$FD118=#BZ+#PZZL+space(16)+getitems('#FSE');
+	$FD16='5202';
+	if(#CZM=='0')
+	{
+	  $FD52='1';
+	}
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7202                          对内现金收付)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#QBFLAG" TYPE="%-1s" FUNCTIONS="T(0)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5202)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  <PAGE NAME="DEFAULT">
+  <ITEM LINE="6" COL="12" TYPE="%-9s" FUNCTIONS="T(操 作 码:)"/>
+  <ITEM NAME="#CZM" INPUT="SELECT" LINE="6" COL="22" TYPE="%-1s" FUNCTIONS="T(0)">
+  <SELECT>
+		<OPTION VALUE="0" TITLE="付出"/>
+		<OPTION VALUE="1" TITLE="收入"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#UCZM" TYPE="%-10s" FUNCTIONS="j(#CZM=0,T{提取}T{上缴})"/>
+  <ITEM NAME="#LIMIT" TYPE="%-1s">
+  <ONLOSTFOCUS>
+  "{
+	if(substr($TLRNO,2,2) != '98')
+	{
+		showmsg('只有98柜员可以做此交易!');
+		return(false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="8"  COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(--------------------------------------------------------------------------)"/>
+  <ITEM LINE="10" COL="12" TYPE="%-10s" FUNCTIONS="T(对方机构:)"/>
+  <ITEM LINE="11" COL="12" TYPE="%-10s" FUNCTIONS="T(机构名称:)"/>
+  <ITEM LINE="12" COL="12" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="13" COL="12" TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+  <ITEM LINE="15" COL="12" TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"/>
+  <ITEM LINE="16" COL="12" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="17" COL="12" TYPE="%-10s" FUNCTIONS="T(封签号码:)"/>
+  <ITEM NAME="#DFJG" INPUT="TEXT" LINE="10" COL="22" TYPE="%-5s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+ "{		initfd();	
+    		commsend_001();
+ 		$FD16='9802';
+		$FD91=#DFJG;
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#JGMC=delspace($FD25);
+		show(#JGMC,true);
+   if(#CZM=='0') // enable(#PZHM,false);
+	  {
+	   show(#FQHM,true);
+	   enable(#FQHM,false);
+	  }
+   enable(#JGMC,false);
+
+}"
+ </ONLOSTFOCUS>
+ </ITEM>
+  <ITEM NAME="#JGMC" INPUT="TEXT" LINE="11" COL="22" TYPE="%-50s" FUNCTIONS=""/>
+  <ITEM NAME="#BZ" INPUT="SELECT" LINE="12" COL="22" TYPE="%-2s" FUNCTIONS="T(01)">
+   <SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+
+		<!----现在只留人民币选项
+		<OPTION VALUE="12" TITLE="英镑"/>
+		<OPTION VALUE="13" TITLE="港元"/>
+		<OPTION VALUE="14" TITLE="美元"/>
+		<OPTION VALUE="15" TITLE="瑞士法郎"/>
+		<OPTION VALUE="27" TITLE="日元"/>
+		<OPTION VALUE="28" TITLE="加元"/>
+		<OPTION VALUE="29" TITLE="澳元"/>
+		<OPTION VALUE="38" TITLE="欧元"/>
+		---->
+	</SELECT>
+	</ITEM>
+  <ITEM NAME="#FSE" INPUT="TEXT" LINE="13" COL="22" TYPE="%17.2f" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+  if( #FSE &lt; 0 or #FSE == 0 )
+  {
+  showmsg('金额不能为零!');
+  return(false);
+  }
+	//showmsg('凭证号码在付出时不需要输入;收入时输入现金调拨单上的号码!'); martin
+	showmsg('封签号码在付出时不需要输入;收入时输入现金调拨单上的封条号码!');
+	show(#PZZL,true);
+	enable(#PZZL,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#UFSE" TYPE="%-40s" FUNCTIONS="U(#FSE)"/>
+	<ITEM NAME="#PZZL" INPUT="SELECT"  LINE="15" COL="22" TYPE="%-3s" FUNCTIONS="T(152)">
+	<SELECT>
+		<OPTION VALUE="152" TITLE="现金调拨单"/>
+		</SELECT>
+	</ITEM>
+  <ITEM NAME="#PZH" INPUT="TEXT" LINE="16" COL="22" TYPE="%-16s" FUNCTIONS="T()V(NB)"/>
+  
+  <ITEM NAME="#PZHM"   TYPE="%-16s" FUNCTIONS=""/>
+ 
+
+  <ITEM NAME="#FQHM" INPUT="TEXT" LINE="17" COL="22" DEVICE="KEYBOARD" TYPE="%-6s" FUNCTIONS=""/> <!-- 仅仅起到打印作用 -->
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#NAME1"  TYPE="%-20s" FUNCTIONS="S(#CZM,#CZM)"/>
+  <ITEM NAME="#NAME2"  TYPE="%-20s" FUNCTIONS="S(#PZZL,#PZZL)"/>
+  <ITEM NAME="#NAME5"  TYPE="%-20s" FUNCTIONS="S(#BZ,#BZ)"/>
+
+  <ITEM NAME="#FLAG" TYPE="%-1s" >
+  <ONLOSTFOCUS>
+  "{
+	if(#CZM=='0' and #QBFLAG=='0')
+	{
+		loadpage('PAGE2');
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" NAME="#SUBMIT1" INPUT="SUBMIT"/>
+  </PAGE>
+
+  <!-- PAGE2 券别 -->
+  <PAGE NAME="PAGE2">
+  <ITEM LINE="05" COL="33" TYPE="%-16s" FUNCTIONS="T(现金付出券别)"/>
+  <ITEM LINE="07" COL="14" TYPE="%-10s" FUNCTIONS="T(一佰元:)"/>
+  <ITEM LINE="07" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="07" COL="44" TYPE="%-10s" FUNCTIONS="T(五拾元:)"/>
+  <ITEM LINE="07" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="09" COL="14" TYPE="%-10s" FUNCTIONS="T(二拾元:)"/>
+  <ITEM LINE="09" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="09" COL="44" TYPE="%-10s" FUNCTIONS="T(拾  元:)"/>
+  <ITEM LINE="09" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="11" COL="14" TYPE="%-10s" FUNCTIONS="T(五  元:)"/>
+  <ITEM LINE="11" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="11" COL="44" TYPE="%-10s" FUNCTIONS="T(二  元:)"/>
+  <ITEM LINE="11" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="13" COL="14" TYPE="%-10s" FUNCTIONS="T(一  元:)"/>
+  <ITEM LINE="13" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="13" COL="44" TYPE="%-10s" FUNCTIONS="T(五  角:)"/>
+  <ITEM LINE="13" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="15" COL="14" TYPE="%-10s" FUNCTIONS="T(二  角:)"/>
+  <ITEM LINE="15" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="15" COL="44" TYPE="%-10s" FUNCTIONS="T(一  角:)"/>
+  <ITEM LINE="15" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="17" COL="14" TYPE="%-10s" FUNCTIONS="T(五  分:)"/>
+  <ITEM LINE="17" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="17" COL="44" TYPE="%-10s" FUNCTIONS="T(二  分:)"/>
+  <ITEM LINE="17" COL="57" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="19" COL="14" TYPE="%-10s" FUNCTIONS="T(一  分:)"/>
+  <ITEM LINE="19" COL="27" TYPE="%-2s"  FUNCTIONS="T(张)"/>
+  <ITEM LINE="19" COL="44" TYPE="%-10s" FUNCTIONS="T(金额合计:)"/>
+
+  <ITEM NAME="#YUAN100" INPUT="TEXT" LINE="07" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN50"  INPUT="TEXT" LINE="07" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN20"  INPUT="TEXT" LINE="09" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN10"  INPUT="TEXT" LINE="09" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN5"   INPUT="TEXT" LINE="11" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN2"   INPUT="TEXT" LINE="11" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#YUAN1"   INPUT="TEXT" LINE="13" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#JIAO5"   INPUT="TEXT" LINE="13" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#JIAO2"   INPUT="TEXT" LINE="15" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#JIAO1"   INPUT="TEXT" LINE="15" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#FEN5"    INPUT="TEXT" LINE="17" COL="22" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#FEN2"    INPUT="TEXT" LINE="17" COL="52" TYPE="%8d" FUNCTIONS=""/>
+  <ITEM NAME="#FEN1"    INPUT="TEXT" LINE="19" COL="22" TYPE="%8d" FUNCTIONS=""/>
+
+  <ITEM NAME="#JE1"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE2"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE3"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE4"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE5"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE6"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE7"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE8"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE9"      TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE10"     TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE11"     TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE12"     TYPE="%-21s" FUNCTIONS=""/>
+  <ITEM NAME="#JE13"     TYPE="%-21s" FUNCTIONS=""/>
+
+  <ITEM NAME="#HJ"       INPUT="LABEL" LINE="19" COL="54" TYPE="%-21s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @totamt as number;
+      dim @totcnt as number;
+
+      @totamt=0;
+      @totcnt=0;
+      @totamt=@totamt+atoi(#YUAN100)*100;
+      @totcnt=@totcnt+atoi(#YUAN100);
+      #JE1=comma(itoa(atoi(#YUAN100)*100,'%.2f'));
+//      #JE1=ltrim(#JE1);
+
+      @totamt=@totamt+atoi(#YUAN50)*50;
+      @totcnt=@totcnt+atoi(#YUAN50);
+      #JE2=comma(itoa(atoi(#YUAN50)*50,'%.2f'));
+//      #JE2=ltrim(#JE2);
+
+      @totamt=@totamt+atoi(#YUAN20)*20;
+      @totcnt=@totcnt+atoi(#YUAN20);
+      #JE3=comma(itoa(atoi(#YUAN20)*20,'%.2f'));
+//      #JE3=ltrim(#JE3);
+
+      @totamt=@totamt+atoi(#YUAN10)*10;
+      @totcnt=@totcnt+atoi(#YUAN10);
+      #JE4=comma(itoa(atoi(#YUAN10)*10,'%.2f'));
+//      #JE4=ltrim(#JE4);
+
+      @totamt=@totamt+atoi(#YUAN5)*5;
+      @totcnt=@totcnt+atoi(#YUAN5);
+      #JE5=comma(itoa(atoi(#YUAN5)*5,'%.2f'));
+//      #JE5=ltrim(#JE5);
+
+      @totamt=@totamt+atoi(#YUAN2)*2;
+      @totcnt=@totcnt+atoi(#YUAN2);
+      #JE6=comma(itoa(atoi(#YUAN2)*2,'%.2f'));
+//      #JE6=ltrim(#JE6);
+
+      @totamt=@totamt+atoi(#YUAN1)*1;
+      @totcnt=@totcnt+atoi(#YUAN1);
+      #JE7=comma(itoa(atoi(#YUAN1)*1,'%.2f'));
+//      #JE7=ltrim(#JE7);
+
+      @totamt=@totamt+atoi(#JIAO5)*0.5;
+      @totcnt=@totcnt+atoi(#JIAO5);
+      #JE8=comma(itoa(atoi(#JIAO5)*0.5,'%.2f'));
+//      #JE8=ltrim(#JE8);
+
+      @totamt=@totamt+atoi(#JIAO2)*0.2;
+      @totcnt=@totcnt+atoi(#JIAO2);
+      #JE9=comma(itoa(atoi(#JIAO2)*0.2,'%.2f'));
+//      #JE9=ltrim(#JE9);
+
+      @totamt=@totamt+atoi(#JIAO1)*0.1;
+      @totcnt=@totcnt+atoi(#JIAO1);
+      #JE10=comma(itoa(atoi(#JIAO1)*0.1,'%.2f'));
+//      #JE10=ltrim(#JE10);
+
+      @totamt=@totamt+atoi(#FEN5)*0.05;
+      @totcnt=@totcnt+atoi(#FEN5);
+      #JE11=comma(itoa(atoi(#FEN5)*0.05,'%.2f'));
+//     #JE11=ltrim(#JE11);
+
+      @totamt=@totamt+atoi(#FEN2)*0.02;
+      @totcnt=@totcnt+atoi(#FEN2);
+      #JE12=comma(itoa(atoi(#FEN2)*0.02,'%.2f'));
+//      #JE12=ltrim(#JE12);
+
+      @totamt=@totamt+atoi(#FEN1)*0.01;
+      @totcnt=@totcnt+atoi(#FEN1);
+      #JE13=comma(itoa(atoi(#FEN1)*0.01,'%.2f'));
+//     #JE13=ltrim(#JE13);
+
+
+
+
+      if(@totamt!=#FSE)
+      {
+	 showmsg('发生额和券别合计不符,请重新核对!');
+	 showmsg('发生额:['+comma(itoa(#FSE,'%.2f'))+'],券别合计:['+comma(itoa(@totamt,'%.2f'))+']');
+	 goitem(#YUAN100);
+	return(false);
+      }
+      #HJ=comma(itoa(@totamt,'%.2f'));
+      #HJ=ltrim(#HJ);
+      #ZS=itoa(@totcnt,'%12d');
+      //showmsg(#ZS);
+      show(#HJ,true);
+      #QBFLAG='1';
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ZS"       TYPE="%12d"    FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+	//showmsg('数='+#ZS);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" NAME="#SUBMIT2" INPUT="SUBMIT"/>
+  
+  </PAGE>
+   
+
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"   TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"   TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="对内现金收付">
+ NOTHING
+ </PACKAGE>
+  <PRINT>"{
+          print( 2,  24,'交易名称:对内现金收付');
+          print( 4,  20,'交易机构:[5  ]',$FD2);
+	  print( 5,  20,'交易日期:[4  ]年[2]月[2]日',#YEAR,#MON,#DAY);  
+	  print( 6,  20,'流水号码:[6  ]',$FD4);
+	  print( 7,  20,'操作员号:[4  ]',$FD7);
+	  print( 8,  20,'操 作 码:[20 ]',#NAME1);
+	  print( 9,  20,'对方机构:[5  ]',#DFJG);
+	  print( 10, 20,'机构名称:[50 ]',#JGMC);
+	  print( 11, 20,'币    种:[20 ]',#NAME5); 
+	  print( 12, 20,'发 生 额:[20 ]',ltrim(comma(itoa(#FSE,'%17.2f'),16)));
+	  print( 13, 20,'凭证种类:[20 ]',#NAME2);
+	  if(#CZM == '0')
+	  {
+		//print( 14, 20,'凭证号码:[16 ]',$FD4); 增加现金调拨单前
+		print( 14, 20,'凭证号码:[16 ]',#PZH);
+		print( 15, 20,'签条号码:[16 ]',$FD4);
+	  }
+	  else
+	  {
+		//print( 14, 20,'凭证号码:[16 ]',#PZHM);
+		print( 14, 20,'凭证号码:[16 ]',#PZH);
+	  }
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  DESC="打印业务专用凭证">
+  NOTHING
+ </PACKAGE>
+<PRINT>"{
+	dim @txtime as string;
+	@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	$KINDNO = '00';
+        print( 5, 20,'机构名称:[30]',$BRNAME);  
+        print( 5, 2,'代码:7202');
+        print( 5, 13,'交易:对内现金收付');
+	print( 7, 20, '对内现金[4]',#NAME1);
+	print( 8, 20,'对方机构:[5]              对方名称:[50]',#DFJG,#JGMC);
+	printacdtl_1();
+	print(24,20,'备注:');
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  DESC="打印内部现金调拨单" LINESPACE="24" CHECK="#CZM=0">
+  NOTHING
+ </PACKAGE>
+<PRINT>"{
+	dim @year   as string;
+	dim @month  as string;
+	dim @day    as string;
+	dim @txtime as string;
+	dim @prtline as number;
+	dim @qsname  as string;
+	dim @zhname  as string;
+	dim @zy  as string;
+	@txtime =substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	$KINDNO = '00';
+
+	@year=substr($HDATE,0,4);
+	@month=substr($HDATE,4,2);
+	@day=substr($HDATE,6,2);
+
+	if($KINBR=='10001')
+	{
+		@qsname=$BRNAME;
+		@zhname=#JGMC;
+		@zy='提取';
+	}else{
+		@qsname=#JGMC;
+		@zhname=$BRNAME;
+		@zy='上缴';
+	}
+	@zhname='    ';
+	@zy='    ';
+
+
+	@prtline = 6;
+
+	print(       4,  20, '\H0[10        ]                      [4    ]    [2 ]    [2 ]\H1              [6]',@qsname,@year,@month,@day,$FD4);
+	print(       5,  36, '\H0[12]             [10                  ]\H1                                        ',@zhname,@zy);
+
+	if(atoi(#YUAN100) &gt; 0)
+	{
+		print(@prtline,  38, '                                 壹佰元       [8       ]    [21                    ]',#YUAN100,#JE1);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN50) &gt; 0)
+	{
+		print(@prtline,  38, '                                 伍拾元       [8       ]    [21                    ]',#YUAN50,#JE2);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN20) &gt; 0)
+	{
+		print(@prtline,  38, '                                 贰拾元       [8       ]    [21                    ]',#YUAN20,#JE3);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN10) &gt; 0)
+	{
+		print(@prtline,  38, '                                 壹拾元       [8       ]    [21                    ]',#YUAN10,#JE4);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN5) &gt; 0)
+	{
+		print(@prtline,  38, '                                 伍  元       [8       ]    [21                    ]',#YUAN5,#JE5);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN2) &gt; 0)
+	{
+		print(@prtline,  38, '                                 贰  元       [8       ]    [21                    ]',#YUAN2,#JE6);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#YUAN1) &gt; 0)
+	{
+		print(@prtline,  38, '                                 壹  元       [8       ]    [21                    ]',#YUAN1,#JE7);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#JIAO5) &gt; 0)
+	{
+		print(@prtline,  38, '                                 伍  角       [8       ]    [21                    ]',#JIAO5,#JE8);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#JIAO2) &gt; 0)
+	{
+		print(@prtline,  38, '                                 贰  角       [8       ]    [21                    ]',#JIAO2,#JE9);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#JIAO1) &gt; 0)
+	{
+		print(@prtline,  38, '                                 壹  角       [8       ]    [21                    ]',#JIAO1,#JE10);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#FEN5) &gt; 0)
+	{
+		print(@prtline,  38, '                                 伍  分       [8       ]    [21                    ]',#FEN5,#JE11);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#FEN2) &gt; 0 and @prtline &lt; 19)
+	{
+		print(@prtline,  38, '                                 贰  分       [8       ]    [21                    ]',#FEN2,#JE12);
+		@prtline=@prtline+1;
+	}
+	if(atoi(#FEN1) &gt; 0 and @prtline &lt; 19)
+	{
+		print(@prtline,  38, '                                 壹  分       [8       ]    [21                    ]',#FEN1,#JE13);
+		@prtline=@prtline+1;
+	}
+	//print(      18,  15, '                    [6]                                         [12          ]         [21                    ]',#FQHM,#ZS,#HJ);
+	print(      18,  15, '                    [6]                                         [12          ]         [21                    ]',$FD4,#ZS,#HJ);
+	print(      20,  38, '                                 \H0[40                                                            ]\H1',#UFSE);
+	}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

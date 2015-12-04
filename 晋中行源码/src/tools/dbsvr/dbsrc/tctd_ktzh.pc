@@ -1,0 +1,286 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"tctd_ktzh_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int tctd_ktzh_con ( struct tctd_ktzh_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct tctd_ktzh_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->tctd_br_no);
+	zip_tail(ps->tctd_acno);
+	zip_tail(ps->tctd_name);
+	zip_tail(ps->tc_kt_flag);
+	zip_tail(ps->td_kt_flag);
+	zip_tail(ps->cx_kt_flag);
+	zip_tail(ps->tctd_xyno);
+	zip_tail(ps->tel);
+	zip_tail(ps->filler);
+}
+int Tctd_ktzh_Debug(struct tctd_ktzh_c *ps){
+	vtcp_log("tctd_ktzh_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("tctd_ktzh_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("tctd_ktzh_c.tctd_br_no=[%s]\n",ps->tctd_br_no);
+	vtcp_log("tctd_ktzh_c.begin_date=[%ld]\n",ps->begin_date);
+	vtcp_log("tctd_ktzh_c.end_date=[%ld]\n",ps->end_date);
+	vtcp_log("tctd_ktzh_c.tctd_acno=[%s]\n",ps->tctd_acno);
+	vtcp_log("tctd_ktzh_c.tctd_name=[%s]\n",ps->tctd_name);
+	vtcp_log("tctd_ktzh_c.tc_kt_flag=[%s]\n",ps->tc_kt_flag);
+	vtcp_log("tctd_ktzh_c.td_kt_flag=[%s]\n",ps->td_kt_flag);
+	vtcp_log("tctd_ktzh_c.cx_kt_flag=[%s]\n",ps->cx_kt_flag);
+	vtcp_log("tctd_ktzh_c.td_amt_lmt=[%f]\n",ps->td_amt_lmt);
+	vtcp_log("tctd_ktzh_c.tctd_xyno=[%s]\n",ps->tctd_xyno);
+	vtcp_log("tctd_ktzh_c.tel=[%s]\n",ps->tel);
+	vtcp_log("tctd_ktzh_c.trace_no=[%ld]\n",ps->trace_no);
+	vtcp_log("tctd_ktzh_c.filler=[%s]\n",ps->filler);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Tctd_ktzh_Sel(reply,tctd_ktzh_c,fmtstr,va_alist)
+char    *reply;
+struct  tctd_ktzh_c *tctd_ktzh_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Tctd_ktzh_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Tctd_ktzh_Fet_Sel( tctd_ktzh_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Tctd_ktzh_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Tctd_ktzh_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,tctd_ktzh.* FROM tctd_ktzh WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tctd_ktzh_sel FROM :comm;
+	EXEC SQL DECLARE sel_tctd_ktzh CURSOR FOR tctd_ktzh_sel;
+
+	EXEC SQL OPEN sel_tctd_ktzh;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tctd_ktzh_Fet_Sel ( struct tctd_ktzh_c *tctd_ktzh_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_tctd_ktzh INTO :tctd_ktzh_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch tctd_ktzh error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch tctd_ktzh finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(tctd_ktzh_c);
+
+	return 0;
+}
+
+int Tctd_ktzh_Clo_Sel (){
+	EXEC SQL CLOSE sel_tctd_ktzh;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Tctd_ktzh_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,tctd_ktzh.* FROM tctd_ktzh WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE tctd_ktzh_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_tctd_ktzh CURSOR FOR tctd_ktzh_upd;
+
+	EXEC SQL OPEN upd_tctd_ktzh;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tctd_ktzh_Fet_Upd( struct tctd_ktzh_c *tctd_ktzh_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_tctd_ktzh INTO :tctd_ktzh_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH tctd_ktzh finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(tctd_ktzh_c);
+
+	return 0;
+}
+
+int Tctd_ktzh_Upd_Upd( struct tctd_ktzh_c tctd_ktzh_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE tctd_ktzh SET br_no=:tctd_ktzh_c.br_no,
+			tctd_br_no=:tctd_ktzh_c.tctd_br_no,
+			begin_date=:tctd_ktzh_c.begin_date,
+			end_date=:tctd_ktzh_c.end_date,
+			tctd_acno=:tctd_ktzh_c.tctd_acno,
+			tctd_name=:tctd_ktzh_c.tctd_name,
+			tc_kt_flag=:tctd_ktzh_c.tc_kt_flag,
+			td_kt_flag=:tctd_ktzh_c.td_kt_flag,
+			cx_kt_flag=:tctd_ktzh_c.cx_kt_flag,
+			td_amt_lmt=:tctd_ktzh_c.td_amt_lmt,
+			tctd_xyno=:tctd_ktzh_c.tctd_xyno,
+			tel=:tctd_ktzh_c.tel,
+			trace_no=:tctd_ktzh_c.trace_no,
+			filler=:tctd_ktzh_c.filler
+	WHERE rowid=:tctd_ktzh_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Tctd_ktzh_Del_Upd(struct tctd_ktzh_c tctd_ktzh_c , char * reply  ){
+
+	EXEC SQL DELETE FROM tctd_ktzh WHERE rowid=:tctd_ktzh_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Tctd_ktzh_Clo_Upd( ){
+	EXEC SQL CLOSE upd_tctd_ktzh;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Tctd_ktzh_Ins( struct tctd_ktzh_c tctd_ktzh_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO tctd_ktzh VALUES (:tctd_ktzh_c.br_no,
+			:tctd_ktzh_c.tctd_br_no,
+			:tctd_ktzh_c.begin_date,
+			:tctd_ktzh_c.end_date,
+			:tctd_ktzh_c.tctd_acno,
+			:tctd_ktzh_c.tctd_name,
+			:tctd_ktzh_c.tc_kt_flag,
+			:tctd_ktzh_c.td_kt_flag,
+			:tctd_ktzh_c.cx_kt_flag,
+			:tctd_ktzh_c.td_amt_lmt,
+			:tctd_ktzh_c.tctd_xyno,
+			:tctd_ktzh_c.tel,
+			:tctd_ktzh_c.trace_no,
+			:tctd_ktzh_c.filler);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT tctd_ktzh error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

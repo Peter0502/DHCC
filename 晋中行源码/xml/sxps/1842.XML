@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1842         批量账户管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{
+	refresh();
+	initfd();
+	commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+  "{
+	commrecv_001();
+  }"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(1842                           批量账户管理 )"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1842)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(批量账户管理)"/>
+	<ITEM NAME="#filename" TYPE="%-60s" FUNCTIONS=""/>
+	<!-- <ITEM LINE="6"  COL="29"  TYPE="%-10s"  FUNCTIONS="T(操作类型:)" />
+	<ITEM LINE="6"  COL="39" NAME="#Oper" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(0)">
+		<SELECT>
+			<OPTION VALUE ="0" TITLE="0.开户 " />
+			<OPTION VALUE ="1" TITLE="1.修改 " />
+			<OPTION VALUE ="2" TITLE="2.删除 " />
+		</SELECT>
+	</ITEM> -->
+	<!--ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @selid as number;
+			if(#DOLIST=='1')
+			{
+				@selid=list_work();     
+				if(@selid &lt; 0)       
+				{                     
+					list_del();            
+					rerun();               
+					return(true);          
+				}           
+				@selid=list_getselid();
+				if(@selid &lt; 0)
+				{
+					list_del();
+					rerun();
+					return(true);
+				}
+				runoutput();
+				showall();
+				rerun();
+				refresh();
+			}
+			#DOLIST='';
+			list_del();
+
+		}"
+		</ONLOSTFOCUS>
+	</ITEM-->
+	<ITEM LINE="6" COL="29" TYPE="%-11s" FUNCTIONS="T(操作方式:)"/>
+	<ITEM LINE="6" COL="39" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" NAME="#Kind" FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="0.手工"/>
+			<OPTION VALUE="1" TITLE="1.磁盘导入"/>
+		</SELECT>
+		<ONLOSTFOCUS>
+		"{
+			if(#Kind == '0')
+			{
+				show(#NOTEHM2,false);
+				show(#VOCNUM2,false);
+			}else{
+				show(#NOTEHM2,true);
+				show(#VOCNUM2,true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="8" COL="29" NAME="#NOTEHM2" TYPE="%-9s" VISABLE="FALSE" INPUT="LABEL" FUNCTIONS="T(文件名称:)"/>
+	<ITEM LINE="8" COL="39" NAME="#VOCNUM2"  TYPE="%-15s" VISABLE="FALSE" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+		//	goitem(#SUB_UI,true);
+			
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#SUB_UI"  TYPE="%1s" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{
+			dim @filename1 as string;
+			dim @filename2 as string;
+			dim @f as file;
+			dim @line as string;
+			dim @amt as number;
+			dim @tot_amt as number;
+			dim @buffer as string;
+			
+			if(#VOCNUM2 != '')
+			{
+				@filename1 = #VOCNUM2;
+				@buffer = getfiletxt('../tmp/'+@filename1);
+				savefiletxt('../tmp/'+$KINBR+$TTYNAME, @buffer);
+				#filename = '../tmp/'+$KINBR+$TTYNAME;		
+			}
+			else
+			{
+				call('rm -rf '+'../tmp/'+$KINBR+$TTYNAME);
+				@filename1 = '../tmp/'+$KINBR+$TTYNAME;
+		
+				editfile('../xml/1842.DLG','../tmp/'+@filename1);
+				
+				list_init(17,75,5,1);
+				list_setcolcnt(7);
+				list_setcol(0,'开户行号',20);
+				list_setcol(1,'账号',20);
+				list_setcol(2,'帐户名称',10);
+				list_setcol(3,'币种',10);
+				list_setcol(4,'账户行业',10);
+				list_setcol(5,'开户日期',10);
+				list_setcol(6,'操作类型',10);
+				
+				#filename = @filename1;  //保存文件名	
+	
+				list_load(@filename1);
+	
+				list_save(@filename1);
+				
+				list_del();
+			}
+
+			setvfile(true,false);
+			@filename2 = '../tmp/'+$KINBR+$TTYNAME;
+
+			@f=openfile(@filename2,'r');
+			if(@f &lt; 0)
+			{
+				showmsg('打开回传文件错误');
+				return(false);
+			}
+			closefile(@f);
+			
+
+
+			goitem(#OK,true);
+			return(true);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+	<ONCLICK>
+	"{
+		dim @rcvbuffer as string;
+		initfd();
+		commsend_001();
+		$FD11 = '1';
+		$FD16 = '2045';
+		$FD18 = 'pbp';
+		//$FD35 = #Oper;
+		callagnpbp();
+
+		//removefile(#filename);
+		call('rm -rf '+'../tmp/'+$KINBR+$TTYNAME);
+		if($FD12 != '0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+
+		runoutput();	
+		rerun();
+		refresh();
+	}"
+	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+	NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+			PrintTxHead();	
+
+			print( 5, 10,'系统参考号：[20]',$FD33); 
+			print( 7, 10,'交易  日期：[20]',$FD45); 
+			
+			PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

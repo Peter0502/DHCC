@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1818      定期借贷记撤销业务)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+	refresh();
+	initfd();
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+     "{
+		loadpage('XIAOWANG');
+      }"
+</FIRSTWORK>
+<VARIABLE>
+<PAGE NAME="XIAOWANG">
+        <ITEM LINE="3" COL="35" TYPE="%-30s" FUNCTIONS="T(统一支付撤销业务)"/>
+        <ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS="T(--------------------------------------------------------------------------)"/>
+        <ITEM NAME="#TXCODE" TYPE="%-30s" FUNCTIONS="T(1818)"/>
+	<ITEM NAME="#TXNAME" TYPE="%-30s" FUNCTIONS="T(统一支付撤销业务)"/>
+        <ITEM LINE="5"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(原交易序号:)" />
+        <ITEM LINE="5"  COL="15"  NAME="#txno" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="5"  COL="27"  TYPE="%-11s"  FUNCTIONS="T(原委托日期:)" />
+        <ITEM LINE="5"  COL="39"  NAME="#txdt" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+        
+        <ONLOSTFOCUS>
+           "{
+                initfd();
+                dim @tota as string;
+                dim @column as string;
+                dim @where as string;
+                commsend_001();
+                $FD16='1114';
+                $FD18='pbp';
+                $FD28='sxps';
+                $FD23='0';
+                #txdt='20140511';
+                #txno='2946';
+                @column='msg_batchid,biz_type, biz_kind,dbtr_id, dbtr_nm, ttl_amt, msg_sts, tx_sts'; 
+                @where = 'tx_date='+'|'+#txdt+'|'+' and ' + 'tx_no='+'|'+#txno+'|';
+                $FD96=@column;
+                $FD76=@where;
+                $FD81='pbp_cdpaymain';
+                $FD101='32|16|16|32|60|17|4|4';
+		@tota=callagnpbp();
+		if($FD12 !='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		//showmsg($FD12);
+                @tota=delspace(@tota);
+		//showmsg(@tota);
+                #Batchno=strfld(@tota,'|',0);
+                //showmsg(#Batchno);
+                #ZH =strfld(@tota,'|',1);
+                //showmsg(#ZH);
+                #ZHMC =strfld(@tota,'|',2);
+                #BZ =strfld(@tota,'|',3);
+                #TTLAMT = strfld(@tota, '|',4);
+                #MSGSTS = strfld(@tota, '|',5);
+                #TXSTS = strfld(@tota, '|',6);
+                enable(#Batchno, false);
+                enable(#ZH, false);
+                enable(#ZHMC, false);
+                enable(#BZ, false);
+                enable(#TTLAMT, false);
+                enable(#MSGSTS, false);
+                enable(#TXSTS, false);
+                showall();
+                refresh();
+		showblock('Block1',true, true);
+                
+		refresh();    
+            }"
+            </ONLOSTFOCUS>
+        </ITEM>
+     <BLOCK NAME="Block1" LINE="5"  COL="3" VISABLE="FALSE">
+        <ITEM LINE="3"  COL="0"  TYPE="%-10s"  FUNCTIONS="T(原批次号:)" />
+        <ITEM LINE="3"  COL="10"  NAME="#Batchno" TYPE="%-30s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="4"  COL="0"  TYPE="%-11s"  FUNCTIONS="T(原业务类型:?)" />
+        <ITEM LINE="4"  COL="12"  NAME="#ZH" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="5"  COL="0"  TYPE="%-11s"  FUNCTIONS="T(原业务种类:)" />
+        <ITEM LINE="5"  COL="12"  NAME="#ZHMC" TYPE="%-12s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="6"  COL="0"  TYPE="%-10s"  FUNCTIONS="T(付款人:)" />
+        <ITEM LINE="6"  COL="10"  NAME="#BZ" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="7"  COL="0"  TYPE="%-11s"  FUNCTIONS="T(付款总金额:)" />
+        <ITEM LINE="7"  COL="12"  NAME="#TTLAMT" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="8"  COL="0"  TYPE="%-10s"  FUNCTIONS="T(交易状态:)" />
+        <ITEM LINE="8"  COL="10"  NAME="#MSGSTS" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="9"  COL="0"  TYPE="%-10s"  FUNCTIONS="T(账务状态:)" />
+        <ITEM LINE="9"  COL="10"  NAME="#TXSTS" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+        <ITEM LINE="10"  COL="0"  TYPE="%-9s"  FUNCTIONS="T(是否撤销:)" />
+        <ITEM NAME="#Oper" LINE="10" COL="13" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)">
+                <SELECT>
+                        <OPTION VALUE="0" TITLE="不撤销"/>
+                        <OPTION VALUE="1" TITLE="撤销"/>
+                </SELECT>
+             <ONLOSTFOCUS>
+             "{
+                   if(#Oper != '0')
+                   {
+	                refresh();    
+              		initfd();
+               		commsend_001();
+                	$FD16='1222';
+                	$FD18='pbp';
+                //产品代码
+                	$FD28='sxps';
+                //交易代码
+                	$FD32=#Batchno;
+			callagnpbp();
+			//showmsg($FD12);
+			if($FD12 !='0000')
+			{
+			    showmsg(geterror());
+			    return(false);
+			}
+                   }
+                   else 
+                   {
+                   }
+	           refresh();    
+              }"
+            </ONLOSTFOCUS>
+          </ITEM>
+     </BLOCK>
+</PAGE>
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		//print(1,25, '1201 贷记业务录入');
+		PrintTxHead();
+		if (#Ctind == '2')
+		{
+			print( 3, 10,'付款人账号:[20]',#PayerAcct);
+   			print(4, 10,'付款人姓名:[60]',#PayerName);
+   		}
+   		print(5,10,'收款人账号:[20]',#PayeeAcct);
+   		print(6,10,'收款人姓名:[60]',#PayeeName);
+   		print(7,10,'交易金额:[20]',ltrim(itoa(#TraceAmount,'%.2f')));
+		print( 8, 10,'支付交易序号:[10]',$FD44);
+			
+		//print(20,10,'柜员:[6]   日期:[10]   流水号:[20]',$FD7,$FD5,$FD56);
+		PrintTxTail();
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

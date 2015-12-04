@@ -1,0 +1,98 @@
+/*****************************************************
+* 文 件 名:  sp3664.pc
+* 功能描述： 删除操作员    (前台:6021.XML)
+* 作    者:  xyy
+* 完成日期： 2007-1-10 11:08
+* 修改记录： 
+* 修 改 人:  YXJ
+* 日    期:  2007.03.19
+* 修改内容:
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "com_tel_c.h"
+int  sp3664()
+{
+        int  cnt = 0;
+        char cTlrno[5];
+        char cFlg[2];
+	char lvlMsg[19];
+	char filename[100];
+	FILE *fp;
+        struct com_tel_c wd_com_tel; 
+        memset(cFlg,'\0',sizeof(cFlg));
+        memset(filename,'\0',sizeof(filename));
+        memset(cTlrno    , 0 , sizeof(cTlrno));
+        memset(&wd_com_tel,'\0',sizeof(wd_com_tel)); 
+        pub_base_sysinit();
+        /***这里从前台得到数值***/
+        get_fd_data("0920",cTlrno);
+        get_fd_data("0110",cFlg);
+        vtcp_log("[%s][%d] cTlrno==[%s]",__FILE__,__LINE__,cTlrno);
+        vtcp_log("[%s][%d] cFlg==[%s]",__FILE__,__LINE__,cFlg);
+        if(cFlg[0]=='0'){/*返回操作员信息*/
+                g_reply_int=Com_tel_Sel(g_pub_tx.reply,&wd_com_tel,"tel='%s' and csts!='4'",cTlrno);
+                if(g_reply_int==100){
+                        vtcp_log("[%s][%d] 此操作员不存在[%s]",cTlrno);
+                        sprintf(acErrMsg,"此操作员不存在[%s]",cTlrno);
+                        WRITEMSG
+                        goto ErrExit;
+                }
+                else if(g_reply_int){
+                        sprintf(acErrMsg,"SERCH ERROR !! [%d]",g_reply_int);
+                        WRITEMSG
+                        goto ErrExit;
+                }
+                vtcp_log("brno[%s]",wd_com_tel.br_no);
+                vtcp_log("name[%s]",wd_com_tel.name);
+                vtcp_log("lvl[%s]",wd_com_tel.lvl);
+		if(wd_com_tel.lvl[0]=='0') memcpy(lvlMsg,"事后监督普通柜员",sizeof(lvlMsg)-1);
+		else memcpy(lvlMsg,"事后监督管理员",sizeof(lvlMsg)-1);
+		pub_base_AllDwnFilName(filename);
+                fp=fopen(filename,"w");
+                if(!fp){
+                       	sprintf(acErrMsg," open file [%s] error ",filename );
+                        WRITEMSG
+                        strcpy( g_pub_tx.reply,"S047" );
+                        vtcp_log("[%s][%d]filename===[%s]",__FILE__,__LINE__,filename);
+                        goto ErrExit;
+               	}
+		fprintf(fp,"%s|%s|%s|%s|\n",wd_com_tel.br_no,wd_com_tel.tel,wd_com_tel.name,lvlMsg);	
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1");
+        }
+	else if(cFlg[0]=='1'){/*删除该操作员*/
+		g_reply_int = Com_tel_Dec_Upd(g_pub_tx.reply,"tel='%s'",cTlrno);
+    		if(g_reply_int != 0){
+        		sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",g_reply_int);
+        		WRITEMSG
+        		goto ErrExit;
+    		}
+    		g_reply_int = Com_tel_Fet_Upd(&wd_com_tel,g_pub_tx.reply);
+    		if (g_reply_int != 0){
+        		sprintf(acErrMsg,"FETCH ERROR !! [%d]",g_reply_int);
+        		WRITEMSG
+        		goto ErrExit;
+    		}
+    		strcpy(wd_com_tel.csts, "4"); /* 删除 */
+    		g_reply_int = Com_tel_Upd_Upd(wd_com_tel,g_pub_tx.reply);
+    		if (g_reply_int != 0){
+        		sprintf(acErrMsg,"修改柜员信息表错误!!!");
+        		WRITEMSG
+        		goto ErrExit;
+    		}
+    		Com_tel_Clo_Upd();
+	}
+OkExit:
+        strcpy( g_pub_tx.reply, "0000" );
+        sprintf(acErrMsg,"操作员删除成功 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 0;
+ErrExit:
+        sprintf(acErrMsg,"操作员删除失败 reply is[%s]",g_pub_tx.reply);
+        WRITEMSG
+        set_zd_data("0120",g_pub_tx.reply);
+        return 1;
+}

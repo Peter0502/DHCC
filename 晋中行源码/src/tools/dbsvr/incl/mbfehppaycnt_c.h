@@ -1,0 +1,55 @@
+#ifndef __mbfehppaycnt_CH__
+#define __mbfehppaycnt_CH__
+struct mbfehppaycnt_c{
+	char      rowid[20];
+	long      consigndate;
+	long      cmt100sendcnt;
+	double    cmt100sendamt;
+	long      cmt100reccnt;
+	double    cmt100recamt;
+	long      cmt101sendcnt;
+	double    cmt101sendamt;
+	long      cmt101reccnt;
+	double    cmt101recamt;
+	long      cmt102sendcnt;
+	double    cmt102sendamt;
+	long      cmt102reccnt;
+	double    cmt102recamt;
+	long      cmt103sendcnt;
+	double    cmt103sendamt;
+	long      cmt103reccnt;
+	double    cmt103recamt;
+	long      cmt105sendcnt;
+	double    cmt105sendamt;
+	long      cmt105reccnt;
+	double    cmt105recamt;
+	long      cmt108sendcnt;
+	double    cmt108sendamt;
+	long      cmt108reccnt;
+	double    cmt108recamt;
+	long      cmt109sendcnt;
+	double    cmt109sendamt;
+	long      cmt109reccnt;
+	double    cmt109recamt;
+	long      cmt121sendcnt;
+	double    cmt121sendamt;
+	long      cmt122reccnt;
+	double    cmt122recamt;
+	long      cmt123reccnt;
+	double    cmt123recamt;
+	long      cmt124reccnt;
+	double    cmt124recamt;
+	long      cmt232lendcnt;
+	double    cmt232lendamt;
+	long      cmt232loancnt;
+	double    cmt232loanamt;
+	long      cmt407lendcnt;
+	double    cmt407lendamt;
+	long      cmt407loancnt;
+	double    cmt407loanamt;
+	long      cmt408lendcnt;
+	double    cmt408lendamt;
+	long      cmt408loancnt;
+	double    cmt408loanamt;
+};
+#endif 

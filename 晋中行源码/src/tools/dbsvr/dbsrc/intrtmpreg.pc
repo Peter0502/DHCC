@@ -1,0 +1,279 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"intrtmpreg_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int intrtmpreg_con ( struct intrtmpreg_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct intrtmpreg_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->actno);
+	zip_tail(ps->kinbr);
+	zip_tail(ps->txdate);
+	zip_tail(ps->atiday);
+	zip_tail(ps->adjday);
+	zip_tail(ps->stat);
+}
+int Intrtmpreg_Debug(struct intrtmpreg_c *ps){
+	vtcp_log("intrtmpreg_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("intrtmpreg_c.actno=[%s]\n",ps->actno);
+	vtcp_log("intrtmpreg_c.actnoseq=[%ld]\n",ps->actnoseq);
+	vtcp_log("intrtmpreg_c.kinbr=[%s]\n",ps->kinbr);
+	vtcp_log("intrtmpreg_c.txdate=[%s]\n",ps->txdate);
+	vtcp_log("intrtmpreg_c.txseq=[%ld]\n",ps->txseq);
+	vtcp_log("intrtmpreg_c.atiday=[%s]\n",ps->atiday);
+	vtcp_log("intrtmpreg_c.adjday=[%s]\n",ps->adjday);
+	vtcp_log("intrtmpreg_c.rate=[%f]\n",ps->rate);
+	vtcp_log("intrtmpreg_c.dinum=[%f]\n",ps->dinum);
+	vtcp_log("intrtmpreg_c.intr=[%f]\n",ps->intr);
+	vtcp_log("intrtmpreg_c.intr_type=[%ld]\n",ps->intr_type);
+	vtcp_log("intrtmpreg_c.avbal=[%f]\n",ps->avbal);
+	vtcp_log("intrtmpreg_c.stat=[%s]\n",ps->stat);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Intrtmpreg_Sel(reply,intrtmpreg_c,fmtstr,va_alist)
+char    *reply;
+struct  intrtmpreg_c *intrtmpreg_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Intrtmpreg_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Intrtmpreg_Fet_Sel( intrtmpreg_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Intrtmpreg_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Intrtmpreg_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,intrtmpreg.* FROM intrtmpreg WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE intrtmpreg_sel FROM :comm;
+	EXEC SQL DECLARE sel_intrtmpreg CURSOR FOR intrtmpreg_sel;
+
+	EXEC SQL OPEN sel_intrtmpreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Intrtmpreg_Fet_Sel ( struct intrtmpreg_c *intrtmpreg_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_intrtmpreg INTO :intrtmpreg_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch intrtmpreg error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch intrtmpreg finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(intrtmpreg_c);
+
+	return 0;
+}
+
+int Intrtmpreg_Clo_Sel (){
+	EXEC SQL CLOSE sel_intrtmpreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Intrtmpreg_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,intrtmpreg.* FROM intrtmpreg WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE intrtmpreg_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_intrtmpreg CURSOR FOR intrtmpreg_upd;
+
+	EXEC SQL OPEN upd_intrtmpreg;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Intrtmpreg_Fet_Upd( struct intrtmpreg_c *intrtmpreg_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_intrtmpreg INTO :intrtmpreg_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH intrtmpreg finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(intrtmpreg_c);
+
+	return 0;
+}
+
+int Intrtmpreg_Upd_Upd( struct intrtmpreg_c intrtmpreg_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE intrtmpreg SET actno=:intrtmpreg_c.actno,
+			actnoseq=:intrtmpreg_c.actnoseq,
+			kinbr=:intrtmpreg_c.kinbr,
+			txdate=:intrtmpreg_c.txdate,
+			txseq=:intrtmpreg_c.txseq,
+			atiday=:intrtmpreg_c.atiday,
+			adjday=:intrtmpreg_c.adjday,
+			rate=:intrtmpreg_c.rate,
+			dinum=:intrtmpreg_c.dinum,
+			intr=:intrtmpreg_c.intr,
+			intr_type=:intrtmpreg_c.intr_type,
+			avbal=:intrtmpreg_c.avbal,
+			stat=:intrtmpreg_c.stat
+	WHERE rowid=:intrtmpreg_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Intrtmpreg_Del_Upd(struct intrtmpreg_c intrtmpreg_c , char * reply  ){
+
+	EXEC SQL DELETE FROM intrtmpreg WHERE rowid=:intrtmpreg_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Intrtmpreg_Clo_Upd( ){
+	EXEC SQL CLOSE upd_intrtmpreg;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Intrtmpreg_Ins( struct intrtmpreg_c intrtmpreg_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO intrtmpreg VALUES (:intrtmpreg_c.actno,
+			:intrtmpreg_c.actnoseq,
+			:intrtmpreg_c.kinbr,
+			:intrtmpreg_c.txdate,
+			:intrtmpreg_c.txseq,
+			:intrtmpreg_c.atiday,
+			:intrtmpreg_c.adjday,
+			:intrtmpreg_c.rate,
+			:intrtmpreg_c.dinum,
+			:intrtmpreg_c.intr,
+			:intrtmpreg_c.intr_type,
+			:intrtmpreg_c.avbal,
+			:intrtmpreg_c.stat);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT intrtmpreg error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3503 证件支取信息维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	// commsend_001();
+  $FD2=$OPNBR;
+ 	$FD3=$KINBR;
+ 	$FD5=$HDATE;
+ 	$FD7=$TLRNO;
+ 	$FD10=$TTYNAME;
+ 	$FD16='2604';
+ 	$FD79=#PASSWD; 
+ 
+	$FD30=getitems('#ACTNO24');  // 账号	
+	$FD62=getitems('#CERTNO');  // 证件号码		
+	$FD67=getitems('#CERTTYPE');  // 证件类型
+	$FD68=getitems('#CERTFLAG');   // 证件支取
+
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#PIC,false);
+  show(#PIC1,false);
+  show(#LBLPIC,false);
+  show(#LBLPIC1,false);
+  enable(#SETPIC,false);
+  enable(#SETPIC1,false);
+}"
+</FIRSTWORK>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(3503                        证件支取信息维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2604)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+
+  <ITEM LINE="6"  COL="5" TYPE="%-10s" FUNCTIONS="T(账   号:)"/>
+  
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	@baktxno=$TXNO;
+    	$TXNO='9961';
+    	$FD30=#ACTNO;
+    	commsend_001();
+    	
+    	callserver();
+    	
+    	$TXNO=@baktxno;
+    	
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	
+    	setitems('#CUSTNAME',$FD25);      	
+    	setitems('#ACTNO24',$FD30);
+ 
+    	//setitems('#CERTTYPE',$FD67);
+    	setitems('#CERTFLAG',$FD68);
+		#CERTTYPE = $FD67;
+    	  	    	 	
+    	showblock('ACTINFO',true,true);
+    		 
+        if (#CERTFLAG=='Y')
+        {
+        	  show(#LCERTTYPE,true);
+        	  show(#CERTTYPE,true); 
+        	  show(#LCERTNO,true);
+        	  show(#CERTNO,true);         	         
+        }
+        else
+        {
+        	  show(#LCERTTYPE,false);
+        	  show(#CERTTYPE,false); 
+        	  show(#LCERTNO,false);
+        	  show(#CERTNO,false);         	  
+        }   	
+    	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="8"     COL="5" NAME="#LBLPIC" TYPE="%-10s" FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="8"     COL="45" NAME="#LBLPIC1" TYPE="%-10s" FUNCTIONS="T(印    件:)"/>
+  <!--added by liuyong 2009-9-15 显示图片信息 start-->
+  <ITEM  NAME="#CHECKACNO"  TYPE="%10s" FUNCTIONS="">
+ <ONLOSTFOCUS>
+ "{
+     dim @txnobak as string;
+     dim @len as number;
+     @len = len(rtrim(#ACTNO));
+     if(@len != 0 and @len != 3 and @len != 5 and @len != 7)
+     {
+       @txnobak = $TXNO;
+       $TXNO = '9663';
+       $FD30 = #ACTNO;
+       commsend_001();
+       callserver();
+       if($FD12 !='0000')
+       {
+         show(#PIC,false);
+         show(#PIC1,false);
+         show(#LBLPIC,false);
+         show(#LBLPIC1,false);
+         enable(#SETPIC,false);
+         enable(#SETPIC1,false);
+       }
+       else
+       {
+         show(#PIC,true);
+         show(#PIC1,true);
+         show(#LBLPIC,true);
+         show(#LBLPIC1,true);
+         enable(#SETPIC,true);
+         enable(#SETPIC1,true);
+       }
+       $TXNO = @txnobak;
+     }
+     
+ }"
+ </ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="8" COL="15" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+    <ITEM LINE="9"  COL="5"  TYPE="%-74s" FUNCTIONS=
+   "T(----------------------------------------------------------------------)"/>
+   
+  <BLOCK NAME="ACTINFO" LINE="10" COL="25" VISABLE="FALSE"> 
+      
+   <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+
+  <ITEM LINE="0"  COL="0" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="0"  COL="10" NAME="#CUSTNAME" TYPE="%-60s" INPUT="TEXT" FUNCTIONS="T()" ENABLE="FALSE"/>
+     
+         
+   <ITEM LINE="2"  COL="0" TYPE="%-10s" FUNCTIONS="T(证件支取:!)"/>
+  <ITEM LINE="2"  COL="10" NAME="#CERTFLAG" TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(Y)"  >
+	<SELECT>
+		<OPTION VALUE="Y" TITLE="Y.启用"/>	
+		<OPTION VALUE="N" TITLE="N.停用"/>				
+	</SELECT>
+  <ONLOSTFOCUS>"{
+        if (#CERTFLAG=='Y')
+        {
+        	  show(#LCERTTYPE,true);
+        	  show(#CERTTYPE,true); 
+        	  show(#LCERTNO,true);
+        	  show(#CERTNO,true);         	         
+        }
+        else
+        {
+        	  show(#LCERTTYPE,false);
+        	  show(#CERTTYPE,false); 
+        	  show(#LCERTNO,false);
+        	  show(#CERTNO,false);         	  
+        }
+    	 
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>   
+    
+
+  <ITEM NAME="#LCERTTYPE" LINE="4"  COL="0"  TYPE="%-10s" INPUT="LABEL"   FUNCTIONS="T(证件类型:!)" /> 
+  <ITEM NAME="#CERTTYPE" LINE="4"  COL="10" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(1)">
+	<SELECT>
+		<OPTION VALUE="1" TITLE="身份证"/>
+		<OPTION VALUE="2" TITLE="户口簿"/>
+		<OPTION VALUE="3" TITLE="护照"/>
+		<OPTION VALUE="4" TITLE="军官证"/>
+		<OPTION VALUE="5" TITLE="回乡证"/>
+		<OPTION VALUE="8" TITLE="企业代码证"/>
+		<OPTION VALUE="9" TITLE="组织机构号"/>
+		<OPTION VALUE="A" TITLE="营业执照"/>
+		<OPTION VALUE="B" TITLE="经营许可证"/>
+		<OPTION VALUE="C" TITLE="事业法人证书"/>
+	</SELECT>
+  </ITEM> 
+  <ITEM NAME="#SCERTTYPE"   TYPE="%-20s"  FUNCTIONS="S(#CERTTYPE,#CERTTYPE)" />
+ 
+  <ITEM NAME="#LCERTNO" LINE="6"  COL="0"   TYPE="%-10s" INPUT="LABEL" VISABLE="FALSE"  FUNCTIONS="T(证件号码:)" /> 
+   <!-- 为核查结果中文传值的变量 wudawei 20131101 -->
+  <ITEM NAME="#HCJGBL"  TYPE="%-60s" />
+  <ITEM NAME="#CERTNO" LINE="6"  COL="10"  TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT"  FUNCTIONS="V(NB)I()"> 
+ 
+  <ONLOSTFOCUS>"{
+	if(#CERTTYPE=='1' and len(#CERTNO)!=15 and len(#CERTNO)!=18){
+		showmsg('身份证位数不够!');
+		return(false);
+	}
+				//add 20131030 wudawei start 调用身份核查
+  		  dim @res as string;
+				if(#CERTTYPE=='1' or #CERTTYPE=='2')
+				{
+					@res = idcheck(#CERTNO,#CUSTNAME);
+					#HCJGBL = strfld(@res,'|',1);
+					@res =  strfld(@res,'|',0);
+					if(@res=='02' or @res=='03' or @res=='04' or @res=='05' or @res=='06')
+					{
+							showmsg('身份核查结果不通过，不能继续办理！');
+							return(false);
+					}
+				}
+				//add 20131030 end
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  </BLOCK>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="证件信息维护成功">
+      NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(8, 25,'证 件 支 取 信 息 维 护 成 功 ！');
+		print(14,15,'操 作 员:[4]',$FD7);
+		print(15,15,'流 水 号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印业务专用凭证" >
+NOTHING
+</PACKAGE>
+<PRINT>
+	"{
+	dim @cert as string;
+	$KINDNO='00';
+	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	if(#CERTFLAG=='Y')
+	{
+	   @cert='启用';
+	}
+	else
+	{
+	   @cert='停用';
+	}
+	
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:3503');
+	print( 5, 13,'交易:证件支取信息维护');
+	if(#CERTFLAG=='Y')
+	{
+		print( 7, 20,'帐    号:[20]',#ACTNO);
+		print( 8, 20,'户    名:[50]',#CUSTNAME);
+		print( 9, 20,'证件状态:[20]',@cert);
+		print(10, 20,'证件类型:[20]',#SCERTTYPE);
+		print(11, 20,'证件号码:[20]',#CERTNO);
+
+	}
+	else
+	{
+		print(7, 20,'帐    号:[20]',#ACTNO);
+		print(8, 20,'户    名:[50]',#CUSTNAME);
+		print(9, 20,'证件状态:[20]',@cert);
+	}
+	print(12,20,'身份核查结果:[60] ',#HCJGBL);
+	print_sq();
+	print( 24,20,'备注:');
+	print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( 24,5,'柜员:[4]',$FD7);
+	print( 24,5,'流水号:[6]',$FD4);
+	}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+

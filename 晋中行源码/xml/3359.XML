@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3359        银联柜面通取款行内补账"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<USERFUN NAME="saveprint">
+"{      
+        //用于补打凭证
+       	dim @file as file;
+       	dim @swtraceno as string;
+       	dim @traceno as string;
+       	dim @line as string;
+  	dim @txamt as string;
+  	dim @bal as string;
+  	dim @bal2 as string;
+  	dim @txtime  as string;
+  	dim @txfee as string;
+  	dim @feeamt as number;
+  	dim @oswtraceno as string;  //取款流水号
+  	@feeamt=val(substr($FD88,1,8),0.01);
+  	
+       	//写文件，用于补打流水
+        @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);  	
+       	@swtraceno = substr($FD52,6,6);
+       	@traceno = $FD4; 
+       	@txamt = ltrim(comma(itoa(#TXAMT,'%15.2f'),16));
+        @oswtraceno = itoa(#OYYTRACENO);
+	@file=openfile('../dat/YYHZ_'+$HDATE+'_'+$TLRNO+'_'+@swtraceno+'.dat','ab');
+	@line = '7618';
+	writeline(@file, @line);
+	@line = @swtraceno + '|' + @traceno + '|' + #CARDNO + '|' + @txamt + '|' + @txtime + '|' +  @oswtraceno+ '|';
+	writeline(@file, @line);
+
+	closefile(@file);	
+				
+}"
+</USERFUN>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3359                    银联柜面通取款行内补账)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=761A)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!-- 本代他卡折取款补账输入项显示 --> 
+  <!--
+  <ITEM LINE="7"  COL="15" TYPE="%-10s" FUNCTIONS="T(读取方式:)"/>
+  -->
+  <ITEM LINE="8"   COL="15" TYPE="%-12s" FUNCTIONS="T(原卡折号:  )"/>
+  <ITEM LINE="9"   COL="15" TYPE="%-12s" FUNCTIONS="T(原操作员:  )"/>
+  <ITEM LINE="10"  COL="15" TYPE="%-12s" FUNCTIONS="T(原平台流水:)"/>
+  <ITEM LINE="11"  COL="15" TYPE="%-12s" FUNCTIONS="T(原取款金额:)"/>
+  <ITEM NAME="#DQFS"   TYPE="%-3s" FUNCTIONS="T(0)V(NB)">
+  <!--
+  <ITEM NAME="#DQFS"  INPUT="SELECT" LINE="7" COL="27" TYPE="%-3s" FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+  <OPTION VALUE="0" TITLE="0.读取词条方式"/>
+  <OPTION VALUE="1" TITLE="1.读取芯片方式"/>
+  <OPTION VALUE="2" TITLE="2.无卡人工输入"/>
+  </SELECT>
+  -->
+  <ONLOSTFOCUS>
+  "{
+   if('0' == #DQFS)
+   { enable(#ACTNO1,true);
+  	enable(#ACTNO2,false);
+  	enable(#AC_NO_NO,false);
+  	show(#ACTNO1,true);
+  	show(#ACTNO2,false);
+  	show(#AC_NO_NO,false);
+   }
+   else if('1' == #DQFS)
+   {
+  
+  	enable(#ACTNO1,false);
+  	enable(#ACTNO2,true);
+  	enable(#AC_NO_NO,false);
+  	show(#ACTNO1,false);
+  	show(#ACTNO2,true);
+  	show(#AC_NO_NO,false);
+   }
+   else if('2' == #DQFS)
+   {
+  
+  	enable(#ACTNO1,false);
+  	enable(#ACTNO2,false);
+  	enable(#AC_NO_NO,true);
+  	show(#ACTNO1,false);
+  	show(#ACTNO2,false);
+  	show(#AC_NO_NO,true);
+   }
+  }"
+  </ONLOSTFOCUS>
+ 
+   </ITEM>
+
+  <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="8" COL="27" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" />
+  <ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="8"  COL="27" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)"/>
+  <ITEM NAME="#AC_NO_NO"   INPUT="TEXT" LINE="8" COL="27" TYPE="%-20s" VISABLE="FALSE" FUNCTIONS="V(NB)I()"/>
+  <ITEM NAME="#CARDNO" TYPE="%-20s" FUNCTIONS="">
+  	<ONLOSTFOCUS>
+   "{
+   
+     if('0' == #DQFS)
+     {
+     #CARDNO=#ACTNO1;
+     }
+     else if ('1' == #DQFS)
+     {
+     #CARDNO=#ACTNO2;
+     }
+     else if ('2' == #DQFS)
+     {
+     #CARDNO=#AC_NO_NO;
+     }
+  }"
+  </ONLOSTFOCUS>
+   </ITEM>
+   
+  <ITEM LINE="9" COL="27" NAME="#OTLRNO"  TYPE="%-6s" INPUT="LABEL"  FUNCTIONS="T($TLRNO)"/>
+  <ITEM LINE="10" COL="27" NAME="#OYYTRACENO" TYPE="%12d" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+  <ITEM LINE="11" COL="27" NAME="#TXAMT" TYPE="%13.2f" DEVICE="KEYBOARD" FUNCTIONS="V(000000000100,999999999999)"/>
+  <ITEM NAME="#XTXAMT"  TYPE="%-16s" FUNCTIONS="X(#TXAMT)"/>
+  
+  <ITEM LINE="21" COL="59" TYPE="%-6s" NAME="#SUBMIT" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+   	<ONCLICK>
+   	"{
+	dim @tota as string;
+	$TXNO='7840';
+	$FD30=#CARDNO;
+	$FD40=itoa(#TXAMT*100,'%016.0f');     //核心用
+	$FD58=#OYYTRACENO;	
+	$FD49=#OTLRNO;
+	$FD85=$HDATE;
+	
+	commsend_001(); 
+	@tota=callagn(); 
+	if($FD12=='H036')
+	{
+		showmsg('原取款交易核心记账已经成功，不能再做行内补款交易!');
+		return(false);
+	}	
+	else if($FD12!='0000')
+	{
+		showmsg(geterror());
+	   	return(false);
+	}	
+	saveprint();
+	runoutput(@tota);		 			 	
+	  }"
+   	</ONCLICK>
+  </ITEM>
+
+  </VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="本代他取款行内补账">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+ 	print( 3,27,'本代他取款行内补账成功!');
+	print( 5,10,'帐    号:[19]',#CARDNO);
+	print( 6,10,'原平台流水:[12]',#OYYTRACENO);
+	print( 7,10,'取款金额:[50]',ltrim(comma(itoa(#TXAMT,'%15.2f'),16)));
+    print( 10,10,'后台流水:[6]',$FD4);
+    print( 11,10,'平台流水:[12]',substr($FD52,6,6));
+    
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印储蓄取款凭证"  CHECK="$FD12=0000">
+	NOTHING
+</PACKAGE>
+	<PRINT> 
+	"{
+	 																																																																																																
+   }"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>
+

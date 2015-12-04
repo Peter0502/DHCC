@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3429 解冻交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+//   	$FD14='00000000';
+   	$FD16='2406';
+   	$FD31=#ACTNO24;
+   	$FD34=#ACTSEQ;
+   	$FD35=#HOLD_SEQN;
+
+  // 	$FD41=itoa(val(#FROZEN_AMT)*100-val(#UNFROZEN_AMT)*100,'%016.0f');
+   //	$FD41=getitems('#FROZEN_AMT');
+   //	$FD42=getitems('#UNFROZEN_AMT');
+
+	$FD41 = itoa(#LFROZEN_AMT*100,'%016.0f');
+	$FD42 = itoa(#LUNFROZEN_AMT*100,'%016.0f');
+   	$FD43=getitems('#AVBAL');
+   	$FD44=#FROZEN_DATE;
+  	$FD66=#DJ_TYPE;
+   	$FD67=#HND_TYPE;
+   	$FD68=#FROZEN_TYPE;
+  	$FD69=#INTR_FLAG1;
+
+   	$FD71=#UNFROZEN_TYPE;
+  	//$FD72=#INTR_FLAG2;
+   	$FD20='B';
+   	$FD81=#FROZEN_MEMO;
+   	$FD82=#UNFROZEN_MEMO;
+   	$FD100=getitems('#AVBAL')+substr($FD100,16,16)+getitems('#AVBAL')+substr($FD100,48,133);
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	if(#HND_TYPE == '1'){
+	setitems('#HOLD_SEQN_RET',$FD49);
+	}
+	else{
+	setitems('#HOLD_SEQN_RET',$FD35);
+	}
+}"
+</COMMRECV>
+
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3429                           解 冻 交 易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=2406)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#PRDT_CODE"   TYPE="%-30s" FUNCTIONS=""/>
+  <ITEM NAME="#AC_TYPE" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#DJ_TYPE" TYPE="%-1s" FUNCTIONS=""/>
+
+
+  <ITEM NAME="#SPACE96" TYPE="%-96s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE1" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE6" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE20" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE16" TYPE="%-16s" FUNCTIONS="                "/>
+
+  <ITEM NAME="#CUSTNAME_TMP" TYPE="%-50s" FUNCTIONS="T()"/>
+
+  <PAGE NAME="DEFAULT">
+
+  <ITEM LINE="6"  COL="10" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)"/>
+
+  <ITEM NAME="#ACTNO" INPUT="TEXT" LINE="6"  COL="20" TYPE="%-19s"  FUNCTIONS="V(NB)" >
+  <ONLOSTFOCUS>
+  "{
+	#ACTNO24=#ACTNO;
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="6"  COL="50" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>
+  <ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="6"  COL="60" TYPE="%4d" FUNCTIONS="V(NB)" MESSAGE="活期默认为1,定期账户序号为0">
+  <ONLOSTFOCUS>"{
+	$FD31=#ACTNO;
+	$FD34=#ACTSEQ;
+	commsend_001();
+	$FD16='9702';
+	callserver();
+	if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+
+	setitems('#CUR_NO',$FD21);     // 币种
+	setitems('#CUSTNAME',$FD25);
+        setitems('#CUSTNAME_TMP',$FD25);
+	setitems('#PRDT_CODE',$FD26);   // 产品描述
+	setitems('#ACTNO24',$FD31);
+
+	// setitems('#FROZEN_AMT',$FD41);
+	// 已冻结的金额
+
+	setitems('#AC_TYPE',$FD67);
+	setitems('#AVBAL#SPACE96',$FD100);  // 余额 ？
+
+	#LFROZEN_AMT=val(substr($FD100,0,16), 0.01);
+//	#LUNFROZEN_AMT=val(substr($FD100,0,16), 0.01);
+//	setitems('#FROZEN_AMT#SPACE96',$FD100);  // 余额 ？
+//	setitems('#UNFROZEN_AMT#SPACE96',$FD100);  // 余额 ？
+ 	showblock('ACTINFO',true,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <BLOCK NAME="ACTINFO" LINE="0" COL="0" VISABLE="FALSE" >
+
+  <ITEM LINE="8"  COL="10"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="8"  COL="20" NAME="#CUSTNAME"  INPUT="LABEL" TYPE="%-50s" FUNCTIONS=""/>
+
+   <ITEM LINE="9"  COL="10" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM NAME="#CUR_NO" LINE="9"  COL="20" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+	</SELECT>
+  </ITEM>
+   <ITEM NAME="#SCUR_NO"  TYPE="%-10s" FUNCTIONS="S(#CUR_NO,#CUR_NO)"/>
+   <ITEM LINE="10"  COL="10" TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+
+  <ITEM LINE="10"  COL="20" NAME="#LAVBAL" TYPE="%-16s" FUNCTIONS="X(#AVBAL)" ENABLE="FALSE"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>
+
+  <!-- <ITEM LINE="4"  COL="10" TYPE="%-10s" FUNCTIONS="T(处理类型:!)"/> -->
+  <ITEM NAME="#HND_TYPE" TYPE="%-1s"   FUNCTIONS="T(2)" />
+	<!--  <SELECT>
+		<OPTION VALUE="2" TITLE="解冻"/>
+	</SELECT>
+  </ITEM>  -->
+  </BLOCK>
+
+
+  <ITEM TYPE="%-6s" NAME="#BUTTON1" FUNCTIONS="T()" >
+   <ONLOSTFOCUS>
+	"{
+	if (#HND_TYPE == '1'){
+		showblock('FROZENSELECT',true,true);
+//		loadpage('PAGEFROZEN');
+		goitem(#FROZEN_TYPE) ;
+	}else {
+		showblock('UNFROZENSELECT',true,true);
+//		loadpage('PAGEUNFROZEN');
+		goitem(#UNFROZEN_TYPE) ;
+	}
+
+	}"
+	 </ONLOSTFOCUS>
+  </ITEM>
+  </PAGE>
+
+
+ <!-- <PAGE NAME="PAGEFROZEN"> -->
+
+  <BLOCK NAME="FROZENSELECT" LINE="20" COL="0" VISABLE="FALSE" >
+
+  <ITEM LINE="12"  COL="10" TYPE="%-10s" FUNCTIONS="T(冻结方式:!)"/>
+  <ITEM LINE="12"  COL="20" NAME="#FROZEN_TYPE"  TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)" >
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.全部冻结"/>
+		<OPTION VALUE="2" TITLE="1.只进不出"/>
+		<OPTION VALUE="3" TITLE="2.部分冻结"/>
+	</SELECT>
+  <ONLOSTFOCUS>"{
+	if( #FROZEN_TYPE == '3' ){
+		enable(#LFROZEN_AMT,true);
+	}else{
+		enable(#LFROZEN_AMT,false);
+	}
+  	showblock('FROZENINFO',true,true);
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  </BLOCK>
+
+  <BLOCK NAME="FROZENINFO" LINE="0" COL="0" VISABLE="FALSE" >
+
+    <ITEM LINE="0"  COL="5"  TYPE="%-74s" FUNCTIONS="T(------------------------------------------------------------)"/>
+
+    <ITEM LINE="0"  COL="10" TYPE="%-10s" FUNCTIONS="T(冻结金额:)"/>
+
+
+    <ITEM LINE="0"  COL="20" NAME="#LFROZEN_AMT" INPUT="TEXT" TYPE="%17.2f" FUNCTIONS="J(#FROZEN_AMT)" />
+    <ITEM NAME="#FROZEN_AMT" TYPE="%-16s" FUNCTIONS="X(#LFROZEN_AMT)"/>
+
+    <ITEM LINE="0"  COL="10" TYPE="%-10s" FUNCTIONS="T(到期日期:)"/>
+    <ITEM LINE="0"  COL="20" NAME="#FROZEN_DATE" INPUT="TEXT" TYPE="%-8s"  FUNCTIONS="V($HDATE,#FROZEN_DATE)D()" />
+   <!---长治全部都记息
+    <ITEM LINE="6"  COL="10" TYPE="%-10s" FUNCTIONS="T(是否记息:!)"  />
+    <ITEM LINE="6"  COL="20" NAME="#INTR_FLAG1"  TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(N)"  >
+	  <SELECT>
+		  <OPTION VALUE="N" TITLE="0.否"/>
+		  <OPTION VALUE="Y" TITLE="1.是"/>
+	  </SELECT>
+    </ITEM>
+  --->
+  <ITEM NAME="#INTR_FLAG1" TYPE="%-1s"  FUNCTIONS="T(Y)"/>
+
+  <ITEM LINE="0"  COL="10" TYPE="%-10s" FUNCTIONS="T(冻结备注:)"/>
+  <ITEM LINE="0"  COL="20" NAME="#FROZEN_MEMO" TYPE="%-50s" INPUT="TEXT" FUNCTIONS="" />
+
+   </BLOCK>
+  <ITEM NAME="#GO1" TYPE="%-1s"  FUNCTIONS="T(0)G(0,#OK1)"/>
+  <!--
+  <ITEM LINE="21" COL="49"  TYPE="%-6s"  FUNCTIONS="T(上一页)" INPUT="BUTTON" >
+  <ONCLICK>
+	"{
+		loadpage('DEFAULT');
+	}"
+	</ONCLICK>
+  </ITEM> -->
+  <ITEM NAME="#OK1" LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+
+ <!--  </PAGE> -->
+
+
+
+
+
+
+
+
+
+
+    <!-- <PAGE NAME="PAGEUNFROZEN"> -->
+
+
+     <BLOCK NAME="UNFROZENSELECT" LINE="0" COL="0" VISABLE="FALSE" >
+
+    <ITEM LINE="12"  COL="10" TYPE="%-10s" FUNCTIONS="T(解冻方式:!)"/>
+
+    <ITEM  LINE="12"  COL="20"  NAME="#UNFROZEN_TYPE" TYPE="%-1s"  ENABLE="TRUE" INPUT="SELECT" FUNCTIONS="T(1)" >
+  	<SELECT>
+  		<OPTION VALUE="1" TITLE="0.全部解冻"/>
+  		<OPTION VALUE="2" TITLE="1.部分解冻"/>
+  	</SELECT>
+    <ONLOSTFOCUS>"{
+	showblock('UNFROZENINFO',true,true);
+	if( #UNFROZEN_TYPE == '2' ) {
+		//enable(#LUNFROZEN_AMT,true);
+		show(#LUNFROZEN_AMT,true);
+	} else {
+		//enable(#LUNFROZEN_AMT,false);
+		show(#LUNFROZEN_AMT,false);
+	}
+
+    }"
+    </ONLOSTFOCUS>
+    </ITEM>
+   <ITEM NAME="#SUNFROZEN_TYPE" TYPE="%-10s" FUNCTIONS="S(#UNFROZEN_TYPE,#UNFROZEN_TYPE)"/>
+
+   </BLOCK>
+
+
+    <BLOCK NAME="UNFROZENINFO" LINE="0" COL="0" VISABLE="FALSE" >
+
+    <ITEM LINE="13"  COL="5"  TYPE="%-74s" FUNCTIONS="T(------------------------------------------------------------)"/>
+
+    <ITEM LINE="15"  COL="10" TYPE="%-10s" FUNCTIONS="T(冻结序号:)"/>
+    <ITEM LINE="15"  COL="20" NAME="#HOLD_SEQN" INPUT="TEXT" TYPE="%-4s"  FUNCTIONS="">
+        <ONLOSTFOUCS>"{
+                        if(msgbox('是否要解冻该交易?','提示','yes|no')!=0){break};
+                        $FD35=#HOLD_SEQN;
+                        $FD31=#ACTNO24;
+                        commsend_001();
+                        $FD16='9633';
+                        callserver();
+                             if($FD12!='0000'){
+                                showmsg(geterror());
+                                return(false);
+                             }
+			#LFROZEN_AMTX=val(substr($FD41,0,16), 0.01);
+                          setitems('#DJ_TYPE',$FD66);
+                          showmsg(#DJ_TYPE);
+                          if(#DJ_TYPE=='1' or  #DJ_TYPE=='2'){
+                             enable(#LUNFROZEN_AMT,false);
+
+
+                          }else{
+                             enable(#LUNFROZEN_AMT,true);
+                             #LUNFROZEN_AMT=#LFROZEN_AMTX;
+                          }
+                      //  setitems('#FROZEN_AMTX',$FD41);
+                      //  #FROZEN_AMTX=$FD41;
+                    //    showmsg(#FROZEN_AMTX);
+                        show(#LFROZEN_AMTX,true);
+                        show(#DJJE,true);
+                       }"
+       </ONLOSTFOUCS>
+    </ITEM>
+    <ITEM LINE="16"  NAME="#DJJE"  COL="10"    VISABLE="false" INPUT="LABEL" TYPE="%-9s" FUNCTIONS="T(冻结金额:)"/>
+    <ITEM LINE="16"  COL="20" NAME="#LFROZEN_AMTX"   VISABLE="false" INPUT="TEXT" ENABLE="false" TYPE="%17.2f" FUNCTIONS="J(FROZEN_AMTX)"/>
+    <ITEM NAME="#FROZEN_AMTX" TYPE="%-21s" FUNCTIONS="X(#LFROZEN_AMTX)"/>
+    <ITEM LINE="17"  COL="10" TYPE="%-10s" FUNCTIONS="T(解冻金额:)"/>
+    <ITEM LINE="17"  COL="20" NAME="#LUNFROZEN_AMT" INPUT="TEXT" TYPE="%17.2f" FUNCTIONS="J(#UNFROZEN_AMT)"/>
+    <ITEM NAME="#UNFROZEN_AMT" TYPE="%-21s" FUNCTIONS="X(#LUNFROZEN_AMT)"/>
+    <!--<ITEM LINE="6"  COL="10" TYPE="%-10s" FUNCTIONS="T(是否记息:!)"  />
+    <ITEM LINE="6"  COL="20" NAME="#INTR_FLAG2"  TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T(N)" >
+	  <SELECT>
+		  <OPTION VALUE="N" TITLE="0.否"/>
+		  <OPTION VALUE="Y" TITLE="1.是"/>
+	  </SELECT>
+    </ITEM>-->
+
+    <ITEM LINE="19"  COL="10" TYPE="%-10s" FUNCTIONS="T(解冻备注:)"/>
+    <ITEM LINE="19"  COL="20" NAME="#UNFROZEN_MEMO" TYPE="%-50s" INPUT="TEXT" FUNCTIONS="V(NB)" />
+
+    </BLOCK>
+
+
+
+  <ITEM NAME="#GO2" TYPE="%-1s"  FUNCTIONS="T(0)G(0,#OK2)"/>
+  <!--
+  <ITEM LINE="21" COL="49"  TYPE="%-6s"  FUNCTIONS="T(上一页)" INPUT="BUTTON" >
+  <ONCLICK>
+	"{
+		loadpage('DEFAULT');
+	}"
+	</ONCLICK>
+  </ITEM>
+  -->
+  <ITEM NAME="#OK2" LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+  <!-- </PAGE>    -->
+
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#HOLD_SEQN_RET" TYPE="%-4s" FUNCTIONS="T()"/>
+
+
+
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="解冻成功">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+                  dim @a as string;
+		  print(6, 25,'帐 户 解 冻 成 功 ！');
+		  print(8, 22,'账\[卡\]号:[19 ]',#ACTNO);
+		  print(9, 22,'解冻序号:[ 4 ]',#HOLD_SEQN_RET);
+		  print(10, 22,'解冻备注:[50 ]',#UNFROZEN_MEMO);
+                  if(#LFROZEN_AMTX &gt; #LUNFROZEN_AMT){
+                  @a=(#LFROZEN_AMTX-#LUNFROZEN_AMT);
+                  print(11,22,'该笔冻结剩余冻结金额:[20]',comma(itoa(@a,'%.2f'),16));
+                 }
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime  as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5,2,'代码:3429');
+		print( 5,13,'交易:解冻交易');
+
+	  	print(7, 20,'账\[卡\]号:[19 ]',#ACTNO);
+	  	print(7, 10,'解冻序号:[ 4 ]',#HOLD_SEQN_RET);
+	  	print(8, 20,'解冻备注:[50 ]',#UNFROZEN_MEMO);
+		print(9, 20,'户    名:[50]',#CUSTNAME_TMP);
+		print(10,20,'币    种:[10]',#SCUR_NO);
+		print(10,19,'解冻金额:[21]',#UNFROZEN_AMT);
+		print(11,20,'解冻方式:[10        ]',#SUNFROZEN_TYPE);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+
+
+

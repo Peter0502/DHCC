@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="3408 打对帐单"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+		$FD16='2408';
+		$FD17='';
+		$FD21=#CURCD;
+		$FD25=#NAME;
+		$FD31=#ACTNO;
+		$FD32=#SACTNO;
+		$FD39='';
+		$FD44=#STDAY;
+		$FD45=#ENDAY;
+		$FD67=#PRTTP;
+		$FD68='';
+	$FD79=#PASSWD;
+	}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(3408                            打对帐单)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="7"   COL="09" TYPE="%-12s" FUNCTIONS="T(打印类型:!)"/>
+  <!--ITEM LINE="7"   COL="43" TYPE="%-12s" FUNCTIONS="T(币    种:!)"/-->
+  <ITEM LINE="9"   COL="09" TYPE="%-12s" FUNCTIONS="T(账 卡/号 :)"/>
+  <ITEM LINE="9"   COL="43" TYPE="%-12s" FUNCTIONS="T(虚拟子账号:)" NAME="#S_SACTNO" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM LINE="13"  COL="09" TYPE="%-12s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="15"  COL="09" TYPE="%-12s" FUNCTIONS="T(起始日期:)"/>
+  <ITEM LINE="17"  COL="09" TYPE="%-12s" FUNCTIONS="T(终止日期:)"/>
+
+  <ITEM NAME="#PRTTP" 	INPUT="SELECT" 	LINE="7"  COL="19	" TYPE="%-1s" 	FUNCTIONS="T(1)">
+  <SELECT LINE="7" COL="37">
+     <OPTION VALUE="1" TITLE="活期账户  "/>
+     <OPTION VALUE="2" TITLE="定期账户  "/>
+     <!----
+     <OPTION VALUE="3" TITLE="虚拟子账号"/>
+     ---->
+     <OPTION VALUE="4" TITLE="贷款账号  "/>
+  </SELECT>
+  </ITEM>
+
+  <ITEM NAME="#CON1"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+   "{
+		if(#PRTTP=='3')
+		{
+			show(#S_SACTNO,true);
+			show(#SACTNO,true);
+		}else{
+			show(#S_SACTNO,false);
+			show(#SACTNO,false);
+		}
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#CURCD" 	TYPE="%-2s" 	FUNCTIONS="T(01)"/>
+     <!-----
+  <ITEM NAME="#CURCD" 	INPUT="SELECT" 	LINE="7"  COL="55	" TYPE="%-2s" 	FUNCTIONS="T(01)">
+  <SELECT LINE="7" COL="57">
+     <OPTION VALUE="01" TITLE="人民币  "/>
+     <OPTION VALUE="12" TITLE="英镑    "/>
+     <OPTION VALUE="13" TITLE="港元    "/>
+     <OPTION VALUE="14" TITLE="美元    "/>
+     <OPTION VALUE="15" TITLE="瑞士法郎"/>
+     <OPTION VALUE="27" TITLE="日元    "/>
+     <OPTION VALUE="28" TITLE="加元    "/>
+     <OPTION VALUE="29" TITLE="澳元    "/>
+     <OPTION VALUE="30" TITLE="欧元    "/>
+  </SELECT>
+  </ITEM>
+     ----->
+
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" 	LINE="9"  COL="19	" TYPE="%-19s" 	FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#SACTNO" 	INPUT="TEXT" 	LINE="9"  COL="55	" TYPE="%-19s"  VISABLE="FALSE" FUNCTIONS="T()V(NB)"/>
+
+  <ITEM NAME="#CON2"    TYPE="%-1s" >
+  <ONLOSTFOCUS>
+   "{
+	commsend_001();
+		$FD16='9947';
+		$FD17='';
+		$FD31=#ACTNO;
+		$FD32=#SACTNO;
+		$FD67=#PRTTP;
+
+		callserver();
+		if($FD12!='0000')
+		{
+			if($FD12=='P447')
+			{
+					showmsg(geterror());
+			}else{
+					showmsg(geterror());
+			}
+			return(false);
+		}
+		#ACTNO=$FD31; //变成新帐号,传给后台
+		//showmsg('ACTNO='+#ACTNO);
+		#NAME=$FD25;
+
+		show(#NAME,true);
+
+		showmsg('起始日期等于终止日期，打印对帐回单');
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#NAME" 	INPUT="LABEL" 	LINE="13"  COL="19	" TYPE="%-50s" 	FUNCTIONS=""/>
+  <ITEM NAME="#STDAY" 	INPUT="TEXT" 	LINE="15"  COL="19	" TYPE="%-8s" 	FUNCTIONS="T($HDATE)"/>
+  <ITEM NAME="#ENDAY" 	INPUT="TEXT" 	LINE="17"  COL="19	" TYPE="%-8s" 	FUNCTIONS="T($HDATE)"/>
+
+  <ITEM NAME="#OAVBAL"  TYPE="%-21s"  FUNCTIONS=""/>
+  <ITEM NAME="#ODATE"   TYPE="%-10s"  FUNCTIONS=""/>
+  <ITEM NAME="#PASSWD"  TYPE="%-6s"   FUNCTIONS="T()"/>
+  <ITEM NAME="#OAMT"   TYPE="%-10s"  FUNCTIONS=""/>
+
+  <ITEM NAME="#PRTFG"  TYPE="%-1s"  FUNCTIONS="T(0)"/>
+  <ITEM NAME="#PAGES"  TYPE="%3d" FUNCTIONS="T(001)"/>
+ 	<ITEM NAME="#LINE"   TYPE="%2d" FUNCTIONS="T(00)"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印帐户余额对帐回单">
+DZHD|@actno|@name|@avbal|@txday
+</PACKAGE>
+<INIT>
+"{
+	#OAVBAL='￥'+ltrim(comma(@avbal,19));
+}"
+</INIT>
+<PRINT>
+"{
+print( 0,0,'@3v1');
+print( 1,0,'                                             \L0存款分户帐\L1');
+print( 2,0,'                             \L0晋中市商业银行　  [30]\L1',$BRNAME);
+print( 3,0,'                       ---------------------------------------------------------------');
+print( 4,0,'                                         \L0对 帐 未 达 清 单\L1');
+print( 5,0,'                                       =====================================');
+print( 6,0,'   ┍━━━━━┯━━━━━━━━━━┯━━━━━┯━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print( 7,0,'   │ 帐    号 │[19               ] │ 户    名 │[50                                              ]│',@actno,@name);
+print( 8,0,'   ┝━━━━━┷━━━━━━━━━━┷━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━━┥');
+print( 9,0,'   │                                                                                                │');
+print(10,0,'   │       截至[4   ]年[2 ]月[2 ]止，你户余额为 [21                 ] 元，                                │',substr(@txday,0,4),substr(@txday,4,2),substr(@txday,6,2),#OAVBAL);
+print(11,0,'   │ 是否相符，请于5日内核对后把回单联盖章退回我行。                                                │');
+print(12,0,'   │                                                                                                │');
+print(13,0,'   │                                                                [30                            ]  │',$BRNAME);
+print(14,0,'   │                                                                   [4   ] 年 [2 ] 月 [2 ] 日          │',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+print(15,0,'   ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+print(16,0,'           说明: 本对帐未达清单随同每月的对帐单联送交开户单位');
+print(17,0,'   ====================================================================================================');
+print(18,0,'   ');
+print(19,0,'                             \L0晋中市商业银行　  [30]\L1',$BRNAME);
+print(20,0,'                       ---------------------------------------------------------------');
+print(21,0,'   ');
+print(22,0,'   ┍━━━━━┯━━━━━━━━━━┯━━━━━┯━━━━━━━━━━━━━━━━━━━━━━━━━┑');
+print(23,0,'   │ 帐    号 │[19               ] │ 户    名 │[50                                              ]│',@actno,@name);
+print(24,0,'   ┝━━━━━┷━━━━━━━━━━┷━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━━┥');
+print(25,0,'   │                                                                                                │');
+print(26,0,'   │       截至[4   ]年[2 ]月[2 ]止，你户余额为                       元，                                │',substr(@txday,0,4),substr(@txday,4,2),substr(@txday,6,2),#OAVBAL);
+print(27,0,'   │   核对相符或不符                           元。                                                │');
+print(28,0,'   │                                                                                                │');
+print(29,0,'   ┝━━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━━━━━━━━┥');
+print(30,0,'   │         银行帐上有，我户帐上无             │              我户帐上有，银行帐上无              │');
+print(31,0,'   ┝━━━━┯━━━┯━━━━━━━━━━━━━┿━━━━┯━━━┯━━━━━━━━━━━━━━━━┥');
+print(32,0,'   │ 日  期 │ 借贷 │       金        额       │ 日  期 │ 借贷 │        金             额       │');
+print(33,0,'   ┝━━━━┿━━━┿━━━━━━━━━━━━━┿━━━━┿━━━┿━━━━━━━━━━━━━━━━┥');
+print(34,0,'   │        │      │                          │        │      │                                │');
+print(35,0,'   │        │      │                          │        │      │                                │');
+print(36,0,'   │        │      │                          │        │      │                                │');
+print(37,0,'   │        │      │                          │        │      │                                │');
+print(38,0,'   │        │      │                          │        │      │                                │');
+print(39,0,'   │        │      │                          │        │      │                                │');
+print(40,0,'   │        │      │                          │        │      │                                │');
+print(41,0,'   │        │      │                          │        │      │                                │');
+print(42,0,'   │        │      │                          │        │      │                                │');
+print(43,0,'   │        │      │                          │        │      │                                │');
+print(44,0,'   │        │      │                          │        │      │                                │');
+print(45,0,'   ┝━━━━┷━━━┷━━━━━━━━━━━━━┷━━━━┷━━━┷━━━━━━━━━━━━━━━━┥');
+print(46,0,'   │                                                                                                │');
+print(47,0,'   │                                                          (开户单位盖章)                        │');
+print(48,0,'   │                                                           年   月   日                         │');
+print(49,0,'   ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙');
+
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印帐户对帐单">
+DZD|@actno|@brno|@addind|@txamt|@txdate|@txtime|@cnt|@brf|@tel|@bal|@ind|@name|@pagecnt|@noteno|@mdmname|@ciftype|@brname|@txcode
+</PACKAGE>
+<INIT>
+"{
+	//$PBLINE='00';
+	#LINE='00';
+}"
+</INIT>
+<PRINT>
+"{
+	if(#LINE=='10')
+	{
+		print(11+val(#LINE),0,' -------------------------------------------------------------------------------------------------------------------');
+		#LINE='00';
+		#PAGES=itoa(val(#PAGES)+1, '%03d');
+	}
+	if(#LINE == '00')
+	{
+		print( 2,5,'                                               \L0 商业银行对帐单\L1');
+		print( 4,5,' 机构名称: [28                          ]                                                     打印日期: [8     ] ',$BRNAME,$FD5);
+		print( 5,5,' 帐    号: [19                ]',#ACTNO);
+		print( 6,5,' 户    名: [50                                              ]                                            页数: [3 ]',$FD25,#PAGES);
+		print( 7,5,' -------------------------------------------------------------------------------------------------------------------');
+		print( 8,5,' 交易日期│ 交 易  │摘要│ 凭证号码  │   凭证类型   │柜员│  借方发生额   │  贷方发生额    │      余  额');
+		print( 9,5,' -------------------------------------------------------------------------------------------------------------------');
+	}
+	if(@ind == '1')
+	{
+	print(10+val(#LINE),5,' [8     ] [8  ]   [4 ]  [12        ]   [12         ]  [4  ]   [15           ]  [15           ]  [21                 ]',@txdate,@addind,@brf,@noteno,@mdmname,@tel,#OAMT,@txamt,@bal);
+	}
+	else
+	{
+	print(10+val(#LINE),5,' [8     ] [8  ]   [4 ]  [12        ]   [12         ]  [4  ]   [15           ]  [15           ]  [21                 ]',@txdate,@addind,@brf,@noteno,@mdmname,@tel,@txamt,#OAMT,@bal);
+	}
+	#LINE=itoa(val(#LINE)+1,'%02.0f');
+	
+}"
+</PRINT>
+<DONE>"{
+	print(11+val(#LINE),5,' -------------------------------------------------------------------------------------------------------------------');
+}"
+</DONE>
+</RESPONSE>
+</TRANSACTION>

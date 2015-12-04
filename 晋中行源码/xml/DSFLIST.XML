@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="1111111100000000" TITLE="5370_1 代收付业务查询明细列表"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+
+<COMMSEND>
+"{
+}"
+</COMMSEND>
+
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3" COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(DSFLIST                     代收付业务查询列表)"/>
+  <ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+    dim @selid as number;
+    dim @filename as string;
+    dim @tota as string;
+    dim @wt_date as string;
+    dim @packid as string;
+    dim @orderno as string;
+    dim @tx_type as string;
+    dim @yw_type as string;
+    dim @br_no as string;
+    dim @txtype as string;
+    dim @sts as string;
+    dim @tx_mx_no as string;
+    dim @cash_br_no as string;
+    dim @pay_br_no as string;
+    dim @pay_ac_no as string;
+    dim @cash_ac_no as string;
+    dim @qs_no as string;
+    dim @or_br_no as string;
+    dim @repstat as string;
+    dim @re_content as string;
+    dim @repstat2 as string;
+    dim @re_content2 as string;
+    dim @xy_no as string;
+    dim @file_name as string;
+    dim @otherword2 as string;
+    dim @otherword as string;
+    dim @o_wt_date as string;
+    dim @o_orderno as string;
+    dim @xy_ind as string;
+    dim @ch_ind as string;
+    dim @totamt as string;
+    dim @stat as string;
+    if(#DOLIST != '')
+    {
+    	//add by sunlicheng 20110615 start 先清空#DOLIST,保证在ESC退出时此值为空
+    	#DOLIST='';
+    	//add by sunlicheng 20110615 end
+      while(true)
+      {
+           @selid=list_work();
+           if(@selid &lt; 0)
+           {
+               list_del();
+    						//add by sunlicheng 20110615 start 打开5370.XML并回传查询条件
+							 open('5370.XML','#BR_NO='+#ASBR_NO+';#RQ='+#ASRQ+';#TYPE='+#ASTYPE+';#AUTOSEARCH=1;');
+    						//add by sunlicheng 20110615 end
+							 //close();
+               return(true);
+           }
+
+          @packid   = rtrim(list_gettext(@selid,0));
+          @wt_date  = rtrim(list_gettext(@selid,2));
+          @orderno  = rtrim(list_gettext(@selid,1));
+          @tx_mx_no = rtrim(list_gettext(@selid,3));
+          @tx_type  = #TX_TYPE  ;
+          @sts      = rtrim(list_gettext(@selid,5));
+
+          initfd();
+          commsend_001();
+          $FD16='5409';
+          $FD44=@wt_date;
+          $FD45=@packid;
+          $FD46=@orderno;  
+          $FD28=@tx_mx_no;
+          $FD67=@tx_type;
+          callserver();
+          if($FD12 != '0000')
+          {
+               showmsg(geterror());
+               return(false);
+          }
+          @tota = $FD95;
+          
+          if(@tx_type=='0')
+          {
+                @filename ='5371.XML';        
+                @wt_date      = delspace(substr(@tota,0,8)    );
+                @packid       = delspace(substr(@tota,8,8)    );
+                @orderno      = delspace(substr(@tota,16,8)   );
+                @tx_mx_no     = delspace(substr(@tota,24,8)   );
+                @br_no        = delspace(substr(@tota,32,12)  );
+                @yw_type      = delspace(substr(@tota,44,5)   );
+                @pay_ac_no    = delspace(substr(@tota,61,32)  );
+                @qs_no        = delspace(substr(@tota,93,12)  );
+                @cash_ac_no   = delspace(substr(@tota,105,32) );
+                @or_br_no     = delspace(substr(@tota,137,12) );
+                @repstat      = delspace(substr(@tota,149,2)  );
+                @re_content   = delspace(substr(@tota,151,60) );
+                @repstat2     = delspace(substr(@tota,211,2)  );
+                @xy_no        = delspace(substr(@tota,213,60) );
+                @file_name    = delspace(substr(@tota,288,44) ); //去掉了前面的路径 /home/hsht/tmp/
+                @re_content2  = delspace(substr(@tota,333,60) );
+                @stat         = delspace(substr(@tota,393,16));
+                @totamt       = delspace(substr(@tota,409,15));
+                @otherword    = delspace(substr(@tota,424,60));
+                @otherword2   = delspace(substr(@tota,484,40));
+                open(@filename,'#TX_TYPE='+@tx_type+';#BR_NO='+@br_no+';#TX_MX_NO='+@tx_mx_no+';#WT_DATE='+@wt_date+';#PACK_ID='+@packid+';#ORDER_NO='+@orderno+';#TX_IND='+@stat+';#TXTYPE='+@tx_type+';#CASH_AC_NO='+@cash_ac_no+';#PAY_AC_NO='+@pay_ac_no+';#PAY_QS_NO='+@qs_no+';#REPSTAT_CONT='+@repstat+';#RE_CONTENT='+@re_content+';#OR_BR_NO='+@or_br_no+';#REPSTAT2_CONT='+@repstat2+';#RE_CONTENT2='+@re_content2+';#XY_NO='+@xy_no+';#TX_AMT='+@totamt+';#OTHERWORD1='+@otherword+';#OTHERWORD2='+@otherword2+';#FILE_NAME='+@file_name+';#YW_TYPE='+@yw_type+';');
+          }
+          else if(@tx_type == '1')
+          { 
+                @filename ='5371.XML';
+                @wt_date      = delspace(substr(@tota,0,8)    );
+                @packid       = delspace(substr(@tota,8,8)    );
+                @orderno      = delspace(substr(@tota,16,8)   );
+                @tx_mx_no     = delspace(substr(@tota,24,8)   );
+                @br_no        = delspace(substr(@tota,32,12)  );
+                @yw_type      = delspace(substr(@tota,44,5)   );
+                @or_br_no     = delspace(substr(@tota,49,12)  );
+                @pay_ac_no    = delspace(substr(@tota,61,32)  );
+                @qs_no        = delspace(substr(@tota,93,12)  );
+                @cash_ac_no   = delspace(substr(@tota,105,32) );
+                @cash_br_no   = delspace(substr(@tota,137,12) );
+                @repstat      = delspace(substr(@tota,149,2)  );
+                @re_content   = delspace(substr(@tota,151,60) );
+                @repstat2     = delspace(substr(@tota,211,2)  );
+                @xy_no        = delspace(substr(@tota,213,60) );
+                @file_name    = delspace(substr(@tota,288,44) ); //去掉了前面的路径 /home/hsht/tmp/
+                @re_content2  = delspace(substr(@tota,333,60) );
+                @stat         = delspace(substr(@tota,393,16) );
+                @totamt       = delspace(substr(@tota,409,15));
+                @otherword    = delspace(substr(@tota,424,60));
+                @otherword2   = delspace(substr(@tota,484,40));
+                open(@filename,'#TX_TYPE='+@tx_type+';#BR_NO='+@br_no+';#TX_MX_NO='+@tx_mx_no+';#WT_DATE='+@wt_date+';#PACK_ID='+@packid+';#ORDER_NO='+@orderno+';#TXTYPE='+@tx_type+';#TX_IND='+@stat+';#CASH_AC_NO='+@cash_ac_no+';#PAY_AC_NO='+@pay_ac_no+';#PAY_QS_NO='+@qs_no+';#REPSTAT_CONT='+@repstat+';#RE_CONTENT='+@re_content+';#OR_BR_NO='+@or_br_no+';#REPSTAT2_CONT='+@repstat2+';#RE_CONTENT2='+@re_content2+';#XY_NO='+@xy_no+';#TX_AMT='+@totamt+';#OTHERWORD1='+@otherword+';#OTHERWORD2='+@otherword2+';#FILE_NAME='+@file_name+';#YW_TYPE='+@yw_type+';');
+          }
+          else if(@tx_type=='2')
+          {
+                @filename ='5372.XML';
+                @wt_date      = delspace(substr(@tota,0,8)    );
+                @packid       = delspace(substr(@tota,8,8)    );
+                @orderno      = delspace(substr(@tota,16,8)   );
+                @br_no        = delspace(substr(@tota,32,12)  );
+                @yw_type      = delspace(substr(@tota,44,5)   );
+                @or_br_no     = delspace(substr(@tota,49,12)  );
+                @repstat2     = delspace(substr(@tota,211,2)  );
+                @o_wt_date    = delspace(substr(@tota,213,8)  );
+                @o_orderno    = delspace(substr(@tota,221,8)  );
+                @sts          = delspace(substr(@tota,229,2)  );
+                @file_name    = delspace(substr(@tota,273,60) ); 
+                @re_content2  = delspace(substr(@tota,333,60) );
+                @stat         = delspace(substr(@tota,393,16) );
+                open(@filename,'#TX_TYPE='+@tx_type+';#BR_NO='+@br_no+';#WT_DATE='+@wt_date+';#PACK_ID='+@packid+';#ORDER_NO='+@orderno+';#O_YW_TYPE='+@yw_type+';#OR_BR_NO='+@or_br_no+';#O_WT_DATE='+@o_wt_date+';#O_ORDERNO='+@o_orderno+';#TX_IND='+@stat+';#REPSTAT2='+@repstat2+';#RE_CONTENT2='+@re_content2+';#CONTENT='+@file_name+';');
+          }
+          else if(@tx_type=='3')
+          {
+                @filename ='5373.XML';
+                @wt_date      = delspace(substr(@tota,0,8)    );
+                @packid       = delspace(substr(@tota,8,8)    );
+                @orderno      = delspace(substr(@tota,16,8)   );
+                @br_no        = delspace(substr(@tota,32,12)  );
+                @pay_br_no    = delspace(substr(@tota,49,12)  );
+                @pay_ac_no    = delspace(substr(@tota,61,32)  );
+                @qs_no        = delspace(substr(@tota,93,12)  );
+                @cash_br_no   = delspace(substr(@tota,137,12) );
+                @re_content   = delspace(substr(@tota,151,60) );
+                @repstat2     = delspace(substr(@tota,211,2)  );
+                @xy_no        = delspace(substr(@tota,213,60) );
+                @or_br_no     = delspace(substr(@tota,273,12) );
+                @xy_ind       = delspace(substr(@tota,285,1)  );
+                @ch_ind       = delspace(substr(@tota,286,1)  );
+                @sts          = delspace(substr(@tota,287,2)  );
+                @re_content2  = delspace(substr(@tota,333,60) );
+                @stat         = delspace(substr(@tota,393,16) );
+                @otherword    = delspace(substr(@tota,424,60) );
+                open(@filename,'#WT_DATE='+@wt_date+';#PACK_ID='+@packid+';#ORDER_NO='+@orderno+';#BR_NO='+@br_no+';#PAY_BR_NO='+@pay_br_no+';#PAY_AC_NO='+@pay_ac_no+';#PAY_QS_NO='+@qs_no+';#CASH_BR_NO='+@cash_br_no+';#RE_CONTENT='+@re_content+';#REPSTAT2='+@repstat2+';#XY_NO='+@xy_no+';#OR_BR_NO='+@or_br_no+';#XY_IND='+@xy_ind+';#CH_IND='+@ch_ind+';#TX_IND='+@stat+';#RE_CONTENT2='+@re_content2+';#CONTENT='+@otherword+';');
+          }
+      return(true);
+    }
+    list_del();
+    close();
+    	//delete by sunlicheng 20110615 start
+    	//#DOLIST='';
+    	//delete by sunlicheng 20110615 end
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+<ITEM NAME="#DOLIST" TYPE="%-1s" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+  showall();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+  <ITEM NAME="#WT_DATE"  TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#PACK_ID"  TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#ORDER_NO"  TYPE="%-8s"  FUNCTIONS=""/>
+  <ITEM NAME="#TX_TYPE"  TYPE="%-1s"  FUNCTIONS=""/>
+
+ <ITEM NAME="#OK"  TYPE="%-6s" FUNCTIONS="" >
+<ONLOSTFOCUS>"{
+  dim @tota as string;
+  dim @offset as number;
+  dim @cnt as number;
+  dim @packlen as number;
+  dim @flag as string;
+  dim @id as number;
+    
+  initfd();
+  commsend_001();
+  $FD16='5410';
+  $FD44=#WT_DATE;
+  $FD45=#PACK_ID;
+  $FD46=#ORDER_NO;
+  $FD67=#TX_TYPE;
+  
+  @tota=callserver();
+  if($FD12!='0000')
+  {
+    showmsg(geterror());
+    return(false);
+  }
+  if(substr(@tota,36,1)=='E')
+  {
+    showmsg(substr(@tota,36,5) +'  '+substr(@tota,44,40))
+    list_del();
+    return(true);
+  }
+  if(autolist(@tota))
+  {
+    #DOLIST='1';
+  }
+
+  }"
+</ONLOSTFOCUS>
+</ITEM>
+
+	<!--add by sunlicheng 20110616 start 保存与5370交易查询条件-->
+	<ITEM NAME="#ASBR_NO" TYPE="%-5s" FUNCTIONS=""/>
+	<ITEM NAME="#ASRQ" TYPE="%-8s" FUNCTIONS=""/>
+	<ITEM NAME="#ASTYPE" TYPE="%-1s" FUNCTIONS=""/>
+	<!--add by sunlicheng 20110616 start-->
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111" TITLE="3313  遂心存签约/解约" 
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+	<COMMSEND>"{
+	  initfd();
+	  commsend_001();
+	  
+	  $FD21=#YW_TYPE;
+	  $FD30=#ACNO;
+	  $FD49='1';
+	  if(#YW_TYPE == '0')
+	  {
+	     $FD16='2313';
+	  }
+	  else if(#YW_TYPE == '1')
+	  {
+	      $FD16='2316';
+	      //showmsg('#ACNO');
+	      //$FD101=getitems('#ACNO#101ACSEQ#101AMT#NOTETYPE#NOTENO');
+	      $FD101=space(44)+#NOTETYPE+#NOTENO;
+	  }
+	  else
+	  {
+	      showmsg('不存在此业务类型!');
+	      return(false);
+	  }
+	}"
+	</COMMSEND>
+	<COMMRECV>"{
+		commrecv_001();   
+	}"
+	</COMMRECV>
+	<VARIABLE>
+		<ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+		 "T(3313                       遂心存签约/解约      )"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		 "T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=0)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#ACNO"    TYPE="%-24s" FUNCTIONS="T()"/>
+		<ITEM NAME="#ACTYPE"  TYPE="%-1s"  FUNCTIONS="T()"/>
+		<ITEM NAME="#WORK_TYPE"  TYPE="%-1s"  FUNCTIONS="T()"/>
+		<ITEM NAME="#PASSWD_JY"  TYPE="%-6s"  FUNCTIONS="T()"/>	
+		<PAGE NAME="DEFAULT">
+		<ITEM NAME="#TXNUMBER" TYPE="%-4s"  FUNCTIONS="T(2313)"/>           <!---交易代码--->
+		<ITEM NAME="#TXNAME"  TYPE="%-20s" FUNCTIONS="T(遂心存签约/解约)"/>       <!---交易名称--->
+		<!--输入变量-->
+		<BLOCK NAME="COMMON" LINE="5" COL="7">
+		<ITEM LINE="1"  COL="2"   TYPE="%-10s" 	INPUT="LABEL" FUNCTIONS="T(读取方式:)"/>
+		<ITEM LINE="3"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(账    号:)"/>  
+		<ITEM LINE="3"  COL="38"  TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(客户名称:)"/>
+		<ITEM LINE="5"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(业务类型:)"/>	
+		<ITEM LINE="7"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(证件类型:)"/>
+		<ITEM LINE="7"  COL="38"  TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(证件号码:)"/>
+		<ITEM LINE="9"  COL="2"   TYPE="%-10s"  INPUT="LABEL" FUNCTIONS="T(支取密码: )" NAME="#ZQMM" VISABLE="FALSE"/>
+		
+		<ITEM NAME="#NOTETYPE" TYPE="%3s"  FUNCTIONS="" />  
+		<ITEM NAME="#NOTENO" TYPE="%16s"  FUNCTIONS="" />  
+		<ITEM NAME="#BAL" TYPE="%17.2f"  FUNCTIONS="" /> 
+		
+	  <ITEM LINE="1" COL="13" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="读取芯片方式"/>
+				<OPTION VALUE="1" TITLE="读取磁条方式"/>
+			</SELECT>
+		  <ONLOSTFOCUS>"{
+		     if(#DQFS=='0')
+		     {
+			     enable(#ACTNO_CT,false);
+			     enable(#ACTNO_IC,true);
+			     show(#ACTNO_IC,true);
+			     show(#ACTNO_CT,false);
+		     }
+		     if(#DQFS=='1')
+		     {
+			     enable(#ACTNO_IC,false);
+			     enable(#ACTNO_CT,true);
+			     show(#ACTNO_CT,true);
+			     show(#ACTNO_IC,false); 
+		     }
+		   }"
+		  </ONLOSTFOCUS>
+	  </ITEM>
+	  <ITEM LINE="3"  COL="13" NAME="#ACTNO_CT"  TYPE="%-19s" DEVICE="MSR" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+	  <ITEM LINE="3"  COL="13" NAME="#ACTNO_IC"  TYPE="%-19s" DEVICE="ICC" INPUT="TEXT" FUNCTIONS="V(NB)M($MSR2,1)"/>
+		<ITEM NAME="#AC_NO" TYPE="%-19s"  FUNCTIONS="">
+			<ONLOSTFOCUS> 	
+			"{
+				dim @note_sts as string;
+				dim @name as string;
+				dim @pwd_ind as string;
+				dim @actype as string;
+				dim @js_lx   as string;
+				dim @mdm_code as string;
+				dim @tota as string;
+				dim @baktxno as string;
+				
+				if(#DQFS=='1')
+				{
+					#AC_NO=#ACTNO_CT;
+				}
+				if(#DQFS=='0')
+				{
+					#AC_NO=#ACTNO_IC;
+				}
+				
+				initfd();
+				commsend_001();
+				$FD31=#AC_NO;
+				$FD16='9958';
+				callserver();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+}		
+#ACNO=delspace($FD31);
+				
+				initfd();
+				commsend_001();
+				$FD16='9331';
+				$FD102=getitems('#ACNO');
+				callserver();
+				if($FD12 != '0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+				#ACNO=delspace($FD32);
+				#Name=delspace($FD25);
+				#BAL=$FD39;
+				//showmsg(itoa(#BAL));
+				
+				#zj_type_re=substr($FD102,124,1);
+				#zj_num_re=delspace(substr($FD102,62,20));
+				#zj_type  = #zj_type_re;
+				@js_lx = $FD70;
+				@pwd_ind=substr($FD102,48,1);
+				@actype=substr($FD102,207,1);
+				#NOTETYPE=substr($FD102,28,3);
+				#NOTENO=substr($FD102,31,16);
+						
+				//$FD23  prdt_no
+				if( substr($FD23,0,1)!='1')
+				{
+			  	showmsg('非活期账户,不能做此业务!');
+			  	return(false);
+				}
+				//showmsg(@actype);
+				if(@actype!='1')
+				{
+			  	showmsg('请输入个人活期账户!');
+			  	return(false);
+				}
+				
+				if(@js_lx!='D')
+				{
+			  	showmsg('此帐号不是个人结算户,请检查!');
+			  	return(false);
+				}
+				//if( substr($FD92,0,3)!='002' ) 
+				//{
+					//showmsg('请输入卡号!');
+					//return(false);
+				//}
+				if( $FD98 != '0')
+				{
+				 	showmsg('介质状态异常!');
+				 	return(false);
+				}
+				if( $FD99 != '1')
+				{
+				 	showmsg('该账户处于非正常状态!');
+				 	return(false);
+				}
+				if( $FD71 == '1' or $FD71 == '2' or $FD71 == '3')
+				{
+				 	showmsg('该账户处于完全冻结或只进不出状态或部分冻结!');
+				 	return(false);
+				}
+						
+				//检查是否需要输入密码
+				if(@pwd_ind == 'Y')
+				{
+			    #DRAW_PWD='';
+			    show(#ZQMM,true);
+			    show(#DRAW_PWD,true);
+				}
+				else
+				{      
+					#DRAW_PWD=''; 
+			    show(#ZQMM,false);
+			    show(#DRAW_PWD,false);
+				}
+				//查询个人证件类型
+				@tota = '';
+				initfd();
+				commsend_001();
+				$FD16='9799';
+				$FD67='1';
+				@tota=callserver();
+				if($FD12 != '0000')
+				{
+			    showmsg(geterror());
+			    return(false);
+				}
+				setsel(#zj_type,@tota,'o5t20o1v1o2');
+			}"	
+			</ONLOSTFOCUS>
+		</ITEM>
+		
+		<ITEM LINE="5" COL="13" NAME="#YW_TYPE" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T()V(NB)">
+			<SELECT>
+				<OPTION VALUE="0" TITLE="0.签约"/>
+				<OPTION VALUE="1" TITLE="1.解约"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				initfd();
+				commsend_001();
+				$FD16='2315';//校验是否签约遂心存
+				$FD68='2';
+				$FD30=#ACNO;//新旧账号转换后的账号
+				callserver(); 
+				if($FD12!='0000')
+				{
+			    showmsg(geterror());
+			    return(false);
+				}
+				//showmsg('$FD69='+$FD69);
+				if($FD69 == '0' and #YW_TYPE == '1')
+				{
+			    showmsg('未签约 不能解约');
+			    return(false);
+				}
+				if($FD69 == '1' and #YW_TYPE == '0')
+				{
+			    showmsg('已签约 不能再签约');
+			    return(false);
+				}
+				if(#YW_TYPE == '0')
+				{
+			    if(val(#BAL, 0.01) &lt; val($FD81))
+			    {
+		        showmsg('账户余额不足'+delspace($FD81)+' 不能签约');
+		        return(false);
+			    }
+				}
+				
+				if(#YW_TYPE == '0')
+				{
+					#PRT_YWTYPE = '遂心存签约';
+				}
+				else if(#YW_TYPE == '1')
+				{
+					#PRT_YWTYPE = '遂心存解约';
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		
+		<ITEM NAME="#SRLX" TYPE="%1s"  FUNCTIONS="" />
+		<ITEM NAME="#PRT_YWTYPE" TYPE="%-12s"  FUNCTIONS="" />
+		
+		<ITEM LINE="3"  COL="46" NAME="#Name" INPUT="LABEL" TYPE="%-60s" FUNCTIONS=""/>
+		<ITEM LINE="7"  COL="13" NAME="#zj_type" TYPE="%-1s" INPUT="SELECT" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+			<SELECT>
+				<OPTION VALUE="1" TITLE="身份证"/>
+			</SELECT>
+			<ONLOSTFOCUS>
+			"{
+				if(#zj_type_re != #zj_type)
+		    {
+		     	showmsg('证件类型错误!原证件类型为【'+#zj_type_re+'】!');
+		     	return(false);
+		    }
+		    dim @a as number;
+		    dim @stra as string;
+		    dim @iden as string;//add by dingning 20111127
+		    
+		    if('1'==#zj_type)
+		    {
+		    	@a = msgbox('请先将身份证放好，然后选择是否使用刷卡器?','提示','ok|cancel');
+		    	if(0 == @a)
+		    	{
+		    		if(not readiden())
+		    		{
+		    			showmsg('读卡失败!');
+		    			return(false);
+		    		}
+		    		
+		    		@stra=fetchiden('id');
+		    		@iden=getconfig($TLRNO+'.'+'IDEN');
+		    		idcheck(@iden,@stra);
+		    		#zj_num=@stra;
+		    		#SRLX='0';
+		    		setrdly(#zj_num);
+		    		show(#zj_num,true);
+		    	}
+		    	else
+		    	{
+		    		#zj_num='';
+		    		#SRLX='1';				
+		    		setnormal(#zj_num);
+		    		show(#zj_num,true);
+		    	}
+		    }
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM NAME="#zj_type_str" TYPE="%-20s" FUNCTIONS="S(#zj_type,#zj_type)"/>
+		<ITEM NAME="#zj_type_re" TYPE="%-1s" FUNCTIONS=""/>
+		<ITEM NAME="#zj_num_re" TYPE="%-20s" FUNCTIONS=""/>
+		<ITEM LINE="7"  COL="46" NAME="#zj_num" TYPE="%-20s"  INPUT="TEXT"  FUNCTIONS="T()V(NB)">
+			<ONLOSTFOCUS>
+			"{
+				dim @idno as string;
+				@idno=delspace(#zj_num);
+				if(#zj_num_re != @idno)
+				{
+					showmsg('证件号码错误!原证件号码为【'+#zj_num_re+'】!');
+					return(false);
+				}
+				dim @tota as string;
+				dim @txno_bak as string;
+				if(#zj_type=='1')
+				{
+					if(len(#zj_num)!=15 and len(#zj_num)!=18)
+					{
+						showmsg('身份证号码位数错误,必须为15或18位!');
+						return(false);
+					}
+					else
+					{
+						if(#SRLX!='0')
+						{
+							idcheck(#zj_num,#Name);
+						}
+					}
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<ITEM LINE="9"  COL="13"  NAME="#DRAW_PWD"  DEVICE="PINPAD"  INPUT="TEXT"  TYPE="%-6d"    FUNCTIONS="V(NB)i()"  VISABLE="FALSE">
+			<ONLOSTFOCUS>
+			"{
+				if(substr(#AC_NO,0,6) != '621223' and substr(#AC_NO,0,6)!='621780')
+				{
+			    initfd();
+			    commsend_001();
+			    $FD16='9317';
+			    $FD30=#AC_NO;
+			    $FD79=getitems('#DRAW_PWD');
+			    callserver();
+			    if($FD12!='0000')
+			    {
+				    showmsg(geterror());
+				    #DRAW_PWD = '';
+				    return (false);
+					}
+				}
+				else if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')
+		    {
+					initfd();
+					commsend_001();
+					$FD16='7007';
+					$FD30=#AC_NO;
+					$FD68='4';   //#OPTION ='04'
+					$FD79=#DRAW_PWD;
+					callagn();
+					if( $FD12 != '0000')
+					{
+						showmsg(geterror());
+						return(false);
+					}
+				}
+			}"
+			</ONLOSTFOCUS>
+		</ITEM>
+		<!--<ITEM LINE="7" COL="13" TYPE="%-6s"  NAME="#PASSWD" DEVICE="PINPAD" INPUT="TEXT" FUNCTIONS="V(NB)i()" VISABLE="FALSE"/>-->
+		</BLOCK>
+		</PAGE>	
+		<ITEM LINE="21"  COL="65" NAME="#CONFIRM" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+	</VARIABLE>
+	<REQUEST>
+	</REQUEST>
+	<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="遂心存签约/解约成功">
+		NOTHING
+	</PACKAGE>
+	<INIT>
+  "{
+      $KINDNO='00';
+  }"
+	</INIT>
+	<PRINT>
+  "{
+  	print( 3,30,'遂心存签约/解约交易');
+		print( 5,22,'账/卡 号:[19]',#AC_NO);
+		print( 6,22,'户    名:[60]',#Name);
+		print( 8,22,'业务类型:[30]',#PRT_YWTYPE);
+		print(11,22,'流 水 号:[ 6]',$FD4);
+  }"
+	</PRINT>
+	</RESPONSE>
+
+	<RESPONSE>
+		<PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印业务凭证">
+			NOTHING
+		</PACKAGE>
+		<PRINT>
+		"{
+		     dim @txtime  as string;
+		     dim @feetype as string;
+		     dim @all_acno as string;
+		     @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		     @all_acno=#AC_NO1+#AC_NO2+#AC_NO3+#AC_NO4+#AC_NO5;
+		     if($REPRINT=='true')
+		     {
+		         reprint_nx();
+		     } 
+		     if(#YW_TYPE=='0')
+		     { 
+		         print( 4,35,'\L0 3313 遂心存签约\L1');
+		         //print( 6,15,'签约日期:[4]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+		         print( 8,15,'机构名称:[30]([6])',$BRNAME, $KINBR);
+		         print( 10,15,'交易类型: 签 约');
+		     	 print( 12,15,'卡    号:[20                  ]     客户名称:[20]',#AC_NO,#Name);
+		         print( 14,15,'证件类型:[20                  ]     证件号码:[50]',#zj_type_str,#zj_num);
+		         print( 16,15,'交易日期:[8] 时间:[8]    操作员:[6]    流水号:[6]',$HDATE,@txtime,$TLRNO,substr($FD126,2,6));
+		         print( 21,40,'  \L0客户签名\L1:  _________________');
+		     }
+		     else
+		     { 
+		         print( 4,35,'\L0 3313 遂心存解约\L1');
+		     	 //print( 6,15,'解约日期:[4]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+		     	 print( 8,15,'机构名称:[30]([6])',$BRNAME, $KINBR);
+		     	 print( 10,15,'交易类型: 解 约');
+		     	 print( 10,21,'结    息:￥[19]', delspace(comma(substr($FD100,96,14)+'.'+substr($FD100,110,2))));
+		     	 print( 12,15,'卡    号:[20                  ]       客户名称:[20]',#AC_NO,#Name);
+		     	 print( 14,15,'证件类型:[20                  ]       证件号码:[50]',#zj_type_str,#zj_num);
+		     	 print( 16,15,'交易日期:[8] 时间:[8]    操作员:[6]    流水号:[6]',$HDATE,@txtime,$TLRNO,substr($FD126,2,6));
+		     	 print( 21,40,'  \L0客户签名\L1:  _________________');
+		    }
+		}"
+		</PRINT>
+	</RESPONSE>
+
+	<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="22" DESC="请打印客户回单" >
+		NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+	     dim @txtime  as string;
+	     dim @feetype as string;
+	     dim @all_acno as string;
+	     @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	     @all_acno=#AC_NO1+#AC_NO2+#AC_NO3+#AC_NO4+#AC_NO5;
+	     if($REPRINT=='true')
+	     {
+	         reprint_nx();
+	     } 
+	     if(#YW_TYPE=='0')
+	     { 
+	         print( 4,35,'\L0 3313 遂心存签约\L1'   ( 客户回单 ));
+	         //print( 6,15,'签约日期:[4]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+	         print( 8,15,'机构名称:[30]([6])',$BRNAME, $KINBR);
+	         print( 10,15,'交易类型: 签 约');
+	     	 print( 12,15,'卡    号:[20                  ]     客户名称:[20]',#AC_NO,#Name);
+	         print( 14,15,'证件类型:[20                  ]     证件号码:[50]',#zj_type_str,#zj_num);
+	         print( 16,15,'交易日期:[8] 时间:[8]    操作员:[6]    流水号:[6]',$HDATE,@txtime,$TLRNO,substr($FD126,2,6));
+	         //print( 21,40,'  \L0客户签名\L1:  _________________');
+	     }
+	     else
+	     { 
+	         print( 4,35,'\L0 3313 遂心存解约\L1    ( 客户回单 )');
+	         //print( 6,15,'解约日期:[4]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+	         print( 9,15,'机构名称:[30]([6])',$BRNAME, $KINBR);
+	         print( 11,15,'交易类型: 解 约');
+	         print( 11,20,'结    息:￥[19]', delspace(comma(substr($FD100,96,14)+'.'+substr($FD100,110,2))));
+	         print( 13,15,'卡    号:[20                  ]      客户名称:[20]',#AC_NO,#Name);
+	         print( 15,15,'证件类型:[20                  ]      证件号码:[50]',#zj_type_str,#zj_num);
+	         print( 17,15,'交易日期:[8] 时间:[8]    操作员:[6]    流水号:[6]',$HDATE,@txtime,$TLRNO,substr($FD126,2,6));
+	         //print( 19,40,'  \L0客户签名\L1:  _________________');
+	     } 
+	}"
+	</PRINT>
+	</RESPONSE>
+
+	<OUTPUT>
+	</OUTPUT>
+</TRANSACTION>

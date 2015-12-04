@@ -1,0 +1,224 @@
+<
+?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00110000" TITLE="5802 保证金利率维护"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+	initfd();
+	$TXNO='9986';
+	$MSGTYPE='03001';
+	$FD12 = '4371';
+	$FD31 = #RATEACCT;
+	$FD32 = #SAFEMONEYACCT;
+	$FD33 = #PROTOCOL;
+	$FD39 = itoa(#RATEMONEY*100,'%016.0f');
+	$FD44 = #BEGINDATE;
+	$FD45 = #ENDDATE;
+	$FD67 = #SAFEMONEYTYPE;
+	$FD68 = #OPERATETION;
+	$FD81 = #CASHBRNAME;
+	$FD83 = #CASHACTNO;
+	$FD84 = itoa(#RATE*1000000,'%08.0f');
+	commsend_001();
+    callserver();
+    if($FD12!='0000'){
+		showmsg(geterror());
+		return(false);
+	}
+    $FD16 = '4371';
+    $MSGTYPE='03001';
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+   "T(5802                         保证金利率维护)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=4371)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <!--输入变量-->
+  <ITEM LINE="6"  COL="5"  TYPE="%-12s" FUNCTIONS="T(操  作  码:!)"/>
+  <ITEM LINE="8"  COL="5"  TYPE="%-70s" FUNCTIONS="T(------------------------------------------------------------------)"/>
+
+
+  <ITEM LINE="10" COL="5"  TYPE="%-12s" FUNCTIONS="T(保证金类型:!)"/>
+  <ITEM LINE="10" COL="45" TYPE="%-13s" FUNCTIONS="T(承兑协议编号:)"/>
+  <ITEM LINE="12" COL="5"  TYPE="%-11s" FUNCTIONS="T(保证金帐号:)"/>
+   <ITEM LINE="12" COL="45"  TYPE="%-11s" FUNCTIONS="T(出票人账号:)"/>
+  <ITEM LINE="14" COL="45"  TYPE="%-11s" FUNCTIONS="T(出票人全称:)"/>
+  <ITEM LINE="14" COL="5"  TYPE="%-12s" FUNCTIONS="T(收息帐号:)"/>
+  <ITEM LINE="16" COL="5"  TYPE="%-12s" FUNCTIONS="T(起息日期:)"/>
+  <ITEM LINE="16" COL="45" TYPE="%-10s" FUNCTIONS="T(到息日期:)"/>
+  <ITEM LINE="18" COL="5"  TYPE="%-12s" FUNCTIONS="T(计息金额:)"/>
+  <ITEM LINE="18" COL="45" TYPE="%-10s" FUNCTIONS="T(年 利 率:)"/>
+  <ITEM LINE="18" COL="64" TYPE="%-10s" FUNCTIONS="T(%)"/>
+  
+  <ITEM NAME="#OPERATETION" INPUT="SELECT" LINE="6" COL="17" TYPE="%-1s" FUNCTIONS="T(0)V(NB)J(#OPNAME)">
+  <SELECT LINE="6" COL="19">
+		<OPTION VALUE="0" TITLE="0.增加"/>
+		<OPTION VALUE="1" TITLE="1.修改"/>
+		<OPTION VALUE="2" TITLE="2.删除"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#OPNAME" TYPE="%-4s" FUNCTIONS="j(#OPERATETION=0,T{增加})j(#OPERATETION=1,T{修改})j(#OPERATETION=2,T{删除})"/>
+
+  <ITEM NAME="#SAFEMONEYTYPE" INPUT="SELECT" LINE="10" COL="17" TYPE="%-1s" FUNCTIONS="T(1)J(#TYPENAME)">
+  <SELECT>
+		<OPTION VALUE="1" TITLE="1.承兑保证金"/>
+		<OPTION VALUE="2" TITLE="2.担保保证金"/>
+  </SELECT>
+  </ITEM>
+  <ITEM  NAME="#TYPENAME" TYPE="%-10s" FUNCTIONS="j(#SAFEMONEYTYPE=1,T{承兑保证金})j(#SAFEMONEYTYPE=2,T{担保保证金})"/>
+  
+  <ITEM NAME="#PROTOCOL" INPUT="TEXT" LINE="10" COL="58" TYPE="%-20s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+		initfd();
+		if(#OPERATETION=='1' or #OPERATETION=='2' )
+		{
+			$FD33 = #PROTOCOL;
+			$FD67 = #SAFEMONEYTYPE;
+			$FD68 = #OPERATETION;
+      $FD81 = #CASHBRNAME;
+	    $FD83 = #CASHACTNO;
+		    commsend_001();
+			$FD16 = '9695';
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+			
+			#RATEACCT = $FD31;
+			#SAFEMONEYACCT = $FD32;
+			#BEGINDATE = $FD44;
+			#ENDDATE = $FD45;
+			#CASHBRNAME = $FD81;
+			#CASHACTNO = $FD83;
+			#RATEMONEY = ltrim(val($FD39,0.01));
+			#RATE = val($FD84,0.000001);
+      
+      show(#CASHBRNAME,true);
+			show(#SAFEMONEYACCT,true);
+			show(#RATEMONEY,true);
+			show(#RATEACCT,true);
+			show(#CASHACTNO,true);
+			show(#BEGINDATE,true);
+			show(#ENDDATE,true);
+			show(#RATE,true);
+
+			goitem(#RATEACCT,false);
+		}
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#SAFEMONEYACCT" INPUT="TEXT" LINE="12" COL="17" TYPE="%-20s"  FUNCTIONS=""/>
+  
+  <ITEM NAME="#CASHACTNO" INPUT="LABEL" LINE="12" COL="57" TYPE="%-20s"  FUNCTIONS=""/>
+  
+  <ITEM NAME="#RATEACCT" INPUT="TEXT" LINE="14" COL="17" TYPE="%-20s" FUNCTIONS=""/>
+  
+  <ITEM NAME="#CASHBRNAME" INPUT="LABEL" LINE="14" COL="57" TYPE="%-20s"  FUNCTIONS=""/>  
+  
+  <ITEM NAME="#BEGINDATE" INPUT="TEXT" LINE="16" COL="17" TYPE="%-8s" FUNCTIONS="D()"/>
+  
+  <ITEM NAME="#ENDDATE" INPUT="TEXT" LINE="16" COL="54" TYPE="%-8s" FUNCTIONS="D()">
+  <ONLOSTFOCUS>
+  "{
+	dim @y1 as number;
+	dim @m1 as number;
+	dim @d1 as number;
+	dim @date1 as number;
+	dim @date2 as number;
+
+
+	
+	@y1=atoi(substr(#BEGINDATE,0,4));
+	@m1=atoi(substr(#BEGINDATE,4,2));
+	@d1=atoi(substr(#BEGINDATE,6,2));
+
+	@m1=@m1+6;
+	if(@m1 &gt; 12)
+	{
+		@y1=@y1+1;
+		@m1=@m1-12;
+	}
+	@date1=@y1*10000+@m1*100+@d1;
+	@date2=atoi(#ENDDATE);
+
+	if(@date1 &lt; @date2)
+	{
+		showmsg('日期期限超过6个月!');
+		return(false);
+	}
+
+//			goitem(#RATE,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  
+  <ITEM NAME="#RATEMONEY" INPUT="TEXT" LINE="18" COL="17" TYPE="%17.2f" FUNCTIONS="V(NB)J(#LRATEMONEY)"/>
+  <ITEM NAME="#LRATEMONEY"  TYPE="%-16s" FUNCTIONS="X(#RATEMONEY)"/>
+
+  <ITEM NAME="#RATE" INPUT="TEXT" LINE="18" COL="54" TYPE="%9.6f" FUNCTIONS="J(#LRATE)"/>
+  <ITEM NAME="#LRATE" TYPE="%-8s" FUNCTIONS="X(#RATE)"/>
+
+<!--
+  <ITEM NAME="#RATEMONEY" INPUT="TEXT" LINE="18" COL="17" TYPE="%17.2f" FUNCTIONS="X(LRATEMONEY)"/>
+  <ITEM NAME="#LRATEMONEY"  TYPE="%16s" FUNCTIONS=""/>
+
+  <ITEM NAME="#RATE" INPUT="TEXT" LINE="18" COL="54" TYPE="%9.6f" FUNCTIONS=""/>
+  <ITEM NAME="#LRATE" TYPE="%8s" FUNCTIONS=""/>
+-->
+  
+  <ITEM NAME="#YEAR"  TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"  TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"  TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+   
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="打印凭条">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 3, 25,'[5]',$KINBR);
+	print( 3, 10,'[20]',$BRNAME);
+	print( 3, 5,'交易日期:[8  ]  [8]',$HDATE,@txtime);
+        print( 4, 36,'保证金利率维护--[4]',#OPNAME);
+        print( 5, 10,'保证金类型:[10]',#TYPENAME);
+        print( 5, 10,'承兑协议编号:[20]',#PROTOCOL);
+        print( 6, 10,'出票人帐号:[20]',#CASHACTNO);
+        print( 6, 10,'出票人全称:[20]',#CASHNAME); 
+        print( 7, 10,'保证金帐号:[20]',#SAFEMONEYACCT);
+        print( 7, 10,'收息帐号:[20]',#RATEACCT);
+        print( 8, 10,'起息日期:[8]',#BEGINDATE);
+        print( 8, 10,'到息日期:[8]',#ENDDATE);
+        print( 9, 10,'计息金额:[16]',#LRATEMONEY);
+        print( 9, 10,'年利率:[8]',#LRATE);
+	      print( 10, 10,'操作员号:[4]     流 水 号:[6]',$FD7,$FD4);
+	        
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

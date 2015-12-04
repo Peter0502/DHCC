@@ -1,0 +1,206 @@
+<!-----转帐交易： 显示帐号信息的变量组合----------> 
+  <PAGE NAME="PAGE2">
+  
+  <ITEM LINE="7"  COL="5"  TYPE="%-10s" FUNCTIONS="T(对方账号: )" NAME="#LDFNO"  VISABLE="TRUE"/>
+  <ITEM LINE="7"  COL="35" TYPE="%-10s" FUNCTIONS="T(账户序号: )" NAME="#LACSEQ" INPUT="LABEL" VISABLE="FALSE"/>
+  <ITEM NAME="#LACTNO"  LINE="9"  COL="4"   TYPE="%-36s" VISABLE="TRUE" FUNCTIONS="T(【转帐对方帐户信息】)"/>
+  <ITEM NAME="#LACTNO"  LINE="10" COL="5"   TYPE="%-70s" VISABLE="TRUE" FUNCTIONS="T(-----------------------------------------------------------------------)"/>
+  
+  
+  <ITEM NAME="#DFNO" INPUT="TEXT" LINE="7"  COL="15" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+    	dim @baktxno as string;
+    	dim @tota    as string;
+    	dim @tmp      as string;
+	    dim @tmp_head as string;
+	    dim @sel_buf  as string;
+	    dim @cnt      as number;
+	    dim @totcnt   as number;
+    	
+    	@baktxno=$TXNO;
+    	initfd();
+    	$MSGTYPE='03001';
+    	$TXNO='9730';
+    	$FD101=getitems('#DFNO')+space(122,' ')+getitems('#CASHFLAG');
+    	commsend_001();
+    	@tota=callserver();
+    	$TXNO=@baktxno;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	
+    	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME',$FD101);
+    	#ACT_LX_CK    = substr($FD101,146,1);
+    	#101TXAMT=#AVBAL;
+    	//showmsg(itoa(#AVBAL,'%16.0f'));
+    	if(#ACT_LX_CK=='1')  //储蓄户
+    	{
+    	    show(#S_VOCTYPE,false);
+    	    show(#S_DSCPT,false);
+    	    show(#101VOCTYPE,false);
+    	    show(#ZY_TP,false);
+    	}else if(#ACT_LX_CK=='2'){ //对公户
+    	
+    	    @cnt=0;
+	        @totcnt=0;
+	        @tmp='';
+	        @tmp_head='';
+	        while(@totcnt &lt; len(@tota))
+	        {
+		           @tmp=substr(@tota,@totcnt,20);
+		           @tmp_head=substr(@tmp,0,4);
+		          if(@tmp_head=='1014' or rtrim(@tmp_head)=='')
+		          {
+			            break;
+		          }
+		          @totcnt=@totcnt+30;
+	       }	
+          @sel_buf=substr(@tota,0,@totcnt);
+	        setsel(#ZY_TP,@sel_buf,'o5t20o1v2o2');
+	
+	        @sel_buf=substr(@tota,@totcnt,len(@tota)-@totcnt);
+	        setsel(#101VOCTYPE,@sel_buf,'o5t20o1v3o2');
+	        
+	        #ZY_TP=substr(#101DSCTYPE,0,2);
+    	    show(#S_VOCTYPE,true);
+    	    show(#S_DSCPT,true);
+    	    show(#101VOCTYPE,true);
+    	    show(#ZY_TP,true);
+    	}else{
+    	   showmsg('帐户类型错误!');
+    	   return(false);
+    	}
+    	showblock('TRANINFO',true,true);	
+    	show(#101CNAME,true);
+		  show(#101AVBAL,true);
+    	show(#101CURCD,true);
+		show(#101PNAME,true);
+		#101TXAMT = #TXAMT;
+		show(#101TXAMT,true);
+			
+	//	if(atoi(#101ACSEQ)>0)
+	//	{
+		//	show(#101ACSEQ,true);
+	//		show(#LACSEQ,true);
+	//		return(true);
+	//	}
+	//	else
+	//	{
+	//		show(#101ACSEQ,false);
+	//		show(#LACSEQ,false);
+	//	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="7" COL="55" TYPE="%4d" NAME="#101ACSEQ"  VISABLE="FALSE" INPUT="TEXT" FUNCTIONS=""/>
+<!-- <ONLOSTFOCUS>"{
+      dim @bak as string;
+    	@bak=$TXNO;
+    	$TXNO='9846';
+    	commsend_001();
+    	$FD101=getitems('#DFNO')+getitems('#101ACSEQ');
+    	callserver();
+    	$TXNO=@bak;
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+    	setitems('#101ACTNO#101ACSEQ#101AMT#101VOCTYPE#101VOCNUM#101DSCPT#101CARDFLAG#101CNAME#101AVBAL#101CURCD#101CASHFLAG#101DSCTYPE#101ACTYPE#101ACSEQ2#101PNAME',$FD101);
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+-->  
+
+ <!-- 后台输入项数据   --> 
+   
+  <ITEM NAME="#101ACTNO"   TYPE="%-24s" FUNCTIONS=""/>
+  <!-- #101ACSEQ  -->
+  <ITEM NAME="#101AMT"    TYPE="%-16s" FUNCTIONS=""/>
+ <!-- <ITEM NAME="#101VOCTYPE"    TYPE="%-3s" FUNCTIONS=""/>-->
+  <ITEM NAME="#101VOCNUM"   TYPE="%-16s" FUNCTIONS=""/>  
+  <ITEM NAME="#101DSCPT" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#101CARDFLAG"   TYPE="%-1s" FUNCTIONS=""/>  
+  <!-- #101CNAME  -->
+  <!-- #101AVBAL   --> 
+  <!-- #101CURCD    -->    
+   <ITEM NAME="#101CASHFLAG"     TYPE="%-1s" FUNCTIONS=""/> 
+  <ITEM NAME="#101DSCTYPE" TYPE="%-3s" FUNCTIONS=""/>
+  <ITEM NAME="#101ACTYPE" TYPE="%-1s" FUNCTIONS=""/>  
+  <ITEM NAME="#101ACSEQ2"  TYPE="%-4s" FUNCTIONS=""/>  
+  <!-- #101PNAME  -->      
+
+  <BLOCK NAME="TRANINFO" LINE="8" COL="5" VISABLE="FALSE">
+  
+  <ITEM LINE="4"   COL="0"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="5"   COL="0"  TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="6"   COL="0"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="7"   COL="0"  TYPE="%-10s" FUNCTIONS="T(产品名称:)"/>
+  <ITEM LINE="9"   COL="0"  TYPE="%-14s" FUNCTIONS="T(转入金额:)"/>
+  <ITEM LINE="11"  COL="0"  TYPE="%-10s" FUNCTIONS="T(凭证种类:!)"  INPUT="LABEL" VISABLE="FALSE" NAME="#S_VOCTYPE"/>
+  <ITEM LINE="12"  COL="0"  TYPE="%-10s" FUNCTIONS="T(摘要选项:!)"  INPUT="LABEL" VISABLE="FALSE" NAME="#S_DSCPT"/>
+  
+ 
+
+  
+
+  <!---------------------------------------------------->
+  <ITEM LINE="4"  COL="10" NAME="#101CNAME" TYPE="%-50s" FUNCTIONS=""/>
+  
+  <ITEM NAME="#101CURCD" LINE="5"  COL="10" TYPE="%-2s"  FUNCTIONS="" ENABLE="FALSE">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="人民币"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM LINE="6"   COL="10" INPUT="TEXT" ENABLE="FALSE" NAME="#101AVBAL" TYPE="%17.2f" FUNCTIONS=""/>
+  <ITEM LINE="7"   COL="10" NAME="#101PNAME"  TYPE="%-30s" FUNCTIONS=""/>
+  
+  <ITEM LINE="9"   COL="10" NAME="#101TXAMT" TYPE="%17.2f" INPUT="TEXT" FUNCTIONS="" ENABLE="FALSE"/>
+  
+  <ITEM LINE="11"  COL="10" INPUT="SELECT" VISABLE="FALSE" NAME="#101VOCTYPE" TYPE="%-3s" FUNCTIONS=""/>
+  
+  <ITEM LINE="12"  COL="10" INPUT="SELECT" VISABLE="FALSE" NAME="#ZY_TP" TYPE="%-2s" FUNCTIONS=""/>
+    
+  
+  <ITEM NAME="#GO"         TYPE="%1s"  FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+   #101DSCPT=#ZY_TP+space(1);
+	goitem(#SUBMIT);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  </BLOCK>
+  
+  <ITEM LINE="21" COL="46"  TYPE="%-6s" FUNCTIONS="T(上一页)" INPUT="BUTTON">
+  <ONCLICK>"{
+    loadpage('DEFAULT');
+  }"
+  </ONCLICK>
+  </ITEM>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" NAME="#SUBMIT"/>
+  </PAGE>
+    
+<!-- 定义 FD101 转帐交易结构  Added by martin 2006-8-9  -->
+<!-- 
+#101ACTNO           24         	账号
+#101ACSEQ            4	         账户序号
+
+#101AMT             16           金额
+#101VOCTYPE          3           凭证种类
+
+#101VOCNUM           16	         凭证号
+#101DSCPT            10	         摘要
+#101CARDFLAG         1	         有折无折
+#101CNAME            50	         户名
+#101AVBAL            16	         余额
+#101CURCD             2	         币种
+#101CASHFLAG          1  	       转现标志
+#101DSCTYPE          3	          摘要选项
+#101ACTYPE            1	        帐户类型
+#101ACSEQ2            4         	帐户序号2
+#101PNAME            30	         产品名称
+--> 
+ 

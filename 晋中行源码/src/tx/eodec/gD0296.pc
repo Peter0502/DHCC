@@ -1,0 +1,308 @@
+/*************************************************************
+* 文 件 名: gD0296.c
+* 功能描述：每天看看4070203看透支没,如果透支就算利息
+
+注意：请在gD0288可用资金统计后使用
+分录: 	清算: 贷 50203 系统内往来利息收入   支行: 借 52203 系统内往来利息支出.
+**************************************************************/
+#define MYSQLERR if(sqlca.sqlcode) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "zjgl_mst_c.h"
+#include "zjgl_hst_c.h"
+#include "com_branch_c.h"
+#include "com_parm_c.h"
+
+struct com_sys_parm_c com_sys_parm_c;
+struct zjgl_mst_c wd_zjgl_mst;
+
+int ret,j,open_flag=0; char jidu[3],qingsuannum;
+FILE *fp1=NULL;
+FILE *fp2=NULL;
+char filename1[64],filename2[64];
+
+gD0296()
+{
+	char ori_br_no[6];
+	int i=0,month;
+	double totamt=0;
+
+	/** 打开事务 **/
+	sql_begin(); 
+	MYSQLERR
+
+  /** 取流水号 **/
+  if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+  {
+        sprintf(acErrMsg,"取流水号错误![%d]",g_pub_tx.trace_no);
+        WRITEMSG
+        goto ErrExit;
+  }
+  set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+	j=0;
+  /** 初始化全局变量 **/
+	ret = 0;
+	pub_base_sysinit();
+
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+	MYRETERR
+	
+	sprintf(acErrMsg,"计算准备金罚息[%d]!",com_sys_parm_c.sys_date);
+	WRITEMSG
+
+	g_pub_tx.tx_date = com_sys_parm_c.sys_date;
+
+	/* 先建立清算中心的传票,下面再一个机构一个机构的往里写 */
+	qingsuannum=1; open_flag=0;/* 建立文件 */
+
+	ret = Zjgl_mst_Dec_Upd(g_pub_tx.reply,"acc_no='4070203' and abs(cr_intst_acm)>0.001 order by opn_br_no"); 
+	MYRETERR
+	memset(ori_br_no,'\0',sizeof(ori_br_no));
+	while(1)
+	{
+		memset(&wd_zjgl_mst,'\0',sizeof(wd_zjgl_mst));
+		totamt=0;
+		ret = Zjgl_mst_Fet_Upd(&wd_zjgl_mst,g_pub_tx.reply);
+		if(ret==100) break;
+		MYRETERR
+		ret = igD0296_Predata(&totamt);
+		MYRETERR
+		vtcp_log("【%s】机构,开始记总帐\n",wd_zjgl_mst.opn_br_no);
+		if(cal_zongzhang(wd_zjgl_mst.opn_br_no,totamt))
+			goto ErrExit;
+	}
+	Zjgl_mst_Clo_Upd();
+	fclose(fp2);
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"计息结束[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"计息!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int igD0296_Predata(double *totamt)
+{
+	double dtxamt=0.0;
+	double davbal=0.0;
+	struct S_pub_intst pub_intst;
+	struct com_parm_c  com_parm;
+	char buf[32];
+
+	memset(&com_parm,'\0',sizeof(com_parm));
+	ret=Com_parm_Sel(g_pub_tx.reply,&com_parm,"parm_code='ZBJF' and parm_seqn=1 ");
+	if(ret)
+		return(ret);
+ 
+    /* 计算罚息 */
+    dtxamt = wd_zjgl_mst.cr_intst_acm * atof(com_parm.val); /* 此利率取出的就是日利率 */
+    /** 四舍五入,精确到分 **/
+    memset(buf,0,sizeof(buf));
+    sprintf(buf,"%.0f",dtxamt*100);
+    dtxamt = atof(buf)/100;
+
+	vtcp_log("罚息积数是[%.2f],金额[%.2f]",wd_zjgl_mst.cr_intst_acm,dtxamt);
+	wd_zjgl_mst.cr_intst_acm=0;
+    ret = Zjgl_mst_Upd_Upd(wd_zjgl_mst, g_pub_tx.reply);
+	if(ret)
+		return(ret);
+ 
+	*totamt +=dtxamt;
+	return(0);
+}
+int cal_zongzhang(char *br_no,double dtxamt)
+{
+	struct com_branch_c s_com_branch;
+
+	if(fabs(dtxamt)<0.0005)	/* 金额是 0 不记帐 */
+		return(0);
+
+	if(open_flag==0){
+			memset(filename2,0x0,sizeof(filename2));
+			sprintf(filename2,"%s/report/%s/gD0296.txt",getenv("HOME"), QS_BR_NO);
+			fp2 = fopen( filename2,"w" ); 
+			if( fp2==NULL )
+			{
+				sprintf(acErrMsg," open file [%s] error ",filename2 );
+				WRITEMSG
+				strcpy( g_pub_tx.reply,"S047" );
+				goto ErrExit;
+    	}
+	}
+
+    /* 借方 */
+  		set_zd_long( DC_TRACE_CNT,++j);
+    g_pub_tx.tx_amt1 = dtxamt;
+		strcpy( g_pub_tx.ac_no,"52203" );	
+
+     strcpy( g_pub_tx.cur_no, "01");
+		strcpy( g_pub_tx.ct_ind, "2" );
+		strcpy( g_pub_tx.brf, "资金帐户罚息" );
+		strcpy( g_pub_tx.tx_br_no,  QS_BR_NO );
+		strcpy( g_pub_tx.opn_br_no, br_no);
+
+		strcpy( g_pub_tx.ac_id_type,"9" ); /*账户类型为内部*/
+		strcpy( g_pub_tx.ac_get_ind,"00" ); /*本程序未读取分户*/
+		strcpy(g_pub_tx.ac_wrk_ind,"000001001"); 
+		strcpy(g_pub_tx.add_ind,"0");	/*借方标志*/
+		strcpy( g_pub_tx.prt_ind,"0" ); /*不登折*/
+		g_pub_tx.svc_ind=9001;  	/*内部帐存取*/
+		strcpy(g_pub_tx.prt_ind,"0");
+		strcpy(g_pub_tx.hst_ind,"1"); /*日间入明细*/
+		strcpy( g_pub_tx.sub_tx_code, "A016" );
+		
+    /* 借方－会计记帐 */
+    set_zd_data( "1204", "01" );   /* 币种 */
+    set_zd_data( "1205", "2" );    /* 1-现金 2-转帐 */
+    set_zd_data( "0152", "52203" );    /* 科目控制字 */
+    set_zd_double( "1208", g_pub_tx.tx_amt1 );
+    strcpy( g_pub_tx.sub_tx_code, "A016" );
+    ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+    if (ret != 0)
+    {
+          sprintf(acErrMsg,"会计记帐不成功!!");
+          WRITEMSG
+          goto ErrExit;
+    }
+
+      		
+    /* 贷方 */
+	set_zd_long( DC_TRACE_CNT,++j);
+    g_pub_tx.tx_amt1 = dtxamt;
+    strcpy( g_pub_tx.ac_no, "50203" );	   
+		strcpy( g_pub_tx.cur_no,"01");
+		strcpy( g_pub_tx.ct_ind, "2" );
+		strcpy( g_pub_tx.brf, "资金帐户计息" );
+		strcpy( g_pub_tx.tx_br_no, QS_BR_NO );
+		strcpy( g_pub_tx.opn_br_no,QS_BR_NO );
+
+		strcpy( g_pub_tx.ac_id_type,"9" );     /*账户类型为内部*/
+		strcpy( g_pub_tx.ac_get_ind,"00" );    /*本程序未读取分户*/
+		strcpy(g_pub_tx.ac_wrk_ind,"000001001"); 
+		strcpy(g_pub_tx.add_ind,"1");          /*贷方标志*/
+		strcpy( g_pub_tx.prt_ind,"0" );        /*不登折*/
+		g_pub_tx.svc_ind=9001;                 /*内部帐存取*/
+		strcpy(g_pub_tx.prt_ind,"0");
+		strcpy(g_pub_tx.hst_ind,"1");          /*日间入明细*/
+		strcpy( g_pub_tx.sub_tx_code, "A017" );
+
+		/* 贷方－会计记帐 */
+    set_zd_data( "1214","01" );   /* 币种 */
+    set_zd_data( "1215", "2" );    /* 1-现金 2-转帐 */
+    set_zd_data( "0152", "50203" );    /* 科目控制字 */
+    set_zd_double( "1218", g_pub_tx.tx_amt1 );
+    strcpy( g_pub_tx.sub_tx_code, "A017" );
+    ret = pubf_acct_proc( g_pub_tx.sub_tx_code );
+    if (ret != 0)
+    {
+          sprintf(acErrMsg,"会计记帐不成功!!");
+          WRITEMSG
+          goto ErrExit;
+    }
+
+    memset(filename1,0x0,sizeof(filename1));
+    sprintf(filename1,"%s/report/%5s/gD0296.txt",getenv("HOME"),br_no);
+    fp1 = fopen( filename1,"w" ); 
+    if( fp1==NULL )
+    {
+        sprintf(acErrMsg," open file [%s] error ",filename1 );
+        WRITEMSG
+        strcpy( g_pub_tx.reply,"S047" );
+        goto ErrExit;
+    }
+    char tmp_cxamt[21],vstr[60];
+    sprintf( tmp_cxamt, "%.2f" ,dtxamt);
+    pub_rpt_flttomon( tmp_cxamt,tmp_cxamt);	/* 小写金额 */
+	numtomoney( dtxamt, vstr);	/* 大写金额 */
+
+	fprintf(fp1,"\n\n\n\n\n\n\n\n\n");
+	/*fprintf(fp1,"%c%c%c%c",0x1b,0x67,0x1c,0x0E);*/
+	fprintf(fp1, "                                     上存资金透支罚息传票\n");
+	fprintf(fp1,"\n");
+	fprintf(fp1, "       机构号: %5s               交易日期: %ld             流水号: %ld       \n",br_no,g_pub_tx.tx_date,g_pub_tx.trace_no);
+	fprintf(fp1, " ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n");
+	fprintf(fp1, " ┃                                                                                            ┃\n");
+	fprintf(fp1, " ┃  借: 52203                                                                                 ┃\n");
+	fprintf(fp1, " ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+	fprintf(fp1, " ┃  小写金额: ￥%-21s                   摘要:上存资金透支罚息                 ┃\n",tmp_cxamt);
+	fprintf(fp1, " ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+	fprintf(fp1, " ┃  大写金额:  %-60s                   ┃\n",vstr);
+	fprintf(fp1, " ┃                                                                                            ┃\n");
+	fprintf(fp1, " ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n");
+	fprintf(fp1, "             事后监督:                    复    核:                      记    帐:    \n");
+	fprintf(fp1,"\n\n\n\n\n\n\n\n");
+	fclose(fp1);
+
+	ret=Com_branch_Sel( g_pub_tx.reply,&s_com_branch,"br_no='%s'",br_no);
+	if(ret){
+        sprintf(acErrMsg," get branch wrong [%s] error ",ret);
+        WRITEMSG
+        strcpy( g_pub_tx.reply,"S047" );
+        goto ErrExit;
+	}
+	if(open_flag==0)
+	{
+		fclose(fp2);
+	}
+    fp2 = fopen( filename2,"a" ); 
+    if( fp2==NULL )
+    {
+        sprintf(acErrMsg," open file [%s] error ",filename2 );
+        WRITEMSG
+        strcpy( g_pub_tx.reply,"S047" );
+        goto ErrExit;
+    }
+	fprintf(fp2,"\n\n\n\n\n\n\n\n\n");
+	fprintf(fp2, "                                  上存资金透支罚息结息传票\n");
+	fprintf(fp2,"\n");
+	fprintf(fp2, "       机构号: %s             交易日期: %ld             流水号: %ld       \n",QS_BR_NO, g_pub_tx.tx_date,g_pub_tx.trace_no);
+	fprintf(fp2, " ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n");
+	fprintf(fp2, " ┃                                                                                            ┃\n");
+	fprintf(fp2, " ┃  贷: 50203                           机构名称: %-30s              ┃\n",s_com_branch.br_name);
+	fprintf(fp2, " ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+	fprintf(fp2, " ┃  小写金额: ￥%-21s                   摘要:上存资金透支罚息                 ┃\n",tmp_cxamt);
+	fprintf(fp2, " ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+	fprintf(fp2, " ┃  大写金额:  %-60s                   ┃\n",vstr);
+	fprintf(fp2, " ┃                                                                                            ┃\n");
+	fprintf(fp2, " ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n");
+	fprintf(fp2, "             事后监督:                    复    核:                      记    帐:    \n");
+	fprintf(fp2,"\n\n\n\n\n\n\n\n");
+	if(qingsuannum==2){
+		fprintf(fp2,"\f");
+		qingsuannum=0;
+	}
+	qingsuannum++;
+	open_flag=1;
+
+OkExit:
+	return 0;
+ErrExit:
+	return ret;
+}

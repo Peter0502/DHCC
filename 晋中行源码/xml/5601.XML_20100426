@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding=:"GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5601 银行承兑汇票录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		initfd();
+    	$FD21 = #CURCD;
+    	$FD25 = #PAYBRNAME;
+    	$FD26 = #PAYNAME;
+		$FD27 = #CASHNAME;
+		$FD32 = #BZACTNO;
+		$FD33 = #CDNUM;
+    	$FD38 = #PAYACTNO;
+		$FD39 = space(16);
+		$FD40 = itoa(val(#XBRATE,100),'%016d');
+		$FD44 = #EDATE;
+		$FD63 = #ZYNUM;
+		$FD67 = #CDTYPE;
+		$FD81 = #CASHBRNAME;
+		$FD83 = #CASHACTNO;
+		$FD82 = #BZJNAME;
+		$FD84 = itoa(val(#XMRATE,1000000),'%08d');
+		$FD91=#PAYBRNO;
+		//$FD91 = $KINBR;
+		$FD100= getitems('#TOAVBAL#ZYAVBAL#BZAVBAL#BZJAVBAL');
+    	commsend_001();
+		$FD16 = '4331';
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+   "T(5601                        银行承兑汇票录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=4331)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="5"  COL="5"  TYPE="%-14s" FUNCTIONS="T(承兑协议编号:)"/>
+  <ITEM LINE="6"  COL="5"  TYPE="%-14s" FUNCTIONS="T(出票人  账号:)"/>
+  <ITEM LINE="7"  COL="5"  TYPE="%-14s" FUNCTIONS="T(出票人  全称:)"/>
+  <ITEM LINE="8"  COL="5"  TYPE="%-14s" FUNCTIONS="T(付款行  行号:)"/>
+  <ITEM LINE="9"  COL="5"  TYPE="%-14s" FUNCTIONS="T(付款行  全称:)"/>
+  <ITEM LINE="10" COL="5"  TYPE="%-14s" FUNCTIONS="T(收款人  帐号:)"/>
+  <ITEM LINE="11" COL="5"  TYPE="%-14s" FUNCTIONS="T(收款人  全称:)"/>
+  <ITEM LINE="12" COL="5"  TYPE="%-14s" FUNCTIONS="T(收款行  全称:)"/>
+  <ITEM LINE="14" COL="5"  TYPE="%-14s" FUNCTIONS="T(承 兑  类 型:!)"/>
+  <ITEM LINE="14" COL="45" TYPE="%-14s" FUNCTIONS="T(罚息  月利率:)"/>
+  <ITEM LINE="15" COL="5"  TYPE="%-14s" FUNCTIONS="T(票面  总金额:)"/>
+  <ITEM LINE="15" COL="45" TYPE="%-14s" FUNCTIONS="T(保证金  比例:)"/>
+  <ITEM LINE="15" COL="67" TYPE="%-1s"  FUNCTIONS="T(%)"/>
+  <ITEM LINE="16" COL="5"  TYPE="%-14s" FUNCTIONS="T(保 证  金 额:)"/>
+  <ITEM LINE="16" COL="45" TYPE="%-12s" FUNCTIONS="T(担保账号:  )" INPUT="LABEL" VISABLE="FALSE" NAME="#SDBACT"/>
+  <ITEM LINE="16" COL="45" TYPE="%-12s" FUNCTIONS="T(保证金账号:)" INPUT="LABEL" VISABLE="TRUE" NAME="#SBZACT"/>
+  <ITEM LINE="17" COL="5"  TYPE="%-15s" FUNCTIONS="T(担保账户全称:)"   INPUT="LABEL" VISABLE="FALSE" NAME="#SDBNM"/>
+  <ITEM LINE="18" COL="5"  TYPE="%-15s" FUNCTIONS="T(担保账户余额:)"   INPUT="LABEL" VISABLE="FALSE" NAME="#SDBYE"/>
+  <ITEM LINE="17" COL="5"  TYPE="%-15s" FUNCTIONS="T(保证金账户全称:)" INPUT="LABEL" VISABLE="TRUE" NAME="#SBZNM"/>
+  <ITEM LINE="18" COL="5"  TYPE="%-15s" FUNCTIONS="T(保证金账户余额:)" INPUT="LABEL" VISABLE="TRUE" NAME="#SBZYE"/>
+  <ITEM LINE="18" COL="45" TYPE="%-12s" FUNCTIONS="T(到期日期:)"/>
+  <ITEM LINE="19" COL="5"  TYPE="%-14s" FUNCTIONS="T(质 押  编 号:)"/>
+  <ITEM LINE="19" COL="45" TYPE="%-10s" FUNCTIONS="T(质押金额:)"/>
+
+<!-- 定义callserver应用但界面未定义的变量 -->
+  <ITEM TYPE="%-2s" NAME="#CURCD"  FUNCTIONS="T(01)"/>  <!-- 9806,$FD21 -->
+<!-- 定义callserver返回但界面不用的变量 -->
+  <ITEM TYPE="%-4s" NAME="#ACTSEQ" FUNCTIONS=""/>  <!-- 9806,$FD34 -->
+
+  <ITEM LINE="5"  COL="19" TYPE="%-20s" NAME="#CDNUM" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <!-- 根据需求，不限制协议编号长度
+  <ONLOSTFOCUS>
+    "{
+		dim @l as number;
+     	@l = len(#CDNUM);
+
+		if( @l!=16 )
+		{
+			showmsg('承兑协议编号应为16位!');
+			return(false);
+		}
+    }"
+  </ONLOSTFOCUS>
+  -->
+  </ITEM>
+  <ITEM LINE="6"  COL="19" TYPE="%-20s" NAME="#PAYACTNO" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9806';
+        $FD38 = #PAYACTNO;
+        $FD21 = #CURCD;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+		#PAYNAME = $FD26;
+		#PAYBRNO = $FD91;
+		#ACTSEQ  = $FD34;
+
+  		$MSGTYPE='03001';
+
+//		第2次callserver得到机构名称
+		initfd();
+  		$MSGTYPE='03001';
+        @baktxno=$TXNO;
+        $TXNO='9802';
+//	$FD91=$KINBR;
+	$FD91=#PAYBRNO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+		#PAYBRNAME = $FD25;
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="7"  COL="19" TYPE="%-50s" NAME="#PAYNAME"   INPUT="LABEL" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="8"  COL="19" TYPE="%-5s"  NAME="#PAYBRNO"   INPUT="LABEL" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="9"  COL="19" TYPE="%-50s" NAME="#PAYBRNAME" INPUT="LABEL" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="10" COL="19" TYPE="%-32s" NAME="#CASHACTNO"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="11" COL="19" TYPE="%-50s" NAME="#CASHNAME"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12" COL="19" TYPE="%-40s" NAME="#CASHBRNAME" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+
+  <ITEM LINE="14"  COL="19" TYPE="%-1s" NAME="#CDTYPE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)J(#CDTYPENAME)">
+    <SELECT LINE="0" COL="0">
+        <OPTION VALUE="1" TITLE="差额承兑"/>
+        <OPTION VALUE="2" TITLE="100%质押存单"/>
+        <OPTION VALUE="3" TITLE="100%保证金"/>
+        <OPTION VALUE="4" TITLE="担保承兑"/>
+        <OPTION VALUE="5" TITLE="大票换小票"/>
+		<!--
+        <OPTION VALUE="4" TITLE="保兑仓"/>
+        <OPTION VALUE="5" TITLE="承兑拆分"/>
+		-->
+    </SELECT>
+  <ONLOSTFOCUS>
+    "{
+	if(#CDTYPE=='4')
+	{
+		show(#SBZACT,false);
+		show(#SBZNM,false);
+		show(#SBZYE,false);
+		show(#SDBACT,true);
+		show(#SDBNM,true);
+		show(#SDBYE,true);
+	}else{
+		show(#SDBACT,false);
+		show(#SDBNM,false);
+		show(#SDBYE,false);
+		show(#SBZACT,true);
+		show(#SBZNM,true);
+		show(#SBZYE,true);
+	}
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CDTYPENAME"  TYPE="%-12s"  FUNCTIONS="S(#CDTYPE,#CDTYPE)"/>
+
+  <ITEM LINE="14" COL="57" TYPE="%9.6f" NAME="#MRATE" DEVICE="KEYBOARD" FUNCTIONS="T(15000000)V(NB)J(#XMRATE)">
+  <ONLOSTFOCUS>
+    "{
+        dim @l as number;
+		@l=15.000000;
+
+        if( @l &gt; #MRATE )
+        {
+            showmsg('输入数据超界!');
+            return(false);
+        }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#XMRATE" TYPE="%-8s" FUNCTIONS="X(#MRATE)"/>
+
+  <ITEM LINE="15" COL="19" TYPE="%17.2f" NAME="#TOAVBAL" DEVICE="KEYBOARD" FUNCTIONS="V(NB)J(#XTOAVBAL)">
+  <ONLOSTFOCUS>
+  "{
+		showmsg('如果无保证金，保证金比例为零!');
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#XTOAVBAL" TYPE="%-16s" FUNCTIONS="X(#TOAVBAL)"/>
+
+  <ITEM LINE="15" COL="57" TYPE="%6.2f" NAME="#BRATE" DEVICE="KEYBOARD" FUNCTIONS="V(NB)J(#XBRATE)">
+  <ONLOSTFOCUS>
+  "{
+		#BZAVBAL = #TOAVBAL*#BRATE/100;
+		show(#BZAVBAL,true);
+		if(#CDTYPE == '5')
+			goitem(#EDATE,false);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#XBRATE" TYPE="%-8s" FUNCTIONS="X(#BRATE)"/>
+
+<!--
+  <ITEM NAME="#CCC" TYPE="%-1s" >
+  <ONLOSTFOCUS>
+  "{
+		$FD40 = itoa(val(#XBRATE,100),'%08d');
+		showhelp(5,20,5,5,'tttt',$FD40);
+		submit();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+-->
+
+  <ITEM LINE="16" COL="19" TYPE="%17.2f" NAME="#BZAVBAL" INPUT="TEXT" ENABLE="FALSE" FUNCTIONS="V(NB)J(#XBZAVBAL)">
+  <ONLOSTFOCUS>"{
+	if(#CDTYPE!='5' and #BRATE==0){
+		goitem(#EDATE,false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#CCC" TYPE="%-1s" >
+  <ONLOSTFOCUS>
+  "{
+	if(#CDTYPE!='5' and #BRATE==0 and #CDTYPE!='4'){
+		goitem(#EDATE,false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+
+  <ITEM NAME="#XBZAVBAL" TYPE="%-16s" FUNCTIONS="X(#BZAVBAL)"/>
+
+<!-- 定义callserver返回但界面不用的变量 -->
+  <ITEM TYPE="%17.2f" NAME="#FD100_1"  FUNCTIONS="V(NB)J(#XFD100_1)"/>
+  <ITEM NAME="#XFD100_1" TYPE="%-16s"  FUNCTIONS="X(#FD100_1)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_2"  FUNCTIONS="V(NB)J(#XFD100_2)"/>
+  <ITEM NAME="#XFD100_2" TYPE="%-16s"  FUNCTIONS="X(#FD100_2)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_3"  FUNCTIONS="V(NB)J(#XFD100_3)"/>
+  <ITEM NAME="#XFD100_3" TYPE="%-16s"  FUNCTIONS="X(#FD100_3)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_4"  FUNCTIONS="V(NB)J(#XFD100_4)"/>
+  <ITEM NAME="#XFD100_4" TYPE="%-16s"  FUNCTIONS="X(#FD100_4)"/>
+
+  <ITEM TYPE="%9.6f"  NAME="#FD100_5"  FUNCTIONS="V(NB)J(#XFD100_5)"/>
+  <ITEM NAME="#XFD100_5" TYPE="%-8s"   FUNCTIONS="X(#FD100_5)"/>
+
+  <ITEM TYPE="%-2s"   NAME="#FD100_6"   FUNCTIONS="V(NB)"/>
+  <ITEM TYPE="%-2s"   NAME="#FD100_7"   FUNCTIONS="V(NB)"/>
+  <ITEM TYPE="%-10s"  NAME="#FD100_8"   FUNCTIONS="V(NB)"/>
+  <ITEM TYPE="%-10s"  NAME="#FD100_9"   FUNCTIONS="V(NB)"/>
+  <ITEM TYPE="%17.2f" NAME="#FD100_10"  FUNCTIONS="V(NB)J(#XFD100_10)"/>
+  <ITEM NAME="#XFD100_10" TYPE="%-16s"  FUNCTIONS="X(#FD100_10)"/>
+  
+  <ITEM LINE="16" COL="57" TYPE="%-19s" NAME="#BZACTNO" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+		initfd();
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+  		$MSGTYPE='03001';
+        $TXNO='9910';
+        $FD21 = #CURCD;
+        $FD32 = #BZACTNO;
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        #BZJNAME = $FD82;
+	setitems('#FD100_1#FD100_2#FD100_3#BZJAVBAL#FD100_5#FD100_6#FD100_7#FD100_8#FD100_9#FD100_10',$FD100);
+
+  	$MSGTYPE='03001';
+	if(#CDTYPE=='4')
+	{
+		if($FD23=='131')
+		{
+			showmsg('担保账号不能是保证金账号!');
+			return(false);
+		}
+		return(true);
+	}else{
+		if($FD23!='131')
+		{
+			showmsg('所输账号非保证金账号!');
+			return(false);
+		}
+	}
+	showmsg('请核对保证金账户全称是否与付款人全称相符!');
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="17" COL="20" TYPE="%-50s" NAME="#BZJNAME"   INPUT="LABEL" FUNCTIONS="V(NB)"/>
+
+<!--
+  <ITEM LINE="18" COL="20" TYPE="%17.2f" NAME="#BZJAVBAL" DEVICE="KEYBOARD"   FUNCTIONS="V(NB)J(#XBZJAVBAL)"/>
+  <ITEM NAME="#XBZJAVBAL" TYPE="%-16s" DEVICE="KEYBOARD" FUNCTIONS="X(#BZJAVBAL)"/>
+-->
+  <ITEM TYPE="%17.2f" NAME="#BZJAVBAL"  FUNCTIONS="(#XBZJAVBAL)"/>
+  <ITEM LINE="18" COL="20" NAME="#XBZJAVBAL" TYPE="%-16s" FUNCTIONS="X(#BZJAVBAL)"/>
+
+  <ITEM LINE="18" COL="55" TYPE="%-8s"  NAME="#EDATE"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+    "{
+
+        if( #EDATE  &lt; $HDATE)
+        {
+            showmsg('到期日期必须大于当前日期，请重新输入!');
+            return(false);
+        }
+		if( addmon($HDATE,6) &lt; #EDATE)
+        {
+            showmsg('到期日不允许超过签发日期六个月，请重新输入!');
+            return(false);
+        }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="19" COL="19" TYPE="%-16s"  NAME="#ZYNUM"  DEVICE="KEYBOARD" FUNCTIONS=""/>
+  <ITEM LINE="19" COL="55" TYPE="%17.2f" NAME="#ZYAVBAL" DEVICE="KEYBOARD" FUNCTIONS="J(#XZYAVBAL)"/>
+  <ITEM NAME="#XZYAVBAL" TYPE="%-16s" DEVICE="KEYBOARD" FUNCTIONS="X(#ZYAVBAL)"/>
+
+
+  <!--输出变量--->
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#YEAR"   TYPE="%-4s" FUNCTIONS="T($FD5,1,4)"/>
+  <ITEM NAME="#MON"    TYPE="%-2s" FUNCTIONS="T($FD5,5,2)"/>
+  <ITEM NAME="#DAY"    TYPE="%-2s" FUNCTIONS="T($FD5,7,2)"/>
+  <ITEM NAME="#ZHNM"   TYPE="%-6s" FUNCTIONS=""/>
+
+  
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容">
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+        print( 6,  8,'承兑协议编号: [20]',#CDNUM);
+        print( 7,  8,'承兑  类型: [12]',#CDTYPENAME);
+        print( 8,  8,'出票人账号: [20]',#PAYACTNO);
+        print( 9,  8,'收款人帐号: [32]',#CASHACTNO);
+        print(10,  8,'票面总金额: [16]',#XTOAVBAL);
+        print(11,  8,'到期  日期: [8]',#EDATE);
+        print(12,  8,'质押  编号: [20]',#ZYNUM);
+        print(13,  8,'质押  金额: [16]',#XZYAVBAL);
+        print(14,  8,'流  水  号: [6]',$FD4);
+    }"
+    </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+        NOTHING
+    </PACKAGE>
+    <PRINT>"{
+$KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);	
+	if(#CDTYPE=='4')
+	{
+		#ZHNM='担保  ';
+	}else{
+		#ZHNM='保证金';
+	}
+
+        print( 5,20,'机构名称:[30]',$BRNAME);
+        print( 5,2,'代码:5601');
+        print( 5,13,'交易:承兑汇票录入');
+
+        print( 7,20,'承兑协议编号:[16              ]                    出票人账号:[20]',#CDNUM,#PAYACTNO);
+        print( 8,20,'收款人  帐号:[32                              ]    收款人全称:[50]',#CASHACTNO,#CASHNAME);
+        print( 9,20,'收款行  全称:[40]',#CASHBRNAME);
+        print(10,20,'承 兑  类 型:[12          ]                        罚息月利率:[8]',#CDTYPENAME,#XMRATE);
+        print(11,20,'票面  总金额:[16              ]                    保证金比例:[8]',#XTOAVBAL,#XBRATE);
+        print(12,20,'[6   ]  账号:[19                 ]                 到期  日期:[8]',#ZHNM,#BZACTNO,#EDATE);
+        print(13,20,'质 押  编 号:[20                  ]                质押  金额:[16]',#ZYNUM,#XZYAVBAL);
+
+        print(24,20,'备注:');
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);
+    }"
+    </PRINT>
+</RESPONSE>
+
+</TRANSACTION>

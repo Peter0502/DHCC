@@ -1,0 +1,427 @@
+/*************************************************************
+* 文 件 名: gD0285.c
+* 功能描述：入机构总帐gl_sub
+*
+*/
+/***  DWDJDPH 1--单网点借贷平衡，多事物 0--全行借贷平衡，单事物***/
+#define MYSQLERR if(sqlca.sqlcode && sqlca.sqlcode!=1403) \
+	{ \
+		sprintf(acErrMsg,"打开数据库错错[%d]",sqlca.sqlcode); \
+		WRITEMSG \
+		strcpy (g_pub_tx.reply, "AT03"); \
+		goto ErrExit; \
+	}
+#define MYRETERR if(ret) \
+	{ \
+		sprintf(acErrMsg,"RET[%d]",ret); \
+		WRITEMSG \
+		goto ErrExit; \
+	}
+#include <stdio.h>  
+#include <math.h>  
+
+EXEC SQL include sqlca;
+#include "public.h"
+#include "gl_sub_c.h"
+#include "gl_bal_c.h"
+#include "gl_amt_c.h"
+#include "com_branch_c.h"
+#include "com_cur_no_code_c.h"
+#include "com_item_c.h"
+
+#include "dc_acc_rel_c.h"
+#include "com_item_c.h"
+#include "com_sys_parm_c.h"
+#include "gl_sub_c.h"
+#include "com_branch_c.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+	struct	gl_sub_c		gl_sub;
+	double d_amt,c_amt;
+EXEC SQL  END  DECLARE SECTION;
+	struct com_sys_parm_c com_sys_parm_c;
+
+gD0285( )
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char			dbname[10];
+EXEC SQL  END  DECLARE SECTION;
+	char			kzxjg[11];
+	char			date[9];
+	char			jgh[10];
+	int		i;
+	int ret=0;
+
+	sql_begin(); /*打开事务*/
+	MYSQLERR
+
+    /**------- 初始化全局变量 --------**/
+	pub_base_sysinit();
+
+	/* 根据公共系统参数表，判断状态是否是1 */
+	ret = pub_base_GetSysparm( &com_sys_parm_c );
+	MYRETERR
+
+	g_pub_tx.tx_date=com_sys_parm_c.lst_date;
+
+	/**
+	EXEC SQL UPDATE STATISTICS for table gl_sub;
+	**/
+
+	/***get_bal get_amt 分别取两类科目，互补的一对***/
+	ret=get_bal(); /**因为没有更新功能所以必须最先调用**/
+	if( ret ) goto ErrExit;
+	ret=get_amt(); /**因为没有更新功能所以必须最先调用**/
+	if( ret ) goto ErrExit;
+
+	ret=get_up_acc(); /**汇总上级科目**/
+	if( ret ) goto ErrExit;
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"汇总!OK!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	sprintf(acErrMsg,"汇总!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+/*----------------------------------------------------------*/
+/**取gl_bal的明细科目**/
+get_bal()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_bal_c b;
+		struct gl_sub_c s;
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL declare cur_bal cursor for
+		select rowid,gl_bal_sum.* 
+		from gl_bal_sum
+		where ( acc_hrt in ( 
+			select acc_hrt from com_item where acc_knd!='3' and acc_knd!='0' )
+		or acc_hrt in('70200','70500') )
+		and br_no in(select up_br_no from com_branch)
+		and br_no!='61000'
+		;
+	MYSQLERR
+
+	EXEC SQL open cur_bal;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_bal
+		into :b ;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		memset( &s,0,sizeof(s) );
+
+		strcpy( s.br_no,b.br_no );
+		strcpy( s.cur_no,b.cur_no );
+		strcpy( s.acc_hrt,b.acc_hrt );
+		s.date=b.date;
+		strcpy( s.dc_ind,b.dc_ind );
+		strcpy( s.up_acc_hrt,b.up_acc_hrt );
+vtcp_log("---[%s] [%s]",s.br_no,s.acc_hrt);
+
+		s.dr_bal=b.dr_bal;
+		s.cr_bal=b.cr_bal;
+
+		s.ldd_bal=b.ldd_bal;
+		s.lcd_bal=b.lcd_bal;
+
+		s.rdd_cnt=b.rdd_cnt;
+		s.rcd_cnt=b.rcd_cnt;
+		s.rdd_amt=b.rdd_amt;
+		s.rcd_amt=b.rcd_amt;
+
+		s.cdd_cnt=b.cdd_cnt;
+		s.ccd_cnt=b.ccd_cnt;
+		s.cdd_amt=b.cdd_amt;
+		s.ccd_amt=b.ccd_amt;
+
+		s.tddr_bal=b.tddr_bal;
+		s.tdcr_bal=b.tdcr_bal;
+		s.tddr_cnt=b.tddr_cnt;
+		s.tdcr_cnt=b.tdcr_cnt;
+		s.tddr_amt=b.tddr_amt;
+		s.tdcr_amt=b.tdcr_amt;
+
+		s.mdr_bal=b.mdr_bal;
+		s.mcr_bal=b.mcr_bal;
+		s.mdr_cnt=b.mdr_cnt;
+		s.mcr_cnt=b.mcr_cnt;
+		s.mdr_amt=b.mdr_amt;
+		s.mcr_amt=b.mcr_amt;
+
+		s.qdr_bal=b.qdr_bal;
+		s.qcr_bal=b.qcr_bal;
+		s.qdr_cnt=b.qdr_cnt;
+		s.qcr_cnt=b.qcr_cnt;
+		s.qdr_amt=b.qdr_amt;
+		s.qcr_amt=b.qcr_amt;
+
+		s.ydr_bal=b.ydr_bal;
+		s.ycr_bal=b.ycr_bal;
+		s.ydr_cnt=b.ydr_cnt;
+		s.ycr_cnt=b.ycr_cnt;
+		s.ydr_amt=b.ydr_amt;
+		s.ycr_amt=b.ycr_amt;
+
+/**
+		EXEC SQL insert into gl_sub values(:s);
+**/
+		Gl_sub_Ins(s,g_pub_tx.reply);
+		MYSQLERR
+	}
+	EXEC SQL close cur_bal;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+get_amt()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_amt_c b;
+		struct gl_sub_c s;
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL declare cur_amt cursor for
+		select rowid,gl_amt_sum.* 
+		from gl_amt_sum
+		where acc_hrt in ( select acc_hrt from com_item where acc_knd='3' )
+		and acc_hrt not in('70200','70500')
+		and br_no in(select up_br_no from com_branch)
+		and br_no!='61000'
+		;
+	MYSQLERR
+
+	EXEC SQL open cur_amt;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_amt
+		into :b ;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+		memset( &s,0,sizeof(s) );
+
+		strcpy( s.br_no,b.br_no );
+		strcpy( s.cur_no,b.cur_no );
+		strcpy( s.acc_hrt,b.acc_hrt );
+		s.date=b.date;
+		strcpy( s.dc_ind,b.dc_ind );
+		strcpy( s.up_acc_hrt,b.up_acc_hrt );
+vtcp_log("-==[%s] [%s]",s.br_no,s.acc_hrt);
+
+		s.dr_bal=b.dr_bal;
+		s.cr_bal=b.cr_bal;
+
+		s.ldd_bal=b.ldd_bal;
+		s.lcd_bal=b.lcd_bal;
+
+		s.rdd_cnt=b.rdd_cnt;
+		s.rcd_cnt=b.rcd_cnt;
+		s.rdd_amt=b.rdd_amt;
+		s.rcd_amt=b.rcd_amt;
+
+		s.cdd_cnt=b.cdd_cnt;
+		s.ccd_cnt=b.ccd_cnt;
+		s.cdd_amt=b.cdd_amt;
+		s.ccd_amt=b.ccd_amt;
+
+		s.tddr_bal=b.tddr_bal;
+		s.tdcr_bal=b.tdcr_bal;
+		s.tddr_cnt=b.tddr_cnt;
+		s.tdcr_cnt=b.tdcr_cnt;
+		s.tddr_amt=b.tddr_amt;
+		s.tdcr_amt=b.tdcr_amt;
+
+		s.mdr_bal=b.mdr_bal;
+		s.mcr_bal=b.mcr_bal;
+		s.mdr_cnt=b.mdr_cnt;
+		s.mcr_cnt=b.mcr_cnt;
+		s.mdr_amt=b.mdr_amt;
+		s.mcr_amt=b.mcr_amt;
+
+		s.qdr_bal=b.qdr_bal;
+		s.qcr_bal=b.qcr_bal;
+		s.qdr_cnt=b.qdr_cnt;
+		s.qcr_cnt=b.qcr_cnt;
+		s.qdr_amt=b.qdr_amt;
+		s.qcr_amt=b.qcr_amt;
+
+		s.ydr_bal=b.ydr_bal;
+		s.ycr_bal=b.ycr_bal;
+		s.ydr_cnt=b.ydr_cnt;
+		s.ycr_cnt=b.ycr_cnt;
+		s.ydr_amt=b.ydr_amt;
+		s.ycr_amt=b.ycr_amt;
+
+	/**
+		EXEC SQL insert into gl_sub values(:s);
+	**/
+		Gl_sub_Ins(s,g_pub_tx.reply);
+		MYSQLERR
+	}
+	EXEC SQL close cur_amt;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+get_up_acc()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct gl_sub_c b;
+		struct gl_sub_c s;
+		char vkm[8];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL declare cur_upac cursor for
+		select rowid,gl_sub.* 
+		from gl_sub
+		where br_no in(select up_br_no from com_branch)
+		and br_no!='61000'
+		and acc_hrt!=up_acc_hrt
+		;
+	MYSQLERR
+
+	EXEC SQL open cur_upac;
+	MYSQLERR
+
+	while(1)
+	{
+		EXEC SQL fetch cur_upac
+		into :b ;
+		if( sqlca.sqlcode==1403 ) break;
+		MYSQLERR
+
+vtcp_log("===[%s] [%s] [%d]",b.br_no,b.acc_hrt,b.date);
+		while( 1 )
+		{
+			EXEC SQL select up_acc_hrt into :vkm from com_item
+				where acc_hrt=:b.acc_hrt;
+			MYSQLERR
+
+			pub_base_strpack(vkm);
+			if( !strcmp(vkm,b.acc_hrt) ) break;
+
+			strcpy( b.acc_hrt,vkm );
+
+			memset( &s,0,sizeof(s) );
+
+			EXEC SQL declare cur_sum3 cursor for
+				select rowid,gl_sub.* 
+				from gl_sub
+				where br_no=:b.br_no and cur_no=:b.cur_no 
+				and acc_hrt=:b.acc_hrt
+				for UPDATE;
+			MYSQLERR
+
+			EXEC SQL open cur_sum3;
+			MYSQLERR
+
+			EXEC SQL fetch cur_sum3
+				into :s ;
+			if( sqlca.sqlcode==1403 )
+			{	
+vtcp_log(" ==[%s] [%s] [%d]",b.br_no,b.acc_hrt,b.date);
+				/**
+				EXEC SQL insert into gl_sub values(:b);
+				**/
+				Gl_sub_Ins(b,g_pub_tx.reply);
+				MYSQLERR
+			}
+			else
+			{
+				MYSQLERR
+				sub_add_all( &s,b ) ;
+
+				/**
+				EXEC SQL update gl_sub set *=(:s)
+					where current of cur_sum3;
+				**/
+				pub_base_strpack(s.rowid);
+				Gl_sub_Upd_Upd(s,g_pub_tx.reply);
+				MYSQLERR
+			}
+
+			EXEC SQL close cur_sum3;
+		}
+	}
+	EXEC SQL close cur_upac;
+
+	return 0;
+ErrExit:
+	return 1;
+}
+sub_add_all( p_gl_sub_c,glsub )
+ struct gl_sub_c *p_gl_sub_c;
+ struct gl_sub_c glsub;
+{
+	struct gl_sub_c gl_sub_c;
+	int ret;
+
+	memcpy( &gl_sub_c,p_gl_sub_c,sizeof(gl_sub_c) );
+
+		gl_sub_c.dr_bal+=glsub.dr_bal;
+		gl_sub_c.cr_bal+=glsub.cr_bal;
+
+		gl_sub_c.ldd_bal+=glsub.ldd_bal;
+		gl_sub_c.lcd_bal+=glsub.lcd_bal;
+
+		gl_sub_c.rdd_cnt+=glsub.rdd_cnt;
+		gl_sub_c.rcd_cnt+=glsub.rcd_cnt;
+		gl_sub_c.rdd_amt+=glsub.rdd_amt;
+		gl_sub_c.rcd_amt+=glsub.rcd_amt;
+
+		gl_sub_c.cdd_cnt+=glsub.cdd_cnt;
+		gl_sub_c.ccd_cnt+=glsub.ccd_cnt;
+		gl_sub_c.cdd_amt+=glsub.cdd_amt;
+		gl_sub_c.ccd_amt+=glsub.ccd_amt;
+
+		gl_sub_c.tddr_bal+=glsub.tddr_bal;
+		gl_sub_c.tdcr_bal+=glsub.tdcr_bal;
+
+            gl_sub_c.tddr_cnt+=glsub.tddr_cnt;
+            gl_sub_c.tdcr_cnt+=glsub.tdcr_cnt;
+            gl_sub_c.tddr_amt+=glsub.tddr_amt;
+            gl_sub_c.tdcr_amt+=glsub.tdcr_amt;
+
+		gl_sub_c.mdr_bal+=glsub.mdr_bal;
+		gl_sub_c.mcr_bal+=glsub.mcr_bal;
+
+            gl_sub_c.mdr_cnt+=glsub.mdr_cnt;
+            gl_sub_c.mcr_cnt+=glsub.mcr_cnt;
+            gl_sub_c.mdr_amt+=glsub.mdr_amt;
+            gl_sub_c.mcr_amt+=glsub.mcr_amt;
+
+		gl_sub_c.qdr_bal+=glsub.qdr_bal;
+		gl_sub_c.qcr_bal+=glsub.qcr_bal;
+
+            gl_sub_c.qdr_cnt+=glsub.qdr_cnt;
+            gl_sub_c.qcr_cnt+=glsub.qcr_cnt;
+            gl_sub_c.qdr_amt+=glsub.qdr_amt;
+            gl_sub_c.qcr_amt+=glsub.qcr_amt;
+
+		gl_sub_c.ydr_bal+=glsub.ydr_bal;
+		gl_sub_c.ycr_bal+=glsub.ycr_bal;
+
+            gl_sub_c.ydr_cnt+=glsub.ydr_cnt;
+            gl_sub_c.ycr_cnt+=glsub.ycr_cnt;
+            gl_sub_c.ydr_amt+=glsub.ydr_amt;
+            gl_sub_c.ycr_amt+=glsub.ycr_amt;
+
+	memcpy( p_gl_sub_c , &gl_sub_c ,sizeof(gl_sub_c) );
+}

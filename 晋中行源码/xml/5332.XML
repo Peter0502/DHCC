@@ -1,0 +1,146 @@
+<TRANSACTION RIGHTS="11110000" TITLE="5332 支付拼包交易)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		commsend_001();
+		$FD16='5872';
+		$FD44=#PACKDAY;
+		$FD23=#PKGNO;
+		$FD53=getitems('#PACKID');
+		$FD67=#OPCD;
+
+}"
+</COMMSEND>
+<COMMRECV>"{
+	   commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5332                           普通业务封包交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+  <ITEM LINE="6"   COL="15"  TYPE="%-12s" FUNCTIONS="T(包  日  期: )"/>
+  <ITEM LINE="8"   COL="15"  TYPE="%-12s" FUNCTIONS="T(包  类  型:!)"/>
+  <ITEM LINE="10"  COL="15"  TYPE="%-12s" FUNCTIONS="T(拼包  序号:)"/>
+  <ITEM LINE="12"  COL="15"  TYPE="%-12s" FUNCTIONS="T(操作  类型:)"/>
+  <ITEM LINE="14"  COL="15"  TYPE="%-12s" FUNCTIONS="T(接收清算行:)"/>
+  <ITEM LINE="16"  COL="15"  TYPE="%-12s" FUNCTIONS="T(交易总笔数:)"/>
+  <ITEM LINE="18"  COL="15"  TYPE="%-12s" FUNCTIONS="T(交易总金额:)"/>
+  
+  <ITEM NAME="#PACKDAY" TYPE="%8d" LINE="6" COL="27" DEVICE="KAYBOARD" FUNCTIONS="T($HDATE)V(NB)D()"/>
+  <ITEM NAME="#PKGNO" TYPE="%3d" LINE="8" COL="27" DEVICE="KAYBOARD" FUNCTIONS="T(001)V(NB)">
+	<SELECT LINE="9" COL="28">
+		<OPTION VALUE="001" TITLE="0.普通贷记业务"/>
+		<OPTION VALUE="002" TITLE="0.普通借记业务"/>
+		<OPTION VALUE="005" TITLE="0.定期贷记业务"/>
+		<OPTION VALUE="006" TITLE="0.定期借记业务"/>
+		<OPTION VALUE="007" TITLE="0.贷记退汇业务"/>
+		<OPTION VALUE="008" TITLE="0.普通借记回执"/>
+		<OPTION VALUE="011" TITLE="0.定期借记回执"/>
+		<OPTION VALUE="012" TITLE="0.通用信息业务"/>
+	</SELECT>
+  </ITEM>
+
+
+  <ITEM NAME="#PACKID" LINE="10" COL="27" DEVICE="KEYBOARD" TYPE="%8s"  FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  		dim @baktxno as string;
+	 	@baktxno=$TXNO;
+		$TXNO='9403';
+		$FD16='9403';
+	    $FD2=$OPNBR;
+		$FD3=$KINBR;
+	    $FD5=$HDATE;
+		$FD7=$TLRNO;
+		$FD10=$TTYNAME;
+		$FD79=#PASSWD;
+
+		$FD28=#PACKDAY;
+		$FD29=getitems('#PACKID');
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000'){
+		  	showmsg(geterror());
+			return(false);
+		}
+		if($FD69!='1'){
+		  	showmsg('包状态错');
+			return(false);
+		}
+		setitems('#CASHQSACTNO',$FD52);
+		setitems('#DTLCNT',substr($FD54,2,8));
+		setitems('#TOTAMT',itoa(val($FD43,0.01),'%.2f'));
+		show(#CASHQSACTNO,true);
+		show(#DTLCNT,true);
+		show(#TOTAMT,true);
+  	}"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#OPCD" LINE="12" COL="27" TYPE="%1d"  DEVICE="KEYBOARD" FUNCTIONS="T(1)">
+	<SELECT LINE="13" COL="51">
+		<OPTION VALUE="1" TITLE="0.封包"/>
+	</SELECT>
+  </ITEM>
+  
+  <ITEM NAME="#GO" TYPE="%1d" FUNCTIONS="G(#MSG)"/>
+  <ITEM NAME="#CASHQSACTNO" LINE="14" COL="27" INPUT="LABEL" DEVICE="NONE" TYPE="%-12s" VISABLE="TRUE" FUNCTIONS=""/>
+  <ITEM NAME="#DTLCNT" LINE="16" COL="27" INPUT="LABEL"  DEVICE="NONE" TYPE="%-8d"  FUNCTIONS="V(NB)J(#UDTLCNT)"/>
+  <ITEM NAME="#TOTAMT" LINE="18" COL="27" INPUT="LABEL" DEVICE="NONE" TYPE="%16.2f"  FUNCTIONS="V(NB)J(#UTOTAMT)"/>
+  <ITEM NAME="#UDTLCNT"  TYPE="%8s"  FUNCTIONS="X(#DTLCNT)"/>
+  <ITEM NAME="#UTOTAMT"  TYPE="%-16s"  FUNCTIONS="X(#TOTAMT)"/>
+
+  <!--输入项定义到这里结束-->
+<ITEM NAME="#MSG" TYPE="%-4s" FUNCTIONS="j($HCODE=0,T{}T{取消})"/>
+<ITEM LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+<ONCLICK>"{
+	submit();
+  }"
+</ONCLICK>
+ </ITEM>  
+
+</VARIABLE>
+<!--发送信息包-->
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="封包交易成功">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+		print(5,25,'交易成功!');
+		print(7,20,'接收清算行:[12]',$FD52);
+		print(8,20,'交易总笔数:[10]',$FD54);
+		print(9,20,'交易总金额:[20]',itoa(val($FD43,0.01),'%.2f'));
+	}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="打印业务专用凭证(封包交易)">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+$KINDNO='00';
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+	print( 5,20,'机构名称:[30]',$BRNAME);
+	print( 5,2,'代码:5332');
+	print( 5,13,'交易:支付拼包交易');
+	print(07,20, '拼包  序号:[12         ]                     委托日期:[8       ]',#PACKID,$HDATE);
+	print(08,20, '接收清算行:[12]',$FD52);
+	print(09,20, '交易总笔数:[10]',$FD54);
+	print(10,20, '交易总金额:[20]',itoa(val($FD43,0.01),'%.2f'));
+	print(24,20,'备注:');
+	print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print(24,5,'柜员:[4]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+        }"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

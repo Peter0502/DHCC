@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3401 增加卡折交易 "
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(                      增加卡折交易 -新卡折号信息)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  
+  <ITEM LINE="8" COL="12" TYPE="%-9s" FUNCTIONS="T(介质种类:)"/>
+
+  <ITEM LINE="10" COL="12" TYPE="%-9s" FUNCTIONS="T(新卡折号:)"/>
+  <ITEM LINE="11" COL="12" TYPE="%-9s" FUNCTIONS="T(凭证号码:)"/>
+
+  <ITEM LINE="13" COL="12" TYPE="%-50s" FUNCTIONS="T(***************新卡折信息设定******************)"/>
+
+  <ITEM LINE="15" COL="12" TYPE="%-9s" FUNCTIONS="T(密码支取:)"/>
+  <ITEM LINE="15" COL="47" TYPE="%-9s" INPUT="LABEL" NAME="#LB0" VISABLE="FALSE"  FUNCTIONS="T(密码:)"/>
+
+ <ITEM LINE="16" COL="12" TYPE="%-9s" INPUT="LABEL" NAME="#LB1"  FUNCTIONS="T(证件支取:)"/>
+ <ITEM LINE="17" COL="12" TYPE="%-9s" INPUT="LABEL" NAME="#LB2"   VISABLE="FALSE"  FUNCTIONS="T(证件类型:)"/>
+ <ITEM LINE="18" COL="12" TYPE="%-9s" INPUT="LABEL" NAME="#LB3"   VISABLE="FALSE"  FUNCTIONS="T(证件号码:)"/>
+
+ <ITEM NAME="#PZNUM" TYPE="%-1s" FUNCTIONS=="T(2)">
+<ONLOSTFOCUS>
+"{
+}"
+</ONLOSTFOCUS>
+</ITEM>
+
+  
+  <ITEM NAME="#MEDIUMTYPE"   INPUT="LABEL"  LINE="8" COL="21" TYPE="%-4s" FUNCTIONS="">
+      <SELECT>
+		<OPTION VALUE="0020" TITLE="0.储蓄卡"/>
+		<OPTION VALUE="0010" TITLE="0.储蓄活期存折"/>
+     </SELECT>
+<ONLOSTFOCUS>
+"{	
+		dim @spa as string;
+	  	@spa = space(138,' ');
+		if(#MEDIUMTYPE=='0010')
+		{	
+			enable(#CARDNO,false);
+		}
+		initfd();
+		commsend_001();
+		$FD116 = #MEDIUMTYPE+@spa;
+		$FD16 = '9739';
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		/*****
+		initfd();
+		commsend_001();
+		$FD16 = '9738';
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		initfd();
+		commsend_001();
+		$FD16 = '9782';
+		$FD116 = #MEDIUMTYPE+@spa;
+		callserver();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		*****/
+
+}"
+</ONLOSTFOCUS>
+ </ITEM>
+ <ITEM NAME="#PZNUM" TYPE="%16s" FUNCTIONS==""/>
+ <ITEM NAME="#NEW_FD116" TYPE="%-142s" FUNCTIONS=""/>
+  <ITEM NAME="#CARDNO" INPUT="TEXT" LINE="10" COL="21" TYPE="%-19s" FUNCTIONS="V(NB)"/>
+  <ITEM NAME="#CREDENCENO" INPUT="TEXT"  LINE="11" COL="21" TYPE="%16d" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+	dim @spa as string;
+	dim @len_cardno as number;
+	@len_cardno = 19 - len(#CARDNO);
+	@spa = space(102);
+	initfd();
+	$MSGTYPE='03001';
+	commsend_001();
+	$FD16 = '9782';  /**检查凭证是否合法*/
+	$FD116 = #MEDIUMTYPE+#CARDNO+space(@len_cardno)+@spa+#CREDENCENO;
+	#NEW_FD116 = $FD116;
+	callserver();
+	if($FD12!='0000')
+	{
+		showmsg(geterror());
+		return (false);
+	}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#CHOOSEPASSWORD"   INPUT="SELECT"  LINE="15" COL="21" TYPE="%1s" FUNCTIONS="G(N,#CONFIRM">
+   <SELECT>
+        <OPTION VALUE="N" TITLE="0.否"/>
+        <OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+	 <ONLOSTFOCUS>
+	 "{
+		show(#PASSWD,false);
+		show(#LB0,false);
+		if(#CHOOSEPASSWORD=='Y')
+		{
+			show(#PASSWD,true);
+			show(#LB0,true);
+		}
+	 }"
+	 </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#PASSWD"   INPUT="TEXT"  LINE="15" COL="56" TYPE="%-6s" VISABLE="FALSE" DEVICE="PINPAD" FUNCTIONS="i()V(NB)L(6,6)"/>
+
+<ITEM NAME="#CHOOSECERTIFICATE" INPUT="SELECT"  LINE="16" COL="21" TYPE="%1s" FUNCTIONS="V(NB)G(N,#CONFIRM)">
+      <SELECT>
+        <OPTION VALUE="N" TITLE="0.否"/>
+        <OPTION VALUE="Y" TITLE="1.是"/>
+     </SELECT>
+	<ONLOSTFOCUS>
+	"{
+				show(#CERTIFYTYPE,false);
+				show(#CERTIFICATE,false);
+				show(#LB2,		  false);
+				show(#LB3,		  false);
+			if(#CHOOSECERTIFICATE=='Y')
+			{
+				show(#CERTIFYTYPE,true);
+				show(#CERTIFICATE,true);
+				show(#LB2,		  true);
+				show(#LB3,		  true);
+			}
+	}"
+</ONLOSTFOCUS>
+  </ITEM>
+   <ITEM NAME="#CERTIFYTYPE"   INPUT="LABEL"  LINE="17" COL="21" TYPE="%1s" VISABLE="false"  FUNCTIONS="V(NB)">
+    <SELECT>
+    <OPTION VALUE="1" TITLE="1 身份证"/>
+    <OPTION VALUE="2" TITLE="2 户口簿"/>
+    <OPTION VALUE="3" TITLE="3 护照"/>
+    <OPTION VALUE="4" TITLE="4 军官证"/>
+    <OPTION VALUE="5" TITLE="5 回乡证"/>
+    <OPTION VALUE="6" TITLE="6 居住证"/>
+    <OPTION VALUE="7" TITLE="7 驾照"/>
+    <OPTION VALUE="8" TITLE="8 企业代码证"/>
+    <OPTION VALUE="9" TITLE="9 经营许可证"/>
+
+  </SELECT>
+</ITEM>
+  <ITEM NAME="#CERTIFICATE"   INPUT="TEXT"  LINE="18" COL="21" TYPE="%-20s"  VISABLE="false" FUNCTIONS="V(NB)"/>
+
+
+  <ITEM NAME="#CONFIRM"  LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>"{
+	$BUFFER = '';
+	$BUFFER=space(1)+#CHOOSEPASSWORD+space(6)+#PASSWD+#CHOOSECERTIFICATE+#CERTIFICATE+space(1)+#CERTIFYTYPE+space(2);
+	close('#SERV9986','#NEW_CARDNO=+#CARDNO+';');	
+}"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

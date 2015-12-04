@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110100" TITLE="4311  二级账销户业务"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	dim @i  as number;
+	dim @j  as number;
+	@i=len(#ACTNO);
+	initfd();
+	commsend_001();
+	$FD16=$TXNO;
+	$FD30=#ACTNO;
+	$FD67='3';//销户
+	$FD78=#SUBSEQN;
+	$FD68='2';
+	$FD39=getitems('#TOTA_AMT');
+	@i=len(#TRAN_ACTNO);
+	@j=len(#VOC_NUM);
+	$FD102=#ACTNO+space(24-len(#ACTNO))+'0001'+#VOC_TYPE+#VOC_NUM+space(16-@j)+space(61)+getitems('#TOTA_AMT')+space(61)+getitems('#TOTA_AMT')+'01';
+	if(#XHFS=='1')        //现金销户
+	{
+		$FD71='1';
+		$FD119='01'+#VOC_TYPE+#VOC_NUM+getitems('#TOTA_AMT')+space(29)+#ACTNO;
+	}
+	else if(#TRANSEQN=='' and #AC_TYPE!='9')//销户到其他账户
+	{
+		$FD71='2';
+		$FD101=#TRAN_ACTNO+space(24-@i)+'0001'+getitems('#TOTA_AMT')+#Y1023+#Y1024+space(87)+'012';
+	}
+	else  if(#TRANSEQN!='' and #AC_TYPE!='9' )                //销户转到其他二级账户上
+	{
+		$FD69='1';
+		$FD71='3';
+		$FD31=#TRAN_ACTNO;
+		$FD44=#TRANSEQN;
+		$FD58='';
+		$FD89='';
+		$FD72='2';
+		$FD40=getitems('#TOTA_AMT');
+		$FD101=#TRAN_ACTNO+space(24-@i)+'0001'+getitems('#TOTA_AMT')+#Y1023+#Y1024+space(87)+'012';
+		#TMPFLAG='1';
+	}
+	else if(#AC_TYPE=='9')				//转销到内部账上
+	{
+		$FD71='4';
+		$FD121=#TRAN_ACTNO+space(20-@i)+space(76)+'012'+space(19)+getitems('#TOTA_AMT');
+	}
+	$FD62='二级账户销户';
+	$FD102=$FD102+$FD71;
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="FALSE">
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(4311                          二级账销户业务)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=2212)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TMPFLAG" TYPE="%-1s"  FUNCTIONS="T(0)" />
+
+  <ITEM NAME="#LACTNO" LINE="6"  COL="10" TYPE="%-10s"  FUNCTIONS="T(账    号: )"/>
+  <ITEM NAME="#ACTNO"  LINE="6"  COL="20" TYPE="%-19s"  INPUT="TEXT" FUNCTIONS="V(NB)">
+	  <ONLOSTFOCUS>
+	  "{
+   		initfd();
+   		commsend_001();
+   		$FD16='9706';
+   		$FD30=#ACTNO;
+   		callserver();
+   		if($FD12!='0000')
+   		{
+   			showmsg(geterror());
+   			return(false);
+   		}
+   		if($FD2!=$KINBR)
+   		{
+   			showmsg('非本机构账号');
+   			return(false);
+   		}
+   		#HM=$FD25;
+	  }"
+	  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"  COL="10"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="7"  COL="20" TYPE="%-50s" FUNCTIONS="" NAME="#HM" INPUT="LABEL"/>
+
+  <ITEM NAME="#LSUBSEQN" LINE="8" COL="10" TYPE="%-10s" FUNCTIONS="T(子户序号:)" />
+  <ITEM NAME="#SUBSEQN"  LINE="8" COL="20" TYPE="%8d"   FUNCTIONS="" INPUT="TEXT" >
+  	<ONLOSTFOCUS>
+  	"{
+			dim @tmp as string;
+			dim @tota as string;
+			initfd();
+			commsend_001();
+			$FD16='9677';
+			$FD101=#ACTNO;
+			$FD44=#SUBSEQN;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if($FD70=='*')
+			{
+				showmsg('该子账户已经销户');
+				return(false);
+			}
+			setitems('#AMT',$FD40);
+			setitems('#LX',$FD41);
+			#SUB_HM=$FD25;
+			#RATE=$FD85;
+			#OPN_DATE=$FD47;
+			#SUB_AC_NO=$FD31;
+			commsend_001();
+			$FD16='9598';
+			$FD123='select sum(round(intst_acm*rate/360/100,2)) from Sub_com_sect_acm where sts='+chr(39)+'0'+chr(39)+' and sub_ac_no='+chr(39)+rtrim(#SUB_AC_NO)+chr(39);
+			@tota=callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			@tmp=strfld(@tota,'|',0);
+			#LX=#LX+val(@tmp);
+			#TOTA_AMT=#AMT+#LX;
+
+			refresh();
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="9"  COL="10"  TYPE="%-10s" FUNCTIONS="T(子户名称:)" INPUT="LABEL" />
+  <ITEM LINE="9"  COL="20"  TYPE="%-50s" FUNCTIONS="" INPUT="LABEL" NAME="#SUB_HM" />
+  <ITEM TYPE="%-9s" NAME="#RATE" FUNCTIONS=""/>
+  <ITEM TYPE="%-8d" NAME="#OPN_DATE" FUNCTIONS=""/>
+  <ITEM TYPE="%-50s" NAME="#SUB_AC_NO" FUNCTIONS=""/>
+  <ITEM LINE="10" COL="10"  TYPE="%-10s" FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="10" COL="20"  TYPE="%17.2f" FUNCTIONS="" NAME="#AMT" INPUT="TEXT" ENABLE="FASLE"/>
+  <ITEM LINE="10" COL="45"  TYPE="%-10s"  FUNCTIONS="T(利息:)"/>
+  <ITEM LINE="10" COL="55"  TYPE="%17.2f" FUNCTIONS="" NAME="#LX" INPUT="TEXT" ENABLE="FALSE" />
+  <ITEM LINE="11" COL="10"  TYPE="%-10s"  FUNCTIONS="T(金额合计:)" />
+  <ITEM LINE="11" COL="20"  TYPE="%17.2f" FUNCTIONS="" NAME="#TOTA_AMT" INPUT="TEXT" ENABLE="FALSE" />
+  <ITEM LINE="12" COL="10"  TYPE="%-10s"  FUNCTIONS="T(销户方式:)" />
+  <ITEM LINE="12" COL="20"  TYPE="%-20s"  FUNCTIONS="T(1)" INPUT="SELECT" NAME="#XHFS">
+  	<SELECT>
+  		<OPTION VALUE="1" TITLE="现金销户"/>
+  		<OPTION VALUE="2" TITLE="转账销户"/>
+  	</SELECT>
+  	<ONLOSTFOCUS>
+  	"{
+  		if(#XHFS=='1')
+  		{
+  			setsel(#VOC_TYPE,'|现金支票|001|','o1t8o1v3o1');
+  			#VOC_TYPE='001';
+  			showblock('TRAN',false,false);
+  		}
+  		else
+  		{
+  			setsel(#VOC_TYPE,'转账支票|002|其他凭证|299|','t8o1v3o1');
+  			#VOC_TYPE='002';
+  			showblock('TRAN',true,false);
+  		}
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="13" COL="10"  TYPE="%-10s" FUNCTIONS="T(介质类型:)"/>
+  <ITEM LINE="13" COL="20"  TYPE="%-3s"  FUNCTIONS="V(NB)" NAME="#VOC_TYPE" INPUT="SELECT"  >
+   		<!-----------
+ 	<SELECT>
+  		<OPTION  VALUE="001" TITLE="现金支票"/>
+  		<OPTION  VALUE="002" TITLE="转账支票"/>
+  		<OPTION  VALUE="299" TITLE="其他凭证"/>
+  	</SELECT>
+  		------------->
+  </ITEM>
+  <ITEM LINE="14" COL="10" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="14" COL="20" TYPE="%16d" FUNCTIONS="T()" INPUT="TEXT" NAME="#VOC_NUM">
+  <ONLOSTFOCUS>"{
+		if(#VOC_TYPE!='299'){
+			commsend_001();
+			$FD16 = '3406';
+			$FD30 = #ACTNO;
+			$FD58 = #VOC_NUM;
+			$FD89 = #VOC_TYPE;
+			$FD48 = $TXNO;
+			$FD54 =#SUBSEQN;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+		}
+  }"
+  </ONLOSTFOCUS>
+	</ITEM>
+<BLOCK NAME="TRAN" LINE="14" COL="0" VISABLE="FALSE" >
+  <ITEM NAME="#LTRAN_ACTNO" LINE="1"  COL="10"  TYPE="%-10s"  FUNCTIONS="T(对方账号:)"/>
+  <ITEM NAME="#TRAN_ACTNO"  LINE="1"  COL="20" TYPE="%-19s"  INPUT="TEXT" FUNCTIONS="V(NB)">
+  	<ONLOSTFOCUS>
+  	"{
+   		initfd();
+   		commsend_001();
+   		$FD16='9731';
+   		$FD102=#TRAN_ACTNO;
+   		callserver();
+   		if($FD12!='0000')
+   		{
+   			showmsg(geterror());
+   			return(false);
+   		}
+   		#TRN_NAME=$FD25;
+   		#Y1023=substr($FD102,28,3);//note_type
+   		#Y1024=substr($FD102,31,16);//note_no
+			if(substr($FD88,0,1)=='1')
+   		{
+   			show(#LZHXH,true);
+   			show(#TRANSEQN,true);
+   			show(#LTRN_SUBMC,true);
+   			show(#TRN_SUBMC,true);
+   		}
+   		else
+   		{
+   			show(#LZHXH,false);
+   			show(#TRANSEQN,false);
+   			show(#LTRN_SUBMC,false);
+   			show(#TRN_SUBMC,false);
+   		}
+   		#TRAN_AMT=#TOTA_AMT;
+   		#AC_TYPE=$FD93;
+
+   		refresh();
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="2" COL="10" TYPE="%-10s" FUNCTIONS="T(对方名称:)"/>
+  <ITEM NAME="#AC_TYPE"   TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM LINE="2" COL="20" TYPE="%-50s" FUNCTIONS=""  NAME="#TRN_NAME" INPUT="LABEL" />
+  <ITEM NAME="#LZHXH"  LINE="3"  COL="10"  TYPE="%-10s"  FUNCTIONS="T(子户序号: )" INPUT="LABEL" VISABLE="FALSE" />
+  <ITEM NAME="#TRANSEQN"  LINE="3"  COL="20" TYPE="%8d"  INPUT="TEXT" FUNCTIONS="V(NB)" VISABLE="FALSE" >
+  	<ONGOTFOCUS>
+  	"{
+  		#TRANSEQN='';
+  	}"
+  	</ONGOTFOCUS>
+  	<ONLOSTFOCUS>
+  	"{
+			initfd();
+			commsend_001();
+			$FD16='9677';
+			$FD101=#TRAN_ACTNO;
+			$FD44=#TRANSEQN;
+			callserver();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			if($FD70=='*')
+			{
+				showmsg('该子账户已经销户');
+				return(false);
+			}
+			if(#ACTNO==#TRAN_ACTNO and #SUBSEQN==#TRANSEQN)
+			{
+				showmsg('转入账号输入错误');
+				return(false);
+			}
+			#TRN_SUBMC=$FD25;
+			refresh();
+  	}"
+  	</ONLOSTFOCUS>
+  </ITEM>
+	<ITEM LINE="4" COL="10" TYPE="%-10s" FUNCTIONS="T(子户名称:)" NAME="#LTRN_SUBMC" INPUT="LABEL" VISABLE="FALSE" />
+	<ITEM LINE="4" COL="20" TYPE="%-50s" FUNCTIONS="" NAME="#TRN_SUBMC" INPUT="LABEL" VISABLE="FALSE" />
+
+	<ITEM LINE="5" COL="10" TYPE="%-10s"  FUNCTIONS="T(转入金额:)" />
+	<ITEM LINE="5" COL="20" TYPE="%17.2f"  FUNCTIONS="" NAME="#TRAN_AMT" INPUT="TEXT" ENABLE="FALSE" />
+</BLOCK>
+	<!-------------------------------------------------------------------------->
+	<ITEM NAME="#Y1023" TYPE="%-3s" FUNCTIONS=""/>
+	<ITEM NAME="#Y1024" TYPE="%-16s" FUNCTIONS="T"/>
+	<!-------------------------------------------------------------------------->
+
+  <ITEM NAME="#PASSWD" TYPE="%16s" FUNCTIONS=""/>
+  <ITEM LINE="21"  COL="59" NAME="#OKEXIT" TYPE="%-6s" FUNCTIONS="T(确  认)"  INPUT="SUBMIT"/>
+</VARIABLE>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="交易成功">
+	NOTHING
+	</PACKAGE>
+	<PRINT>
+	"{
+		print( 8,22,'交 易 成 功');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证"  >
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+	// if($REPRINT=='true')
+	// {
+	// 	reprint_nx();
+	// }
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'交易代码: 4311');
+		print( 5,13,'交易名称:二级账销户');
+		print( 7, 30,'\L0二级账销户凭条\L1');
+
+		print( 9,10,'主 账 号:[20]       户    名:[50]',#ACTNO,#HM);
+		if(#VOC_TYPE=='001')
+		{
+			print(10,10,'凭证类型: 现金支票                  凭证号码:[16]',#VOC_NUM);
+		}
+		else if(#VOC_TYPE=='002')
+		{
+			print(10,10,'凭证类型: 转账支票                  凭证号码:[16]',#VOC_NUM);
+		}
+		else
+		{
+			print(10,10,'凭证类型: 其他凭证                  凭证号码:[16]',#VOC_NUM);
+		}
+		print(11,10,'子账户账号:[24] 户    名:[50]',#SUB_AC_NO,#SUB_HM);
+		print(12,10,'本    金:[20]       利    息:[20]',ltrim(itoa(#AMT,'%16.2f')),ltrim(itoa(#LX,'%16.2f')));
+		print(13,10,'合    计:[20]',ltrim(itoa(#TOTA_AMT,'%16.2f')));
+		if(#XHFS=='2')
+		{
+			print(14,10,'转入账号:[24]',#TRAN_ACTNO);
+			print(15,10,'转入户名:[50]',#TRN_NAME);
+		}
+		print(24,15,'备注:');
+		print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[6]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24"  DESC="二级账销户利息清单">
+   NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	 $KINDNO='00';
+	// if($REPRINT=='true')
+	// {
+	// 	reprint_nx();
+	// }
+	dim @txtime1 as string;
+	@txtime1=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+	print( 5,10,'机构名称:[30]',$BRNAME);
+	print( 5, 2,'代码:4311');
+	print( 5,13,'交易名称:二级账销户业务');
+
+	print( 7,30,'\L0二级账销户利息清单\L1');
+	print( 9,10,'子账户账号:[24]      户    名:[50]',#SUB_AC_NO,#SUB_HM);
+	print(10,10,'开  户  日:[8]                      支 取 日:[8]',#OPN_DATE,$HDATE);
+	print(11,10,'利      率:[8]%                     利    息:￥[16]',comma(val(#RATE,0.000001),8),ltrim(comma(itoa(#LX,'%17.2f'))));
+	print(12,10,'金额  合计:￥[19] ',ltrim(comma(itoa(#TOTA_AMT,'%17.2f'))));
+	print(20,75,'\H0核对无误，请签字:\H1 ____________');
+	print(24,15,'备注:');
+	print(24,27,'交易日期:[8]  [8]',$HDATE,@txtime1);
+	print(24, 5,'柜员:[6]',$FD7);
+	print(24,5,'流水号:[6]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+<LASTWORK>
+	"{
+		//先发一次销户前存利息
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J002';
+		$FD30=#SUB_AC_NO;              //账  号
+		$FD5=$HDATE;                   //交易日期
+		$FD39=getitems('#LX');         //交易金额
+		$FD41=$KINBR;                  //银行代码
+		$FD81='1转账存款';             //摘要
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+
+		//发借方
+		commsend_001();
+		$FD24='fwx';
+		$FD16='J002';
+		$FD30=#SUB_AC_NO;              //账  号
+		$FD5=$HDATE;                   //交易日期
+		$FD39=getitems('#TOTA_AMT');        //交易金额
+		$FD41=$KINBR;                  //银行代码
+		if(#VOC_TYPE=='001')
+		{
+			$FD81='2现金取款销户';        //摘要
+		}
+		else
+		{
+			$FD81='2转账取款销户';        //摘要
+		}
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+
+    // 有转入子账户再发一笔存款
+		if(#TMPFLAG=='1')
+		{
+			commsend_001();
+			$FD24='fwx';
+			$FD16='J002';
+			$FD30=#TRAN_ACTNO+'-'+itoa(val(#TRANSEQN));     //账  号
+			$FD5=$HDATE;                               //交易日期
+			$FD39=getitems('#AMT');                    //交易金额
+			$FD41=$KINBR;                              //银行代码
+			$FD81='1转账存款';                          //摘要
+			callagn();
+			if($FD12 != '0000')
+			{
+				showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+				return(false);
+			}
+		}
+		 showmsg('二级账户销户成功!！');
+	}"
+</LASTWORK>
+</TRANSACTION>

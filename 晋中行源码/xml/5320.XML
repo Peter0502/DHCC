@@ -1,0 +1,200 @@
+<TRANSACTION RIGHTS="11110000" TITLE="6532 小额业务撤销申请报文录入/发送"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    commsend_001();
+    $FD44 = #WT_DAY;
+	$FD45 = #O_WT_DAY;
+    $FD3 =$KINBR;
+    $FD7=$TLRNO;
+    commsend_123();
+}"
+</COMMSEND>
+<COMMRECV>"{
+
+	commrecv_001();
+	commrecv_123();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+    "T(5320                    小额业务撤销申请报文录入/发送)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5860)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="6"  COL="05" TYPE="%-14s" FUNCTIONS="T(接 收  行 号:)"/>
+  <ITEM LINE="7"  COL="05" TYPE="%-14s" FUNCTIONS="T(原包 类型 号:)"/>
+  <ITEM LINE="8"  COL="05" TYPE="%-14s" FUNCTIONS="T(原包委托日期:)"/>
+  <ITEM LINE="9"  COL="05" TYPE="%-14s" FUNCTIONS="T(原 包  序 号:)"/>
+  <ITEM LINE="11" COL="05" TYPE="%-10s" FUNCTIONS="T(附    言:)"/>
+
+  <ITEM   NAME="#NOTPAY_DATE"  TYPE="%8d"   FUNCTIONS="T($HDATE)D()"/>    <!----查询日期--->
+  <ITEM   NAME="#CMTNO"        TYPE="%-3s"  FUNCTIONS="T(321)"/>       <!----CMTNO--->
+  <ITEM   NAME="#OPCD"         TYPE="%-2s"  FUNCTIONS="T(10)"/>        <!----交易处理码--->
+  <ITEM   NAME="#LW_IND"       TYPE="%-1s"  FUNCTIONS="T(1)"/>         <!---来往标识 1往,2来--->
+  <ITEM   NAME="#OTYPE"        TYPE="%-1s"  FUNCTIONS="T(2)"/>         <!---大小额标志 1大额，2小额--->
+
+  <ITEM LINE="6"   COL="20" NAME="#AC_BR_NO"    TYPE="%-12s"  DEVICE="KEYBOARD"   FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+        dim @baktxno1 as string;
+        @baktxno1='';
+        $FD96='';
+        @baktxno1=$TXNO;
+        $FD32=#AC_BR_NO;
+        $TXNO='9553';
+        commsend_001();
+        callserver();
+        $TXNO=@baktxno1;
+        if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+        }
+        showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"   COL="20" NAME="#O_CMTNO"    TYPE="%-3s"   DEVICE="KEYBOARD" INPUT="SELECT"   FUNCTIONS="T(001)V(001,011)">
+   <SELECT LINE="7" COL="21" >
+           <OPTION VALUE="001 普通贷记业务"      TITLE="001.普通贷记业务"/>
+           <OPTION VALUE="008 普通借记业务"      TITLE="002.普通借记回执业务"/>
+           <OPTION VALUE="005 定期贷记业务"      TITLE="005.定期贷记业务"/>
+           <OPTION VALUE="011 定期借记业务"      TITLE="006.定期借记回执业务"/>
+           <OPTION VALUE="007 贷记退汇业务"      TITLE="007.贷记退汇业务"/>
+   </SELECT>
+   </ITEM>
+
+   <ITEM LINE="8"   COL="20" NAME="#O_WT_DAY"    TYPE="%-8s"   DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM LINE="9"   COL="20" NAME="#OORDERNO"   TYPE="%8d"    DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+   <ITEM LINE="11"  COL="15" NAME="#NOTE"       TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>
+  "{
+    if (strfldcnt(#NOTE,':') != 1 or strfldcnt(#NOTE,'{') != 1 or strfldcnt(#NOTE,'}') != 1)
+    {
+        showmsg('输入内容中不能含有半角:{}字符,请修改为全角其它字符');
+        return(false);
+    }
+    delspace(#NOTE);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#NOTPAY_CONTENT" TYPE="%-255s" FUNCTIONS="T(#NOTE)"/>
+
+
+  <!-----占位字段--------------->
+  <ITEM NAME="#PAY_QS_NO"     TYPE="%-12s"      FUNCTIONS=""/><!--(原)发起清算行行号-->
+  <ITEM NAME="#OR_BR_NO"      TYPE="%-12s"      FUNCTIONS=""/><!--(原)发起行号,申请撤销行号 退回行号-->
+  <ITEM NAME="#SENDCO"        TYPE="%-4s"       FUNCTIONS=""/><!--发报中心代码-->
+  <ITEM NAME="#PAY_OPN_BR_NO" TYPE="%-12s"      FUNCTIONS=""/><!--付款人开户行-->
+  <ITEM NAME="#PAY_AC_NO"     TYPE="%-32s"      FUNCTIONS=""/><!--付款人帐号(原收款人帐号)-->
+  <ITEM NAME="#PAY_NAME"      TYPE="%-60s"      FUNCTIONS=""/><!--付款人名称(原收款人名称)-->
+  <ITEM NAME="#PAY_ADDR"      TYPE="%-60s"      FUNCTIONS=""/><!--付款人地址(原收款人地址)-->
+
+  <ITEM NAME="#CASH_QS_NO"    TYPE="%-12s"      FUNCTIONS=""/><!--接受清算行号-->
+  <ITEM NAME="#RECECO"        TYPE="%-4s"       FUNCTIONS=""/><!--发报中心代码-->
+  <ITEM NAME="#CASH_OPN_BR_NO" TYPE="%-12s"     FUNCTIONS=""/><!--收款人开户行号-->
+  <ITEM NAME="#CASH_AC_NO"    TYPE="%-32s"      FUNCTIONS=""/><!--收款人帐号,原付款人帐号-->
+  <ITEM NAME="#CASH_NAME"     TYPE="%-60s"      FUNCTIONS=""/><!--收款人姓名,原付款人姓名-->
+  <ITEM NAME="#CASH_ADDR"     TYPE="%-60s"      FUNCTIONS=""/><!--收款人地址-->
+
+  <ITEM NAME="#YW_TYPE"       TYPE="%-2s"       FUNCTIONS=""/><!--业务种类-->
+  <ITEM NAME="#ORDERNO"       TYPE="%-8s"       FUNCTIONS=""/><!--支付交易序号   撤销支付交易序号-->
+  <ITEM NAME="#CONTENT"       TYPE="%-60s"      FUNCTIONS=""/><!--附言-->
+  <ITEM NAME="#RATE"          TYPE="%-7s"       FUNCTIONS=""/><!--拆借利率-->
+  <ITEM NAME="#RATEDATE"      TYPE="%-5s"       FUNCTIONS=""/><!--拆借期限-->
+
+  <ITEM NAME="#PROCODE"           TYPE="%-8s"       FUNCTIONS=""/><!--处理码-->
+  <ITEM NAME="#CR_DATE"           TYPE="%-8s"       FUNCTIONS=""/><!--查复日期-->
+  <ITEM NAME="#CR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查复行号-->
+  <ITEM NAME="#CR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--查复书号-->
+  <ITEM NAME="#QR_BR_NO"          TYPE="%-12s"      FUNCTIONS=""/><!--查询行号  原查询行号-->
+  <ITEM NAME="#QR_TX_NUM"         TYPE="%-8s"       FUNCTIONS=""/><!--原查询书号 查询书号-->
+  <ITEM NAME="#TX_TYPE"           TYPE="%-1s"       FUNCTIONS=""/><!--原交易种类-->
+  <ITEM NAME="#NOTPAY_ORDERNO"    TYPE="%-3s"       FUNCTIONS=""/><!--撤销申请号   退回申请号-->
+  <ITEM NAME="#O_NOTPAY_ORDERNO"  TYPE="%-3s"       FUNCTIONS=""/><!--原撤销申请号  原退回申请号-->
+  <ITEM NAME="#RESP1"             TYPE="%-1s"       FUNCTIONS=""/><!--撤销应答 退回应答-->
+  <ITEM NAME="#OPERLEVEL"         TYPE="%-1s"       FUNCTIONS=""/><!--优先级别 -->
+  <ITEM NAME="#PROC_STS"          TYPE="%-1s"       FUNCTIONS=""/><!--处理状态 -->
+  <ITEM NAME="#HP_ADD_PWD"        TYPE="%-1s"       FUNCTIONS=""/><!--汇票是否核押 -->
+  <ITEM NAME="#PACKID"            TYPE="%-8s"       FUNCTIONS=""/><!--包序号 -->
+  <ITEM NAME="#O_PACKID"          TYPE="%-8s"       FUNCTIONS=""/><!--包序号 -->
+  <ITEM NAME="#PACK_DATE"         TYPE="%-8s"       FUNCTIONS=""/><!--包日期 -->
+  <ITEM NAME="#O_PACK_DATE"       TYPE="%-8s"       FUNCTIONS=""/><!--包日期 -->
+  <ITEM NAME="#TXNUM"             TYPE="%-5s"       FUNCTIONS=""/><!--业务类型编号 -->
+  <ITEM NAME="#O_TXNUM"           TYPE="%-5s"       FUNCTIONS=""/><!--原业务类型编号-->
+  <ITEM NAME="#LV_YW_IND"         TYPE="%-12s"      FUNCTIONS=""/><!--业务类型编号 -->
+  <ITEM NAME="#RESP_DATE"         TYPE="%-8s"       FUNCTIONS=""/><!--应答日期 -->
+  <ITEM NAME="#RCP_STS"           TYPE="%-2s"       FUNCTIONS=""/><!--业务回执状态 -->
+  <ITEM NAME="#RESP2"             TYPE="%-8s"       FUNCTIONS=""/><!--ccpc交易处理代码-->
+  <ITEM NAME="#RETCODE"           TYPE="%-2s"       FUNCTIONS=""/><!--退汇原因-->
+  <ITEM NAME="#YW_DTL_ID"         TYPE="%-8s"       FUNCTIONS=""/><!--退汇原因-->
+  <ITEM NAME="#ACC_IND"           TYPE="%-1s"       FUNCTIONS=""/><!--实时业务付款人帐户类型-->
+  <ITEM NAME="#REQ_TYPE"          TYPE="%-1s"       FUNCTIONS=""/><!--申请类型 0＝单笔  1＝整包-->
+  <ITEM NAME="#DF_FREEAMT"        TYPE="%-16s"      FUNCTIONS=""/><!--对方手续费-->
+  <ITEM NAME="#PROTNO"            TYPE="%-60s"      FUNCTIONS=""/><!--多方协议号-->
+  <ITEM NAME="#PO_NO"             TYPE="%-8s"       FUNCTIONS=""/><!--汇票号码-->
+  <ITEM NAME="#PO_TYPE"           TYPE="%-1s"       FUNCTIONS=""/><!--汇票类型0可转 1 不可转 2现金-->
+  <ITEM NAME="#WT_DAY"            TYPE="%-8s"       FUNCTIONS="T($HDATE)"/>
+  <ITEM NAME="#TX_AMT"            TYPE="%16.2f"     FUNCTIONS=""/>
+  <ITEM NAME="#CUR_NO"            TYPE="%-3s"       FUNCTIONS="T(RMB)"/>
+
+
+
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+
+  </VARIABLE>
+
+	<!--接收信息包-->
+<REQUEST>
+</REQUEST>	
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+	<PRINT>"{
+	dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print(3,25,'小额撤销申请报文录入/发送');
+		print(5,15,'交易机构 :[7 ] 时     间: [10         ]   操作员号:[4]',$FD3,@txtime,$FD7);
+		print(6,15,'发起行号 :[12]',#OR_BR_NO);
+		print(7,15,'委托日期 :[8]',#WT_DAY);
+		print(8,15,'交易序号 :[8]',#ORDERNO);
+		print(9,15,'流水号码 :[6]',$FD4);
+		print(10,15,'撤销附言 :[60]',substr(#NOTE,0,40));
+		print(11,15,'          [20]',substr(#NOTE,40,20));
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+    <PRINT>"{
+    $KINDNO='00';
+    dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+  
+   print( 5,20,'机构名称:[30]',$BRNAME);  
+   print( 5,2,'代码:5320');
+   print( 5,13,'交易:小额业务撤销申请报文录入/发送');
+
+   print(07,20,'委托日期:[8       ]',$HDATE);
+   print(08,20,'发起行号:[12]',#OR_BR_NO);
+   print(09,20,'交易序号:[8]',#ORDERNO);
+   print(10,20,'撤销附言 :[40]',substr(#NOTE,0,40));
+   print(11,20,'          [20]',substr(#NOTE,40,20));
+   print(24,20,'备注:');
+   print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+   print(24,5,'柜员:[4]',$FD7);
+   print(24,5,'流水号:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+

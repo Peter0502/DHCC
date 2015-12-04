@@ -1,0 +1,199 @@
+/*************************************************************
+* 文 件 名: gT004.c
+* 功能描述：检查保盘数据正确性，并将数据导入到czcust表中
+* 作    者: 
+* 完成日期: 2007-2-27 9:31
+*
+* 修改记录：
+* 日    期: 2007-2-27 9:31
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+EXEC SQL include sqlca;
+#include "dc_log_bk_c.h"
+#include "cif_basic_inf_c.h"
+#include "cif_alias_inf_c.h"
+#include "cif_id_code_rel_c.h"
+#include "cif_email_inf_c.h"
+#include "cif_addr_inf_c.h"
+#include "dd_mst_c.h"
+#include "czcust_c.h"
+#include "td_mst_c.h"
+#include "ln_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "prdt_ac_id_c.h"
+
+static struct cif_alias_inf_c    cif_alias_inf;
+static struct cif_basic_inf_c    cif_basic_inf;
+static struct cif_id_code_rel_c  cif_id_code_rel;
+static struct cif_addr_inf_c  	 cif_addr_inf;
+static struct cif_email_inf_c  	 cif_email_inf;
+static struct dd_mst_c           sDd_mst;
+static struct mdm_ac_rel_c       sMdm_ac_rel;
+static struct td_mst_c           sTd_mst;
+static struct prdt_ac_id_c       sPrdt_ac_id;
+static struct ln_mst_c           sLn_mst;
+static struct czcust_c           sCzcust;
+gT004()
+{
+	int ret = 0;
+	int cnt=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	char cId    [21];
+	char cIdtype[2];
+	char cName  [81];
+	int  iTotCnt=0;
+	char cOld_Id    [21];
+	char cOld_Idtype[2];
+	char cOld_Name  [81];
+	int iCif_cnt=0;
+	char cAc_no[20];
+	long lAc_id;
+	FILE *fpr;
+	char * p;
+	char cTmpbuf[2048];
+	char cValue[100];
+	EXEC SQL END DECLARE SECTION;
+	memset(cTmpbuf, 0 , sizeof(cTmpbuf));
+	memset(cId    , 0 , sizeof(cId    ));
+	memset(cIdtype, 0 , sizeof(cIdtype));
+	memset(cName  , 0 , sizeof(cName  ));
+	memset(cOld_Id    , 0 , sizeof(cOld_Id    ));
+	memset(cOld_Idtype, 0 , sizeof(cOld_Idtype));
+	memset(cOld_Name  , 0 , sizeof(cOld_Name  ));
+	memset(cAc_no, 0 , sizeof(cAc_no));
+	memset(&cif_basic_inf, 0x00, sizeof(struct cif_basic_inf_c));
+	memset(&cif_alias_inf, 0x00, sizeof(struct cif_alias_inf_c));
+	memset(&cif_id_code_rel, 0x00, sizeof(struct cif_id_code_rel_c));
+	memset(&cif_id_code_rel, 0 ,sizeof(struct cif_id_code_rel_c));
+	memset(&cif_addr_inf   , 0 ,sizeof(struct cif_addr_inf_c));
+	memset(&cif_email_inf  , 0 ,sizeof(struct cif_email_inf_c));
+	
+	memset(&sDd_mst    , 0 , sizeof(sDd_mst    ));
+	memset(&sMdm_ac_rel, 0 , sizeof(sMdm_ac_rel));
+	memset(&sTd_mst    , 0 , sizeof(sTd_mst    ));
+	memset(&sPrdt_ac_id, 0 , sizeof(sPrdt_ac_id));
+	memset(&sLn_mst    , 0 , sizeof(sLn_mst    ));
+	fpr=fopen("/home/newsys/tmp/czcust.dat","rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("%s,%d fopen czcust error ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+	while(1)
+	{
+		memset(&sCzcust, 0 , sizeof(sCzcust));
+		memset(cTmpbuf, 0 , sizeof(cTmpbuf));
+		fgets(cTmpbuf,sizeof(cTmpbuf)-1,fpr);
+		if(strlen(cTmpbuf)==0) break;
+	/* 开户机构 */
+		p=strtok(cTmpbuf,"|");
+		strncpy(sCzcust.opnbr,p,sizeof(sCzcust.opnbr)-1);
+		/* ac_id */
+		memset(cValue, 0 , sizeof(cValue));
+		p=strtok(NULL,"|");
+		strncpy(cValue,p,sizeof(cValue)-1);
+		sCzcust.ac_id=atol(cValue);
+		/* ac_no */
+		p=strtok(NULL,"|");
+		strncpy(sCzcust.ac_no,p,sizeof(sCzcust.ac_no)-1);
+		/* 检查帐号和id号关系 */
+		memset(&sMdm_ac_rel, 0 , sizeof(sMdm_ac_rel));
+		memcpy(sMdm_ac_rel.ac_no,sCzcust.ac_no,strlen(sCzcust.ac_no));
+		ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_no='%s' ",sCzcust.ac_no);
+		if(ret)
+		{
+			vtcp_log("%s,%d find mdm_ac_rel error sqlcode=[%d],cnt=[%d]\n",__FILE__,__LINE__,ret,cnt);
+			goto ErrExit;
+		}
+		if(sCzcust.ac_id!=0)
+		{
+			if(sMdm_ac_rel.ac_id!=sCzcust.ac_id)
+			{
+				vtcp_log("%s,%d find mdm_ac_rel error sqlcode=[%d]\n",__FILE__,__LINE__,ret);
+				goto ErrExit;
+			}
+		}
+		else
+			sCzcust.ac_id=sMdm_ac_rel.ac_id;
+		/* 客户号 */
+		memset(cValue, 0 , sizeof(cValue));
+		p=strtok(NULL,"|");
+		strncpy(cValue,p,sizeof(cValue)-1);
+		sCzcust.cif_no=atol(cValue);
+  	/* 户名 */
+		p=strtok(NULL,"|");
+		strncpy(sCzcust.name,p,sizeof(sCzcust.name)-1);
+  	/* 借据号 */
+		p=strtok(NULL,"|");
+		strncpy(sCzcust.pact_no,p,sizeof(sCzcust.pact_no)-1);
+  	
+		p=strtok(NULL,"|");
+		strncpy(cValue,p,sizeof(cValue)-1);
+		str2dbl(cValue,strlen(cValue),0,&sCzcust.avbal);
+  	
+		p=strtok(NULL,"|");
+		strncpy(sCzcust.opday,p,sizeof(sCzcust.opday)-1);
+  	
+		p=strtok(NULL,"|");
+		strncpy(sCzcust.endday,p,sizeof(sCzcust.endday)-1);
+  	
+		p=strtok(NULL,"|");
+		memset(cValue, 0 , sizeof(cValue));
+		strncpy(cValue,p,sizeof(cValue)-1);
+		pub_base_strpack(cValue);
+		if(strlen(cValue)>20)
+		{
+			vtcp_log("%s,%d ===============================",__FILE__,__LINE__);
+			vtcp_log("%s,%d line=[%d]营业执照号码长度大于20=[%s]",__FILE__,__LINE__,cnt,cValue);
+		}
+		strncpy(sCzcust.id_no,cValue,sizeof(sCzcust.id_no)-1);
+		
+  	
+		p=strtok(NULL,"|");
+		memset(cValue, 0 , sizeof(cValue));
+		strncpy(cValue,p,sizeof(cValue)-1);
+		pub_base_strpack(cValue);
+		if(strlen(cValue)>20)
+		{
+			vtcp_log("%s,%d ===============================",__FILE__,__LINE__);
+			vtcp_log("%s,%d line=[%d]营业执照号码长度大于20=[%s]",__FILE__,__LINE__,cnt,cValue);
+		}
+		strncpy(sCzcust.crd_no,cValue,sizeof(sCzcust.crd_no)-1);
+  	
+		ret=Czcust_Ins(sCzcust,g_pub_tx.reply);
+		if(ret)
+		{
+			if(ret==-239) continue;
+			vtcp_log("%s,%d 插入Czcust 错误 sqlcode=[%d]",__FILE__,__LINE__,ret);
+			goto ErrExit;
+		}
+		cnt ++;
+	}
+	fclose(fpr);
+	vtcp_log("%s,%d ===== end =========",__FILE__,__LINE__);
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"测试程序执行成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	strcpy(g_pub_tx.reply,"D008");
+	sprintf(acErrMsg,"程序执行失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

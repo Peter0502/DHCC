@@ -1,0 +1,287 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="燃气退费"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+  <ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9924                         燃气退费 )"/>
+  <ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=3010)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="7"   COL="5"  TYPE="%-14s"    FUNCTIONS="T(用 户 代 码:)"/>
+  <ITEM LINE="7"   COL="15" NAME="#USER_NO" INPUT="TEXT" TYPE="%-6s"  FUNCTIONS="V(000001,999999)"/>
+
+  <ITEM LINE="7"   COL="40"  TYPE="%-14s"    FUNCTIONS="T(流  水  号:)"/>
+  <ITEM LINE="7"   COL="50"  TYPE="%-8s"    NAME="#OLD_TRACENO"    INPUT="TEXT"  FUNCTIONS="V(00000001,99999999)"/>
+  <ITEM LINE="9"   COL ="5"  TYPE="%-14s"    FUNCTIONS="T(缴 费 日 期:)"/>
+  <ITEM LINE="9"   COL="15"  TYPE="%-8s"    NAME="#OLD_DATE"    INPUT="LABEL"  FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="9"  COL="40"   TYPE="%-14s"    FUNCTIONS="T(缴 费 金 额:)"/>
+  <ITEM LINE="9"  COL="50"  TYPE="%10.2f"   NAME="#OLD_AMT"   INPUT="TEXT"  FUNCTIONS="V(0000000001,9999999999)">
+    <ONLOSTFOCUS>
+    "{
+      //检查交易流水
+      initfd();
+      commsend_001();
+      $FD16='9020';             //平台补打业务凭条接口
+      $FD60='RQDS';             //平台交易类型
+      //$FD30=#USER_NO;
+      $FD32=#OLD_TRACENO;
+      $FD28=#OLD_DATE;
+
+      callagnpt();
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        rerun();
+        return(false);
+      }
+
+      #YHNAME=delspace($FD25);             //用户姓名
+      #ADDRESS=delspace($FD76);            //用户单位及地址
+
+      #SYBS=delspace($FD86);               //上月表指数
+      #BYBS=delspace($FD87);               //本月表指数
+      #YL=delspace($FD88);                 //用量
+      #DJ=delspace($FD91);                 //单价
+      #RQF=delspace($FD73);                //燃气费
+      #BXF=delspace($FD84);                //保险费
+      #FZJ=delspace($FD85);                //复置金
+      #SYQF=delspace($FD58);               //上月欠费
+      #ZNJ=delspace($FD59);                //滞纳金
+      #SYJY=delspace($FD26);               //上月结余
+      #DYJJK=delspace($FD61);              //当月已交款
+      #YSHJ=delspace($FD52);               //应收合计
+      #CHBY=delspace($FD27);               //抄表员
+      #PHONE=delspace($FD62);              //电话
+      #AC_NO=delspace($FD31);              //账号
+      #AC_NAME=delspace($FD33);            //户名
+
+      #OLD_TRACENO=delspace($FD32);        //平台交易流水
+      #JFFS=delspace($FD68);               //缴费方式
+      #TX_CODE=delspace($FD44);            //交易代码
+
+      //非缴费交易不可退费
+      if(#TX_CODE!='2010'){
+        showmsg('非缴费流水不可进行退费交易，请确认流水号！');
+        rerun();
+        return(false);
+      }
+      //转账缴费时，需要验密
+      if(#JFFS=='2'){
+        show(#LAC_NO,true);
+        show(#AC_NO,true);
+        show(#LACNAME,true);
+        show(#AC_NAME,true);
+        show(#LMM,true);
+        show(#DRAW_PWD,true);
+      }else{
+        show(#LAC_NO,false);
+        show(#AC_NO,false);
+        show(#LACNAME,false);
+        show(#AC_NAME,false);
+        show(#LMM,false);
+        show(#DRAW_PWD,false);
+      }
+
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#SYBS" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#BYBS" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#YL" TYPE="%-9s" FUNCTIONS=""/>
+  <ITEM NAME="#DJ" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#RQF" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#BXF" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#FZJ" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SYQF" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#ZNJ" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#SYJY" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#DYJJK" TYPE="%-10s" FUNCTIONS=""/>
+  <ITEM NAME="#YSHJ" TYPE="%-11s" FUNCTIONS=""/>
+  <ITEM NAME="#CHBY" TYPE="%-8s" FUNCTIONS=""/>
+  <ITEM NAME="#PHONE" TYPE="%-11s" FUNCTIONS=""/>
+
+  <ITEM LINE="11" COL="5"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+
+  <ITEM LINE="13"  COL="5" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+  <ITEM LINE="13"  COL="15" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+  <ITEM LINE="14"  COL="5"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+  <ITEM LINE="14"  COL="15" NAME="#ADDRESS"  TYPE="%-64s"    INPUT="LABEL" FUNCTIONS="T()"/>
+
+  <ITEM LINE="16" COL="5"  NAME="#LAC_NO"  VISABLE="FALSE" INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(账    号:)" />
+  <ITEM LINE="16" COL="15" NAME="#AC_NO"   VISABLE="FALSE" INPUT="LABEL" TYPE="%-19s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="16" COL="40"  NAME="#LACNAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+  <ITEM LINE="16" COL="50" NAME="#AC_NAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-60s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="17" COL="5" NAME="#LMM" TYPE="%-10s" INPUT="LABEL"  VISABLE="FALSE" FUNCTIONS="T(密    码:)"/>
+  <ITEM LINE="17" COL="15" NAME="#DRAW_PWD" TYPE="%6d" VISABLE="FALSE" INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+    <ONLOSTFOCUS>
+    "{
+      if(substr(#AC_NO,0,6)!='621223' and substr(#AC_NO,0,6)!='621780')  //存折验密
+      {
+        dim @baktxno as string;
+        @baktxno=$TXNO;
+        $TXNO='9317';
+        commsend_001();
+        $FD30=#AC_NO;
+        $FD79=getitems('#DRAW_PWD');
+        callserver();
+        $TXNO=@baktxno;
+        if($FD12!='0000'){
+          showmsg(geterror());
+          return (false);
+        }
+      }
+      else if(substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6)=='621780')  //卡验密
+      {
+        initfd();
+        commsend_001();
+        $FD16='7007';         //卡验密接口
+        $FD30=#AC_NO;         //绑定卡号
+        $FD68='4';
+        $FD79=#DRAW_PWD;      //卡密码
+        callagn();
+        if( $FD12 != '0000')
+        {
+          showmsg(geterror());
+          return(false);
+        }
+      }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#JFFS"        TYPE="%1s"      FUNCTIONS=""/>
+  <ITEM NAME="#TX_CODE"     TYPE="%4s"      FUNCTIONS=""/>
+  <ITEM NAME="#TRACE_NO"    TYPE="%-20s"  FUNCTIONS=""/>
+
+  <ITEM NAME="#BTN" LINE="21"  COL="61"  TYPE="%-6s"     FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    <ONCLICK>
+    "{
+      initfd();
+      commsend_001();
+      $FD16='3369';                   //退费需要授权
+      callserver();
+      if($FD12 !='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+
+      initfd();
+      commsend_001();
+      $FD16='3010';                   //平台退费接口
+      $FD60='RQDS';                   //平台交易类型
+      $FD20='1';                      //柜面发起标志
+      $FD30=#USER_NO;
+      $FD32=#OLD_TRACENO;
+      $FD28=#OLD_DATE;
+      $FD39=itoa(#OLD_AMT,'%-10.2f'); //交易金额
+      $FD79=#DRAW_PWD;
+
+      //退费时，将原交易流水信息写入退费记录
+      $FD25=#YHNAME;
+      $FD76=#ADDRESS;
+      $FD86=#SYBS;
+      $FD87=#BYBS;
+      $FD88=#YL;
+      $FD91=#DJ;
+      $FD73=#RQF;
+      $FD84=#BXF;
+      $FD85=#FZJ;
+      $FD58=#SYQF;
+      $FD59=#ZNJ;
+      $FD26=#SYJY;
+      $FD61=#DYJJK;
+      $FD52=#YSHJ;
+      $FD27=#CHBY;
+      $FD62=#PHONE;
+      $FD68=#JFFS;
+      $FD31=#AC_NO;
+      $FD33=#AC_NAME;
+
+      callagnpt();
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+
+     #TRACE_NO=delspace($FD32);           //平台流水号
+
+      //转账存折缴费场合，需要补登存折
+      if(#JFFS=='2' and len(delspace(#AC_NO))==13)
+      {
+        showmsg('原缴费交易为转账存折方式，请凭证打印完毕后进行3407补登存折！');
+      }
+
+     runoutput();
+     rerun();
+    }"
+    </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<RESPONSE>
+  <PACKAGE DEVICE="SCREEN"  DESC="显示内容">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    print(3,27,'退费交易成功');
+    print(6,20,'用户代码：[6]                     用户姓名：[40]',#USER_NO,#YHNAME);
+    print(7,20,'地    址：[64]',#ADDRESS);
+    print(8,20,'原缴费金额：[16]         退费金额：[16]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(comma(itoa(#OLD_AMT,'%.2f'))));
+    print(9,20,'原缴费流水：[8]                 退费流水：[8]',delspace(#OLD_TRACENO),#TRACE_NO);
+    if(#JFFS == '2')
+    {
+      print(10,20,'退费方式：转账');
+      print(11,20,'银行卡：[19]          户名：[60]',#AC_NO,#AC_NAME);
+    }
+    else
+    {
+      print(10,20,'退费方式：现金');
+    }
+  }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+  <PACKAGE DEVICE="PRINTER"  LINESPACE="22" DESC="打印专用凭证">
+    NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+    dim @txtime  as string;
+    @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+    print(5,20,'机构名称:[30]',$BRNAME);
+    print(5,2,'代码:9924');
+    print(5,13,'交易:燃气退费');
+
+    print(7,40,'\L0燃气退费\L1');
+    print(9,20,'用户代码：[6]                  用户姓名：[40]',#USER_NO,#YHNAME);
+    print(10,20,'地    址：[64]',#ADDRESS);
+    if(#JFFS == '2')
+    {
+      print(11,20,'退费方式：转账');
+      print(12,20,'原缴费金额：[16]      支付账号：[19]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(#AC_NO));
+      print(13,20,'退费金额：[16]        退入账号：[19]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(#AC_NO));
+      print(14,20,'原缴费流水：[8]              退费流水：[8]',delspace(#OLD_TRACENO),#TRACE_NO);
+    }
+    else
+    {
+      print(11,20,'退费方式：现金');
+      print(12,20,'原缴费金额：[16]      退费金额：[16]',delspace(comma(itoa(#OLD_AMT,'%.2f'))),delspace(comma(itoa(#OLD_AMT,'%.2f'))));
+      print(13,20,'原缴费流水：[8]              退费流水：[8]',delspace(#OLD_TRACENO),#TRACE_NO);
+    }
+
+    print_sq(); 
+
+    print(17,80,'\H0本人已确认银行打印记录正确无误.\H1');
+    print(19,80,'客户签名:_____________________');
+
+    print( 24,20,'备注:');
+    print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+    print( 24,5,'柜员:[4]',$FD7);
+    print( 24,5,'流水号:[6]',$FD4);
+  }"
+  </PRINT>
+</RESPONSE>
+</TRANSACTION>

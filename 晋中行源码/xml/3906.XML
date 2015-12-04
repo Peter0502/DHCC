@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="01010000" TITLE="3906  对公冲正"
+ xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+<ITEM NAME="#KINBR"  TYPE="%-7s" FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#HEJFNO" TYPE="%-6s" FUNCTIONS="T($HEJFNO)"/>
+<ITEM NAME="#OPNBR"  TYPE="%-7s" FUNCTIONS="T($KINBR)"/>
+<ITEM NAME="#HCODE"  TYPE="%-1s" FUNCTIONS="T($HCODE)"/>
+<ITEM NAME="#TRMSEQ" TYPE="%-2s" FUNCTIONS="T($TRMSEQ)"/>
+<ITEM NAME="#EJFNO"  TYPE="%-6s" FUNCTIONS="T($TXTNO)"/>
+<ITEM NAME="#TASKID" TYPE="%-2s" FUNCTIONS="T(UC)"/>
+<ITEM NAME="#TMTYPE" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#APTYPE" TYPE="%-1s" FUNCTIONS="T(p)"/>
+<ITEM NAME="#TXNO"   TYPE="%-2s" FUNCTIONS="T(94)"/>
+<ITEM NAME="#PTYPE"  TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#MULTTX" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#TRNMOD" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#SBTMOD" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#TLRNO"  TYPE="%-6s" FUNCTIONS="T($TLRNO)"/>
+<ITEM NAME="#CURCD"  TYPE="%-3s" FUNCTIONS="T(RMB)"/>
+<ITEM NAME="#NBCD"   TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#XCRT"   TYPE="%-8s" FUNCTIONS="T($XCRT)"/>
+<ITEM NAME="#SUPIN1" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#SUPIN2" TYPE="%-1s" FUNCTIONS="T(0)"/>
+<ITEM NAME="#DSCPT"  TYPE="%-3s" FUNCTIONS="T(002)"/>
+<ITEM NAME="#TXTYPE" TYPE="%-2s" />
+<ITEM LINE="3"  COL="3"  TYPE="%-50s" FUNCTIONS="T(3906                            对公冲正)"/>
+<ITEM LINE="4"  COL="3" TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+<ITEM LINE="6"  COL="15" TYPE="%-10s" FUNCTIONS="T(帐    号:)"/>
+<ITEM LINE="8"  COL="15" TYPE="%-10s" FUNCTIONS="T(科 目 号:)"/>
+<ITEM LINE="6"  COL="40" TYPE="%-10s" FUNCTIONS="T(户  名:)"/>
+<ITEM LINE="8"  COL="40" TYPE="%-10s" FUNCTIONS="T(余  额:)"/>
+<ITEM LINE="10" COL="15" TYPE="%-10s" FUNCTIONS="T(错帐日期:)"/>
+<ITEM LINE="12" COL="15" TYPE="%-10s" FUNCTIONS="T(借贷标志:!)"/>
+<ITEM LINE="14" COL="15" TYPE="%-10s" FUNCTIONS="T(冲正金额:)"/>
+<ITEM NAME="#TYPE"  TYPE="%1d" />
+<ITEM LINE="6" COL="25" NAME="#ORDERNO" TYPE="%-14s" DEVICE="KEYBOARD" FUNCTIONS="">
+<ONLOSTFOCUS>
+"{
+#ORDERNO=rtrim(#ORDERNO);
+if(len(#ORDERNO)==0)
+{
+    #TYPE='1';          //按科目
+    #ORDERNO='';
+    goitem(#SUBJNO);
+}else{
+    #TYPE='0';          //按帐号
+    #SUBJNO='';
+}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<!--
+<ITEM NAME="#CCC"    TYPE="%-3s"  FUNCTIONS="T(#ORDERNO,1,3)">
+<ONLOSTFOCUS>
+"{
+    if(#CCC=='118')
+    {
+        showmsg('1180000科目要通过转帐记帐来做!');
+        return(false);
+
+     }
+}"
+</ONLOSTFOCUS>
+</ITEM>
+-->
+<ITEM NAME="#YYY"    TYPE="%-4s"  FUNCTIONS="T($KINBR,1,4)"/>
+<ITEM NAME="#CPBMRFLAG"    TYPE="%-1s"  FUNCTIONS=""/>
+<ITEM NAME="#OACTNO" TYPE="%-18s" FUNCTIONS="T(#YYY+#ORDERNO)">
+<ONLOSTFOCUS>
+"{
+	dim @a as string;
+	dim @txamt as string;
+	@txamt='19000000';
+
+	@a='';
+	@a=checkno('D11',#OACTNO);
+	if(@a!=''){
+	#OPERNAME=substr(@a,0,30);
+	#OPERAVBAL=substr(@a,40,16);
+            #OACTNO=substr(@a,56,18);	   //旧帐号得到新帐号
+            #ORDERNO=substr(#OACTNO,4,14); //旧帐号得到新帐号
+	enable(#ORDERNO,true);
+        enable(#OPERNAME,true);
+        enable(#OPERAVBAL,true);
+        //在这里进行授权,把帐户类型设成a
+        #CPBMRFLAG = '4';
+        //open('9997.XML','#ACTTYPE='+#CPBMRFLAG+';');
+    //    open('9997.XML','#TXAMT='+@txamt+';#ACTTYPE='+#CPBMRFLAG+';');
+	}
+        else
+        {
+        enable(#OPERNAME,false);
+        enable(#OPERAVBAL,false);
+        showmsg('帐号输入有误!');
+        return(false);
+        }
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#PVOCTYPE" TYPE="%1s" FUNCTIONS=""/>
+<ITEM LINE="6"  COL="47" NAME="#OPERNAME" TYPE="%-30s" FUNCTIONS="T()" INPUT="LABEL"/>
+<ITEM LINE="8"  COL="47" NAME="#OPERAVBAL" TYPE="%-30s" FUNCTIONS="T()" INPUT="LABEL"/>
+<ITEM NAME="#NNN"  TYPE="%-1s"  FUNCTIONS="j(#TYPE=1,T{1}T{0})G(0,#ERRDATE)"/> 
+<ITEM NAME="#DHCACNO"  TYPE="%-7s"  FUNCTIONS=""/> 
+<ITEM LINE="8"  COL="25" NAME="#SUBJNO"  TYPE="%-7d" DEVICE="KEYBOARD" FUNCTIONS="T()">
+<ONLOSTFOCUS>
+"{
+        dim @a as string;
+        dim @len as number;
+        @a='';
+			if(#SUBJNO=='1060100' or #SUBJNO=='1060200'){
+				showmsg('抵质押不能冲正');
+//				return(false);
+			}
+          // 冲正或者补记交易做118科目会造成总分不平
+			if(#SUBJNO=='1180000' ){
+				showmsg('1180000科目要通过转帐记帐来做!');
+				return(false);
+			}
+        #SUBJNO=rtrim(#SUBJNO);
+        if(len(#SUBJNO)==0)
+        {
+            #SUBJNO='';
+            goitem(#ORDERNO);
+            return(true);
+        }
+        @a=checkno('D11',#SUBJNO);
+        if(@a!=''){
+				@len = len(@a);
+				#DHCACNO = substr(@a, @len - 14, 7); //城信科目
+	
+            #OPERNAME=substr(@a,0,30);
+            #OPERAVBAL=substr(@a,40,16);
+            enable(#OPERNAME,true);
+            enable(#OPERAVBAL,true);
+            //在这里进行授权,把帐户类型设成a
+        	#CPBMRFLAG = 'a';
+        //	open('9997.XML','#ACTTYPE='+#CPBMRFLAG+';');
+        
+        }else{
+            enable(#OPERNAME,false);
+            enable(#OPERAVBAL,false);
+            showmsg('科目输入有误!');
+            return(false);
+        }
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="10"  COL="25" NAME="#ERRDATE" TYPE="%-8s" DEVICE="KEYBOARD"  FUNCTIONS="V(20000101,$HDATE)D()" >
+<ONLOSTFOCUS>
+"{
+	if(#ERRDATE &gt;= $HDATE){
+		showmsg('当天的帐不能冲正,请做取消交易!');
+		return(false);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>   
+<ITEM LINE="12" COL="25" NAME="#CRDB"    TYPE="%-1s" DEVICE="KEYBOARD"  FUNCTIONS="T(1)V(1|2)">
+<SELECT LINE="12" COL="27" >
+<OPTION  VALUE="1 借" TITLE="1.借"/>
+<OPTION  VALUE="2 贷" TITLE="2.贷"/>
+</SELECT>
+  <ONLOSTFOCUS>
+    "{
+	if(#SUBJNO &gt; '5000000' and #SUBJNO &lt; '5160000' and #CRDB=='1'){
+		showmsg('本科目只能记贷方!');
+		return(false);
+	}
+	if(#SUBJNO &gt; '5200000' and #SUBJNO &lt; '5510000' and #CRDB=='2'){
+		showmsg('本科目只能记借方!');
+		return(false);
+	}
+     }"
+  </ONLOSTFOCUS>
+</ITEM>
+<ITEM LINE="14"  COL="25" NAME="#TXAMT1" TYPE="%17.2f"  DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,0009999999999999)"> 
+<ONLOSTFOCUS>
+"{
+//     showmsg('注意帐号跨结息日冲正不能取消!');
+}"
+</ONLOSTFOCUS>
+</ITEM>   
+
+<ITEM NAME="#XTXAMT" TYPE="%-21s"  FUNCTIONS="X(#TXAMT1)" /> 
+<ITEM NAME="#TXAMT"  TYPE="%13.2f" FUNCTIONS="T(#TXAMT1,5,12)" /> 
+<ITEM NAME="#ZERO"   TYPE="%-11s"  FUNCTIONS="T(00000000000)" /> 
+<ITEM NAME="#ACTNO"   TYPE="%-18s" FUNCTIONS="j(#TYPE=0,T{#OACTNO}T{#SUBJNO})"/> 
+<ITEM NAME="#OSUBJNO" TYPE="%-7s"  /> 
+<ITEM NAME="#ONAME"   TYPE="%-30s" FUNCTIONS="J(#PNAME)"/>
+<ITEM NAME="#PNAME"   TYPE="%-20s" FUNCTIONS="T(#ONAME,1,20)"/>
+<ITEM NAME="#OFLAG"   TYPE="%-1s"  />
+<ITEM NAME="#CCRDB"   TYPE="%-2s"   FUNCTIONS="j(#CRDB=1,T{借}T{贷})"/>
+<ITEM NAME="#OFTXAMT" TYPE="%17.2f" FUNCTIONS="J(#XFTXAMT)" />
+<ITEM NAME="#XFTXAMT" TYPE="%-21s"  FUNCTIONS="X(#OFTXAMT)" />
+
+<!--<ITEM NAME="#OTXAMT"  TYPE="%17.2f"  FUNCTIONS="J(#XTXAMT)"/>
+<ITEM NAME="#XTXAMT" TYPE="%-21s"   FUNCTIONS="X(#OTXAMT)" /> -->
+<ITEM NAME="#OTXAMT"  TYPE="%17.2f" FUNCTIONS="J(#LIXI)"/>
+
+<ITEM NAME="#LIXI"  TYPE="%17.2f" FUNCTIONS="E(#OTXAMT-#TXAMT1)J(#XLIXI)"/>
+<ITEM NAME="#XLIXI" TYPE="%-21s"   FUNCTIONS="X(#LIXI)" /> 
+
+<ITEM NAME="#OBTXAMT" TYPE="%17.2f" FUNCTIONS="J(#XBTXAMT)" />
+<ITEM NAME="#XBTXAMT" TYPE="%-21s"  FUNCTIONS="X(#OBTXAMT)" /> 
+<ITEM NAME="#TOTLRNO" TYPE="%-9s"   FUNCTIONS="T(#KINBR+#TLRNO)"/>
+<ITEM NAME="#FTLRNO"  TYPE="%-5s"   FUNCTIONS="T(#TOTLRNO,5,5)"/>
+<ITEM NAME="#BRSRNO" TYPE="%-5s" /> 
+<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/ >
+
+</VARIABLE>
+<REQUEST><PACKAGE SERVICE="dh39060">
+ $APCTLHD
+ $HTRMSEQ$HEJFNO#OPNBR#KINBR#TRMSEQ#EJFNO#TASKID#TMTYPE#APTYPE#TXNO#PTYPE
+ #DSCPT$HCODE#ACTNO#TXTYPE#MULTTX#CRDB$SUPCD1$SUPCD2$REASON#TLRNO#NBCD
+ #TRNMOD#SBTMOD#CURCD#XCRT#TXAMT
+ #TYPE#DHCACNO#ERRDATE#TXAMT1
+</PACKAGE></REQUEST>    
+ 
+<RESPONSE>
+<PACKAGE>
+p94101#OACTNO#OSUBJNO#ONAME#OFLAG#OFTXAMT#OTXAMT#OBTXAMT#BRSRNO
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+<PACKAGE>002#TYPE=0C940000A显示内容N505#ACTNO#ONAME#CCRDB#XFTXAMT#XTXAMT#XBTXAMT</PACKAGE>
+<PACKAGE>003#TYPE=1C940000B显示内容N505#SUBJNO#ONAME#CCRDB#XTXAMT</PACKAGE>        
+<PACKAGE>004#TYPE=0C940000C普通凭证N205#KINBR$TLRNO$BRNAME#BRSRNO#ACTNO#PNAME#CCRDB#XFTXAMT#XTXAMT#XBTXAMT#ERRDATE$HDATE</PACKAGE>
+<PACKAGE>000#TYPE=1C940000D普通凭证N205#KINBR$TLRNO$BRNAME#BRSRNO#SUBJNO#PNAME#CCRDB#XTXAMT#ERRDATE$HDATE</PACKAGE>
+<FORMAT NAME="C940000A">
+"04                    帐      号: ####-#######-#######
+05                    帐户  名称：##############################
+06                    借贷  标志: ##
+07                    交易前金额: #####################
+08                    交易  金额: #####################
+09                    交易后余额: #####################
+"
+</FORMAT>
+<FORMAT NAME="C940000B">
+"04                     科 目 号: #######
+05                     科目名称：##############################
+06                     借贷标志: ##
+07                     交易金额: #####################
+"
+</FORMAT>
+<FORMAT NAME="C940000C">
+"04                     #######                    对公冲正凭证                    ######
+05                     ##############################                             ##### 
+06              帐      号: ####-#######-#######    户      名: ####################
+07              借贷  标志: ##                      交易前金额: #####################    
+08              交易  金额: #####################   交易后余额: #####################   
+09              错 帐 日期: ####/##/##              交易  日期: ######## 
+"
+</FORMAT>
+<FORMAT NAME="C940000D">
+"04                     #######                     对公冲正凭证                    ######
+05                     ##############################                              ##### 
+06                 科 目 号: #######           科目名称: ####################
+07                 借贷标志: ##                交易金额: #####################
+08                 错帐日期: ####/##/##        交易日期: ####/##/##
+"
+</FORMAT>
+</OUTPUT>
+</TRANSACTION>

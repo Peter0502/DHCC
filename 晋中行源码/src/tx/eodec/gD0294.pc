@@ -1,0 +1,372 @@
+/***************************************************************
+* ÎÄ ¼þ Ãû: gD0294.c
+* ¹¦ÄÜÃèÊö: ÔÂµ×Ö§ÐÐ268×ªÈëµ½ÇåËãµÄ26504ÉÏ ×ó¾­ÀíËµÒª»®µ½ÕâÉÏÃæ
+*
+* ×÷    Õß: ligl
+* Íê³ÉÈÕÆÚ: 2006-11-3 16:11
+*
+* ÐÞ¸Ä¼ÇÂ¼£º
+*    ÈÕ    ÆÚ:
+*    ÐÞ ¸Ä ÈË:
+*    ÐÞ¸ÄÄÚÈÝ:
+*
+**************************************************************/
+#include <stdio.h>
+#define EXTERN
+#include "public.h"
+#include "com_parm_c.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "gl_sub_c.h"
+#include "com_item_c.h"
+#include "dc_acc_rel_c.h"
+char  def_br_no[6];
+char  def_tel[5];
+char  cTestbrno[BRNO_LEN+1];
+ 
+static char cAc_no[13]="26504";
+gD0294()
+{
+  int ret=0;
+	double c_bal=0.00, d_bal=0.00;
+	char dc_ind;
+	struct com_parm_c sCom_parm;
+	struct com_branch_c sCom_branch;
+	struct com_sys_parm_c sCom_sys_parm;
+	struct gl_sub_c sGl_sub;
+	struct com_item_c sCom_item;
+	struct mdm_ac_rel_c vmdm_ac_rel;
+	struct dd_mst_c vdd_mst;
+	struct dd_parm_c vdd_parm;
+	struct dc_acc_rel_c vdc_acc_rel;
+	FILE *fp1=NULL;
+	FILE *fp2=NULL;
+	FILE *fp3=NULL;
+	char filename1[248];
+	char filename2[248];
+	char filename3[248];
+	 char tmp[6];
+	 int i=0;
+	memset(&sGl_sub , 0 , sizeof(sGl_sub));
+	memset(filename1,0x0,sizeof(filename1));
+	memset(filename2,0x0,sizeof(filename2));
+	memset(filename3,0x0,sizeof(filename3));
+
+	memset(&sCom_parm , 0 , sizeof(sCom_parm));
+	memset(&sCom_branch, 0  ,sizeof(sCom_branch));
+	memset(&sCom_sys_parm, 0 , sizeof(sCom_sys_parm));
+	memset(&sCom_item, 0 , sizeof(sCom_item));
+	memset(&vmdm_ac_rel,0x0,sizeof(vmdm_ac_rel));
+	memset(&vdd_mst,0x0,sizeof(struct dd_mst_c));
+	memset(&vdc_acc_rel,0x0,sizeof(struct dc_acc_rel_c));
+	memset(&vdd_parm,0x0,sizeof(struct dd_parm_c));
+
+
+
+
+	ret=sql_begin(); /*´ò¿ªÊÂÎñ*/
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "´ò¿ªÊÂÎñÊ§°Ü!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	if ( pub_base_PubQlsh(&g_pub_tx.trace_no,g_pub_tx.reply))
+	{
+		sprintf(acErrMsg,"È¡Ö÷»úÁ÷Ë®ºÅ´í [%d]",g_pub_tx.trace_no);
+		WRITEMSG
+		goto ErrExit;
+	}
+	set_zd_long( DC_TRACE_NO,g_pub_tx.trace_no );
+	set_zd_long( DC_TRACE_CNT,1 );
+
+	memset(cTestbrno, 0 , sizeof(cTestbrno));
+	ret=Com_sys_parm_Sel(g_pub_tx.reply,&sCom_sys_parm,"1=1");
+	if(ret != 0)
+	{
+		sprintf( acErrMsg, "µÃµ½½»Ò×ÈÕÆÚÊ§°Ü!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*** ³õÊ¼»¯È«¾Ö±äÁ¿ ***/
+	if(pub_base_sysinit())
+	{
+		strcpy(acErrMsg,"³õÊ¼»¯È«¾Ö±äÁ¿³ö´í!");
+		WRITEMSG
+		goto ErrExit;
+	}
+	g_pub_tx.tx_date = sCom_sys_parm.sys_date;
+	memset(filename2,0x0,sizeof(filename2));
+	sprintf(filename2,"%s/report/%s/gD0294.txt",getenv("HOME"),QS_BR_NO);
+	fp2 = fopen( filename2,"w" );	/*¸ÃÎÄ¼þÓÃÀ´¼ÇÂ¼ÕýÈ·´¦Àí½á¹û*/
+	if( fp2==NULL )
+	{
+		sprintf(acErrMsg," open file [%s] error ",filename2 );
+	WRITEMSG
+	strcpy( g_pub_tx.reply,"S047" );
+	goto ErrExit;
+	}	
+	/*fprintf(fp2,"@3v1\n");	*/
+	ret=Com_branch_Dec_Sel(g_pub_tx.reply,"br_type='4' and br_no!='%s' and wrk_sts!='*' ", CW_BR_NO);
+	if(ret)
+	{
+		strcpy(acErrMsg,"¶¨Òå»ú¹¹ÓÎ±ê³ö´í!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		i==0;
+		memset(&sCom_branch,0x0,sizeof(sCom_branch));
+		ret=Com_branch_Fet_Sel(&sCom_branch,g_pub_tx.reply);
+		if(ret==100) break;
+		if(ret)
+		{
+		strcpy(acErrMsg,"¶ÁÈ¡»ú¹¹ÓÎ±ê³ö´í!");
+		WRITEMSG
+		goto ErrExit;
+		}
+		if(strlen(cTestbrno)!=0)
+		{
+			if(memcmp(cTestbrno,sCom_branch.br_no,BRNO_LEN))
+				continue;
+		}
+		memcpy(g_pub_tx.tel,sCom_branch.br_no+1,2);
+		memcpy(g_pub_tx.tel+2,"99",2);
+		vtcp_log("%s,%d tel===[%s]",__FILE__,__LINE__,g_pub_tx.tel);
+		set_zd_data(DC_TEL,g_pub_tx.tel);
+		memcpy(g_pub_tx.tx_br_no,sCom_branch.br_no,5);
+		memset(&sGl_sub,0x0,sizeof(sGl_sub));
+		ret=Gl_sub_Sel(g_pub_tx.reply,&sGl_sub,"acc_hrt='26800' and br_no='%s'",sCom_branch.br_no);
+		if(ret)
+		{
+		strcpy(acErrMsg,"¶¨Òå»ú¹¹×ÜÕÊÓÎ±ê³ö´í!");
+		WRITEMSG
+		goto ErrExit;
+		}
+				set_zd_data("0152","");
+				set_zd_data("1201","");
+				set_zd_data("120A","");
+				set_zd_data("1204","" );
+				set_zd_data("1205","" );
+      	set_zd_double("1208",0.00 );
+				set_zd_data("1211","");
+				set_zd_data("121A","");
+				set_zd_data("1214","" );
+				set_zd_data("1215","" );
+      	set_zd_double("1218",0.00 );
+				vtcp_log("%s,%d ====AAA====[%s][%s]",__FILE__,__LINE__,g_pub_tx.dc_code,DC_CODE);
+				memset(g_pub_tx.dc_code,0x0,sizeof(g_pub_tx.dc_code));
+				vtcp_log("%s,%d ====AAA=====[%s][%s]",__FILE__,__LINE__,g_pub_tx.dc_code,DC_CODE);
+		    strncpy(g_pub_tx.brf,"ÔÂÌáÀûÏ¢Ë°",sizeof(g_pub_tx.brf));
+		if(sGl_sub.cr_bal!=0)
+		{
+				/* ½è·½´¦ÀíÖ§ÐÐ */
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",sGl_sub.acc_hrt);
+				if(ret)
+				{
+					sprintf(acErrMsg,"¸ù¾Ý[%s]²éÑ¯¿ÆÄ¿´íÎó",sGl_sub.acc_hrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				memcpy(g_pub_tx.opn_br_no,sCom_branch.br_no,5);
+				g_pub_tx.tx_amt1=sGl_sub.cr_bal;/*Ö§ÐÐ½è·½*/
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='0';/*½è*/
+				memcpy(g_pub_tx.cur_no,"01",2);
+				set_zd_data("1201",sCom_item.acc_no);
+				set_zd_double("1208",g_pub_tx.tx_amt1);
+				set_zd_data("120A",g_pub_tx.brf);
+				set_zd_data("1205",g_pub_tx.ct_ind); 
+				set_zd_data("1204",g_pub_tx.cur_no);
+				set_zd_data("0152","26800");	
+				char tmp[6];
+				memset(tmp,0x0,sizeof(tmp));
+				get_zd_data("0152",tmp);
+				set_zd_data(DC_CODE,"ACHR");
+				vtcp_log("%s,%d ----------[%s][%s][%s]",__FILE__,__LINE__,sGl_sub.acc_hrt,sCom_item.acc_no,tmp);
+				ret = pubf_acct_proc("A016");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "¼Ç»ú¹¹%sµÄ%s¿ÆÄ¿»á¼ÆÕÊ´íÎó!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				
+				
+				/*============================================================
+					¸ÄÎª´ûÇåËãÖÐÐÄµÄ26504 gujy JinZ 070424
+				====================================*/
+				ret=Com_item_Sel(g_pub_tx.reply,&sCom_item,"acc_hrt='%s'",cAc_no);
+				if(ret)
+				{
+					sprintf(acErrMsg,"¸ù¾Ý[%s]²éÑ¯¿ÆÄ¿´íÎó",sCom_item.acc_hrt);
+					WRITEMSG
+					goto ErrExit;
+				}
+				memcpy(g_pub_tx.opn_br_no,QS_BR_NO,5);
+				g_pub_tx.tx_amt1=sGl_sub.cr_bal;/*Ö§ÐÐ½è·½*/
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				set_zd_data("1211",sCom_item.acc_no);
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152","26504");	
+				set_zd_data(DC_CODE,"ACHR");
+				ret = pubf_acct_proc("A017");
+				if (ret != 0)
+				{
+					sprintf(acErrMsg, "¼Ç»ú¹¹%sµÄ%s¿ÆÄ¿»á¼ÆÕÊ´íÎó!! ret=[%d]", ret);
+					WRITEMSG
+					goto ErrExit;
+				}
+				/*vtcp_log("%s,%d ",__FILE__,__LINE__);
+				set_zd_data("1201","");
+				set_zd_data("120A","");
+				set_zd_data("0152","");
+				set_zd_data("1204","" );
+				set_zd_data("1205","" );
+      	set_zd_double("1208",0.00 );*/
+				/* ´¦Àí´û·½¶Ô¹«ÕÊºÅ*/
+				#if 0
+      	memset(&g_mdm_ac_rel,0x0,sizeof(struct mdm_ac_rel_c));
+				memset(&g_dd_mst,0x0,sizeof(struct dd_mst_c));
+				memset(&vdc_acc_rel,0x0,sizeof(struct dc_acc_rel_c));
+				ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no='%s'",cAc_no);
+				if(ret) goto ErrExit;
+				memcpy(g_pub_tx.ac_no,g_mdm_ac_rel.ac_no,sizeof(g_pub_tx.ac_no));
+				g_pub_tx.ac_id = g_mdm_ac_rel.ac_id;
+				g_pub_tx.ac_seqn = 1 ;
+				ret=Dd_mst_Sel(g_pub_tx.reply,&g_dd_mst,"ac_id=%ld",g_mdm_ac_rel.ac_id);
+				if(ret) goto ErrExit;
+				if(g_dd_mst.ac_sts[0]!='1') goto ErrExit;
+				if(g_dd_mst.hold_sts[0]!='0') goto ErrExit;
+				/*
+				memset(&g_dd_parm,0x0,sizeof(struct dd_parm_c));
+				ret=Dd_parm_Sel(g_pub_tx.reply,&g_dd_parm,"prdt_no='%s'",g_dd_mst.prdt_no);
+				if(ret) goto ErrExit;
+				ret=Dc_acc_rel_Sel(g_pub_tx.reply,&vdc_acc_rel,"dc_code='%s' and data_code='0152'",g_dd_parm.dc_code);
+				if(ret) goto ErrExit;
+					*/
+				memcpy(g_pub_tx.opn_br_no,g_dd_mst.opn_br_no,5);
+				g_pub_tx.tx_amt1=sGl_sub.cr_bal;
+				g_pub_tx.ct_ind[0]='2';
+				g_pub_tx.add_ind[0]='1';
+				memcpy(g_pub_tx.cur_no,"01",2);
+				strcpy( g_pub_tx.ac_get_ind,"000");	
+				strcpy( g_pub_tx.ac_id_type,"1" );	
+				strcpy( g_pub_tx.add_ind,"1" );		
+				strcpy( g_pub_tx.ct_ind,"2" );		
+				strcpy( g_pub_tx.prt_ind,"0" );
+				strcpy( g_pub_tx.hst_ind,"1" );        
+				strcpy ( g_pub_tx.intst_type , "1" );	
+				g_pub_tx.svc_ind=1001;	   
+				strcpy ( g_pub_tx.brf,"×ªÀûÏ¢Ë°");					
+				if( pub_acct_trance() )
+				{
+						sprintf(acErrMsg,"½»Ò×¼ÇÕÊ´¦Àí´íÎó!");
+						WRITEMSG
+						goto ErrExit;
+				}
+			/*	set_zd_data("1211",vmdm_ac_rel.ac_no);
+				set_zd_double("1218",g_pub_tx.tx_amt1);
+				set_zd_data("121A",g_pub_tx.brf);
+				set_zd_data("1215",g_pub_tx.ct_ind); 
+				set_zd_data("1214",g_pub_tx.cur_no);
+				set_zd_data("0152","20109");
+				vtcp_log(acErrMsg, "%s,%d ----------",__FILE__,__LINE__);
+				ret = pubf_acct_proc("A017");
+				*/
+				set_zd_data("101A","01");         
+				set_zd_double("1013",g_pub_tx.tx_amt1);                     
+				strcpy(g_pub_tx.sub_tx_code,"D099");
+				strcpy(g_pub_tx.prdt_code,g_dd_mst.prdt_no);
+				ret = pubf_acct_proc(g_pub_tx.sub_tx_code);
+				if (ret != 0)
+				{
+					sprintf(acErrMsg,"»á¼Æ¼ÇÕÊ²»³É¹¦!!");
+					WRITEMSG
+					goto ErrExit;
+				}
+				#endif
+				  fprintf(fp2,"\n\n\n\n\n\n\n\n");
+					fprintf(fp2, "                                     %sÀûÏ¢Ë°´«Æ±\n",sCom_branch.br_no);
+					fprintf(fp2, "      ½»Ò×ÈÕÆÚ: %ld                                   Á÷Ë®ºÅ: %ld        \n",g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp2, " ©³©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©·\n");
+					fprintf(fp2, " ©§  »ú¹¹  ºÅ: %5s                                                                           ©§\n",g_dd_mst.opn_br_no);
+					fprintf(fp2, " ©§  ´û·½ÕËºÅ: %20s                                                            ©§\n",cAc_no);
+					fprintf(fp2, " ©§  »§    Ãû: %50s                              ©§\n",sCom_item.acc_name);
+					fprintf(fp2, " ©§--------------------------------------------------------------------------------------------©§\n");
+					fprintf(fp2, " ©§  ½»Ò×½ð¶î£º£¤%.2lf             ÕªÒª:%s                                            ©§\n",g_pub_tx.tx_amt1,g_pub_tx.brf);
+					fprintf(fp2, " ©§--------------------------------------------------------------------------------------------©§\n");
+					fprintf(fp2, " ©§  »ú¹¹  ºÅ: %5s                                                                           ©§\n",sCom_branch.br_no);
+					fprintf(fp2, " ©§  ½è·½ÕËºÅ: 268                                                                             ©§\n");
+					fprintf(fp2, " ©§  »§    Ãû: Ó¦¸¶ÀûÏ¢Ë°                                                                      ©§\n");
+					fprintf(fp2, " ©»©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¿\n");
+					fprintf(fp2, "             »á    ¼Æ:                    ¸´    ºË:                      ¼Ç    ÕÊ: %s\n",g_pub_tx.tel);
+				  fprintf(fp2,"\n\n\n\n\n\n\n\n");
+				  i++;
+				  if(i%2==0)
+				  {
+				  fprintf(fp2,"\f\n");
+				  }
+				  
+				if(memcmp(sCom_branch.br_no,QS_BR_NO,5))
+				{
+					memset(filename1,0x0,sizeof(filename1));
+					sprintf(filename1,"%s/report/%s/gD0294.txt",getenv("HOME"),sCom_branch.br_no);
+					fp1 = fopen( filename1,"w" );	/*¸ÃÎÄ¼þÓÃÀ´¼ÇÂ¼ÕýÈ·´¦Àí½á¹û*/
+					if( fp1==NULL )
+					{
+						sprintf(acErrMsg," open file [%s] error ",filename1 );
+					WRITEMSG
+					strcpy( g_pub_tx.reply,"S047" );
+					goto ErrExit;
+					}
+					fprintf(fp1,"\n\n\n\n\n\n\n\n");
+					/*fprintf(fp1,"@3v1\n");*/
+					fprintf(fp1, "                                     %sÀûÏ¢Ë°´«Æ±\n",sCom_branch.br_no);
+					fprintf(fp1, "      ½»Ò×ÈÕÆÚ: %ld                                   Á÷Ë®ºÅ: %ld        \n",g_pub_tx.tx_date,g_pub_tx.trace_no);
+					fprintf(fp1, " ©³©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©·\n");
+					fprintf(fp1, " ©§  »ú¹¹  ºÅ: %5s                                                                           ©§\n",g_dd_mst.opn_br_no);
+					fprintf(fp1, " ©§  ´û·½ÕËºÅ: %20s                                                            ©§\n",cAc_no);
+					fprintf(fp1, " ©§  »§    Ãû: %50s                              ©§\n",g_dd_mst.name);
+					fprintf(fp1, " ©§--------------------------------------------------------------------------------------------©§\n");
+					fprintf(fp1, " ©§  ½»Ò×½ð¶î£º£¤%.2lf             ÕªÒª:%s                                          ©§\n",g_pub_tx.tx_amt1,g_pub_tx.brf);
+					fprintf(fp1, " ©§--------------------------------------------------------------------------------------------©§\n");
+					fprintf(fp1, " ©§  »ú¹¹  ºÅ: %5s                                                                           ©§\n",sCom_branch.br_no);
+					fprintf(fp1, " ©§  ½è·½ÕËºÅ: 268                                                                             ©§\n");
+					fprintf(fp1, " ©§  »§    Ãû: Ó¦¸¶ÀûÏ¢Ë°                                                                      ©§\n");
+					fprintf(fp1, " ©»©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¥©¿\n");
+					fprintf(fp1, "             »á    ¼Æ:                    ¸´    ºË:                      ¼Ç    ÕÊ: %s\n",g_pub_tx.tel);
+					fprintf(fp1,"\n\n\n\n\n\n");
+					fclose(fp1);
+				}
+		}
+	}
+	Com_branch_Clo_Sel();
+  fclose(fp2);
+
+
+OkExit:
+    sql_commit();   /*--Ìá½»ÊÂÎñ--*/
+    strcpy(g_pub_tx.reply,"0000");
+		sprintf(acErrMsg,"268×ªÈë´¦Àí³É¹¦![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 0;
+ErrExit:
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+    {
+        strcpy(g_pub_tx.reply,"G009");
+    }
+    sql_rollback(); /*--ÊÂÎñ»Ø¹ö--*/
+	sprintf(acErrMsg,"268×ªÈë´¦ÀíÊ§°Ü![%s]",g_pub_tx.reply);
+    WRITEMSG
+    set_zd_data("0120",g_pub_tx.reply);
+    return 1;
+}

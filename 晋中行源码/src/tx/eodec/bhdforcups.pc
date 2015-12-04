@@ -1,0 +1,2695 @@
+/***************************************************************************
+ *** 程序作者 : Han Xichao                                               ***
+ *** 日    期 : 2010-01-23                                               ***
+ *** 所属模块 :                                                          ***
+ *** 程序名称 : bhdforcups.pc                                            ***
+ *** 程序作用 : 根据银联流水文件记录交易明细                             ***
+ *** 使用注意 :                                                          ***
+ ***************************************************************************/
+
+#include  <stdio.h>
+#include  <stdlib.h>
+#include  <math.h>
+#include  "public.h"
+#include  "card.h"
+#include  "com_sys_parm_c.h"
+#include  "cupsinsctl_c.h"
+#include  "cupserr_c.h"
+#include  "cupsppfw_c.h"
+#include  "atmrecord_c.h"
+#include  "cupscardhtr_c.h"
+#include  "com_tel_c.h"
+
+#define  BRNO_LEN 5
+EXEC SQL INCLUDE sqlca ;
+EXEC SQL INCLUDE sqlda ;
+
+EXEC SQL BEGIN DECLARE SECTION;
+static struct cupsinsctl_c g_cupsinsctl;
+static struct com_sys_parm_c g_com_sys_parm;
+static struct atmrecord_c g_atmrecord;
+static struct mdm_ac_rel_c g_mdm_ac_rel;
+static struct com_tel_c com_tel;
+EXEC SQL END DECLARE SECTION;
+
+static int  iRc = 0;
+static int  ret = 0;
+static char sSysDay[9];
+
+char   sTmp[501];
+
+extern char * pub_base_daynumLAT(char *date, int num);
+static char *sbhdforcups_getfilename(char *sday,struct cupsinsctl_c *wk_ctl);
+static int ibhdforcups_insert(struct cupsinsctl_c *wp_ctl);
+static int ibhdforcups_insCardhtr_COM(char *nday,char *sname);
+static int ibhdforcups_insCardhtr_TFL(char *nday,char *sname);
+static int ibhdforcups_insCardhtr_STI(char *nday,char *sname);
+/***TO BEGIN  IC卡***/
+static int ibhdforcups_insCardhtr_LOD(char *nday,char *sname);
+static int ibhdforcups_insCardhtr_LTR(char *nday,char *sname);
+/***TO END***/
+/***add by 20130527 处理IC卡脱机消费的POS回佣***/
+static int ibhdforcups_insCardhtr_INF(char *nday,char *sname);
+/***add by 20130527 处理IC卡脱机消费的POS回佣***/
+/***追偿性分润 hzh 20131123***/
+static int ibhdforcups_insCardhtr_FMCZ(char *nday,char *sname);
+/***追偿性分润 hzh 20131123***/
+static int ibhdforcups_insErr(char *nday,char *sname);
+static char * sCupsCutStr(int fg,int ilen,char *buf);
+static char * sCupsCutTJStr(int fg,int ilen,char *buf);
+static char *bhdforcups_getbrno(char brtype,char *cardno,char *atmno);
+
+bhdforcups()
+{
+
+	vtcp_log("%s,%d ■根据银联流水文件登记本地流水表!\n",__FILE__,__LINE__);
+	/*取系统日期*/
+	memset(sSysDay,0x00,sizeof(sSysDay));
+	memset(&g_cupsinsctl,0x00,sizeof(g_cupsinsctl));
+	memset(&g_mdm_ac_rel,0x00,sizeof(g_mdm_ac_rel));
+	ret= Com_sys_parm_Sel(g_pub_tx.reply,&g_com_sys_parm,"1=1");
+	if(ret)
+	{
+		vtcp_log("[%s][%d]得到系统日期错![%d]\n",__FILE__,__LINE__,ret);
+		goto ErrExit;
+	}
+	/**TODO:TEST**/
+	memcpy(sSysDay,"20130401",8);
+	/**TODO:TEST**/
+	sprintf(sSysDay,"%d",g_com_sys_parm.sys_date);
+	vtcp_log("%s,%d,sSysDay==[%s]",__FILE__,__LINE__,sSysDay);
+	/*读取控制表参数*/
+	ret = Cupsinsctl_Dec_Sel(g_pub_tx.reply,"1=1");
+	if(ret){
+		vtcp_log("[%s][%d]cupsinsctl错![%d]\n",__FILE__,__LINE__,ret);
+		goto ErrExit;
+	}
+
+	while(1)
+	{
+		memset(&g_cupsinsctl,0x00,sizeof(g_cupsinsctl));
+
+		ret = Cupsinsctl_Fet_Sel(&g_cupsinsctl,g_pub_tx.reply);
+		if(ret==100)
+			break;
+		if(ret)
+		{
+			vtcp_log("[%s][%d]数据库错误![%d]\n",__FILE__,__LINE__,ret);
+			goto ErrExit;
+		}
+		zip_space(g_cupsinsctl.name1);
+		zip_space(g_cupsinsctl.name2);
+		zip_space(g_cupsinsctl.name3);
+		zip_space(g_cupsinsctl.tabname);
+
+		vtcp_log("trseq=[%d]\n",g_cupsinsctl.trseq);
+		vtcp_log("brtype=[%s]\n",g_cupsinsctl.brtype);
+		vtcp_log("lstinsday=[%s]\n",g_cupsinsctl.lstinsday);
+		vtcp_log("name1=[%s]\n",g_cupsinsctl.name1);
+		vtcp_log("name2=[%s]\n",g_cupsinsctl.name2);
+		vtcp_log("name3=[%s]\n",g_cupsinsctl.name3);
+		vtcp_log("tabname=[%s]\n",g_cupsinsctl.tabname);
+		iRc = ibhdforcups_insert(&g_cupsinsctl);
+		if(iRc)
+		{
+			/**goto ErrExit;**/
+		}
+	}
+	Cupsinsctl_Clo_Sel();
+
+GoodExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sql_commit();   /*--提交事务--*/
+	vtcp_log("\n ■ 流水登记成功!\n");
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	vtcp_log("\n ■ 流水登记失败!\n");
+	sql_rollback(); /*--事务回滚--*/
+	return 1;
+}
+
+int ibhdforcups_insert(struct cupsinsctl_c *wp_ctl)
+{
+	char sNextDay[9];
+	char sFilename[51];
+	char sCmd[201];
+	char cdate[9];
+	int  cCntday=1;
+	FILE *fpr;
+
+	memset(sNextDay,0x00,sizeof(sNextDay));
+	memset(cdate,0x00,sizeof(cdate));
+	while(1)
+	{
+		int i=0;
+		char tmp_address[30];
+
+		memset(sFilename,0x00,sizeof(sFilename));
+		memset(sNextDay,0x00,sizeof(sNextDay));
+		memset(tmp_address,0x00,sizeof(tmp_address));
+
+		memcpy(cdate,g_cupsinsctl.lstinsday,8);
+		long tmpdate=0,tmpdate1=0;
+		tmpdate1=atol(cdate);
+		vtcp_log("%s,%d,tmpdate1=[%ld]",__FILE__,__LINE__,tmpdate1);
+		pub_base_deadlineD(tmpdate1,1,&tmpdate);/***计算上一插入日期的下一日期***/
+		sprintf(sNextDay,"%8ld",tmpdate);
+		vtcp_log("%s,%d,snextday=[%s]",__FILE__,__LINE__,sNextDay);
+
+		zip_space(sNextDay);
+		if(strlen(sNextDay)==0)
+		{
+			vtcp_log("[%s][%d]计算下一交易日错误!\n", __FILE__,__LINE__);
+			return(-1);
+		}
+
+
+		/*因为银联对帐文件要等第二天才能传来, 所以只取到昨日  */
+		if(memcmp(sSysDay,sNextDay,8)<=0)
+		{
+		    vtcp_log("[%s][%d]错误! SYSDAY[%s],NEXTDAY[%s]", __FILE__,__LINE__,sSysDay,sNextDay);
+			break;
+	    }
+		/*得到该日流水文件名称*/
+		vtcp_log("%s,%d,开始取该日流水文件名称",__FILE__,__LINE__);
+		strcpy(sFilename,sbhdforcups_getfilename(sNextDay,wp_ctl));/*mod by ChengGX sNextDay 改为　tmpdate1*/
+		vtcp_log("%s,%d \n",__FILE__,__LINE__);
+		zip_space(sFilename);
+		vtcp_log("%s,%d,该日流水文件名称[%s]",__FILE__,__LINE__,sFilename);
+		if(strlen(sFilename)==0)
+		{
+			vtcp_log("[%s][%d]获取文件名称失败\n",__FILE__,__LINE__,sFilename);
+			return(-1);
+		}
+
+		/*开始插入记录*/
+		if(strcmp(g_cupsinsctl.tabname,"cupscardhtr")==0)	/*一般流水表*/
+		{
+			if(memcmp(g_cupsinsctl.name3,"COM",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_COM(sNextDay,sFilename);
+			}
+			else if(memcmp(g_cupsinsctl.name3,"FCP",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_COM(sNextDay,sFilename);
+			}
+			else if(memcmp(g_cupsinsctl.name3,"TFL",3)==0)
+			{
+				iRc = ibhdforcups_insCardhtr_TFL(sNextDay,sFilename);
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+			}
+			else if(memcmp(g_cupsinsctl.name3,"STI",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_STI(sNextDay,sFilename);
+			}
+			/***TO BEGIN  IC卡***/
+			else if(memcmp(g_cupsinsctl.name3,"LOD",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_LOD(sNextDay,sFilename);
+			}
+			else if(memcmp(g_cupsinsctl.name3,"LTR",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_LTR(sNextDay,sFilename);
+			}
+			/***TO END IC卡***/
+			/***add by 20130527 IC卡脱机消费***/
+			else if(memcmp(g_cupsinsctl.name3,"C",1)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_INF(sNextDay,sFilename);
+			}
+			/***add by 20130527 IC卡脱机消费***/
+			/***追偿性分润 hzh 20131123 begin***/
+			else if(memcmp(g_cupsinsctl.name3,"FMCZ",4)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_FMCZ(sNextDay,sFilename);
+			}
+			/***追偿性分润 hzh 20131123 end***/
+			/***周期计费 wst 20140107 begin***/
+			else if(memcmp(g_cupsinsctl.name3,"PED",3)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_COM(sNextDay,sFilename);
+			}
+			/***周期计费 wst 20140107 end***/
+			else if(memcmp(g_cupsinsctl.name3,"SUMCN",5)==0){
+				vtcp_log("%s,%d \n",__FILE__,__LINE__);
+				iRc = ibhdforcups_insCardhtr_SUMCN(sNextDay,sFilename);
+			}
+			else{
+				vtcp_log("[%s][%d]参数文件对应表名错误[%s][%s]\n",__FILE__,__LINE__,g_cupsinsctl.name3,g_cupsinsctl.tabname);
+				return(-1);
+			}
+			vtcp_log("%s,%d \n",__FILE__,__LINE__);
+		}else if(strcmp(g_cupsinsctl.tabname,"cupserr")==0){	/*差错流水表*/
+			vtcp_log("%s,%d \n",__FILE__,__LINE__);
+			iRc = ibhdforcups_insErr(sNextDay,sFilename);
+		}else if(strcmp(g_cupsinsctl.tabname,"cupsppfw")==0){/*品牌服务表*/
+			vtcp_log("%s,%d \n",__FILE__,__LINE__);
+			iRc = ibhdforcups_insPpfw(sNextDay,sFilename);
+		}else{
+			vtcp_log("[%s][%d]参数文件对应表名错误[%s]\n",__FILE__,__LINE__,g_cupsinsctl.tabname);
+			return(-1);
+		}
+		vtcp_log("%s,%d \n",__FILE__,__LINE__);
+
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]插入CUPS交易流水表错误![%d]\n",__FILE__,__LINE__,iRc);
+			return(-1);
+		}
+		vtcp_log("%s,%d \n",__FILE__,__LINE__);
+		/*更新控制表最后登记日期*/
+		ret = sql_execute("update cupsinsctl set lstinsday = '%s' where trseq = %d",sNextDay,g_cupsinsctl.trseq);
+		if(ret){
+			vtcp_log("%s,%d 更新cupsinctl表错误\n",__FILE__,__LINE__);
+			return(-1);
+		}
+		vtcp_log("%s,%d \n",__FILE__,__LINE__);
+		if(sqlca.sqlcode)
+		{
+			vtcp_log("[%s][%d]更新控制表错 错误码[%d],序号[%d]\n",__FILE__,__LINE__,sqlca.sqlcode,g_cupsinsctl.trseq);
+			return(-1);
+		}
+
+		/*调整结构里的最后登记日*/
+		memcpy(g_cupsinsctl.lstinsday,sNextDay,8);
+		vtcp_log("%s,%d \n",__FILE__,__LINE__);
+		i++;
+	}
+	return(0);
+}
+
+char *sbhdforcups_getfilename(char *sday,struct cupsinsctl_c *wk_ctl)
+{
+	static char sName[51];
+
+	memset(sName,0x00,sizeof(sName));
+	/*取文件名前3位开头部分*/
+	memcpy(sName,wk_ctl->name1,3);
+
+	/*取文件名日期部分YYMMDD*/
+	memcpy(sName+3,sday+2,6);
+	/*10-11位因为银联也没有这2位的说明,以下结果是观察值*/
+	if(memcmp(wk_ctl->name3,"COM",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"LOD",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"LTR",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"TFL",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"TUK",3)==0){
+		memcpy(sName+9,"01",2);
+	}
+		/***TO BEGIN  IC卡***/
+	else if(memcmp(wk_ctl->name3,"LOD",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"LTR",3)==0){
+		memcpy(sName+9,"01",2);
+	}
+	/**追偿性分润 hzh 20131123***/
+	else if(memcmp(wk_ctl->name3,"FMCZ",4)==0){
+	memcpy(sName+9,"01",2);
+	}
+	/***TO END***/
+	else if(memcmp(wk_ctl->name3,"ERR",3)==0){
+		/**memcpy(sName+9,"01",2); Upd by hxc 山西银联二代清算系统升级**/
+		memcpy(sName+9,"99",2);
+	}else if(memcmp(wk_ctl->name3,"FCP",3)==0){
+		/**memcpy(sName+9,"01",2); Upd by hxc 山西银联二代清算系统升级**/
+		memcpy(sName+9,"99",2);
+	}else if(memcmp(wk_ctl->name3,"LFEE",4)==0){
+		/**memcpy(sName+9,"01",2); Upd by hxc 山西银联二代清算系统升级**/
+		memcpy(sName+9,"99",2);
+	}else if(memcmp(wk_ctl->name3,"STI",3)==0){
+		memcpy(sName+9,"01",2);
+	}else if(memcmp(wk_ctl->name3,"EXR",3)==0){
+		memcpy(sName+9,"80",2);
+	}else if(memcmp(wk_ctl->name3,"C",1)==0){
+		memcpy(sName+9,"51",2);/***ADD BY 20130527 IC卡脱机消费POS回佣***/
+	}else if(memcmp(wk_ctl->name3,"PED",3)==0){
+		memcpy(sName+9,"32",2);
+	}else if(memcmp(wk_ctl->name3,"SUMCN",5)==0){
+		memcpy(sName+9,"98",2);  /***ADD BY lzy 20140417 公交回佣小额打包计费***/
+	}else{
+		return(NULL);
+	}
+	/***mod by 20130527 IC卡脱机消费POS回佣***/
+	if(memcmp(wk_ctl->name1,"INF",3)==0){
+		/*取最后1位, 脱机消费类型为C*/
+		sName[11] = wk_ctl->name3[0];
+		vtcp_log("[%s][%d]组合后的文件名为[%s]\n",__FILE__,__LINE__,sName);
+	}else{
+		/*取发卡/受理标志,文件名12位*/
+		sName[11] = wk_ctl->name2[0];
+	
+		/*取最后3-4位, 交易类型*/
+		sprintf(sName+12,"%s",wk_ctl->name3);
+	}
+
+	/***mod by 20130527 IC卡脱机消费POS回佣***/
+	return(sName);
+
+}
+
+int ibhdforcups_insCardhtr_COM(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+		{
+			break;
+		}
+		if(sBuff[0] == '\0')
+			break;
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_htr.brtype[0] = '0';
+		else
+			wn_htr.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+
+		/*代理机构标识码*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+		/*部分代收时的承兑金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.dsamt);
+		wn_htr.dsamt=wn_htr.dsamt/100.00;
+		/*持卡人交易手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.fee);
+		wn_htr.fee=wn_htr.fee/100.00;
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+		/** 商户类型为6010是柜面通交易,本行作为受理方wn_htr.brtype:3 20131107 hzh begin**/
+		if(memcmp(wn_htr.mertype,"6010",4)==0 && sname[11]=='A')
+		{
+		wn_htr.brtype[0] = '3';	
+		}
+		if(memcmp(wn_htr.mertype,"6010",4)==0 && sname[11]=='I')
+		{
+		wn_htr.brtype[0] = '0';	
+		}
+		/** 商户类型为6010是柜面通交易,本行作为受理方wn_htr.brtype:3 20131107 hzh end**/
+		
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+
+		/*授权应答码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.otrseq,p,sizeof(wn_htr.otrseq)-1);
+
+		/*交易返回码*/
+		p = sCupsCutStr(1,2,sBuff);
+		/*填补手工预授权完成交易respcd没有值的问题*/
+		if( strlen(p)==0 || memcmp(p,"  ",2)==0 )
+		{
+			memcpy(wn_htr.respcd,"00",sizeof(wn_htr.respcd)-1);
+		}else
+		{
+			memcpy(wn_htr.respcd,p,sizeof(wn_htr.respcd)-1);
+		}
+
+		/*服务点输入方式*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.inputmd,p,sizeof(wn_htr.inputmd)-1);
+
+		/*应收手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.infee);
+		wn_htr.infee=wn_htr.infee/100.00;
+		/*应付手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+		str2dbl(p,12,0,&wn_htr.outfee);
+		wn_htr.outfee=wn_htr.outfee/100.00;
+		/**del by hxc 100517 修正Pos退货冲正交易中每笔手续费返还差2元钱**/
+		/*if(sname[11]=='I' && wn_htr.outfee>0.005)
+			wn_htr.outfee=wn_htr.outfee-2.00;*/
+		/**end by hxc 100517**/
+		/*转接服务费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.zjfee);
+		wn_htr.zjfee=wn_htr.zjfee/100.00;
+		/*单双转换标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.dsflag,p,sizeof(wn_htr.dsflag)-1);
+
+		/*卡片序列号*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.cardseq,p,sizeof(wn_htr.cardseq)-1);
+
+		/*终端读取能力*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.tmreadfg,p,sizeof(wn_htr.tmreadfg)-1);
+
+		/*IC卡条件代码*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.iccardfg,p,sizeof(wn_htr.iccardfg)-1);
+
+		/*原始交易日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.otxtime,p,sizeof(wn_htr.otxtime)-1);
+
+		/*发卡机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.opnbrno,p,sizeof(wn_htr.opnbrno)-1);
+
+		/*交易跨境标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.outtxfg,p,sizeof(wn_htr.outtxfg)-1);
+
+		/*交易渠道*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.jyqd,p,sizeof(wn_htr.jyqd)-1);
+
+		/*ECI标志*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.eciflag,p,sizeof(wn_htr.eciflag)-1);
+
+		/*保留使用*/
+		p = sCupsCutStr(1,27,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+
+		/*交易机构或开户机构*/
+		/**柜面受理他行卡业务交易机构号直接取受卡方标识号 20131030 hzh begin**/
+		if(wn_htr.brtype[0] == '3')
+		{
+		 zip_space(wn_htr.acbkflg);
+		 if(strlen(wn_htr.acbkflg)==0)
+		 {
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		 }
+		 else
+		 {
+		 memcpy(wn_htr.brno,wn_htr.acbkflg,sizeof(wn_htr.brno)-1);
+		 vtcp_log("[%s][%d]柜面渠道作为受理方的卡业务直接取受卡方标识号为交易机构号,机构号[%s]!\n",__FILE__,__LINE__,wn_htr.brno);
+		 }
+		}
+		else
+		{
+		 memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		 if(strlen(wn_htr.brno)==0)
+		 {
+		 	vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+		 	return(-1);
+		 }
+		 vtcp_log("[%s][%d]非柜面渠道作为受理方的业务去表中查询机构号,机构号[%s]!\n",__FILE__,__LINE__,wn_htr.brno);
+		}
+		/**柜面受理他行卡业务交易机构号直接取受卡方标识号 20131030 hzh end**/
+		Cupscardhtr_Debug(&wn_htr);
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupscardhtr_Debug(&wn_htr);
+			return(-1);
+		}
+	}
+	return(0);
+}
+
+int ibhdforcups_insCardhtr_TFL(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[800];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	memset(&com_tel,0x00,sizeof(com_tel));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+		vtcp_log("===这里==[%s]==[%d]===buf=[%s]\n",__FILE__,__LINE__,sBuff);
+		if(feof(fpr))
+			break;
+		vtcp_log("===这里==[%s]==[%d]===\n",__FILE__,__LINE__);
+		if(sBuff[0] == '\0')
+			break;
+		vtcp_log("===这里==[%s]==[%d]===\n",__FILE__,__LINE__);
+		/**Mod by hxc 20100408 **/
+		/*发卡/受理方*/
+		if(sname[11]=='I' || sname[11]=='O')
+			{
+			wn_htr.brtype[0] = '0';
+			vtcp_log("===TFL==[%s]==[%d]===sname=[%s],wn_htr.brtype =[%s]\n",__FILE__,__LINE__,sname,wn_htr.brtype);
+		}
+		else
+		{
+			wn_htr.brtype[0] = '1';
+			vtcp_log("===TFL==[%s]==[%d]===sname=[%s],wn_htr.brtype =[%s]\n",__FILE__,__LINE__,sname,wn_htr.brtype);
+		}
+		/**End by hxc 20100408 **/
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.filename);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.txday);
+		/*代理机构标识码*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.dlbrno);
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.trseq);
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.txtime);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.cardno);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		vtcp_log("===看看哈哈===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,p);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+		vtcp_log("===看看哈哈===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,sBuff);
+		vtcp_log("===看看哈哈===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,p);
+		vtcp_log("===看看哈哈===[%s]==[%d]==[%f]===\n",__FILE__,__LINE__,wn_htr.txamt);
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.msgtype);
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.txcode);
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.mertype);
+		/** 商户类型为6010是柜面通交易,本行作为受理方wn_htr.brtype:3,本行作为发卡方wn_htr.brtype:4 20131107 hzh begin**/
+		if(memcmp(wn_htr.mertype,"6010",4)==0 && sname[11]=='A')
+		{
+		wn_htr.brtype[0] = '3';	
+		}
+		if(memcmp(wn_htr.mertype,"6010",4)==0 && (sname[11]=='I' || sname[11]=='O'))
+		{
+		wn_htr.brtype[0] = '4';	
+		}
+		/** 商户类型为6010是柜面通交易,本行作为受理方wn_htr.brtype:3,本行作为发卡方wn_htr.brtype:4 20131107 hzh end**/
+		
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.atmno);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.wssrno);
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.inputcd);
+		/*授权应答码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.authcd);
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.isbkno);
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.otrseq,p,sizeof(wn_htr.otrseq)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.otrseq);
+		/*交易返回码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.respcd,p,sizeof(wn_htr.respcd)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.respcd);
+		/*服务点输入方式*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.inputmd,p,sizeof(wn_htr.inputmd)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.inputmd);
+		/*应收手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.infee);
+		wn_htr.infee=wn_htr.infee/100.00;
+		vtcp_log("===在这里===[%s]==[%d]==[%d]===\n",__FILE__,__LINE__,wn_htr.infee);
+		/*应付手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.outfee);
+		vtcp_log("===在这里===[%s]==[%d]==[%d]===\n",__FILE__,__LINE__,wn_htr.outfee);
+		/**Add by hxc 100806 晋中转账交易为正交易(msgtype==0200)并且支出金额大于零时,无需进行手续费处理,固定写入0.00;否则按银联文件中的金额进行相应处理**/
+		vtcp_log("===转账交易===[%s]==[%d]==[%s]==[%s]==[%.2f]==[%d]=\n",__FILE__,__LINE__,wn_htr.msgtype,wn_htr.respcd,wn_htr.infee,wn_htr.outfee);
+		if(memcmp(wn_htr.msgtype,"0200",4)==0 && wn_htr.outfee >0 )
+			{
+				wn_htr.outfee=0.00;
+			}
+		/**Add by hxc 100916 晋中转账交易为冲正交易(msgtype==0420)并且支出金额大于零时,需进行手续费处理,手续费收入固定写入0.00,支出金额要如实填写,同时reapcd置为00,以便冲减正交易收入金额的费用**/
+		else if(memcmp(wn_htr.msgtype,"0420",4)==0 && wn_htr.outfee >0 )
+			{
+				memcpy(wn_htr.respcd,"00",2);
+				wn_htr.infee=0.00;
+				wn_htr.outfee=wn_htr.outfee/100.00;
+				vtcp_log("===转账冲正交易===[%s]==[%d]==[%s]==[%.2f]==[%.2f]=\n",__FILE__,__LINE__,wn_htr.respcd,wn_htr.infee,wn_htr.outfee);
+			}
+		/**End by hxc 100916 晋中转账交易为冲正交易(msgtype==0420)并且支出金额大于零时,需进行手续费处理,手续费收入固定写入0.00,支出金额要如实填写,同时reapcd置为00,以便冲减正交易收入金额的费用**/
+		else
+		  {
+		    wn_htr.outfee=wn_htr.outfee/100.00;
+	    }
+	  /**End by hxc 100806 晋中转账交易为正交易(msgtype==0200)并且支出金额大于零时,无需进行手续费处理,固定写入0.00;否则按银联文件中的金额进行相应处理**/
+		/*转接服务费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.zjfee);
+		wn_htr.zjfee=wn_htr.zjfee/100.00;
+		vtcp_log("===在这里===[%s]==[%d]==[%d]===\n",__FILE__,__LINE__,wn_htr.zjfee);
+		/*持卡人交易手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.fee);
+		wn_htr.fee=wn_htr.fee/100.00;
+		vtcp_log("===在这里===[%s]==[%d]==[%d]===\n",__FILE__,__LINE__,wn_htr.fee);
+		/*转出机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.outbrno,p,sizeof(wn_htr.outbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.outbrno);
+		/*转出卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.outcardno,p,sizeof(wn_htr.outcardno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.outcardno);
+		/*转入机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.inbrno,p,sizeof(wn_htr.inbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.inbrno);
+		/*转入卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.incardno,p,sizeof(wn_htr.incardno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.incardno);
+		/*卡片序列号*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.cardseq,p,sizeof(wn_htr.cardseq)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.cardseq);
+		/*终端读取能力*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.tmreadfg,p,sizeof(wn_htr.tmreadfg)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.tmreadfg);
+		/*IC卡条件代码*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.iccardfg,p,sizeof(wn_htr.iccardfg)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.iccardfg);
+		/*同城/异地标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.cityfg,p,sizeof(wn_htr.cityfg)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.cityfg);
+		/*交易发起渠道*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.jyqd,p,sizeof(wn_htr.jyqd)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.jyqd);
+		/*原始交易日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.otxtime,p,sizeof(wn_htr.otxtime)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.otxtime);
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.fsbrno);
+		/*保留使用*/
+		/*p = sCupsCutStr(1,300,sBuff);
+		zip_space(p);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);*/
+		/**tmp没有实际意义,这里统一赋值成a，后面记账后会重新被致成1 20131213 hzh begin**/
+		memcpy(wn_htr.tmp,"a",1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.tmp);
+		/**tmp没有实际意义,这里统一赋值成a，后面记账后会重新被致成1 20131213 hzh end**/
+
+		/*交易机构或开户机构*/
+		/**柜面受理他行卡业务交易机构号从com_tel表中查询20131030 hzh begin**/
+		if(wn_htr.brtype[0] == '3')
+		{
+		 zip_space(wn_htr.atmno);
+		 ret = Com_tel_Sel( g_pub_tx.reply,&com_tel," tel='%s' ",wn_htr.atmno);
+		 if( ret ){
+		 vtcp_log("[%s][%d]机构号码错![%d]\n",__FILE__,__LINE__,ret);
+		 return(NULL);
+		 }
+		 memcpy(wn_htr.brno,com_tel.br_no,sizeof(wn_htr.brno));
+		 vtcp_log("[%s][%d]柜面渠道作为受理方的转账业务从com_tel表中获取交易机构号[%s]!\n",__FILE__,__LINE__,wn_htr.brno);
+		}
+		else
+		{
+		 memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		 if(strlen(wn_htr.brno)==0)
+		 {
+		 	vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+		 	return(-1);
+		 }
+		 vtcp_log("[%s][%d]非柜面渠道作为受理方的业务发卡行在mdm_ac_rel表中查询开户机构号,受理方在atmrecord表中查询,机构号[%s]!\n",__FILE__,__LINE__,wn_htr.brno);
+		}
+		/**柜面受理他行卡业务交易机构号从com_tel表中查询20131030 hzh end**/
+		vtcp_log("===这里==[%s]==[%d]===wn_htr.brtype==[%s],wn_htr.mertype=[%s]\n",__FILE__,__LINE__,wn_htr.brtype,wn_htr.mertype);
+		/**Add by hxc 100628 For JZCARD 便于在rptcupsfee.pc中分发手续费到各支行时区分ATM(brtype='1')和POS(brtype='0')交易**/
+		if(wn_htr.brtype[0]=='0' && memcmp(wn_htr.mertype,"6011",4)==0)
+			{
+				vtcp_log("[%s][%d]重置银联卡ATM交易wn_htr.brtype标志位为'1'!\n",__FILE__,__LINE__);
+				wn_htr.brtype[0]='1';
+			}
+		/**End by hxc 100628 For JZCARD 便于在rptcupsfee.pc中分发手续费到各支行时区分ATM和POS交易**/
+
+		/**Add by hxc 101228 For JZCARD 便于在rptcupsfee.pc中分发手续费到各支行时区分他行卡ATM(brtype='1')和本行卡ATM(brtype='2')交易**/
+		if(wn_htr.brtype[0]=='1' && (memcmp(wn_htr.cardno,CARDHEADCODE,6) == 0 || memcmp(wn_htr.cardno,ICCARDHEADCODE,6) == 0)  )
+			{
+				vtcp_log("[%s][%d]重置本行卡wn_htr.brtype标志位为'2'!\n",__FILE__,__LINE__);
+				wn_htr.brtype[0]='2';
+			}
+		/**End by hxc 101228 For JZCARD 便于在rptcupsfee.pc中分发手续费到各支行时区分他行卡ATM和本行卡ATM交易**/
+
+		Cupscardhtr_Debug(&wn_htr);
+		vtcp_log("===这里==[%s]==[%d]===\n",__FILE__,__LINE__);
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		vtcp_log("===这里==[%s]==[%d]===\n",__FILE__,__LINE__);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			return(-1);
+		}
+	}
+	vtcp_log("%s,%d \n",__FILE__,__LINE__);
+	return(0);
+}
+int ibhdforcups_insCardhtr_STI(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+			break;
+
+		if(sBuff[0] == '\0')
+			break;
+
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_htr.brtype[0] = '0';
+		else
+			wn_htr.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+
+		/*报文类型*/
+		p = sCupsCutStr(0,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+		/*交易货币代码*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.curcd,p,sizeof(wn_htr.curcd)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+
+		/*受卡方所在地日期*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.dltxday,p,sizeof(wn_htr.dltxday)-1);
+
+		/*受卡方所在地时间*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.dltxtime,p,sizeof(wn_htr.dltxtime)-1);
+
+		/*清算日期*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.qsday,p,sizeof(wn_htr.qsday)-1);
+
+		/*受理方机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+
+		/*转发机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+
+		/*授权标识码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+
+		/*代授权原因*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.sqresn,p,sizeof(wn_htr.sqresn)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+
+		/*受卡方名称地址*/
+		p = sCupsCutStr(1,40,sBuff);
+		memcpy(wn_htr.acbkaddr,p,sizeof(wn_htr.acbkaddr)-1);
+
+		/*证件种类*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.certtype,p,sizeof(wn_htr.certtype)-1);
+
+		/*证件编号*/
+		p = sCupsCutStr(1,20,sBuff);
+		memcpy(wn_htr.certnum,p,sizeof(wn_htr.certnum)-1);
+
+		/*受理方单双标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.dldsflg,p,sizeof(wn_htr.dldsflg)-1);
+
+		/*处理中心流水号*/
+		p = sCupsCutStr(1,9,sBuff);
+		memcpy(wn_htr.clzxseq,p,sizeof(wn_htr.clzxseq)-1);
+
+		/*接收机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+
+		/*发卡银行代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.opncdbk,p,sizeof(wn_htr.opncdbk)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+
+		/*交易返回码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.respcd,p,sizeof(wn_htr.respcd)-1);
+
+		/*服务点输入方式*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.inputmd,p,sizeof(wn_htr.inputmd)-1);
+
+		/*收费标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.feeflg,p,sizeof(wn_htr.feeflg)-1);
+
+		/*是否高于通知限额的标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.tzxeflg,p,sizeof(wn_htr.tzxeflg)-1);
+
+		/*应收手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.infee);
+		wn_htr.infee=wn_htr.infee/100.00;
+		/*应付手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.outfee);
+		wn_htr.outfee=wn_htr.outfee/100.00;
+		/*转接服务费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.zjfee);
+		wn_htr.zjfee=wn_htr.zjfee/100.00;
+		/*代校验项目*/
+		p = sCupsCutStr(1,30,sBuff);
+		memcpy(wn_htr.djyobj,p,sizeof(wn_htr.djyobj)-1);
+
+		/*代授权费用*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_htr.dsqfee);
+		wn_htr.dsqfee=wn_htr.dsqfee/100.00;
+		/*保留使用*/
+		p = sCupsCutStr(1,30,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+
+		/*交易机构或开户机构*/
+		memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		if(strlen(wn_htr.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			return(-1);
+		}
+	}
+	return(0);
+}
+
+int ibhdforcups_insCardhtr_SUMCN(char *nday,char *sname)
+{
+	int i;
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   temp[101];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+	vtcp_log("%s,%d,ppfw文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+			break;
+		if(sBuff[0] == '\0')
+			break;
+
+		zip_space(sBuff);
+		if(strcmp(sBuff,"小额打包计费交易")==0)
+		{
+			vtcp_log("读到倒数第5行退出循环!\n");
+			break;
+	  }
+	}
+	vtcp_log("接着再读3行记录!\n");
+
+	for(i=0;i<3;i++)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+	}
+						
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+		
+		wn_htr.brtype[0] = '0';
+		
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+		
+		/*交易机构*/
+		memcpy(wn_htr.brno,"10801",5);
+
+		p = sCupsCutTJStr(0,20,sBuff);
+		p = sCupsCutTJStr(1,75,sBuff);
+		memset(temp,0x00,sizeof(temp));
+		memcpy(temp,p,75);
+		zip_space(temp);
+		/*应收费用*/
+		wn_htr.infee=atof(temp);
+		
+		/*应付费用*/
+		wn_htr.outfee=0.00 ;
+		
+		vtcp_log("sBuff[%s] p[%s] temp[%s]\n",sBuff,p,temp);
+		vtcp_log("发卡方[%s] 机构号[%s] 文件名称[%s] 服务费[%lf]\n", wn_htr.brtype,wn_htr.brno,wn_htr.filename,wn_htr.infee);
+		
+		/*交易返回码*/
+		memcpy(wn_htr.respcd,"00",2);
+		
+		/*商户类型*/
+		memcpy(wn_htr.mertype,"7011",4);
+		
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			return(-1);
+		}
+				
+		return(0);
+}
+
+int ibhdforcups_insErr(char *nday,char *sname)
+{
+	struct cupserr_c wn_err;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_err,0x00,sizeof(wn_err));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+			break;
+
+		if(sBuff[0] == '\0')
+			break;
+
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_err.brtype[0] = '0';
+		else
+			wn_err.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_err.filename,sname,sizeof(wn_err.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_err.txday,nday,sizeof(wn_err.txday)-1);
+
+		/*差错交易标志*/
+		p = sCupsCutStr(0,3,sBuff);
+		memcpy(wn_err.errflg,p,sizeof(wn_err.errflg)-1);
+
+		/*代理机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.dlbrno,p,sizeof(wn_err.dlbrno)-1);
+
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.fsbrno,p,sizeof(wn_err.fsbrno)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_err.trseq,p,sizeof(wn_err.trseq)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_err.txtime,p,sizeof(wn_err.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_err.cardno,p,sizeof(wn_err.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.txamt);
+		wn_err.txamt==wn_err.txamt/100.00;
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_err.msgtype,p,sizeof(wn_err.msgtype)-1);
+
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_err.txcode,p,sizeof(wn_err.txcode)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_err.mertype,p,sizeof(wn_err.mertype)-1);
+
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_err.atmno,p,sizeof(wn_err.atmno)-1);
+
+		/*原始交易检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_err.wssrno,p,sizeof(wn_err.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_err.inputcd,p,sizeof(wn_err.inputcd)-1);
+
+		/*授权应答码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_err.authcd,p,sizeof(wn_err.authcd)-1);
+
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.isbkno,p,sizeof(wn_err.isbkno)-1);
+
+		/*发卡银行标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.opnbrno,p,sizeof(wn_err.opnbrno)-1);
+
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_err.otrseq,p,sizeof(wn_err.otrseq)-1);
+
+		/*交易返回码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_err.respcd,p,sizeof(wn_err.respcd)-1);
+
+		/*服务点输入方式*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_err.inputmd,p,sizeof(wn_err.inputmd)-1);
+
+		/*应收手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.insxfee);
+		wn_err.insxfee=wn_err.insxfee/100.00;
+		/*应付手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.outsxfee);
+		wn_err.outsxfee=wn_err.outsxfee/100.00;
+		/*转接服务费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_err.zjfee);
+		wn_err.zjfee=wn_err.zjfee/100.00;
+		/*持卡人交易手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_err.fee);
+		wn_err.fee=wn_err.fee/100.00;
+		/*应收费用*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.infee);
+		wn_err.infee=wn_err.infee/100.00;
+		/*应付费用*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.outfee);
+		wn_err.outfee=wn_err.outfee/100.00;
+		/*差错原因*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_err.errreasn,p,sizeof(wn_err.errreasn)-1);
+
+		/*接收机构标识码/转出机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.outbrno,p,sizeof(wn_err.outbrno)-1);
+
+		/*转出卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_err.outcardno,p,sizeof(wn_err.outcardno)-1);
+
+		/*转入机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_err.inbrno,p,sizeof(wn_err.inbrno)-1);
+
+		/*转入卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_err.incardno,p,sizeof(wn_err.incardno)-1);
+
+		/*原始交易的日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_err.otxtime,p,sizeof(wn_err.otxtime)-1);
+
+		/*卡片序列号*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_err.cardseq,p,sizeof(wn_err.cardseq)-1);
+
+		/*终端读取能力*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_err.tmreadfg,p,sizeof(wn_err.tmreadfg)-1);
+
+		/*IC卡条件代码*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_err.iccardfg,p,sizeof(wn_err.iccardfg)-1);
+
+		/*原始交易清算日期*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_err.oqstime,p,sizeof(wn_err.oqstime)-1);
+
+		/*原始交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_err.otxamt);
+		wn_err.otxamt=wn_err.otxamt/100.00;
+		/*交易地域标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_err.areaflg,p,sizeof(wn_err.areaflg)-1);
+
+		/*ECI标志*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_err.eciflag,p,sizeof(wn_err.eciflag)-1);
+
+		/*交易机构或开户机构*/
+		memcpy(wn_err.brno,bhdforcups_getbrno(wn_err.brtype[0],wn_err.cardno,wn_err.atmno),sizeof(wn_err.brno)-1);
+		if(strlen(wn_err.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+
+		iRc = Cupserr_Ins(wn_err,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			return(-1);
+		}
+	}
+	return(0);
+}
+
+int ibhdforcups_insPpfw(char *nday,char *sname)
+{
+	struct cupsppfw_c wn_ppfw;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+	vtcp_log("%s,%d,ppfw文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_ppfw,0x00,sizeof(wn_ppfw));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+			break;
+
+		if(sBuff[0] == '\0')
+			break;
+
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_ppfw.brtype[0] = '0';
+		else
+			wn_ppfw.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_ppfw.filename,sname,sizeof(wn_ppfw.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_ppfw.txday,nday,sizeof(wn_ppfw.txday)-1);
+
+		/*受理方一级分行代码a*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_ppfw.firstbr,p,sizeof(wn_ppfw.firstbr)-1);
+
+		/*是否银联标准卡c*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_ppfw.cardtype,p,sizeof(wn_ppfw.cardtype)-1);
+
+		/*借贷记卡标志*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_ppfw.cdtype,p,sizeof(wn_ppfw.cdtype)-1);
+
+		/*交易渠道*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_ppfw.jyqd,p,sizeof(wn_ppfw.jyqd)-1);
+
+		/*卡介质*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_ppfw.cardjz,p,sizeof(wn_ppfw.cardjz)-1);
+
+		/*交易跨境标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_ppfw.outtxfg,p,sizeof(wn_ppfw.outtxfg)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_ppfw.mertype,p,sizeof(wn_ppfw.mertype)-1);
+
+		/*受理方二级分行*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.secbr,p,sizeof(wn_ppfw.secbr)-1);
+
+		/*受理机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.dlbrno,p,sizeof(wn_ppfw.dlbrno)-1);
+
+		/*转发机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.fsbrno,p,sizeof(wn_ppfw.fsbrno)-1);
+
+		/*发卡机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.opnbrno,p,sizeof(wn_ppfw.opnbrno)-1);
+
+		/*接收机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.isbkno,p,sizeof(wn_ppfw.isbkno)-1);
+
+		/*收单机构代码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_ppfw.sdbrno,p,sizeof(wn_ppfw.sdbrno)-1);
+
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_ppfw.msgtype,p,sizeof(wn_ppfw.msgtype)-1);
+
+		/*交易处理码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_ppfw.txcode,p,sizeof(wn_ppfw.txcode)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_ppfw.inputcd,p,sizeof(wn_ppfw.inputcd)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_ppfw.trseq,p,sizeof(wn_ppfw.trseq)-1);
+
+		/*交易传输日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_ppfw.txtime,p,sizeof(wn_ppfw.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_ppfw.cardno,p,sizeof(wn_ppfw.cardno)-1);
+
+		/*转出卡*/
+		p = sCupsCutStr(1,28,sBuff);
+		memcpy(wn_ppfw.outcardno,p,sizeof(wn_ppfw.outcardno)-1);
+
+		/*转入卡*/
+		p = sCupsCutStr(1,28,sBuff);
+		memcpy(wn_ppfw.incardno,p,sizeof(wn_ppfw.incardno)-1);
+
+		/*原始交易信息*/
+		p = sCupsCutStr(1,42,sBuff);
+		memcpy(wn_ppfw.otxmsg,p,sizeof(wn_ppfw.otxmsg)-1);
+
+		/*受卡方终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_ppfw.atmno,p,sizeof(wn_ppfw.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_ppfw.acbkflg,p,sizeof(wn_ppfw.acbkflg)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_ppfw.wssrno,p,sizeof(wn_ppfw.wssrno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_ppfw.txamt);
+		wn_ppfw.txamt=wn_ppfw.txamt/100.00;
+		/*受理方手续费j*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_ppfw.slfee);
+		wn_ppfw.slfee=wn_ppfw.slfee/100.00;
+		/*品牌服务费*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p+1,11,0,&wn_ppfw.pinpfee);
+		wn_ppfw.pinpfee=wn_ppfw.pinpfee/100.00;
+		/*保留使用*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_ppfw.tmp1,p,sizeof(wn_ppfw.tmp1)-1);
+
+		/*净金额*/
+		p = sCupsCutStr(1,13,sBuff);
+		str2dbl(p+1,12,0,&wn_ppfw.jamt);
+		wn_ppfw.jamt=wn_ppfw.jamt/100.00;
+		/*保留使用*/
+		p = sCupsCutStr(1,100,sBuff);
+		memcpy(wn_ppfw.tmp2,p,sizeof(wn_ppfw.tmp2)-1);
+		vtcp_log("%s,%d,ppfw----brtype=[%c]",__FILE__,__LINE__,wn_ppfw.brtype[0]);
+		/*交易机构或开户机构*/
+		memcpy(wn_ppfw.brno,bhdforcups_getbrno(wn_ppfw.brtype[0],wn_ppfw.cardno,wn_ppfw.atmno),sizeof(wn_ppfw.brno)-1);
+		if(strlen(wn_ppfw.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+		vtcp_log("[%s][%d]准备插入ppfw!\n",__FILE__,__LINE__);
+
+		iRc = Cupsppfw_Ins(wn_ppfw,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupsppfw_Debug(&wn_ppfw);
+			return(-1);
+		}
+	}
+	return(0);
+}
+
+int ibhdforcups_insCardhtrSUMCN(char *nday,char *sname)
+{
+	struct cupsppfw_c wn_ppfw;
+	int i;
+	char   *p;
+	char   sBuff[501];
+	char   temp[101];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+	vtcp_log("%s,%d,ppfw文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+			break;
+		if(sBuff[0] == '\0')
+			break;
+
+		zip_space(sBuff);
+		if(strcmp(sBuff,"小额打包计费交易")==0)
+		{
+			vtcp_log("读到倒数第5行退出循环!\n");
+			break;
+	  }
+	}
+	vtcp_log("接着再读三行记录!\n");
+
+	for(i=0;i<3;i++)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+	}
+						
+		memset(&wn_ppfw,0x00,sizeof(wn_ppfw));
+		
+		wn_ppfw.brtype[0] = '0';
+		
+		/*银联明细文件名称*/
+		memcpy(wn_ppfw.filename,sname,sizeof(wn_ppfw.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_ppfw.txday,nday,sizeof(wn_ppfw.txday)-1);
+		
+		/*交易机构*/
+		memcpy(wn_ppfw.brno,"10801",5);
+
+		p = sCupsCutTJStr(0,20,sBuff);
+		p = sCupsCutTJStr(1,75,sBuff);
+		memset(temp,0x00,sizeof(temp));
+		memcpy(temp,p,75);
+		zip_space(temp);
+		wn_ppfw.pinpfee=atof(temp);
+		
+		vtcp_log("sBuff[%s] p[%s] temp[%s]\n",sBuff,p,temp);
+		vtcp_log("发卡方[%s] 机构号[%s] 文件名称[%s] 服务费[%lf]\n",wn_ppfw.brtype,wn_ppfw.brno,wn_ppfw.filename,wn_ppfw.pinpfee);
+		
+		iRc = Cupsppfw_Ins(wn_ppfw,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupsppfw_Debug(&wn_ppfw);
+			return(-1);
+		}
+				
+		return(0);
+}
+
+char * sCupsCutStr(int fg,int ilen,char *buf)
+{
+	static int icutlen;
+
+	if(fg == 0)
+	{
+		icutlen = 0;
+	}
+
+	memset(sTmp,0x00,sizeof(sTmp));
+	memcpy(sTmp,buf+icutlen,ilen);
+	icutlen+=ilen;
+	icutlen+=1;	/*间隔符,1位*/
+
+	return(sTmp);
+}
+
+/***add by 20130527 分割银联IC卡脱机消费文件中字段之间无空格***/
+char * sCupsCutTJStr(int fg,int ilen,char *buf)
+{
+	static int icutlen;
+
+	if(fg == 0)
+	{
+		icutlen = 0;
+	}
+
+	memset(sTmp,0x00,sizeof(sTmp));
+	memcpy(sTmp,buf+icutlen,ilen);
+	icutlen+=ilen;
+	/*icutlen+=1;	间隔符,1位,脱机消费文件没有空格*/
+
+	return(sTmp);
+}
+/***add by 20130527 分割银联IC卡脱机消费文件中字段之间无空格***/
+
+char *bhdforcups_getbrno(char brtype,char *cardno,char *atmno)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		static varchar sbrno[BRNO_LEN+1];
+		varchar scardno[20];
+		varchar satmno[11];
+	EXEC SQL END   DECLARE SECTION;
+
+	memset(scardno.arr,0x00,sizeof(scardno.arr));
+	memset(satmno.arr,0x00,sizeof(satmno.arr));
+	memset(sbrno.arr,0x00,sizeof(sbrno.arr));
+	memset(&g_atmrecord,0x00,sizeof(g_atmrecord));
+	vtcp_log("%s,%d,brtype=[%c]",__FILE__,__LINE__,brtype);
+	vtcp_log("%s,%d,atmno=[%s]",__FILE__,__LINE__,atmno);
+	vtcp_log("%s,%d,cardno=[%s]",__FILE__,__LINE__,cardno);
+	if(brtype == '0' || brtype == '4')	/*开户行*/
+	{
+
+		pub_base_old_acno(cardno);
+		vtcp_log("%s,%d,转换后cardno=[%s]",__FILE__,__LINE__,cardno);
+		pub_base_strpack(cardno);
+		vtcp_log("%s,%d,转换后cardno=[%s]",__FILE__,__LINE__,cardno);
+		ret = Mdm_ac_rel_Sel(g_pub_tx.reply,&g_mdm_ac_rel,"ac_no='%s'",cardno);
+		if(ret){
+			vtcp_log("[%s][%d]查帐号开户机构号错![%d]\n",__FILE__,__LINE__,ret);
+				return(NULL);
+		}
+		memcpy(sbrno.arr,g_mdm_ac_rel.opn_br_no,sizeof(sbrno.arr));
+
+
+	} else{	/*代理行*/
+		memcpy(satmno.arr,atmno,sizeof(satmno.arr)-1);
+		satmno.len  = 8;
+		ret = Atmrecord_Sel(g_pub_tx.reply,&g_atmrecord,"atmno='%s'",satmno.arr);
+		if(ret){
+			vtcp_log("[%s][%d]机构号码错![%d]\n",__FILE__,__LINE__,ret);
+				return(NULL);
+		}
+		memcpy(sbrno.arr,g_atmrecord.opnbr,sizeof(sbrno.arr));
+	}
+
+	return(sbrno.arr);
+}
+
+/***TO BEGIN  IC卡***/
+int ibhdforcups_insCardhtr_LOD(char *nday,char *sname)
+ {
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+		{
+			break;
+		}
+		if(sBuff[0] == '\0')
+			break;
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_htr.brtype[0] = '0';
+		else
+			wn_htr.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+
+		/*代理机构标识码*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+
+    /*消息类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+
+		/*授权应答码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.otrseq,p,sizeof(wn_htr.otrseq)-1);
+
+		/*原始交易日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.otxtime,p,sizeof(wn_htr.otxtime)-1);
+
+		/*发卡机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.opnbrno,p,sizeof(wn_htr.opnbrno)-1);
+
+		/*发卡应付手续费*/
+		if(sname[11]=='I'){
+			p = sCupsCutStr(1,12,sBuff);
+			str2dbl(p+1,11,0,&wn_htr.outfee);
+			wn_htr.outfee=wn_htr.outfee/100.00;
+		}
+		else{/*受理应收手续费*/
+			p = sCupsCutStr(1,12,sBuff);
+			vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+			str2dbl(p+1,11,0,&wn_htr.infee);
+			wn_htr.infee=wn_htr.infee/100.00;
+		}
+
+		/*卡片序列号*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.cardseq,p,sizeof(wn_htr.cardseq)-1);
+
+
+		/*交易发起方式*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.tzxeflg,p,sizeof(wn_htr.tzxeflg)-1);
+
+		/*解决LOD文件中无respcd的问题，ALOD加00在rptcupsfee.pc文件中收回佣*/
+		if(sname[11]=='A')
+			memcpy(wn_htr.respcd,"00",sizeof(wn_htr.respcd)-1);
+		
+		/*保留使用*/
+		p = sCupsCutStr(1,27,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+
+		/*交易机构或开户机构*/
+		memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		if(strlen(wn_htr.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+		Cupscardhtr_Debug(&wn_htr);
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupscardhtr_Debug(&wn_htr);
+			return(-1);
+		}
+	}
+	return(0);
+}
+
+int ibhdforcups_insCardhtr_LTR(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+		{
+			break;
+		}
+		if(sBuff[0] == '\0')
+			break;
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_htr.brtype[0] = '0';
+		else
+			wn_htr.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+
+		/*受理方标识码*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+
+		/*交易类型码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+
+		/*授权应答码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.otrseq,p,sizeof(wn_htr.otrseq)-1);
+
+		/*原始交易日期时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.otxtime,p,sizeof(wn_htr.otxtime)-1);
+
+		/*发卡机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.opnbrno,p,sizeof(wn_htr.opnbrno)-1);
+
+		/*发卡应付手续费*/
+		if(sname[11]=='I'){
+			p = sCupsCutStr(1,12,sBuff);
+			str2dbl(p+1,11,0,&wn_htr.outfee);
+			wn_htr.outfee=wn_htr.outfee/100.00;
+		}
+		else{/*受理应收手续费*/
+			p = sCupsCutStr(1,12,sBuff);
+			vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+			str2dbl(p+1,11,0,&wn_htr.infee);
+			wn_htr.infee=wn_htr.infee/100.00;
+		}
+
+		/*转出机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.outbrno,p,sizeof(wn_htr.outbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.outbrno);
+
+		/*转出卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.outcardno,p,sizeof(wn_htr.outcardno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.outcardno);
+
+		/*转入机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.inbrno,p,sizeof(wn_htr.inbrno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.inbrno);
+
+		/*转入卡号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.incardno,p,sizeof(wn_htr.incardno)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.incardno);
+
+		/*卡片序列号*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.cardseq,p,sizeof(wn_htr.cardseq)-1);
+		vtcp_log("===在这里===[%s]==[%d]==[%s]===\n",__FILE__,__LINE__,wn_htr.cardseq);
+
+		/*同城/异地标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.cityfg,p,sizeof(wn_htr.cityfg)-1);
+
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+
+		/*交易发起方式*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.tzxeflg,p,sizeof(wn_htr.tzxeflg)-1);
+		
+		/*解决LOD文件中无respcd的问题，ALOD加00在rptcupsfee.pc文件中收回佣*/
+		if(sname[11]=='A')
+			memcpy(wn_htr.respcd,"00",sizeof(wn_htr.respcd)-1);
+		
+		/*保留使用*/
+		p = sCupsCutStr(1,27,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+
+		/*交易机构或开户机构*/
+		memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		if(strlen(wn_htr.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+		Cupscardhtr_Debug(&wn_htr);
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupscardhtr_Debug(&wn_htr);
+			return(-1);
+		}
+	}
+	return(0);
+}
+/***TO END IC卡***/
+/***ADD BY 20130527 IC卡脱机消费***/
+int ibhdforcups_insCardhtr_INF(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[1001];
+	char   sfilename[101];
+	FILE   *fpr;
+	int	iNum=0;
+	int	num=0;
+	char	buf[1000];
+	char	txcode[4];
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+	memset(sBuff,'\0',sizeof(sBuff));
+	memset(buf,'\0',sizeof(buf));
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]文件[%s]无法打开!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+
+	memset(sBuff,0x00,sizeof(sBuff));
+	fgets(sBuff,47,fpr);
+	vtcp_log("[%s],[%d],sBuff=[%s]!\n",__FILE__,__LINE__,sBuff);
+	if(memcmp(sBuff,"000",3) != 0)
+	{
+		vtcp_log("[%s][%d]文件[%s]取值错误!\n",__FILE__,__LINE__,sfilename);
+		return(-1);
+	}
+	iNum=1;
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+		fgets(sBuff,527,fpr);
+		vtcp_log("[%s],[%d],sBuff=[%s]!\n",__FILE__,__LINE__,sBuff);
+		iNum++;
+
+		/*001到达文件尾导入完成*/
+		if(memcmp(sBuff,"001",3) == 0)
+		{
+			memset(buf,'\0',sizeof(buf));
+			memcpy(buf,sBuff+7,10);
+			vtcp_log("[%s],[%d],buf=[%s]!\n",__FILE__,__LINE__,buf);
+			num=atoi(buf);
+			if(num == iNum)
+			{
+				vtcp_log("[%s],[%d],文件导入完成,记录条数=[%d]!",__FILE__,__LINE__,iNum);
+				break;
+			}
+			else
+			{
+				vtcp_log("[%s],[%d],文件导入数据出现异常,记录条数num=[%d],iNum=[%d]!",__FILE__,__LINE__,num,iNum);
+				break;
+			}
+		}
+
+		if(feof(fpr))
+		{
+			break;
+		}
+		if(sBuff[0] == '\0')
+		{
+			break;
+		}
+		
+		/*头文件TC000*/
+		/*交易代码
+		p = sCupsCutTJStr(0,3,sBuff);
+		vtcp_log("%s,%d看看交易代码到底是多少%s",__FILE__,__LINE__,p);*/
+		/*段位图
+		p = sCupsCutTJStr(1,4,sBuff);
+		vtcp_log("%s,%d看看段位图到底是多少%s",__FILE__,__LINE__,p);*/
+		/*机构代码
+		p = sCupsCutTJStr(1,11,sBuff);
+		vtcp_log("%s,%d看看机构代码到底是多少%s",__FILE__,__LINE__,p);*/
+		/*批结日期
+		p = sCupsCutTJStr(1,8,sBuff);
+		vtcp_log("%s,%d看看批结日期到底是多少%s",__FILE__,__LINE__,p);*/
+		/*CUPS保留
+		p = sCupsCutTJStr(1,8,sBuff);
+		vtcp_log("%s,%d看看CUPS保留到底是多少%s",__FILE__,__LINE__,p);*/
+		/*版本标记
+		p = sCupsCutTJStr(1,4,sBuff);
+		vtcp_log("%s,%d看看版本标记到底是多少%s",__FILE__,__LINE__,p);*/
+		/*版本号
+		p = sCupsCutTJStr(1,8,sBuff);
+		vtcp_log("%s,%d看看版本号到底是多少%s",__FILE__,__LINE__,p);*/
+		
+/*		if(sBuff[0] == '\0')
+			break;*/		
+
+		vtcp_log("[%s],[%d],sBuff=[%s]!\n",__FILE__,__LINE__,sBuff);
+			/*发卡/IC卡脱机消费归为发卡方*/
+			wn_htr.brtype[0] = '0';
+			
+			/*银联明细文件名称*/
+			memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+			
+			/*交易日期*/
+			memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+	
+	
+			/*基本清算信息 截掉前46位的头文件*/
+			/*交易代码??*/
+			p = sCupsCutTJStr(0,3,sBuff);
+			memset(txcode,'\0',sizeof(txcode));
+			memcpy(txcode,p,3);
+			vtcp_log("[%s],[%d],sBuff=[%s]!\n",__FILE__,__LINE__,sBuff);
+			vtcp_log("%s,%d看看交易代码到底是多少%s",__FILE__,__LINE__,p);
+			
+			/*段位图??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			vtcp_log("%s,%d看看段位图到底是多少%s",__FILE__,__LINE__,p);
+	
+			/*主帐号*/
+			p = sCupsCutTJStr(1,19,sBuff);
+			memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+			vtcp_log("%s,%d看看主帐号到底是多少%s",__FILE__,__LINE__,p);
+	
+			/*交易金额*/
+			p = sCupsCutTJStr(1,12,sBuff);
+			str2dbl(p,12,0,&wn_htr.txamt);
+			wn_htr.txamt=wn_htr.txamt/100.00;
+			vtcp_log("%s,%d看看交易金额到底是多少%s",__FILE__,__LINE__,p);
+	
+			/*交易货币代码*/
+			p = sCupsCutTJStr(1,3,sBuff);
+			memcpy(wn_htr.curcd,p,sizeof(wn_htr.curcd)-1);
+			vtcp_log("%s,%d看看交易货币代码到底是多少%s",__FILE__,__LINE__,p);
+	
+			/*交易传输时间*/
+			p = sCupsCutTJStr(1,10,sBuff);
+			memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+			vtcp_log("%s,%d看看交易传输时间到底是多少%s",__FILE__,__LINE__,p);
+			
+			/*系统跟踪号*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+			vtcp_log("%s,%d看看系统跟踪号到底是多少%s",__FILE__,__LINE__,p);
+			
+			/*str2dbl(p,12,0,&wn_htr.dsamt);
+			wn_htr.dsamt=wn_htr.dsamt/100.00;*/
+			
+			/*授权应答标识码*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			memcpy(wn_htr.authcd,p,sizeof(wn_htr.authcd)-1);
+			vtcp_log("%s,%d看看授权应答标识码到底是多少%s",__FILE__,__LINE__,p);
+			
+			/*授权日期??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			vtcp_log("%s,%d看看授权日期到底是多少%s",__FILE__,__LINE__,p);
+	
+			/*检索参考号*/
+			p = sCupsCutTJStr(1,12,sBuff);
+			memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+	
+			/*代理机构标识码*/
+			p = sCupsCutTJStr(1,11,sBuff);
+			memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+	
+			/*发送机构标识码*/
+			p = sCupsCutTJStr(1,11,sBuff);
+			memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+	
+			/*商户类型*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+	
+			/*受卡机终端标识码*/
+			p = sCupsCutTJStr(1,8,sBuff);
+			memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+	
+			/*受卡方标识码*/
+			p = sCupsCutTJStr(1,15,sBuff);
+			memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+	
+			/*受卡方名称地址*/
+			p = sCupsCutTJStr(1,40,sBuff);
+			memcpy(wn_htr.acbkaddr,p,sizeof(wn_htr.acbkaddr)-1);
+	
+			/*原始交易信息??*/
+			p = sCupsCutTJStr(1,23,sBuff);
+	
+			/*报文原因代码??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+	
+			/*单双信息标志*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			memcpy(wn_htr.dldsflg,p,sizeof(wn_htr.dldsflg)-1);
+	
+			/*CUPS流水号==处理中心流水号*/
+			p = sCupsCutTJStr(1,9,sBuff);
+			memcpy(wn_htr.clzxseq,p,sizeof(wn_htr.clzxseq)-1);
+	
+			/*接收机构代码??*/
+			p = sCupsCutTJStr(1,11,sBuff);
+		
+			/*发卡机构代码??*/
+			p = sCupsCutTJStr(1,11,sBuff);
+	
+			/*CUPS通知标志==是否高于通知限额标志*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			memcpy(wn_htr.tzxeflg,p,sizeof(wn_htr.tzxeflg)-1);
+			
+			/*交易发起渠道*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			memcpy(wn_htr.jyqd,p,sizeof(wn_htr.jyqd)-1);
+	
+			/*交易特征标识??*/
+			p = sCupsCutTJStr(1,1,sBuff);
+	
+			/*CUPS保留使用??*/
+			p = sCupsCutTJStr(1,8,sBuff);
+	
+			/*POS服务点条件代码*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+	
+			/*本方手续费*/
+			p = sCupsCutTJStr(1,12,sBuff);
+			vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+			str2dbl(p+1,11,0,&wn_htr.infee);
+			wn_htr.infee=wn_htr.infee/100.00;
+	
+			/*交易地域标志??*/
+			p = sCupsCutTJStr(1,1,sBuff);
+	
+			/*ECI标志*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			memcpy(wn_htr.eciflag,p,sizeof(wn_htr.eciflag)-1);
+	
+			/*特殊计费标志??*/
+			p = sCupsCutTJStr(1,2,sBuff);
+	
+			/*特殊计费档次??*/
+			p = sCupsCutTJStr(1,1,sBuff);
+	
+			/*交易发起方式*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			
+			/*交易返回码--为配合POS回佣返回码必须为00而赋值*/
+			memcpy(wn_htr.respcd,"00",sizeof(wn_htr.respcd)-1);
+	
+			/*保留使用*/
+			p = sCupsCutTJStr(1,9,sBuff);
+			memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+			
+			/*基于PBOC借贷记标准的IC卡特征信息*/
+			/*应用密文??*/
+			p = sCupsCutTJStr(1,16,sBuff);
+			
+			/*服务点输入方式码==服务点输入方式*/
+			p = sCupsCutTJStr(1,3,sBuff);
+			memcpy(wn_htr.inputmd,p,sizeof(wn_htr.inputmd)-1);
+			
+			/*卡片序列号*/
+			p = sCupsCutTJStr(1,3,sBuff);
+			memcpy(wn_htr.cardseq,p,sizeof(wn_htr.cardseq)-1);
+			
+			/*终端读取能力*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			memcpy(wn_htr.tmreadfg,p,sizeof(wn_htr.tmreadfg)-1);
+			
+			/*IC卡条件代码*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			memcpy(wn_htr.iccardfg,p,sizeof(wn_htr.iccardfg)-1);
+			
+			/*终端性能??*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			
+			/*终端验证结果??*/
+			p = sCupsCutTJStr(1,10,sBuff);
+			
+			/*不可预知数??*/
+			p = sCupsCutTJStr(1,8,sBuff);
+			
+			/*接口设备序列号??*/
+			p = sCupsCutTJStr(1,8,sBuff);
+			
+			/*发卡行应用数据??*/
+			p = sCupsCutTJStr(1,64,sBuff);
+			
+			/*应用交易记数器??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			
+			/*应用交互特征??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			
+			/*交易日期==原始交易日期时间*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			memcpy(wn_htr.otxtime,p,sizeof(wn_htr.otxtime)-1);
+			
+			/*终端国家代码??*/
+			p = sCupsCutTJStr(1,3,sBuff);
+			
+			/*交易响应码??*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			
+			/*交易类型==交易类型码*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+			
+			/*授权金额??*/
+			p = sCupsCutTJStr(1,12,sBuff);
+			vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+			
+			/*交易币种代码??*/
+			p = sCupsCutTJStr(1,3,sBuff);
+			
+			/*应用密文校验结果??*/
+			p = sCupsCutTJStr(1,1,sBuff);
+			
+			/*卡有效期??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			
+			/*密文信息数据??*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			
+			/*其它金额??*/
+			p = sCupsCutTJStr(1,12,sBuff);
+			
+			/*持卡人验证方法结果??*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			
+			/*终端类型??*/
+			p = sCupsCutTJStr(1,2,sBuff);
+			
+			/*专用文件名称??*/
+			p = sCupsCutTJStr(1,32,sBuff);
+			
+			/*应用版本号??*/
+			p = sCupsCutTJStr(1,4,sBuff);
+			
+			/*交易序列计数器??*/
+			p = sCupsCutTJStr(1,8,sBuff);
+			
+			/*电子现金发卡行授权码??*/
+			p = sCupsCutTJStr(1,6,sBuff);
+			
+			/*卡产品标识信息??*/
+			p = sCupsCutTJStr(1,24,sBuff);
+			
+			/*交易机构或开户机构*/
+			memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+			if(strlen(wn_htr.brno)==0)
+			{
+				vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+				return(-1);
+			}
+			Cupscardhtr_Debug(&wn_htr);
+			iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+			if(iRc)
+			{
+				vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+				Cupscardhtr_Debug(&wn_htr);
+				return(-1);
+			}
+	}
+	return(0);
+}
+/***ADD BY 20130527 IC卡脱机消费***/
+/***追偿性分润 hzh 20131123 begin***/
+int ibhdforcups_insCardhtr_FMCZ(char *nday,char *sname)
+{
+	struct cupscardhtr_c wn_htr;
+	char   *p;
+	char   sBuff[501];
+	char   sfilename[101];
+	FILE   *fpr;
+
+	/*准备文件名*/
+	memset(sfilename,0x00,sizeof(sfilename));
+	strcpy(sfilename,getenv("CUPSFILEPATH"));
+	/*strcpy(sfilename,"/home/jzht/cupsfiles/");*/
+	strcat(sfilename,nday);
+	strcat(sfilename,"/");
+
+	strcat(sfilename,sname);
+
+	vtcp_log("%s,%d,文件在>>【%s】!\n",__FILE__,__LINE__,sfilename);
+	fpr = fopen(sfilename,"rb");
+	if(fpr==NULL)
+	{
+		vtcp_log("[%s][%d]当日不存在[%s]文件，跳过此步骤继续!\n",__FILE__,__LINE__,sfilename);
+		return(0);
+	}
+
+	while(1)
+	{
+		memset(sBuff,0x00,sizeof(sBuff));
+		memset(&wn_htr,0x00,sizeof(wn_htr));
+
+		fgets(sBuff,sizeof(sBuff)-1,fpr);
+
+		if(feof(fpr))
+		{
+			break;
+		}
+		if(sBuff[0] == '\0')
+			break;
+		/*发卡/受理方*/
+		if(sname[11]=='I')
+			wn_htr.brtype[0] = '0';
+		else
+			wn_htr.brtype[0] = '1';
+
+		/*银联明细文件名称*/
+		memcpy(wn_htr.filename,sname,sizeof(wn_htr.filename)-1);
+
+		/*交易日期*/
+		memcpy(wn_htr.txday,nday,sizeof(wn_htr.txday)-1);
+
+		/*代理机构标识码*/
+		p = sCupsCutStr(0,11,sBuff);
+		memcpy(wn_htr.dlbrno,p,sizeof(wn_htr.dlbrno)-1);
+
+		/*发送机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.fsbrno,p,sizeof(wn_htr.fsbrno)-1);
+
+		/*系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.trseq,p,sizeof(wn_htr.trseq)-1);
+
+		/*交易传输时间*/
+		p = sCupsCutStr(1,10,sBuff);
+		memcpy(wn_htr.txtime,p,sizeof(wn_htr.txtime)-1);
+
+		/*主账号*/
+		p = sCupsCutStr(1,19,sBuff);
+		memcpy(wn_htr.cardno,p,sizeof(wn_htr.cardno)-1);
+
+		/*交易金额*/
+		p = sCupsCutStr(1,12,sBuff);
+		str2dbl(p,12,0,&wn_htr.txamt);
+		wn_htr.txamt=wn_htr.txamt/100.00;
+
+		/*报文类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.msgtype,p,sizeof(wn_htr.msgtype)-1);
+
+		/*交易处理码*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.txcode,p,sizeof(wn_htr.txcode)-1);
+
+		/*商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+		memcpy(wn_htr.mertype,p,sizeof(wn_htr.mertype)-1);
+		
+		/*正确商户类型*/
+		p = sCupsCutStr(1,4,sBuff);
+
+		/*追偿类型*/
+		p = sCupsCutStr(1,1,sBuff);
+
+		/*受卡机终端标识码*/
+		p = sCupsCutStr(1,8,sBuff);
+		memcpy(wn_htr.atmno,p,sizeof(wn_htr.atmno)-1);
+
+		/*受卡方标识码*/
+		p = sCupsCutStr(1,15,sBuff);
+		memcpy(wn_htr.acbkflg,p,sizeof(wn_htr.acbkflg)-1);
+
+		/*检索参考号*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.wssrno,p,sizeof(wn_htr.wssrno)-1);
+
+		/*服务点条件码*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.inputcd,p,sizeof(wn_htr.inputcd)-1);
+
+		/*接收机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.isbkno,p,sizeof(wn_htr.isbkno)-1);
+
+		/*原始交易的系统跟踪号*/
+		p = sCupsCutStr(1,6,sBuff);
+		memcpy(wn_htr.otrseq,p,sizeof(wn_htr.otrseq)-1);
+
+		/*交易返回码*/
+		p = sCupsCutStr(1,2,sBuff);
+		/*填补手工预授权完成交易respcd没有值的问题*/
+		if( strlen(p)==0 || memcmp(p,"  ",2)==0 )
+		{
+			memcpy(wn_htr.respcd,"00",sizeof(wn_htr.respcd)-1);
+		}else
+		{
+			memcpy(wn_htr.respcd,p,sizeof(wn_htr.respcd)-1);
+		}
+
+		/*服务点输入方式*/
+		p = sCupsCutStr(1,3,sBuff);
+		memcpy(wn_htr.inputmd,p,sizeof(wn_htr.inputmd)-1);
+
+		/*应付追偿手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+		str2dbl(p,12,0,&wn_htr.outfee);
+		wn_htr.outfee=wn_htr.outfee/100.00;
+
+		/*应收追偿手续费*/
+		p = sCupsCutStr(1,12,sBuff);
+		vtcp_log("%s,%d看看金额到底是多少%s",__FILE__,__LINE__,p);
+		str2dbl(p,12,0,&wn_htr.infee);
+		wn_htr.infee=wn_htr.infee/100.00;
+		
+		/*保留使用h*/
+		p = sCupsCutStr(1,12,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+
+		/*发卡机构标识码*/
+		p = sCupsCutStr(1,11,sBuff);
+		memcpy(wn_htr.opnbrno,p,sizeof(wn_htr.opnbrno)-1);
+
+		/*交易地域标志*/
+		p = sCupsCutStr(1,1,sBuff);
+		memcpy(wn_htr.outtxfg,p,sizeof(wn_htr.outtxfg)-1);
+
+		/*终端类型*/
+		p = sCupsCutStr(1,2,sBuff);
+		memcpy(wn_htr.jyqd,p,sizeof(wn_htr.jyqd)-1);
+		
+		/*合规特殊计费标识i*/
+		p = sCupsCutStr(1,1,sBuff);
+		
+		/*标准化清算II的倍数j*/
+		p = sCupsCutStr(1,2,sBuff);
+
+		/*保留使用*/
+		p = sCupsCutStr(1,27,sBuff);
+		memcpy(wn_htr.tmp,p,sizeof(wn_htr.tmp)-1);
+		
+		/*交易机构或开户机构*/
+		memcpy(wn_htr.brno,bhdforcups_getbrno(wn_htr.brtype[0],wn_htr.cardno,wn_htr.atmno),sizeof(wn_htr.brno)-1);
+		if(strlen(wn_htr.brno)==0)
+		{
+			vtcp_log("[%s][%d]得到机构号错误!\n",__FILE__,__LINE__);
+			return(-1);
+		}
+		Cupscardhtr_Debug(&wn_htr);
+		iRc = Cupscardhtr_Ins(wn_htr,g_pub_tx.reply);
+		if(iRc)
+		{
+			vtcp_log("[%s][%d]记录插入失败![%d]\n",__FILE__,__LINE__,iRc);
+			Cupscardhtr_Debug(&wn_htr);
+			return(-1);
+		}
+	}
+	return(0);
+}
+/***追偿性分润 hzh 20131123 end***/

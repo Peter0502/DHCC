@@ -1,0 +1,888 @@
+/***********************************************************
+* 文 件 名: XD.pc
+* 功能描述: 用于导信贷所需数据
+* 
+* 作    者: chenchao
+* 完成日期：2011-7-24 18:06:01
+**
+* 修改记录：*
+*    日    期:
+*    修 改 人:
+*    修改内容:
+**
+***********************************************************/
+#define ERR_DEAL {if(iRet){ vtcp_log("导出失败,请检查!!!\n");goto ErrExit;}}
+#include <sys/stat.h>
+#include <string.h>
+#include <math.h>
+#include "public.h"
+#include "ln_mst_c.h"
+#include "ln_mst_hst_c.h"
+#include "mo_discnt_c.h"
+#include "mo_bank_acc_po_c.h"
+#include "mo_bank_po_c.h"
+#include "cif_basic_inf_c.h"
+#include "cif_cop_inf_c.h"
+#include "cif_per_inf_c.h"
+#include "cif_email_inf_c.h"
+#include "cif_addr_inf_c.h"
+#include "cif_id_code_rel_c.h"
+
+EXEC SQL INCLUDE SQLCA;
+static iRet = 0;
+static char filename[50];
+static FILE *fp=NULL;
+int XD()
+{
+	iRet = Unload_mo_bank_acc_po();	/** 承兑  **/
+	ERR_DEAL
+	iRet = Unload_ln_mst();		/**** 导出贷款主文件**/
+	ERR_DEAL
+	iRet = Unload_mo_discnt();	/** 贴现  **/
+	ERR_DEAL
+	iRet = Unload_cif_id_code_rel();/** 证件信息 **/
+	ERR_DEAL
+	iRet = Unload_cif_basic_inf();	/** 客户基本信息  **/
+	ERR_DEAL
+	iRet = Unload_cif_cop_inf();	/** 公司客户  **/
+	ERR_DEAL
+	iRet = Unload_cif_per_inf();	/** 个人  **/
+	ERR_DEAL
+	iRet = Unload_cif_email_inf();	/** 电子地址  **/
+	ERR_DEAL
+	iRet = Unload_cif_addr_inf();	/** 客户地址信息表  **/
+	ERR_DEAL
+	iRet = Unload_ln_mst_hst();	/** 贷款信息明细  **/
+	ERR_DEAL
+	iRet = Unload_mo_bank_acc_po_all();/**全部建账数据 **/
+	ERR_DEAL
+OKExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	vtcp_log("Before OK return: reply is [%s]\n",g_pub_tx.reply);
+	return (0);
+ErrExit:
+	strcpy(g_pub_tx.reply,"H034");
+	sprintf(acErrMsg,"Before return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	vtcp_log("Before bad return: reply is [%s]\n",g_pub_tx.reply);
+	return (1);
+}
+int Unload_ln_mst()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	cAc_no[21];
+		struct	ln_mst_c	sLn_mst;
+		long	lJq_date = 0;
+		long	lLst_pay_date = 0;
+		double	dBase_rate = 0.00;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sLn_mst,0x00,sizeof(sLn_mst));
+	sprintf(filename,"%s/usr/cc/ln_mst.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_LN_MST CURSOR FOR select rowid,ln_mst.* from ln_mst where ac_sts!='9' order by ac_id ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_LN_MST;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		lJq_date = 0;
+		lLst_pay_date = 0;
+		dBase_rate = 0.00;
+		memset(&sLn_mst,0x00,sizeof(sLn_mst));
+		memset(cAc_no,0x00,sizeof(cAc_no));
+		EXEC SQL FETCH CUR_LN_MST INTO :sLn_mst;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		EXEC SQL select tx_date into :lLst_pay_date from ln_mst_hst a,(select max(tx_date||trace_no||trace_cnt) tt from ln_mst_hst where ac_id=:sLn_mst.ac_id and add_ind='0' and tx_code !='3205' ) b where ac_id=:sLn_mst.ac_id and  add_ind='0'  and a.tx_date||a.trace_no||a.trace_cnt =b.tt ;
+		if(sqlca.sqlcode==1403)
+		{
+			lLst_pay_date=sLn_mst.lst_date;
+		}else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		
+		if(sLn_mst.bal +sLn_mst.in_lo_intst +sLn_mst.out_lo_intst +sLn_mst.cmpd_lo_intst < 0.005)
+		{
+			lJq_date=sLn_mst.lst_date;
+		}
+		EXEC SQL select b.rate_val into :dBase_rate from ln_parm a,com_rate b where a.rate_no=b.rate_code and a.cur_no=b.cur_no and b.end_date=99999999 and a.prdt_no=:sLn_mst.prdt_no;
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		EXEC SQL select ac_no into :cAc_no from mdm_ac_rel where ac_id=:sLn_mst.ac_id ;
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		fprintf(fp,"%s|%s|%.2lf|%.2lf|%.2lf|%.6lf|%.6lf|%.6lf|%.6lf|%.6lf|%.6lf|%.6lf|%.6lf|%.6lf|%s|%ld|%ld|%ld|%s|%s|%s|%ld|%ld|%s|%.2lf|%ld|%s|%s|%ld|%s|%s|%s|%ld|%ld|%.2lf|%s|\n", \
+		sLn_mst.opn_br_no,sLn_mst.prdt_no,sLn_mst.bal,sLn_mst.amt_lmt,sLn_mst.ttl_prvd_amt,sLn_mst.rate,\
+		sLn_mst.rate_flt,sLn_mst.over_rate,sLn_mst.over_rate_flt,sLn_mst.fine_rate,sLn_mst.fine_rate_flt,\
+		sLn_mst.in_lo_intst,sLn_mst.out_lo_intst,sLn_mst.cmpd_lo_intst,sLn_mst.cal_code,sLn_mst.opn_date,\
+		sLn_mst.mtr_date,sLn_mst.lst_date,sLn_mst.intst_type,sLn_mst.repay_type,sLn_mst.cmpd_intst_ind,\
+		sLn_mst.repay_ac_id,sLn_mst.save_ac_id,sLn_mst.exp_ind,sLn_mst.exp_rate,sLn_mst.exp_mtr_date,\
+		sLn_mst.ac_sts,sLn_mst.five_sts,sLn_mst.cif_no,sLn_mst.name,sLn_mst.pact_no,sLn_mst.trust_no,lJq_date,lLst_pay_date,dBase_rate,cAc_no);
+	}
+	EXEC SQL CLOSE CUR_LN_MST;
+	fclose(fp);
+	vtcp_log("[%s][%d]ln_mst导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_mo_discnt()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	mo_discnt_c	sMo_discnt;
+		long	lCif_no = 0;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sMo_discnt,0x00,sizeof(sMo_discnt));
+	sprintf(filename,"%s/usr/cc/mo_discnt.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_MO_DIS CURSOR FOR select rowid,mo_discnt.*  from mo_discnt where (pn_date>20110000 or tpn_date>20110000 or rtpn_date>20110000 ) order by pact_no ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_MO_DIS;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		lCif_no = 0;
+		memset(&sMo_discnt,0x00,sizeof(sMo_discnt));
+		EXEC SQL FETCH CUR_MO_DIS INTO :sMo_discnt;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		pub_base_strpack(sMo_discnt.pn_ac_no);
+		if(sMo_discnt.pn_type[0] == '1')
+		{
+			EXEC SQl select a.cif_no into :lCif_no from dd_mst a,mdm_ac_rel b  where a.ac_id=b.ac_id and b.ac_no=:sMo_discnt.pn_ac_no;
+			if(sqlca.sqlcode)
+			{
+				sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+				WRITEMSG
+				return (-1);
+			}
+		}
+
+		fprintf(fp,"%s|%s|%s|%s|%s|%s|%.6lf|%.6lf|%.6lf|%ld|%ld|%ld|%ld|%s|%.2lf|%.2lf|%.2lf|%s|%ld|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%.2lf|%ld|%s|%s|%ld|%ld|%ld|%s|\n", \
+		sMo_discnt.pact_no,sMo_discnt.tpact_no,sMo_discnt.rpact_no,sMo_discnt.br_no,sMo_discnt.bkrl_code,sMo_discnt.pn_type,\
+		sMo_discnt.pn_rate,sMo_discnt.tpn_rate,sMo_discnt.rtpn_rate,sMo_discnt.pn_date,\
+		sMo_discnt.tpn_date,sMo_discnt.rtpn_date,sMo_discnt.return_date,sMo_discnt.local_ind,\
+		sMo_discnt.pn_int,sMo_discnt.tpn_int,sMo_discnt.rpn_int,sMo_discnt.pn_ac_no,lCif_no,\
+		sMo_discnt.pn_name,sMo_discnt.ac_type,sMo_discnt.pay_ac_type,sMo_discnt.pay_ac_no,\
+		sMo_discnt.pay_name,sMo_discnt.get_ac_type,sMo_discnt.tpay_ac_type,sMo_discnt.tin_ac_no,\
+		sMo_discnt.tpn_name,sMo_discnt.rin_ac_no,sMo_discnt.remitter,sMo_discnt.rem_ac_no,\
+		sMo_discnt.payer_brno_name,sMo_discnt.payee,sMo_discnt.payee_ac_no,sMo_discnt.payee_brno_name,\
+		sMo_discnt.par_amt,sMo_discnt.not_matr_date,sMo_discnt.note_type,sMo_discnt.pnote_no,\
+		sMo_discnt.way_days,sMo_discnt.wrk_date,sMo_discnt.trace_no,sMo_discnt.sts);
+	}
+	EXEC SQL CLOSE CUR_MO_DIS;
+	fclose(fp);
+	vtcp_log("[%s][%d]mo_discnt导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_mo_bank_acc_po()
+{
+	char	cPo_sts_new[2];
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	mo_bank_acc_po_c	sMo_bank_acc_po;
+		struct	mo_bank_po_c		sMo_bank_po;
+		long	lCif_no = 0;
+		char	cAc_no[32];
+	EXEC SQL END DECLARE SECTION;
+	
+	memset(filename,0x00,sizeof(filename));
+	memset(cAc_no,0x00,sizeof(cAc_no));
+	memset(cPo_sts_new,0x00,sizeof(cPo_sts_new));
+	memset(&sMo_bank_acc_po,0x00,sizeof(sMo_bank_acc_po));
+	memset(&sMo_bank_po,0x00,sizeof(sMo_bank_po));
+	sprintf(filename,"%s/usr/cc/mo_bank_acc_po.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_MO_BANK CURSOR FOR select rowid,mo_bank_acc_po.*  from mo_bank_acc_po where acc_po_sts='2' order by pact_no ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_MO_BANK;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		lCif_no = 0;
+		memset(cAc_no,0x00,sizeof(cAc_no));
+		memset(&sMo_bank_acc_po,0x00,sizeof(sMo_bank_acc_po));
+		memset(&sMo_bank_po,0x00,sizeof(sMo_bank_po));
+		EXEC SQL FETCH CUR_MO_BANK INTO :sMo_bank_acc_po;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		pub_base_strpack(sMo_bank_acc_po.payer_ac_no);
+		pub_base_strpack(sMo_bank_acc_po.bail_ac_no);
+		if(strlen(sMo_bank_acc_po.payer_ac_no) == 0)
+		{
+			memcpy(cAc_no,sMo_bank_acc_po.bail_ac_no,sizeof(cAc_no)-1);
+		}else
+		{
+			memcpy(cAc_no,sMo_bank_acc_po.payer_ac_no,sizeof(cAc_no)-1);
+		}
+		pub_base_strpack(sMo_bank_acc_po.pact_no);
+		EXEC SQl select a.cif_no into :lCif_no from dd_mst a,mdm_ac_rel b  where a.ac_id=b.ac_id and b.ac_no=:cAc_no;
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		EXEC SQL DECLARE CUR_MO_PO CURSOR FOR select rowid,mo_bank_po.*  from mo_bank_po where pact_no=:sMo_bank_acc_po.pact_no and po_sts='1' and  at_term_ind='N';
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		EXEC SQL OPEN CUR_MO_PO;
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		while(1)
+		{
+			memset(&sMo_bank_po,0x00,sizeof(sMo_bank_po));
+			memset(cPo_sts_new,0x00,sizeof(cPo_sts_new));
+			EXEC SQL FETCH CUR_MO_PO INTO :sMo_bank_po;
+			if(sqlca.sqlcode==1403)
+			{
+				break;
+			}
+			else if(sqlca.sqlcode)
+			{
+				sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+				WRITEMSG
+				return (-1);
+			}
+			if(sMo_bank_po.po_sts[0] == '1')
+			{
+				cPo_sts_new[0] = '1';
+			}else if(sMo_bank_po.po_sts[0] == '2')
+			{
+				cPo_sts_new[0] = '9';
+			}else if(sMo_bank_po.po_sts[0] == '3')
+			{
+				cPo_sts_new[0] = '8';
+			}
+			if(sMo_bank_po.at_term_ind[0] == 'Y')
+			{
+				cPo_sts_new[0] = '7';
+			}
+			if(sMo_bank_acc_po.advance_amt > 0.005)
+			{
+				cPo_sts_new[0] = '6';
+			}
+			fprintf(fp,"%s|%s|%ld|%ld|%s|%s|%s|%s|%s|%s|%s|%ld|%s|%.2lf|%.2lf|%.2lf|%s|%.6lf|%s|%s|%ld|%ld|%ld|%d|%s|%.2lf|%s|%s|\n", \
+			sMo_bank_acc_po.pact_no,sMo_bank_acc_po.tx_br_no,sMo_bank_acc_po.req_date,\
+			lCif_no,sMo_bank_acc_po.payer_name,sMo_bank_acc_po.payer_ac_no,\
+			sMo_bank_acc_po.payer_br_no,sMo_bank_acc_po.payer_br_name,\
+			sMo_bank_acc_po.payee_name,sMo_bank_acc_po.payee_ac_no,\
+			sMo_bank_acc_po.payee_br_name,sMo_bank_acc_po.matr_date,\
+			sMo_bank_acc_po.bail_ac_no,sMo_bank_acc_po.bail_amt,\
+			sMo_bank_acc_po.bail_amt_ratio,sMo_bank_acc_po.advance_amt,\
+			sMo_bank_acc_po.over_ac_no,sMo_bank_acc_po.over_rate,sMo_bank_acc_po.acc_type,\
+			sMo_bank_po.sign_br_no,sMo_bank_po.sign_date,sMo_bank_po.receive_date,\
+			sMo_bank_po.cash_date,sMo_bank_po.pact_no_num,sMo_bank_po.po_no,sMo_bank_po.po_amt,
+			cPo_sts_new,sMo_bank_po.po_ind);
+		}
+		EXEC SQL CLOSE CUR_MO_PO;
+		if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		
+	}
+	EXEC SQL CLOSE CUR_MO_BANK;
+	fclose(fp);
+	vtcp_log("[%s][%d]mo_bank_acc_po导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_id_code_rel()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_id_code_rel_c		sCif_id_code_rel;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_id_code_rel,0x00,sizeof(sCif_id_code_rel));
+	sprintf(filename,"%s/usr/cc/cif_id_code_rel.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF1 CURSOR FOR select rowid,cif_id_code_rel.* from cif_id_code_rel  ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF1;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_id_code_rel,0x00,sizeof(sCif_id_code_rel));
+		EXEC SQL FETCH CUR_CIF1 INTO :sCif_id_code_rel;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+
+		fprintf(fp,"%ld|%s|%s|\n", sCif_id_code_rel.cif_no,sCif_id_code_rel.id_type,sCif_id_code_rel.id_no);
+	}
+	EXEC SQL CLOSE CUR_CIF1;
+	fclose(fp);
+	vtcp_log("[%s][%d]cif_id_code_rel导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_basic_inf()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_basic_inf_c		sCif_basic_inf;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_basic_inf,0x00,sizeof(sCif_basic_inf));
+	sprintf(filename,"%s/usr/cc/cif_basic_inf.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF CURSOR FOR select rowid,cif_basic_inf.*  from cif_basic_inf  ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_basic_inf,0x00,sizeof(sCif_basic_inf));
+		EXEC SQL FETCH CUR_CIF INTO :sCif_basic_inf;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+
+		fprintf(fp,"%ld|%s|%s|%s|%s|%ld|%ld|%s|%s|%s|\n", \
+		sCif_basic_inf.cif_no,sCif_basic_inf.type,sCif_basic_inf.name,\
+		sCif_basic_inf.local,sCif_basic_inf.poten,\
+		sCif_basic_inf.crt_date,sCif_basic_inf.crt_time,sCif_basic_inf.lvl,\
+		sCif_basic_inf.shareholder_ind,sCif_basic_inf.sts);
+	}
+	EXEC SQL CLOSE CUR_CIF;
+	fclose(fp);
+	vtcp_log("[%s][%d]cif_basic_inf导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_cop_inf()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_cop_inf_c		sCif_cop_inf;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_cop_inf,0x00,sizeof(sCif_cop_inf));
+	sprintf(filename,"%s/usr/cc/cif_cop_inf.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF_COP CURSOR FOR select rowid,cif_cop_inf.*  from cif_cop_inf  ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF_COP;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_cop_inf,0x00,sizeof(sCif_cop_inf));
+		EXEC SQL FETCH CUR_CIF_COP INTO :sCif_cop_inf ;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+
+		fprintf(fp,"%ld|%ld|%s|%.2lf|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%.2lf|%s|%s|%s|%s|%s|\n", \
+		sCif_cop_inf.cif_no,sCif_cop_inf.reg_date,sCif_cop_inf.reg_country,\
+		sCif_cop_inf.reg_fund,sCif_cop_inf.cur_no,sCif_cop_inf.crd_no,\
+		sCif_cop_inf.units_license,sCif_cop_inf.g_tax_no,sCif_cop_inf.d_tax_no,\
+		sCif_cop_inf.credit_no,sCif_cop_inf.license,sCif_cop_inf.eco_attri,\
+		sCif_cop_inf.ent_attri,sCif_cop_inf.credit,sCif_cop_inf.region,\
+		sCif_cop_inf.supervior,sCif_cop_inf.director,sCif_cop_inf.belong_bank,\
+		sCif_cop_inf.belong_stat,sCif_cop_inf.mana_orga_moda,sCif_cop_inf.bd_corp_orga_moda,\
+		sCif_cop_inf.corp_size,sCif_cop_inf.corp_act_mode,sCif_cop_inf.paicl_up_capital,\
+		sCif_cop_inf.corp_mana_sts,sCif_cop_inf.ap_qualife,sCif_cop_inf.artificial_person,\
+		sCif_cop_inf.ap_id,sCif_cop_inf.cif_scopes);
+	}
+	EXEC SQL CLOSE CUR_CIF_COP;
+	fclose(fp);
+	vtcp_log("[%s][%d]Cif_cop_inf导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_per_inf()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_per_inf_c		sCif_per_inf;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_per_inf,0x00,sizeof(sCif_per_inf));
+	sprintf(filename,"%s/usr/cc/cif_per_inf.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF_PER CURSOR FOR select rowid,cif_per_inf.*  from cif_per_inf  ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF_PER;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_per_inf,0x00,sizeof(sCif_per_inf));
+		EXEC SQL FETCH CUR_CIF_PER INTO :sCif_per_inf ;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+
+		fprintf(fp,"%ld|%s|%ld|%ld|%s|%s|%ld|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%.2lf|%.2lf|%ld|\n", \
+		sCif_per_inf.cif_no,sCif_per_inf.name,sCif_per_inf.g_bir,sCif_per_inf.n_bir,\
+		sCif_per_inf.sex,sCif_per_inf.marriage,sCif_per_inf.mar_date,sCif_per_inf.edu,\
+		sCif_per_inf.religion,sCif_per_inf.nationality,sCif_per_inf.country,\
+		sCif_per_inf.folk,sCif_per_inf.language,sCif_per_inf.clerk_no,sCif_per_inf.health,\
+		sCif_per_inf.technical_post,sCif_per_inf.headship,sCif_per_inf.birth_adr,\
+		sCif_per_inf.mon_income,sCif_per_inf.h_mon_income,sCif_per_inf.home_cnt);
+	}
+	EXEC SQL CLOSE CUR_CIF_PER;
+	fclose(fp);
+	vtcp_log("[%s][%d]Cif_per_inf导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_email_inf()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_email_inf_c		sCif_email_inf;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_email_inf,0x00,sizeof(sCif_email_inf));
+	sprintf(filename,"%s/usr/cc/cif_email_inf.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF_EM CURSOR FOR select rowid,cif_email_inf.* from cif_email_inf;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF_EM;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_email_inf,0x00,sizeof(sCif_email_inf));
+		EXEC SQL FETCH CUR_CIF_EM INTO :sCif_email_inf;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+
+		fprintf(fp,"%ld|%ld|%s|%s|%s|\n", \
+		sCif_email_inf.cif_no,sCif_email_inf.addr_seqn,sCif_email_inf.addr_type,sCif_email_inf.email,sCif_email_inf.link_man);
+	}
+	EXEC SQL CLOSE CUR_CIF_EM;
+	fclose(fp);
+	vtcp_log("[%s][%d]Cif_email_inf导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_cif_addr_inf()
+{
+	int	ilen = 0;
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct	cif_addr_inf_c		sCif_addr_inf;
+	EXEC SQL END DECLARE SECTION;
+	memset(filename,0x00,sizeof(filename));
+	memset(&sCif_addr_inf,0x00,sizeof(sCif_addr_inf));
+	sprintf(filename,"%s/usr/cc/cif_addr_inf.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE CUR_CIF_ADD CURSOR FOR select rowid,cif_addr_inf.* from cif_addr_inf;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN CUR_CIF_ADD;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(&sCif_addr_inf,0x00,sizeof(sCif_addr_inf));
+		EXEC SQL FETCH CUR_CIF_ADD INTO :sCif_addr_inf;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		pub_base_strpack(sCif_addr_inf.addr);
+		ilen = strlen(sCif_addr_inf.addr);
+
+		if(sCif_addr_inf.addr[ilen-1] == 10)
+		{
+			vtcp_log("[%s][%d]cif_no=[%ld]add=[%s]",__FILE__,__LINE__,sCif_addr_inf.cif_no,sCif_addr_inf.addr);
+			sCif_addr_inf.addr[ilen-1]='\0';
+		}
+		if(sCif_addr_inf.addr[ilen-2] == 13)
+		{
+			vtcp_log("[%s][%d]cif_no=[%ld]add=[%s]",__FILE__,__LINE__,sCif_addr_inf.cif_no,sCif_addr_inf.addr);
+			sCif_addr_inf.addr[ilen-2]='\0';
+		}
+		fprintf(fp,"%ld|%d|%s|%s|%s|%s|\n", \
+		sCif_addr_inf.cif_no,sCif_addr_inf.addr_seqn,sCif_addr_inf.addr_type,sCif_addr_inf.country,sCif_addr_inf.addr,sCif_addr_inf.post_code);
+	}
+	EXEC SQL CLOSE CUR_CIF_ADD;
+	fclose(fp);
+	vtcp_log("[%s][%d]Cif_addr_inf导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_ln_mst_hst()
+{
+	int	ilen = 0;
+	EXEC SQL BEGIN DECLARE SECTION;
+		char cPact_no[21];
+		char cAc_no[20];
+		char cLn_tx_type[2];
+		char cAdd_ind[2];
+		char cTx_br_no[6];
+		char cTel[6];
+		char cBrf[21];
+		char cIntst_type[2];
+		double dTx_amt=0.00;
+		long lTx_date=0;
+		long lTrace_no=0;
+		long lAc_id=0;
+		long lAc_seqn;
+	EXEC SQL END DECLARE SECTION;
+	int	jjlx=0;
+	memset(filename,0x00,sizeof(filename));
+	memset(cPact_no     ,0x00,sizeof(cPact_no     ));
+	memset(cAc_no       ,0x00,sizeof(cAc_no       ));
+	memset(cLn_tx_type  ,0x00,sizeof(cLn_tx_type  ));
+	memset(cAdd_ind     ,0x00,sizeof(cAdd_ind     ));
+	memset(cTx_br_no    ,0x00,sizeof(cTx_br_no    ));
+	memset(cTel         ,0x00,sizeof(cTel         ));
+	memset(cBrf         ,0x00,sizeof(cBrf         ));
+	memset(cIntst_type  ,0x00,sizeof(cIntst_type  ));
+	sprintf(filename,"%s/usr/cc/ln_mst_hst.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE LN_MST_HST CURSOR FOR SELECT ac_id,ac_seqn,ln_tx_type,add_ind,tx_date,trace_no,tx_amt,tx_br_no,tel,brf
+		FROM ln_mst_hst  order by opn_br_no,ac_id,tx_date,trace_no;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN LN_MST_HST;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	char *dcflag[2]={"C","D"};/*借方（D），贷方（C）*/
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		jjlx=0;
+		lAc_id=0;
+		lAc_seqn=0;
+		lTx_date=0;
+		lTrace_no=0;
+		dTx_amt=0.00;
+		memset(cPact_no     ,0x00,sizeof(cPact_no     ));
+		memset(cAc_no       ,0x00,sizeof(cAc_no       ));
+		memset(cLn_tx_type  ,0x00,sizeof(cLn_tx_type  ));
+		memset(cAdd_ind     ,0x00,sizeof(cAdd_ind     ));
+		memset(cTx_br_no    ,0x00,sizeof(cTx_br_no    ));
+		memset(cTel         ,0x00,sizeof(cTel         ));
+		memset(cBrf         ,0x00,sizeof(cBrf         ));
+		memset(cIntst_type  ,0x00,sizeof(cIntst_type  ));
+		EXEC SQL FETCH LN_MST_HST INTO :lAc_id,:lAc_seqn,:cLn_tx_type,:cAdd_ind,:lTx_date,:lTrace_no,:dTx_amt,:cTx_br_no,:cTel,:cBrf;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		EXEC SQL SELECT pact_no,intst_type INTO :cPact_no,:cIntst_type FROM ln_mst WHERE ac_id = :lAc_id and ac_seqn = :lAc_seqn;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 
+		EXEC SQL SELECT ac_no INTO :cAc_no FROM mdm_ac_rel WHERE ac_id = :lAc_id and ac_seqn = :lAc_seqn;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		}
+		jjlx=(cIntst_type[0] =='6'?1:0);
+		fprintf(fp,"%s|%s|%s|%s|%ld|%ld|%.2lf|%s|%s|%s|%d|\n",\
+			cPact_no,cAc_no,cLn_tx_type,dcflag[atoi(cAdd_ind)],lTx_date,lTrace_no,dTx_amt,cTx_br_no,cTel,cBrf,jjlx);	
+	}
+	EXEC SQL CLOSE LN_MST_HST;
+	fclose(fp);
+	vtcp_log("[%s][%d]ln_mst_hst导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+int Unload_mo_bank_acc_po_all()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char cMy_char[2001];
+	EXEC SQL END DECLARE SECTION;
+	char filename[201];
+	memset(filename,0x00,sizeof(filename));
+	sprintf(filename,"%s/usr/cc/mo_bank_acc_po_all.txt",getenv("HOME"));
+	fp = fopen(filename,"w");
+	if( fp == NULL )
+	{
+		vtcp_log("open file [%s] error",filename);
+		return (-1);
+	}
+	EXEC SQL DECLARE mo_bank_all CURSOR FOR select PACT_NO ||'|'||TX_BR_NO ||'|'||REQ_DATE ||'|'||PAYER_NAME ||'|'||PAYER_AC_NO ||'|'||PAYER_BR_NO ||'|'||PAYER_BR_NAME ||'|'||PAYEE_NAME ||'|'||PAYEE_AC_NO ||'|'||PAYEE_BR_NAME ||'|'||SIGN_AMT ||'|'||MATR_DATE ||'|'||BAIL_AC_NO ||'|'||BAIL_AMT ||'|'||BAIL_AMT_RATIO ||'|'||PACT_NUM ||'|'||TOT_MORT_AMT ||'|'||ADVANCE_AMT ||'|'||OVER_AC_NO ||'|'||OVER_RATE ||'|'||ACC_PO_STS ||'|'||ACC_PO_IND ||'|'||ACC_TYPE 
+		from MO_BANK_ACC_PO where acc_po_sts='2' and pact_no in (select pact_no from mo_bank_po where po_sts='1'  and at_term_ind='N' );
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN mo_bank_all;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(cMy_char  ,0x00,sizeof(cMy_char  ));
+		EXEC SQL FETCH mo_bank_all INTO :cMy_char;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		pub_base_strpack(cMy_char);
+		fprintf(fp,"%s|\n",cMy_char);	
+	}
+	EXEC SQL CLOSE mo_bank_all;
+	fclose(fp);
+	vtcp_log("[%s][%d]mo_bank_acc_po_all导出成功\n",__FILE__,__LINE__);
+	return 0;
+}

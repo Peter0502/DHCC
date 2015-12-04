@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="GBK" ?> 
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1813 统一支付通兑业务录入" 
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org"> 
+	<COMMSEND> 
+	"{ 
+		commsend_001(); 
+	}" 
+	</COMMSEND> 
+	<COMMRECV> 
+	"{ 
+		commrecv_001(); 
+	}" 
+	</COMMRECV> 
+	<FIRSTWORK> 
+	"{ 
+		loadpage('FIRSTPAGE'); 
+	}" 
+	</FIRSTWORK> 
+	<VARIABLE> 
+		<ITEM NAME="#TraceType" TYPE="%-2s" FUNCTIONS="T(00)"/> 
+		<ITEM NAME="#SysCode" TYPE="%-8s" FUNCTIONS="T(sxps)"/> 
+		<ITEM NAME="#PayNo"   TYPE="%-10s" /> 
+		<PAGE NAME="FIRSTPAGE"> 
+			<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS="T(1813                       统一支付通兑业务录入)"/> 
+			<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/> 
+			 
+			<ITEM LINE="5"  COL="6"  TYPE="%-12s" FUNCTIONS="T(现转  标志:)"/> 
+			<ITEM LINE="5" COL="18" INPUT="SELECT" NAME="#Ctind" TYPE="%-1s"  FUNCTIONS="T(1)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE="1" TITLE="现金"/> 
+					<OPTION VALUE="2" TITLE="转账"/> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					if (#Ctind == '2') 
+					{ 
+						showblock('Payee_B', true, true); 
+					} 
+					else 
+					{ 
+						showblock('Payee_B', false, false); 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<BLOCK LINE="5" COL="0" NAME="Payee_B" VISABLE="FALSE"> 
+				<ITEM LINE="0"  COL="42"  TYPE="%-16s" FUNCTIONS="T(收款人账户类型:)" /> 
+				<ITEM LINE="0"  COL="58" TYPE="%-1s" INPUT="SELECT" NAME="#PayeeAcctType" FUNCTIONS="T(0)V(NB)"> 
+					<SELECT> 
+						<OPTION VALUE ="0" TITLE="磁条卡" /> 
+						<!--OPTION VALUE ="1" TITLE="IC卡" /--> 
+						<OPTION VALUE ="1" TITLE="存折" /> 
+					</SELECT> 
+				</ITEM> 
+				<ITEM LINE="1"  COL="6"  TYPE="%-12s" FUNCTIONS="T(收款人账号:)" /> 
+				<ITEM LINE="1"  COL="18" TYPE="%-24s"  NAME="#PayeeAcct" INPUT="TEXT" FUNCTIONS="T()V(NB)"> 
+					<ONLOSTFOCUS> 
+					"{ 
+						initfd(); 
+						commsend_001(); 
+						$FD16 = '1404'; 
+						$FD18 = 'pbp'; 
+						callagnpbp(); 
+						if ($FD12 != '0000') 
+						{ 
+							showmsg(geterror()); 
+							return(false); 
+						} 
+						#PayeeName = $FD25; 
+						show(#PayeeName, true); 
+					}" 
+					</ONLOSTFOCUS> 
+				</ITEM> 
+			</BLOCK> 
+			<ITEM LINE="7"  COL="6"  TYPE="%-12s" NAME="#PayeeName_L" FUNCTIONS="T(收款人名称:)"/> 
+			<ITEM LINE="7"  COL="18" TYPE="%-32s" NAME="#PayeeName"   INPUT="TEXT" FUNCTIONS="V(NB)"/> 
+			<ITEM LINE="8"  COL="6"  TYPE="%-12s" FUNCTIONS="T(收款人地址:)"/> 
+			<ITEM LINE="8"  COL="18" TYPE="%-54s" NAME="#PayeeAddr" INPUT="TEXT" FUNCTIONS="T()"/>
+			 
+			<ITEM LINE="10"  COL="6"  TYPE="%-16s" FUNCTIONS="T(付款人账号类型:)"/> 
+			<ITEM LINE="10"  COL="22" TYPE="%-1s"  INPUT="SELECT" NAME="#PayerAcctType" FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE ="0" TITLE="卡" /> 
+					<!--OPTION VALUE ="1" TITLE="IC卡" /--> 
+					<OPTION VALUE ="1" TITLE="存折" /> 
+				</SELECT> 
+			</ITEM> 
+			<ITEM LINE="10" COL="36" TYPE="%-12s" FUNCTIONS="T(付款人账号:)" /> 
+			<ITEM LINE="10" COL="48" TYPE="%-24s" NAME="#PayerAcct" INPUT="TEXT" FUNCTIONS="T()V(NB)"/> 
+			<ITEM LINE="11" COL="6"  TYPE="%-12s" NAME="#PayeeName_L" FUNCTIONS="T(付款人名称:)"/> 
+			<ITEM LINE="11" COL="18" TYPE="%-32s" NAME="#PayerName" INPUT="TEXT" FUNCTIONS="T()V(NB)"/> 
+			<ITEM LINE="12" COL="6"  TYPE="%-12s" FUNCTIONS="T(付款行行号:)"/> 
+			<ITEM LINE="12" COL="18" TYPE="%-16s" NAME="#InBankNo" INPUT="TEXT" FUNCTIONS="T()V(NB)"> 
+				<ONLOSTFOCUS> 
+				"{ 
+					initfd(); 
+					commsend_001();	 
+					$FD16 = '1101'; 
+					$FD18 = 'pbp'; 
+					$FD59 = #InBankNo; 
+					callagnpbp(); 
+					if ($FD12 != '0000') { 
+						showmsg(geterror()); 
+					} 
+					else { 
+						#InBankName = $FD76; 
+						show(#InBankName, true); 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="13"  COL="6"  TYPE="%-12s" FUNCTIONS="T(付款行行名:)"/> 
+			<ITEM LINE="13"  COL="18" TYPE="%-54s" NAME="#InBankName" INPUT="TEXT" FUNCTIONS=""/> 
+			<ITEM LINE="14"  COL="6"  TYPE="%-12s" FUNCTIONS="T(付款人地址:)"/> 
+			<ITEM LINE="14"  COL="18" TYPE="%-54s" NAME="#PayerAddr" INPUT="TEXT" FUNCTIONS="T()"/> 
+			 
+			<ITEM LINE="16" COL="6"  TYPE="%-12s" FUNCTIONS="T(货币  代码:)"/> 
+			<ITEM LINE="16" COL="18" TYPE="%-1s"  INPUT="SELECT" NAME="#CurrCode" FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE="0" TITLE="[CNY]人民币" /> 
+					<OPTION VALUE="1" TITLE="[USD]美元"   /> 
+					<OPTION VALUE="2" TITLE="[HKD]港币"   /> 
+					<OPTION VALUE="3" TITLE="[EUR]欧元"   /> 
+					<OPTION VALUE="4" TITLE="[GBP]英镑"   /> 
+					<OPTION VALUE="5" TITLE="[JPY]日元"   /> 
+				</SELECT> 
+			</ITEM> 
+			<ITEM LINE="16" COL="36"  TYPE="%-10s" FUNCTIONS="T(钞汇类型:)"/> 
+			<ITEM LINE="16" COL="46" NAME="#CurrType" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE ="0" TITLE="0.丙钞"     /> 
+					<OPTION VALUE ="2" TITLE="2.企业外汇" /> 
+					<OPTION VALUE ="3" TITLE="3.乙钞"     /> 
+					<OPTION VALUE ="4" TITLE="4.乙汇"     /> 
+					<OPTION VALUE ="6" TITLE="6.丙汇"     /> 
+				</SELECT> 
+			</ITEM> 
+			<ITEM LINE="17" COL="6"  TYPE="%-12s" FUNCTIONS="T(交易  金额:)"/> 
+			<ITEM LINE="17" COL="18" TYPE="%16.2f" NAME="#TradeAmt" INPUT="TEXT" FUNCTIONS="V(NB)"> 
+				<ONLOSTFOCUS> 
+				"{ 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="19"  COL="6"  TYPE="%-12s"  FUNCTIONS="T(事由  用途:)" /> 
+			<ITEM LINE="19"  COL="18" NAME="#Purp" TYPE="%-54s" INPUT="TEXT" FUNCTIONS="T()"> 
+				<ONLOSTFOCUS> 
+				"{ 
+					loadpage('SECONDPAGE'); 
+					#AuthInfo_L = '支付密码:'; 
+					show(#AuthInfo_L, true); 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+		</PAGE> 
+		<PAGE NAME="SECONDPAGE" VISABLE="FALSE"> 
+			<ITEM LINE="5"  COL="6"  TYPE="%-12s" FUNCTIONS="T(业务类型:)"/> 
+			<ITEM LINE="5"  COL="18" TYPE="%-4s" NAME="#BusType" INPUT="SELECT" FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					//根据业务类型获取业务种类列表 
+					dim @tota as string; 
+					initfd(); 
+					commsend_001(); 
+					$FD16='1105'; 
+					$FD18='pbp'; 
+					$FD34=#BusType; 
+					@tota=callagnpbp(); 
+					setsel(#BusKind,@tota,'v4o1t32o1'); 
+					show(#BusKind, true); 
+					//if (#BusType == '') { 
+					//} else (#BusType == '') { 
+					//} 
+					}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="5"  COL="42"  TYPE="%-12s" FUNCTIONS="T(业务种类:)"/> 
+			<ITEM LINE="5"  COL="52" TYPE="%-4s" NAME="#BusKind" INPUT="SELECT" FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+				</SELECT> 
+			</ITEM> 
+			<ITEM LINE="7"  COL="6"  TYPE="%-12s" FUNCTIONS="T(票据种类:)"/> 
+			<ITEM LINE="7"  COL="18" TYPE="%-2s" NAME="#BillType" INPUT="SELECT" FUNCTIONS="T(72)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE="72" TITLE="现金通兑"     /> 
+					<OPTION VALUE="74" TITLE="转账通兑"     /> 
+					<OPTION VALUE="31" TITLE="支付密码支票" /> 
+					<OPTION VALUE="32" TITLE="密押本票"     /> 
+					<OPTION VALUE="33" TITLE="个人密押本票" /> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					//与现转标志比对 
+					if (#Ctind == '1') 
+					{ 
+						if (#BillType == '74') 
+						{ 
+							showmsg('现转标志与票据种类不符！'); 
+							return(false); 
+						} 
+					} 
+					else if (#Ctind == '2') 
+					{ 
+						if (#BillType == '72') 
+						{ 
+							showmsg('现转标志与票据种类不符！'); 
+							return(false); 
+						} 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="7" COL="42"  TYPE="%-10s" FUNCTIONS="T(票据日期:)"/> 
+			<ITEM LINE="7" COL="52" TYPE="%-8s" NAME="#IssueDate" INPUT="TEXT" FUNCTIONS="D()"> 
+			</ITEM> 
+			<ITEM LINE="8" COL="6"  TYPE="%-10s" FUNCTIONS="T(票据号码:)"/> 
+			<ITEM LINE="8" COL="16" TYPE="%-18s" NAME="#CertNo" INPUT="TEXT" FUNCTIONS="T(321321321312)"/> 
+			<ITEM LINE="10" COL="6" TYPE="%-10s" FUNCTIONS="T(认证方式:)"/> 
+			<ITEM LINE="10" COL="16" TYPE="%-1s"  INPUT="SELECT" NAME="#AuthCode" FUNCTIONS="T(1)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE ="0" TITLE="[AC00]协议方式" /> 
+					<OPTION VALUE ="1" TITLE="[AC03]支付密码" /> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					if (#AuthCode == '0') 
+					{ 
+						#AuthInfo_L = '协议号码:'; 
+					} else if (#AuthCode == '1') 
+					{ 
+						#AuthInfo_L = '支付密码:'; 
+					} 
+					show(#AuthInfo_L, true); 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="10" COL="42"  TYPE="%-10s" NAME="#AuthInfo_L" FUNCTIONS="T(支付密码:)"/> 
+			<ITEM LINE="10" COL="52" TYPE="%-18s" NAME="#AuthInfo" INPUT="TEXT" FUNCTIONS="T(passwd)V(NB)i()"> 
+				<ONGOTFOCUS> 
+				"{ 
+					#AuthInfo = ''; 
+					show(#AuthInfo, true); 
+				}" 
+				</ONGOTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="17" COL="6" TYPE="%-10s" FUNCTIONS="T(优 先 级:)"/> 
+			<ITEM NAME="#Priority" LINE="17" COL="16" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE="0" TITLE="普通"/> 
+					<OPTION VALUE="1" TITLE="紧急"/> 
+					<OPTION VALUE="2" TITLE="加急"/> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="19" COL="6" TYPE="%-10s" FUNCTIONS="T(汇路选择:)"/> 
+			<ITEM NAME="#SysCode_I" LINE="19" COL="16" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(0)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE="0" TITLE="自动"/> 
+					<OPTION VALUE="1" TITLE="sxps"/> 
+					<OPTION VALUE="2" TITLE="nxps"/> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					if (#SysCode_I == '0') 
+					{ 
+						//调用短交易选择合适的汇路 
+					} 
+					else if (#SysCode_I == '1') 
+					{ 
+						#SysCode = 'sxps'; 
+						loadpage('SXPS'); 
+					} 
+					else if (#SysCode_I == '2') 
+					{ 
+						#SysCode = 'nxps'; 
+						loadpage('NXPS'); 
+					} 
+				}"	 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+		</PAGE> 
+		<PAGE NAME="NXPS" VISABLE="FALSE"> 
+			<ITEM LINE="3"  COL="20" TYPE="%-52s" FUNCTIONS="T(1813 统一支付通兑业务录入（银川同城）)"/> 
+			<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/> 
+			<!-- 当票据可背书人转让时显示背书人转让标志选项 --> 
+			<ITEM LINE="6"  COL="6"  TYPE="%-14s"  FUNCTIONS="T(背书转让标志:)" /> 
+			<ITEM LINE="6"  COL="20"  NAME="#EndorLogo" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="V(NB)T(1)" > 
+				<SELECT> 
+					<OPTION VALUE = "0" TITLE="0.是"/> 
+					<OPTION VALUE = "1" TITLE="0.否"/> 
+				</SELECT> 
+			</ITEM> 
+		</PAGE> 
+		<PAGE NAME="NPS" VISABLE="FALSE"> 
+			<ITEM LINE="3"  COL="20" TYPE="%-52s" FUNCTIONS="T(1813   统一支付通兑业务录入（农信银）)"/> 
+			<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/> 
+			<ITEM LINE="6" COL="6" TYPE="%-10s" FUNCTIONS="T(证件类型:)"/> 
+			<ITEM LINE="6" COL="18" TYPE="%-1s" INPUT="TEXT"  NAME="#CARDTYPE"  FUNCTIONS="T(0)" > 
+				<SELECT> 
+					<OPTION VALUE = "0" TITLE="0.身份证"/> 
+				</SELECT> 
+			</ITEM> 
+			<ITEM LINE="7" COL="6" TYPE="%-10s" FUNCTIONS="T(证件号码:)"/> 
+			<ITEM LINE="7" COL="18" TYPE="%-20s" INPUT="TEXT"  NAME="#CARDNO"  FUNCTIONS="T()V(NB)"> 
+				<ONLOSTFOCUS> 
+				"{ 
+					if (#PayerAcctType == '1') 
+					{ 
+						showblock('CZ_INFO', true, true); 
+					} 
+					else 
+					{ 
+						showblock('CZ_INFO', false, false); 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<BLOCK NAME="CZ_INFO" LINE="8"  COL="6" VISABLE="FALSE"> 
+				<ITEM LINE="0" COL="0" TYPE="%-10s" FUNCTIONS="T(存折余额:)"/> 
+				<ITEM LINE="0" COL="12" TYPE="%16.2fs" INPUT="TEXT"  NAME="#CZAMT" FUNCTIONS="T()V(NB)" /> 
+				<ITEM LINE="1" COL="0" TYPE="%-10s" FUNCTIONS="T(存折号码:)"/> 
+				<ITEM LINE="1" COL="12" TYPE="%-32s" INPUT="TEXT"  NAME="#CZNUM" FUNCTIONS="T()V(NB)" /> 
+			</BLOCK> 
+		</PAGE> 
+		<PAGE NAME="SXPS" VISABLE="FALSE"> 
+			<ITEM LINE="3"  COL="20" TYPE="%-52s" FUNCTIONS="T(3003     统一支付通兑业务录入（同城）)"/> 
+			<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/> 
+			<ITEM LINE="6"  COL="6"  TYPE="%-14s"  FUNCTIONS="T(付款人身份证:)" /> 
+			<ITEM LINE="6"  COL="20" TYPE="%-18s"  INPUT="TEXT" NAME="#PersonID" FUNCTIONS="T()"> 
+				<ONLOSTFOCUS> 
+				"{ 
+					dim @amt       as number; 
+					dim @allstring as string; 
+					dim @i         as number; 
+					dim @get       as string; 
+					dim @len       as number; 
+ 
+					@amt = #TradeAmt*100; 
+					if (#Ctind == '1') { 
+						if (@amt &lt; 50000) 
+						{ 
+							#PersonID = ''; 
+							show(#PersonID, true); 
+						} 
+						else 
+						{ 
+							if (delspace(#PersonID) == '') 
+							{ 
+								showmsg('现金通兑金额大于五万必须提供付款人身份证!'); 
+								return(false); 
+							} 
+							if (len(delspace(#PersonID)) != 18) 
+							{ 
+								if (len(delspace(#PersonID)) != 16) 
+								{ 
+									showmsg('身份证号码位数错误!'); 
+									return(false); 
+								} 
+							} 
+							@allstring = delspace(#PersonID); 
+							@i = 0; 
+							@len = len(#PersonID); 
+							while (@i &lt; @len) 
+							{ 
+								@get = substr(@allstring, @i, 1); 
+								if (@get &gt; '9' or @get &lt; '0') 
+								{ 
+									showmsg('身份证号只包含数字!'); 
+									#PersonID = ''; 
+									show(#PersonID, true); 
+									return(false); 
+								} 
+								@i = @i + 1; 
+							} 
+						} 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<ITEM LINE="19" COL="6" TYPE="%-19s" FUNCTIONS="T(手续费收取方式:)"/> 
+			<ITEM LINE="19" COL="25" NAME="#FeeWay" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(1)V(NB)"> 
+				<SELECT> 
+					<OPTION VALUE ="0" TITLE="1.现金 " /> 
+					<OPTION VALUE ="1" TITLE="2.转账 " /> 
+					<OPTION VALUE ="2" TITLE="0.不收 " /> 
+				</SELECT> 
+				<ONLOSTFOCUS> 
+				"{ 
+					if(#FeeWay != '2') 
+					{ 
+						showblock('FeeAmt_B',true,true); 
+					} 
+					else 
+					{ 
+						showblock('FeeAmt_B',false,false); 
+					} 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+			<BLOCK NAME="FeeAmt_B" LINE="19" COL="35" VISABLE="FALSE"> 
+				<ITEM LINE="0" COL="4"  TYPE="%-12s"  FUNCTIONS="T(手续费金额:)"/> 
+				<ITEM LINE="0" COL="18" TYPE="%16.2f" NAME="#FeeAmt" INPUT="TEXT" FUNCTIONS="V(NB)"/> 
+			</BLOCK> 
+			<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" > 
+				<ONLOSTFOCUS> 
+				"{ 
+					dim @s_num as string; 
+					dim @num as number; 
+					initfd(); 
+					commsend_001(); 
+					$FD16 = '1211'; 
+					$FD18 = 'pbp'; 
+					$FD28 = #SysCode; 
+					 
+					$FD34  = #BusType; 
+					$FD64  = #BusKind; 
+					 
+					$FD36  = #PayerAcctType; 
+					$FD25  = #PayerName; 
+					$FD27  = #InBankName; 
+					$FD30  = #PayerAcct; 
+					$FD59  = #InBankNo; 
+					$FD112 = #PayerAddr; 
+					 
+					$FD26  = #PayeeName; 
+					$FD31  = #PayeeAcct; 
+					$FD116 = #PayeeAddr; 
+					 
+					$FD48  = #CurrCode; 
+					$FD49  = #CurrType; 
+					//$FD66  = #TradeType; 
+					@num   = #TradeAmt*100; 
+					@s_num  = itoa(@num,'%16d'); 
+					$FD39 = @s_num; 
+					$FD92  = #BillType; 
+					$FD60  = #CertNo; 
+					$FD67  = #FeeWay; 
+					@num   = #FeeAmt*100; 
+					@s_num  = itoa(@num,'%16d'); 
+					$FD40  = @s_num; 
+					$FD101 = #AuthInfo; 
+					$FD105 = #Purp; 
+					callagnpbp(); 
+					if ($FD12 != '0000') 
+					{ 
+						showmsg(geterror()); 
+						return(false); 
+					} 
+					runoutput(); 
+					closeall(); 
+					return(true); 
+				}" 
+				</ONLOSTFOCUS> 
+			</ITEM> 
+		</PAGE> 
+	</VARIABLE> 
+	<RESPONSE> 
+<PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="通兑业务"> 
+NOTHING 
+</PACKAGE> 
+<PRINT> 
+"{ 
+	dim @txtime as string; 
+	dim @txdate as string; 
+	dim @feeamt as string; 
+	dim @amt    as string; 
+	@txdate = substr($FD5,0,4)+'年'+substr($FD5,4,2)+'月'+substr($FD5,6,2)+'日'; 
+	@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2); 
+	@feeamt = delspace(itoa(#FeeAmt*100, '%16d')); 
+	if (@feeamt == '0') 
+	{ 
+		@feeamt = '0.00'; 
+	} 
+	else 
+	{ 
+		@feeamt = substr(@feeamt, 0, len(@feeamt)-2)+'.'+substr(@feeamt, len(@feeamt)-2, 2); 
+	} 
+	@amt    = delspace(itoa(#TradeAmt*100, '%16d')); 
+	if (@amt == '0') 
+	{ 
+		@amt = '0.00'; 
+	} 
+	else 
+	{ 
+		@amt = substr(@amt, 0, len(@amt)-2)+'.'+substr(@amt, len(@amt)-2, 2); 
+	} 
+	print(3,  11, '交易名称:跨行通兑                      交易代码: 3003'); 
+	print(5,  11  '交易序号:[16              ]流水号:[12          ]', $FD60, $FD41); 
+	print(6,  11, '转 出 户:[32                                   ]', #PayerAcct); 
+	//if (#Ctind == '2') 
+	//{ 
+		print(7,  11, '转 入 户:[32                                   ]', #PayeeAcct); 
+	//} 
+	print(8,  11, '事    由:[32]', #Purp); 
+	print(9,  11, '交易金额:[16]手 续 费:[16]', @amt, @feeamt); 
+	print(12, 11, '交易机构:[6     ]|[30                            ]', $KINBR, $BRNAME); 
+	print(13, 11, '柜    员:[6     ]日期：[16              ] 时间: [8       ]',$FD7,@txdate,@txtime); 
+}" 
+</PRINT> 
+</RESPONSE> 
+</TRANSACTION> 

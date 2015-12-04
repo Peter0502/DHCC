@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1870       当日借贷记报表生成)"
+	xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+	}"
+</COMMSEND>
+<COMMRECV>
+	"{
+	}"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3" COL="3" TYPE="%-54s" FUNCTIONS=
+		"T(1870                         当日借贷记报表生成)"/>
+	<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+	<ITEM NAME="#TXNAME"   TYPE="%-30s"  FUNCTIONS="T(当日借贷记报表生成)">
+		<ONLOSTFOCUS>
+			"{
+				//$KINBR = '10001';
+				showblock('Qsblock', false, true);
+				if($KINBR == '10001')
+				{
+					showblock('Qsblock', true, true);
+				}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="6" COL="3"  TYPE="%-10s" FUNCTIONS="T(工作日期：)"/>
+	<ITEM LINE="6" COL="13" NAME="#TxDt" TYPE="%-8s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)D()"/>
+	<ITEM LINE="8" COL="3"  TYPE="%-10s" FUNCTIONS="T(工作场次：)"/>
+	<ITEM LINE="8" COL="13" NAME="#TxNo" TYPE="%-18s" INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)"/>
+	<ITEM LINE="10" COL="3"  TYPE="%-10s" FUNCTIONS="T(操作类型：)"/>
+	<ITEM LINE="10" COL="13" NAME="#Opertp" TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(2)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="提出明细"/>
+			<OPTION VALUE="1" TITLE="提入明细"/>
+			<OPTION VALUE="2" TITLE="汇总"/>		
+	  	</SELECT>
+	</ITEM>	
+	<BLOCK NAME="Qsblock" LINE="12"  COL="3" VISABLE="FALSE">
+	<ITEM LINE="0"  COL="0"  TYPE="%-10s"  FUNCTIONS="T(导出机构号：)" />
+	<ITEM LINE="0"  COL="10"  NAME="#Brno" TYPE="%-10s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+	</ITEM>
+	</BLOCK>
+	<ITEM  NAME="#OK" LINE="21"  COL="63"  TYPE="%-6s"   FUNCTIONS="T(确  定)" INPUT="BUTTON">
+ 	<ONCLICK>
+ 		"{
+ 				
+				initfd();
+				commsend_001();
+				
+				$FD16 = '2057';
+				$FD18 = 'pbp';
+				$FD28 = 'sxps';
+				$FD44 = #TxDt;
+				$FD52 = #TxNo;
+				//$FD45 = #TxDt;
+				//$FD58 = #TxNo;
+				$FD30 = #Opertp;
+				
+				if (delspace(#Brno) != '')
+				{
+					$FD85 = #Brno;
+				}
+				
+				dim @rcvbuffer as string;
+				
+				callagnpbp();
+				@rcvbuffer = getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+					
+				dim @filename1 as string;
+				dim @ret as number;
+					
+				@filename1 = '../tmp/'+$KINBR+$HDATE;
+				@ret = savefiletxt(@filename1, @rcvbuffer);
+				if(@ret &lt; 0){
+					showmsg('报表生成失败！');
+					return(false);
+				}
+				
+				call('fview '+'../tmp/'+$KINBR+$HDATE);
+				return(true);
+ 		}"
+ 	</ONCLICK>  
+ 	</ITEM>
+</VARIABLE>
+</TRANSACTION>
+

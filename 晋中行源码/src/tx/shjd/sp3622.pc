@@ -1,0 +1,130 @@
+/******************************************************************************
+*交易名称：事后监督未督查询                                                   *
+*函数名称：sp3622()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：       2007-1-11 15:36                                             *
+*修改日期：                                                                   *
+*数据库表:        xdtl_main                                                   *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "xdtl_main_c.h"
+#include "shjd_tlrvsbrn_c.h"
+EXEC SQL INCLUDE sqlca;
+int sp3622()
+{
+	int ret=0;
+	char shtlrno[7];
+	char crdbname[3];
+	char brno[8];
+	int ttlnum=0;			/**读取的总条数**/
+	int i=0;
+  FILE *fp=NULL;
+  char tmpstr[1024];
+  char wherelist[1024];
+  char filename[256];
+  struct xdtl_main_c xdtl_main;
+	struct shjd_tlrvsbrn_c shjd_tlrvsbrn;
+	memset(&shjd_tlrvsbrn,0x00,sizeof(struct shjd_tlrvsbrn_c));
+	memset(&xdtl_main,0x00,sizeof(struct xdtl_main_c));
+	memset(brno,0x00,sizeof(brno));
+	memset(shtlrno,0x00,sizeof(shtlrno));
+	memset(filename,0x00,sizeof(filename));
+  memset(crdbname,0x00,sizeof(crdbname));
+  memset(tmpstr,0x00,sizeof(tmpstr));
+  memset(wherelist,0x00,sizeof(wherelist));
+
+ 	vtcp_log("[%s][%d] sp3622开始喽\n",__FILE__,__LINE__);
+  pub_base_sysinit();
+  get_fd_data("0910",brno);
+  get_fd_data("0920",shtlrno); 
+	if(strlen(brno))
+	{
+		sprintf( tmpstr," brno like '%%%%%s%%%%' and ",brno);
+		strcat( wherelist,tmpstr );
+	}
+	sprintf( tmpstr," tlrno='%s' and ",shtlrno);
+	strcat( wherelist,tmpstr );
+	strcat(wherelist,"1=1") ;
+	ret=Shjd_tlrvsbrn_Dec_Sel(g_pub_tx.reply,wherelist );
+	ERR_DEAL
+	ttlnum=0;
+	while(1)
+	{
+			ret=Shjd_tlrvsbrn_Fet_Sel(&shjd_tlrvsbrn, g_pub_tx.reply );
+			if( ret==100 ) break;
+			ERR_DEAL
+			ret=Xdtl_main_Dec_Sel(g_pub_tx.reply,"stat='0' and hcode='0' and kinbr='%s'",shjd_tlrvsbrn.brno);
+	    ERR_DEAL
+			i = 0;
+			while(1)
+			{
+				ret=Xdtl_main_Fet_Sel(&xdtl_main, g_pub_tx.reply );
+				if( ret==100 ) break;
+				ERR_DEAL
+				if(!i)
+				{
+					pub_base_AllDwnFilName( filename );
+					fp = fopen( filename,"w" );
+					if( fp==NULL )
+					{
+							sprintf(acErrMsg," open file [%s] error ",filename );
+							WRITEMSG
+							strcpy( g_pub_tx.reply,"S047" );
+							goto ErrExit;
+					}
+					/**显示列标题**/
+					fprintf( fp,"~交易日期|帐号|旧账号|交易金额|借贷标志|开户机构|操作柜员|流水号|户名|\n" );
+		    		}	
+				if(xdtl_main.crdb[0]=='1')
+				{
+				  	memcpy(crdbname,"借",sizeof(crdbname)-1);
+				}
+				else
+				{
+				  	memcpy(crdbname,"贷",sizeof(crdbname)-1);
+				}
+	      fprintf(fp,"%s|%s|%s|%s|%s|%s|%s|%s|%s|\n",xdtl_main.txday,xdtl_main.mrkey,xdtl_main.exdkey1,xdtl_main.txamt,crdbname,xdtl_main.kinbr,xdtl_main.tlrno,xdtl_main.wssrno,xdtl_main.name);	
+				i++;
+				ttlnum++;
+			}
+			ret=Xdtl_main_Clo_Sel();
+			ERR_DEAL
+			ttlnum++;
+	 }
+	 ret=Shjd_tlrvsbrn_Clo_Sel();
+	 ERR_DEAL
+	 if( !ttlnum )
+	{
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else
+	{
+		fclose(fp);
+		set_zd_data(DC_FILE_SND,"1" );
+	}
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}
+

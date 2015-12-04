@@ -1,0 +1,1276 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100010000000000000000000000" TITLE="4684 理财产品认购/撤单交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+	"{
+		commsend_001();
+		if(len(#ACTNO)==0 or  len(#prot_code)==0 or len(#ACTSEQ)==0 )
+		{
+			showmsg('有输入项未填!');
+			return(false);
+		}
+   	$FD16='4684';    	    // 改自2406
+   	$FD31=#ACTNO;
+   	$FD34=#ACTSEQ;  			//账户序号
+   	//showmsg('#HOLD_SEQN= '+#HOLD_SEQN);
+   	#HOLD_SEQN = itoa(atoi(#HOLD_SEQN));
+   	$FD35=#HOLD_SEQN;   //冻结序号
+   	//showmsg('$FD35= '+$FD35);
+
+		$FD41 = itoa(#TX_AMT,'%016.2f'); 		// 冻结金额
+		// $FD41 = itoa(#LFROZEN_AMT,'%016.0f'); 		// 冻结金额
+	  $FD42 = itoa(#TX_AMT,'%016.2f');// 解冻金额
+	  
+   	$FD43=getitems('#AVBAL');    
+   	$FD44='99999999';   // 到期日期  原来 FROZEN_DATE 取消
+  	  	 	  	
+   	$FD67=#HND_TYPE1;  		// 处理类型 1-冻结(认购） 2-解冻（撤单）
+   	$FD68=#FROZEN_TYPE;		// 冻结方式 1-完全 2-只进不出 3-部分
+   	// $FD70=#TMPFLAG; 			// 冻结类型 0-其他冻结 1-司法机关 2-抵押质押贷款 
+		$FD63=#prot_code;
+		
+		$FD20='A'; 
+
+		if ( #HND_TYPE1 == '1' )
+		{
+			 $FD70='0';
+			 $FD81=#FROZEN_MEMO;   // 冻结备注
+		}
+		
+		if ( #HND_TYPE1 == '2' )
+		{
+			$FD20='B'; 	   //解冻时
+			$FD71='1'; 		//部分解冻插一条记录在mo_hold表,解冻是针对此条记录全部解冻,后台
+   	//$FD71=#UNFROZEN_TYPE;  //2 是部分解冻 。应该选择全部解冻1
+   	// (tmp_ind5[0] == '1')  spD406.c
+		//			f_dd_mst.hold_amt = 0.00;
+		//			当该冻结序号是部分冻结并且选择全部解冻时，只对该记录而言
+		//			f_dd_mst.hold_amt = f_dd_mst.hold_amt - f_mo_hold.plan_hold_amt;
+  	//$FD72=#INTR_FLAG2;      		
+   	//$FD82=#UNFROZEN_MEMO;    		
+   		$FD82='理财认购撤单';
+   	}
+   	$FD27 = #MOBILE;
+   	$FD100=getitems('#AVBAL')+substr($FD100,16,16)+getitems('#AVBAL')+substr($FD100,48,133);
+   	
+}"
+</COMMSEND>
+
+<COMMRECV>
+	"{
+	  	dim @trace as string;
+	  	dim @hx_trace as string;
+			dim @frozecode as string;
+			dim @filename as string;
+		 //神码通讯变量
+		commrecv_001();			
+		if($FD12!='0000'){          //该改改改改
+					
+					showmsg(geterror());
+					rerun();
+					return(false);
+		}	
+			
+		if(#HND_TYPE1 == '1')   //原来是 HND_TYPE
+		{
+			
+			//showmsg('#repay_plan_rate= '+#repay_plan_rate);
+			//showmsg('$FD60= '+$FD60);
+			#repay_plan_rate = delspace($FD60); // 收益率 
+			$FD49= itoa(atoi($FD49));
+			setitems('#HOLD_SEQN_RET',$FD49);   //冻结 认购
+			
+			
+		}
+		else
+		{
+			setitems('#HOLD_SEQN_RET',$FD35);   //解冻 撤单
+			
+		}
+		//与神码通讯开始 
+		@filename='../tmp/'+$FD7+$FD10+'.fds';
+		if(#HND_TYPE1 == '1')   
+		{
+			if(substr(#ACTNO,0,2)=='62' and $FD12=='0000'){
+				savefds(@filename);
+				// 删除与神马通信5117交易20120826 by hab
+				//存挂失登记簿存平台流水
+				$FD119=space(5)+@frozecode;
+				//showmsg('$FD119='+$FD119);
+				@trace=substr(#pt_trace,4,8);
+				@hx_trace=substr($FD126,8,8);
+				$FD126=space(16)+@trace+@hx_trace;
+				commsend_001();			
+				$FD44=$HDATE;
+			  $FD16='9624';
+			  $FD37=#ACTNO;
+			  $FD34=#ACTSEQ;
+			  $FD71='0';
+			  $FD72='3';
+			  $FD69=#FROZEN_TYPE;
+			  callserver();
+			  if($FD12!='0000')
+			  {
+						showmsg('交易已经成功,更新流水挂失登记簿错误'+geterror());
+						//return(false);
+			  }
+			}
+		}
+		// 删除神马5118交易20120826 by hab
+		
+	 runoutput();
+   rerun();
+   
+    
+	}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(4684                       理财产品认购/撤单交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=4684)"/>    
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(4684)"/>   
+  <ITEM NAME="#TXNAME"  TYPE="%-10s" FUNCTIONS="T(理财产品认购交易)"/>  
+  <ITEM NAME="#pt_trace"     TYPE="%-15s" FUNCTIONS=""/>
+  
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#PRDT_CODE"   TYPE="%-30s" FUNCTIONS=""/>
+  <ITEM NAME="#AC_TYPE" TYPE="%-1s" FUNCTIONS=""/>
+   
+  <ITEM NAME="#SPACE96" TYPE="%-96s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE1" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE6" TYPE="%-6s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE20" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE16" TYPE="%-16s" FUNCTIONS=""/>
+
+  <ITEM NAME="#CUSTNAME_TMP" TYPE="%-50s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SHOWTIP" TYPE="%-4s" FUNCTIONS="T(止付)"/>
+
+  <!--PAGE NAME="DEFAULT"-->
+
+  <ITEM LINE="8"  COL="10" TYPE="%-10s" FUNCTIONS="T(账/卡 号:)">  
+  <ONLOSTFOCUS>
+  "{
+  		show(#HOLD_TS,false);
+  		show(#TMPFLAG,false);
+  		
+  }" 
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#opentmp"  TYPE="%-5s"  FUNCTIONS="" />
+  <ITEM NAME="#ac_bal"  TYPE="%016.2f"  FUNCTIONS="" />
+  <ITEM NAME="#hold_bal"  TYPE="%016.2f"  FUNCTIONS="" />
+  <ITEM NAME="#ctl_amt"  TYPE="%016.2f"  FUNCTIONS="" />
+
+  <ITEM LINE="6"  COL="10" TYPE="%-10s" FUNCTIONS="T(处理类型:!)"/>
+  <ITEM NAME="#HND_TYPE" TYPE="%-1s" INPUT="VARIABLE" FUNCTIONS="T()"/>
+  <ITEM LINE="6"  COL="20" NAME="#HND_TYPE1"   TYPE="%-1s" INPUT="SELECT"  FUNCTIONS="T(1)" >
+	<SELECT>
+		<OPTION VALUE="1" TITLE="0.认购" />
+		<OPTION VALUE="2" TITLE="1.撤单" />
+		<!--OPTION VALUE="1" TITLE="0.止付" />
+		<OPTION VALUE="2" TITLE="1.冻结" /-->
+	</SELECT>
+  <ONLOSTFOCUS>
+  "{
+  		//  1-冻结(认购） 2-解冻（撤单）
+  		//  #HND_TYPE='1';  原来是  关键点
+  		if(#HND_TYPE1=='1')
+	  	{
+	  			#FROZEN_TYPE = '3'; //部分冻结
+	  			#TMPFLAG='0';
+	  			enable(#TMPFLAG,false);
+					#SHOWTIP='认购';
+					enable(#NAME1,true);
+					#NAME1='冻结类型:!';
+					enable(#NAME1,false);
+					enable(#NAME2,true);	  
+					#NAME2='冻结金额:';
+					enable(#NAME2,false);
+					enable(#NAME3,true);
+					//#NAME3='冻结备注:';
+					//enable(#NAME3,false);
+					show(#SHOW_HOUYI,true);
+					//show(#FROZEN_DATE1,true);
+					//show(#FROZEN_DATE,true);   
+					
+					show(#HOLD_TS,false);
+					show(#HOLD_SEQN,false);
+					enable(#HOLD_SEQN,false);
+					show(#MOBILE_TS,true);
+					show(#MOBILE,true);
+					enable(#MOBILE,true);
+					#FROZEN_MEMO = '理财认购';
+					
+	  			refresh();
+	  		}
+	  		
+	  		if(#HND_TYPE1 == '2' ) 
+	  		{
+					#SHOWTIP='撤单';
+					
+					show(#SHOW_HOUYI,false);
+					//enable(#TMPFLAG,true);
+					#TMPFLAG='0';
+					//#SHOWTIP='止付';
+					//enable(#NAME1,true);
+					//#NAME1='止付类型:!';
+					enable(#NAME1,false);
+					//enable(#NAME2,true);	  
+					//#NAME2='止付金额:';
+					enable(#NAME2,false);
+					//enable(#NAME3,true);
+					//#NAME3='止付备注:';
+					enable(#NAME3,false);
+					show(#HOLD_TS,true);
+					show(#HOLD_SEQN,true);
+					enable(#HOLD_SEQN,true);
+					show(#MOBILE_TS,false);
+					show(#MOBILE,false);
+					
+					#FROZEN_MEMO = '理财认购撤单';
+					refresh();
+	  		}
+  		
+  		
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM NAME="#IDNO"   TYPE="%-18s"  FUNCTIONS=""/>
+  <ITEM NAME="#ACID"     TYPE="%10s"  FUNCTIONS=""/>
+  <ITEM NAME="#draw_pwd_yn"   TYPE="%1s"  FUNCTIONS=""/>
+  <ITEM NAME="#SUPERFLAG" TYPE="%1s" FUNCTIONS=""/>
+  <ITEM NAME="#grade" TYPE="%2s" FUNCTIONS=""/>
+  <ITEM NAME="#prot_grade" TYPE="%2s" FUNCTIONS=""/>
+  <ITEM  LINE="8"  COL="20" NAME="#ACTNO"  DEVICE="MSR" INPUT="TEXT"  TYPE="%-19s"  FUNCTIONS="V(NB)M($MSR2,1)">
+  <!--ITEM NAME="#ACTNO" INPUT="TEXT" DEVICE="MSR" LINE="8" COL="20"  TYPE="%-19s" FUNCTIONS="M($MSR2,1)"-->
+  	<ONLOSTFOCUS>
+  "{
+  			// 20120816 modify by hab 修改卡折都到 9527验二磁道信息 
+  	//		if(len(#ACTNO) &gt; 0)
+  //		{
+	//			commsend_001();
+		//		$FD16='9527';
+			//	$FD30=#ACTNO;
+			//	$FD75=$MSR2;
+			//	callserver();
+			//	if('0000' != $FD12)
+			//	{
+			//		showmsg(geterror());
+			//		return(false);
+			//	}
+	//		}
+			// 20120816 modify by hab 修改卡折都到 9527验二磁道信息 
+				
+	  //#ACTNO=#ACTNO24;
+	  //FIXMSR
+	  dim @baktxno as string;
+	  dim @opnbrno as string;
+	  dim @amt as string;
+	  dim @mdm_code as string;
+    
+	  dim @tota as string;
+	  dim @f as file;
+	  dim @line as string;
+	  dim @seqn as string;
+	  dim @opn_date as string;
+	  dim @prdt_name as string;
+	  dim @bal as string;
+	  dim @act_sts as string;
+	  dim @selid as number;
+	  dim @seqn1 as number;
+	  dim @zqmm  as string;
+	  dim @sqls as string;
+		dim @note_sts as string;
+		dim @acid as string;
+		dim @holdsts as string; 
+		dim @idtype as string;
+		dim @rate_date as string;
+		dim @days as number;
+		
+ 		@note_sts='0';
+		#ACTSEQ='';
+		@baktxno=$TXNO;
+		commsend_001();
+    $FD16='9598';		 
+     @sqls='select opn_br_no,ac_id,id_no,id_type from mdm_ac_rel  where ac_no='+chr(39)+#ACTNO+chr(39)+'';
+    
+    $FD123=rtrim(@sqls);
+    @tota=callserver();     
+    
+    #opentmp = strfld(@tota,'|',0);
+    @acid = strfld(@tota,'|',1);
+    #IDNO = strfld(@tota,'|',2);
+    @idtype = strfld(@tota,'|',3);
+    //#draw_pwd_yn =strfld(@tota,'|',3);    
+    #ACID = @acid;
+    if( @tota=='')
+    {
+       //showmsg('无此帐号');
+       showmsg('无此帐号.如果是老存折请先换折.');  //zhanghan 20111019
+      return(false);
+    }
+    if($FD12!='0000')
+    {
+      showmsg(geterror());
+      return(false);
+    }
+    
+    //检查客户风险等级
+    if(#HND_TYPE1=='1'){
+	    initfd();
+	    commsend_001();
+	    $FD16='9598';
+	    @sqls='select grade,rate_date from financing_risk_rating where id_type='+chr(39)+@idtype+chr(39)+' and id_no='+chr(39)+#IDNO+chr(39);
+	    $FD123=@sqls;
+	    @tota=callserver();
+	    if(@tota==''){
+	    	showmsg('请先做客户风险评估');
+	    	open('4686.XML','#ACTNO='+#ACTNO+';');
+	    	return(true);
+	    }
+	    
+	    #grade=strfld(@tota,'|',0);
+	    @rate_date=strfld(@tota,'|',1);
+	    @days=func(@rate_date,$HDATE);
+	    if(@days &lt; 0){
+	    	showmsg('计算天数出错');
+	    	return(false);
+	    }
+	    else if(@days &gt; 365){
+	    	showmsg('客户风险评级已超过一年，请重做客户风险评级');
+	    	open('4686.XML','#ACTNO='+#ACTNO+';');
+	    	return(true);
+	    }
+	    
+	    
+    }
+    
+    //允许跨机构认购理财产品20130628 huangjg
+    //if ( $FD3 != #opentmp )
+    //{
+    //   showmsg('认购理财产品需到账户开户网点.');
+    //   return(false);
+    //}
+    // if( #draw_pwd_yn=='N')
+    // {
+    // 	 
+    // 	 showmsg('无密码账户户,请核实确定.');
+    //    show(#PASSWD,false);
+    //    enable(#PASSWD,false);
+    // }
+    @tota='';   
+    @sqls=''; 			
+    $FD123='';
+    
+    @baktxno=$TXNO;
+		commsend_001();
+    $FD16='9598';		 
+    @sqls='select hold_sts,bal,hold_amt,ctl_amt from dd_mst  where ac_id= '+chr(39)+@acid+chr(39)+' ';
+    $FD123=rtrim(@sqls);
+    @tota=callserver();     
+    @holdsts=strfld(@tota,'|',0);
+    #ac_bal=val(strfld(@tota,'|',1));
+    #hold_bal=val(strfld(@tota,'|',2));
+    #ctl_amt=val(strfld(@tota,'|',3));
+    
+    //showmsg('dd_mst='+@tota);
+    if( @tota=='')
+    {
+       showmsg('无此帐号');
+      return(false);
+    }
+    if( @holdsts!='0' and  @holdsts!='3' and #HND_TYPE1=='1' )
+    {
+    		showmsg('帐号冻结状态是完全冻结或只进不出,不能认购');
+      	return(false);
+    }
+    //showmsg('A'+itoa(#ac_bal,'%.2f'));
+    //showmsg('B'+itoa(#hold_bal,'%.2f'));
+    //showmsg('C'+@holdsts);
+    
+    if($FD12!='0000')
+    {
+      showmsg(geterror());
+      return(false);
+    }    
+    @tota='';    			
+    $FD123='';    
+        			
+		//调用sp9655.c将活期帐号信息显示出来 
+		list_init(7,66,8,7);
+		list_setcolcnt(5);
+		list_setcol(0,'序 号', 8);
+		list_setcol(1,'开户日期',10);
+		list_setcol(2,'产品类型',16);
+		list_setcol(3,'账户余额',16);
+		list_setcol(4,'帐户状态',8);
+
+	  @baktxno=$TXNO;
+	  //initfd();
+	  //commsend_001();
+	  $TXNO='9655';
+	  $FD72='4';//止付
+	  $FD37=#ACTNO;
+	  commsend_001();
+	  @tota=callserver();
+	  savefiletxt('../tmp/6666_4684.txt',@tota);
+	 
+	  $TXNO=@baktxno;
+	  if($FD12!='0000'){
+	  	showmsg(geterror());
+	  	return(false);
+	  }
+	  @f=openfile('../tmp/6666_4684.txt','r');
+	  if(@f &lt; 0){
+	  	showmsg('打开回传文件错误!');
+	  	return(false);
+	  }
+    
+
+	    while(true){
+               @line=readline(@f);
+               if(@line!=''){
+                       @seqn=strfld(@line,'|',0);
+                       @opn_date=strfld(@line,'|',1);
+                       @opn_date=substr(@opn_date,2,6);
+                       @prdt_name=strfld(@line,'|',2);
+                       @bal=strfld(@line,'|',3);
+		       						 @act_sts=strfld(@line,'|',4);
+			       					 
+			       					 if(@act_sts=='1'){
+	    	               		@act_sts='正常';}
+	    	               else if(@act_sts=='3'){
+	    	               		@act_sts='挂失结清';}
+	    	               else if(@act_sts=='4'){
+	    	               		@act_sts='开户更正';}
+	    	               else if(@act_sts=='5'){
+	    	               		@act_sts='临时销户';}
+	    	               else if(@act_sts=='#'){
+	    	               		@act_sts='计息结束';}
+	    	               else if(@act_sts=='*'){
+	    	               		@act_sts='销户';}
+	    	               list_additem('',@seqn,@opn_date,@prdt_name,@bal,@act_sts);
+               }else{
+                       break;
+               }
+       }//while end 
+       closefile(@f);
+               @selid=list_work();
+               if(@selid &lt; 0){
+                   showmsg('没有得到分帐户信息');
+                   list_del();
+                   refresh();
+                   return(true);
+               }
+               @selid=0;
+               @selid=list_getselid();
+               @seqn1=list_gettext(@selid,0);
+	       			 #ACTSEQ=@seqn1;
+       
+							 list_del();
+    					 refresh();
+		 					 return(true);
+     
+  }" 
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="8"  COL="42" TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>   
+  <ITEM NAME="#ACTSEQ" INPUT="TEXT" LINE="8"  COL="52" TYPE="%4d" FUNCTIONS="V(NB)"  	MESSAGE="活期默认为1">
+  <ONLOSTFOCUS>
+  	"{
+  	  dim @tota as string;
+	    $FD31=#ACTNO;
+	    $FD34=#ACTSEQ;	
+	    commsend_001();
+	    $FD16='9702';
+	    @tota = callserver();
+	    
+	    if($FD12!='0000'){
+	    
+	    	showmsg(geterror());
+	    	return(false);
+	    	
+	    }
+	    // showmsg('@tata= '+@tota);
+		  // showmsg($FD25);
+			// #CUSTNAME = $FD25;  
+			//showmsg(#CUSTNAME);
+			
+	   //setitems('#CUR_NO',$FD21);     // 币种	  
+	   //setitems('#CUSTNAME',$FD25);   //户名 
+	   #CUSTNAME = $FD25;  
+	   #CUR_NO = $FD21;
+	   //showmsg('币种'+$FD21);
+     setitems('#CUSTNAME_TMP',$FD25); 
+	   setitems('#PRDT_CODE',$FD26);   // 产品描述	   
+	   setitems('#AC_TYPE',$FD67);   
+	   setitems('#AVBAL#SPACE96',$FD100);  // 余额 
+	   //showmsg('PRDT_CODE'+#PRDT_CODE);
+	  // #LFROZEN_AMT=val(substr($FD100,0,16), 0.01);
+	  // #LUNFROZEN_AMT=val(substr($FD100,0,16), 0.01);
+ 	   //showblock('ACTINFO',true,true);
+ 	   
+ 	   show(#CUSTNAME,true);
+ 	   show(#CUR_NO,true);
+ 	   
+ 	   //showmsg('序号这里报错$FD20=== '+$FD20);
+ 	   if($FD20!='#')  //有挂失 mo_loss
+ 		{
+		  if($FD20=='1')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:口挂');
+		  	
+		  }else if($FD20=='2')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:书挂');
+		  }else if($FD20=='3')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:密挂');
+		  }else if($FD20=='4')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:密挂兼书挂');
+		  }else if($FD20=='5')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:印挂');
+		  }else if($FD20=='6')
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:申请书挂失');
+		  }else
+		  {
+		  	showhelp(6,30,7,40,'提示','帐    号:'+#ACTNO+chr(10)+'账号状态:挂失');
+		  }
+		  showmsg('账号状态非正常,不能认购或撤销');
+		  return(false);		  
+		  
+ 		}		
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  
+  <ITEM LINE="9"  COL="10"  TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9"  COL="20"  NAME="#CUSTNAME"  INPUT="LABEL" TYPE="%-50s" FUNCTIONS="" ENABLE="FALSE"/> 
+  
+  <ITEM LINE="10"  COL="10" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM NAME="#CUR_NO" LINE="10"  COL="20" TYPE="%-6s"  VISABLE="FALSE" FUNCTIONS="" ENABLE="TRUE">
+		<SELECT LINE="09" COL="55">
+			<OPTION VALUE="01"  TITLE="0.人民币" />
+		</SELECT>
+  </ITEM>  
+  <ITEM NAME="#SCUR_NO" TYPE="%-10s" FUNCTIONS="S(#CUR_NO,#CUR_NO)"> 
+  <ONLOSTFOCUS>
+ 	 "{
+  		//showmsg(#SCUR_NO);
+  		refresh();
+  	}"	
+  	</ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="11"  COL="10" TYPE="%-10s" FUNCTIONS="T(余    额:)"/> 
+  <ITEM LINE="11"  COL="20" NAME="#LAVBAL" TYPE="%-21s" FUNCTIONS="X(#AVBAL)" ENABLE="FALSE"/>
+  <ITEM NAME="#AVBAL" TYPE="%17.2f" FUNCTIONS="J(#LAVBAL)"/>       
+  <ITEM TYPE="%-60s"  NAME="#CPMC"    FUNCTIONS="V()"/> 
+  <ITEM TYPE="%-3s"  NAME="#term"    FUNCTIONS="V()"/>
+  <ITEM TYPE="%1s"   NAME="#issue_type"    FUNCTIONS="V()"/>
+  <ITEM TYPE="%8s"  NAME="#assign_date"    FUNCTIONS="V()"/>
+  <ITEM TYPE="%8s"  NAME="#cls_date"    FUNCTIONS="V()"/>
+  <ITEM TYPE="%3s"   NAME="#prot_type"    FUNCTIONS="V()"/>
+  <ITEM TYPE="%16s"  NAME="#repay_plan_rate"    FUNCTIONS="V()"/>
+  <ITEM LINE="13"  COL="10" TYPE="%-13s" FUNCTIONS="T(产品编号:)"/> 
+  <ITEM LINE="13"  COL="20" TYPE="%-12s" NAME="#prot_code" DEVICE="KEYBOARD"  FUNCTIONS="V(NB)" >
+    <ONLOSTFOCUS>
+ 	 "{
+        dim @tota as string;
+        dim @sql  as string;
+        dim @brno as string;
+        dim @line as string;
+        dim @csts as string;
+        dim @areas as string;
+        dim @raise_beg as string;
+        dim @raise_end as string;
+        dim @qq as string;
+        dim @branchlist as string;
+        dim @br_no as string;
+        dim @br_total_num as number;
+        dim @ii    as number;
+        @csts='0';
+        @qq='00';
+  		//showmsg(#SCUR_NO);
+  		//showmsg('LAVBAL='+#LAVBAL);
+  		commsend_001();
+      $FD16='9598';		 
+      @sql='select area,cif_type,raise_beg,raise_end,limit,prot_name,term,issue_type,assign_date,cls_date,prot_type,filler,redemption_acno from financing_products_parm  where  prot_code='+chr(39)+#prot_code+chr(39)+'and sts= '+chr(39)+@csts+chr(39)+'';
+      $FD123=rtrim(@sql);
+      //showmsg(@sql);
+      @tota=callserver();  
+     // showmsg('tota='+@tota);
+      if( @tota == '')
+      {
+         showmsg('无此理财产品或已经募集完成');
+         return(false);
+      }
+      if($FD12!='0000')
+      {
+        showmsg(geterror());
+        return(false);
+      }
+      //showmsg('#opentmp'+#opentmp);
+      
+   		@areas = strfld(@tota,'|',0);   		
+   		@raise_beg=strfld(@tota,'|',2);
+   		@raise_end=strfld(@tota,'|',3);
+   		#CPMC=strfld(@tota,'|',5);
+   		#term=strfld(@tota,'|',6);   		
+		  #issue_type =strfld(@tota,'|',7);
+		  #assign_date=strfld(@tota,'|',8);
+		  #cls_date  = strfld(@tota,'|',9);
+		  #prot_type = strfld(@tota,'|',10);
+		  @branchlist = strfld(@tota,'|',11);
+		  #prot_grade = strfld(@tota,'|',12);
+		  
+
+   		@brno = substr(#opentmp,0,2); 
+   		
+   		//showmsg(@areas);
+   		//showmsg(@brno);
+   		//showmsg(@raise_beg);
+   		//showmsg(@raise_end);
+
+        //按某个联社网点列表限制
+   		if(@areas == 'AA'){ 
+   		    @br_total_num=strfldcnt(@branchlist,',');
+   		    @ii=0;
+   		    while(true){
+   		        @br_no=strfld(@branchlist,',',@ii);
+       		    @br_no=delspace(@br_no);
+       		    if(@br_no==$KINBR) {break;}
+       		    if(@br_no=='' and @ii+1 &gt;= @br_total_num){
+       		        showmsg('不允许本机构销售该理财产品');
+       		        return(false);
+       		    }
+       		    @ii=@ii+1;
+   		    }
+   		}else if(@areas == 'BB'){ 
+   		    @br_total_num=strfldcnt(@branchlist,',');
+   		    @ii=0;
+   		    while(true){
+   		        @br_no=strfld(@branchlist,',',@ii);
+       		    @br_no=delspace(@br_no);
+       		    if(@br_no==substr($KINBR,0,2)) {break;}
+       		    if(@br_no=='' and @ii+1 &gt;= @br_total_num){
+       		        showmsg('不允许本机构销售该理财产品');
+       		        return(false);
+       		    }
+       		    @ii=@ii+1;
+   		    }
+   		}   		 
+   		else if ( (@areas != @brno  or @brno != substr($KINBR,0,2))and  @areas != '00' ) 
+  		{
+  		    showmsg('交易网点不在销售适用机构范围内');
+            return(false);
+  		}else if(@areas=='00' and @brno!=substr($KINBR,0,2)){
+  		    showmsg('不能跨联社认购');
+  		    return(false);
+  		}
+  		 
+  	  // showmsg('FD5'+$FD5);
+  	   
+  	   if ( $FD5 &lt; @raise_beg or $FD5 &gt; @raise_end  )
+  		{
+  		  showmsg('不在销售许可的日期范围');
+        return(false);
+  		 }
+
+		if(#HND_TYPE1=='1' and #grade &lt; #prot_grade){
+			opendlg('../xml/46841.DLG');
+			if(#SUPERFLAG=='0'){
+				return(false);
+			}
+		}  		
+  	}"	
+  	</ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="13"  COL="42" TYPE="%-12s"  	 FUNCTIONS="T(认购金额: )"/>
+  <ITEM LINE="13"  COL="52"  NAME="#TX_AMT"   TYPE="%16.2f" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)">
+  <ONLOSTFOCUS>
+  "{
+     dim @amt as string;
+     dim @valid as number;
+     
+     @amt = itoa(#TX_AMT);
+  		refresh();
+  		//showmsg('TX_AMT='+@amt);
+     @valid=#AVBAL-#hold_bal-#ctl_amt-#TX_AMT;
+     //showmsg('valid='+itoa(@valid,'%.2f'));
+     if( @valid &lt; 0.00 and #HND_TYPE1=='1' )
+     {
+        showmsg('客户可用余额不足!');
+        return(false); 
+     }
+  		
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#UTXAMT"  TYPE="%-40s"  FUNCTIONS="U(#TX_AMT)"/>    <!---大写金额--->
+  <ITEM LINE="15"  COL="10" TYPE="%-12s"  	 FUNCTIONS="T(账户密码:)"/>
+  <!-- ITEM  NAME="#LUNFROZEN_AMT" INPUT="TEXT" TYPE="%16.2f" FUNCTIONS="J(#UNFROZEN_AMT)"   >
+  <ITEM  NAME="#LUNFROZEN_AMT" INPUT="TEXT" TYPE="%16.2f" FUNCTIONS="T(#TX_AMT)" /-->
+  <ITEM NAME="#FD79_PWD"   TYPE="%16s"  FUNCTIONS="T()"/>  
+  
+  
+  <ITEM LINE="15" COL="20" NAME="#PASSWD"  VISABLE="TRUE" DEVICE="PINPAD" INPUT="TEXT"  TYPE="%6d"  FUNCTIONS="T()i()">
+  <!--ITEM LINE="15" COL="20" NAME="#PASSWD"  VISABLE="TRUE" DEVICE="KEYBOARD" INPUT="TEXT"  TYPE="%6d"  FUNCTIONS="T()i()"-->
+  	<ONLOSTFOCUS>
+	  "{
+    
+    dim @bal as string;
+    dim @name as string;
+    dim @fd102 as string;
+    dim @buffer as string;
+    dim @amtamt as string;
+    
+    #FD79_PWD=#PASSWD;//
+    #ACTNO=delspace(#ACTNO);
+    // @amtamt = itoa(#TX_AMT);
+    // showmsg('@amtamt=1=',@amtamt);
+    // 冻结金额超过余额 后台仍然成功!!!!!!!!!!!!!
+    
+    // modify by hab 20120816 all to 9317 check password begin
+    // modify by zhanghan 20120925 卡折暂时区分处理，为销售理财产品，9952修改来不及评估
+    if(len(#ACTNO) &lt; 19)  
+    { //折子
+	    initfd();
+  	  commsend_001();
+  	  $FD16='9952';  	  
+  	  $FD25='CHECKPWD';
+  	  $FD79=#FD79_PWD;
+  	  $FD102=#ACTNO;
+  	  callserver();
+  	  if($FD12 != '0000')
+  	  {
+  		  showmsg(geterror());
+		    return(false);
+  	  }
+  	  @fd102=$FD102;
+  	  @name=substr(@fd102, 145, 60);
+  	  @name=delspace(@name);
+  	  @bal=substr(@fd102, 205, 16);
+  	  @bal=itoa(val(delspace(@bal), 0.01), '%-12.2f');
+  	  showhelp(4,35,14,40,'帐户信息','户名：'+@name+chr(10)+'活期余额:'+@bal);
+  	  
+  	  if(val(@bal) &lt; val(#TX_AMT))
+  	  {
+  	  	showmsg('账户活期余额不足.');
+		    return (false);
+  	  }
+  	  
+  	 }else  
+  	 { //卡
+	    initfd();
+  	  commsend_001();
+  	  $FD16='9317';
+  	  $FD30=#ACTNO;  	    	  
+  	  $FD75=$MSR2;
+  	  $FD79=#FD79_PWD;
+  	  @buffer=callserver();
+  	  if($FD12 != '0000') 
+	     {
+		     showmsg(geterror());
+		     rerun();
+		     return(false);
+	     }else
+	    {
+		     initfd();
+  		   commsend_001();
+  		   $FD16='6700';
+  		   $FD30=#ACTNO;
+  		   $FD67='1';
+  		   callserver();
+  		   if($FD12 != '0000')
+  		   {
+  			    showmsg(geterror());
+			      return(false);
+  		    }
+  	    @name=delspace($FD25);
+  	    @bal=itoa(val(delspace($FD39), 0.01), '%-12.2f');
+  	    showhelp(5,24,14,50,'帐户信息','户名：'+@name+' 活期余额:'+@bal);
+        if(val(@bal) &lt; val(#TX_AMT))
+  	    {
+  	  	  showmsg('账户活期余额不足.');
+		      return (false);
+  	    }
+  	  
+  	   
+  	  }
+    }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>	
+  <!--  HND_TYPE  处理类型 原位置   -->
+  
+  
+  <!--ITEM  TYPE="%-15s" FUNCTIONS="T(处理方式:!)"/-->
+  <ITEM  NAME="#FROZEN_TYPE"  TYPE="%-1s"  FUNCTIONS="">
+	<!--SELECT>
+		<OPTION VALUE="1" TITLE="0.全部"/>
+		<OPTION VALUE="2" TITLE="1.只进不出"/>	
+		<OPTION VALUE="3" TITLE="2.部分冻结"/>			
+	</SELECT-->
+  <!--ONLOSTFOCUS>"{
+  	
+	     // if( #FROZEN_TYPE == '3' ){
+	     // 	enable(#LFROZEN_AMT,true);
+	     // }else{
+	     // 	enable(#LFROZEN_AMT,false);  
+	     // }               
+	     // showblock('FROZENINFO',true,true);
+	      
+	  		if(#HND_TYPE1=='1')
+	  		{
+	  			#TMPFLAG='0';
+	  			enable(#TMPFLAG,false);
+					#SHOWTIP='冻结';
+					enable(#NAME1,true);
+					#NAME1='冻结类型:!';
+					enable(#NAME1,false);
+					enable(#NAME2,true);	  
+					#NAME2='冻结金额:';
+					enable(#NAME2,false);
+					enable(#NAME3,true);
+					//#NAME3='冻结备注:';
+					//enable(#NAME3,false);
+					show(#SHOW_HOUYI,true);
+					show(#FROZEN_DATE1,true);
+					show(#FROZEN_DATE,true);   
+					
+					show(#HOLD_TS,false);
+					show(#HOLD_SEQN,false);
+					enable(#HOLD_SEQN,false);
+					
+					#FROZEN_MEMO = '理财认购';
+					
+	  			refresh();
+	  		}
+	  		
+	  		if(#HND_TYPE1=='2') 
+	  		{
+					#SHOWTIP='撤单';
+					
+					show(#SHOW_HOUYI,false);
+					//enable(#TMPFLAG,true);
+					#TMPFLAG='0';
+					//#SHOWTIP='止付';
+					//enable(#NAME1,true);
+					//#NAME1='止付类型:!';
+					enable(#NAME1,false);
+					//enable(#NAME2,true);	  
+					//#NAME2='止付金额:';
+					enable(#NAME2,false);
+					//enable(#NAME3,true);
+					//#NAME3='止付备注:';
+					enable(#NAME3,false);
+					
+					#FROZEN_MEMO = '理财认购撤单';
+					refresh();
+	  		}
+  }"
+  </ONLOSTFOCUS-->	
+  </ITEM>  
+  <ITEM NAME="#SHENMA" TYPE="%-15s"   FUNCTIONS="T()" />
+  <ITEM LINE="15"  COL="42" TYPE="%-12s" NAME="#HOLD_TS" VISABLE="FALSE" FUNCTIONS="T(冻结序号:)"/>
+    	
+  <ITEM LINE="15"  COL="52" TYPE="%-6s" NAME="#HOLD_SEQN"   INPUT="TEXT" FUNCTIONS="V(NB)" ENABLE="FALSE" VISABLE="FALSE" >  	
+  	<ONLOSTFOCUS>
+    "{
+        dim @sqls as string;
+        dim @stsh as string;
+        dim @tota as string;
+        @stsh='0';
+           
+        if( len(#ACTNO)==19 and substr(#ACTNO,0,2)=='62' )
+        {
+                initfd();
+                commsend_001();
+                
+                //$FD37=#ACTNO;
+                //$FD34=#ACTSEQ;
+                //$FD16='5565';
+                
+    						$FD16='9598';		 
+    								//hold_sts='0' and ac_id=%ld and ac_seqn=%d
+     					  //@sqls='select filler from mo_hold where ac_id='+@acid+' and ac_seqn='+@acseqn+' and hold_seqn='+@holdseqn+' and hold_sts='+chr(39)+'1'+chr(39);
+
+     					  @sqls='select filler from mo_hold  where hold_sts='+chr(39)+@stsh+chr(39)+' and ac_id='+#ACID+' and ac_seqn='+#ACTSEQ+' and hold_seqn='+#HOLD_SEQN;
+                //showmsg(@sqls);
+                $FD123=rtrim(@sqls);
+                @tota=callserver();
+                //showmsg(@tota);
+                if($FD12!='0000')
+                {
+                   showmsg(geterror());
+                   return(false);
+                }
+                //#SHENMA=substr($FD119,5,15);
+                #SHENMA = strfld(@tota,'|',0);
+                //show(#MOBILE_TS,false);
+								//show(#MOBILE,false);
+                
+        }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SFROZEN_TYPE" TYPE="%-16s" FUNCTIONS="S(#FROZEN_TYPE,#FROZEN_TYPE)" />  
+   
+  <ITEM NAME="#NAME1" TYPE="%-10s" FUNCTIONS="T(止付类型:!)" ENABLE="FALSE"/>  
+  <ITEM NAME="#LFROZEN_AMT" TYPE="%17.2f" FUNCTIONS="T(#TX_AMT)V(0000000000000001,9999999999999999)" />
+  <!--ITEM NAME="#FROZEN_AMT" TYPE="%-21s" FUNCTIONS="X()T(#TX_AMT)"/-->  
+  <ITEM NAME="#SHOW_HOUYI"  TYPE="%-12s"  FUNCTIONS="T(理财冻结)" ENABLE="FALSE" VISABLE="FALSE" />
+  <ITEM NAME="#TMPFLAG"  TYPE="%-1s" ENABLE="FALSE" VISABLE="FALSE"  FUNCTIONS="T()">
+	  <!--SELECT>
+	  	<OPTION VALUE="0" TITLE="0.其他止付"/>
+			<OPTION VALUE="2" TITLE="2.抵押质押贷款"/>
+	  </SELECT-->	  
+	  <!--ONLOSTFOCUS>"{
+	  if(#TMPFLAG == '2'){
+			#FROZEN_DATE='99999999';
+			show(#FROZEN_DATE1,false);
+			show(#FROZEN_DATE,false);
+			//showmsg('止付类型:'+#FROZEN_TYPE);
+			if(#FROZEN_TYPE=='3')
+			{
+				if(#LFROZEN_AMT &gt; #AVBAL)
+				{
+					showmsg('抵值押止付的止付金额不能大于余额');
+					return(false);
+				}
+			}
+	  }else{
+		  show(#FROZEN_DATE1,true);
+		  show(#FROZEN_DATE,true);   
+	}
+  }"
+  </ONLOSTFOCUS-->  
+  </ITEM>     
+  
+	<ITEM NAME="#NAME2"  TYPE="%-10s" FUNCTIONS="T(止付金额:)"/>      
+  <!--ITEM LINE="17"  COL="10" TYPE="%-10s" NAME="#FROZEN_DATE1" VISABLE="FALSE" FUNCTIONS="T(到期日期:)"/-->
+  <!--ITEM LINE="17"  COL="20" NAME="#FROZEN_DATE" INPUT="TEXT" TYPE="%-8s" INPUT="TEXT" VISABLE="FALSE" FUNCTIONS="V($HDATE,#FROZEN_DATE)D()" /--> 
+ 
+  <ITEM NAME="#NAME3"   TYPE="%-10s"  ENABLE="FALSE" FUNCTIONS="T(止付备注:)"/>
+  <ITEM  NAME="#FROZEN_MEMO" TYPE="%-50s"   FUNCTIONS="T()" />  
+  <ITEM LINE="17"  COL="10" NAME="#MOBILE_TS"  TYPE="%-12s" FUNCTIONS="T(手机号码:)"/>
+  <ITEM LINE="17"  COL="20" NAME="#MOBILE"  TYPE="%-11s" INPUT="TEXT"  FUNCTIONS="T()">
+  <ONLOSTFOCUS>
+	 "{
+	 		  //showmsg('LFROZEN_AMT'+itoa(#LFROZEN_AMT));
+       if(len(#MOBILE)!=11  ){
+						showmsg('客户必须留手机号且保证号码无误.');
+						return(false);
+					}
+	  }"
+	 </ONLOSTFOCUS>
+	</ITEM>
+  <!--ITEM LINE="19" COL="40"   NAME="#L7"  VISABLE="FALSE" INPUT="LABEL" TYPE="%-10s"  FUNCTIONS="T(    密码:)"/-->
+  <!--ITEM LINE="19" COL="31"   NAME="#ac_no"  DEVICE="FIXMSR" VISABLE="FALSE" INPUT="TEXT"  TYPE="%-19s"  FUNCTIONS="M($MSR2,1)" >
+  <ONLOSTFOCUS>"{
+	      commsend_001();
+	      $FD31=#ac_no;
+	      $FD16='9958';
+	      callserver();
+	      if($FD12 != '0000')
+	      {
+	      	showmsg(geterror());
+	      	return(false);
+	      }
+	      #ac_no=delspace($FD31);
+	      
+	      initfd();
+	      commsend_001();
+	      $FD16='9952';
+	      $FD102=#ac_no;
+	      callserver();
+	      if($FD12!='0000' and $FD12!='O164'){
+	      	showmsg(geterror());
+	      	return(false);
+	      }
+
+        dim @name as string;
+        dim @bal as string;
+		  if(substr(#ac_no,0,1)=='5'){
+	      initfd();
+  	    commsend_001();
+  	    $FD16='6700';
+  	    $FD30=#ac_no;
+  	    $FD67='1';
+  	    callserver();
+  	    if($FD12 != '0000')
+  	    {
+  	      showmsg(geterror());
+		  		return(false);
+  	    }
+  	    @name=delspace($FD25);
+  	    @bal=itoa(val(delspace($FD39), 0.01), '%-12.2f');
+  	    showhelp(5,22,14,50,'帐户信息','户名：'+@name+chr(10)+' 余额：'+@bal);
+  	    if(val(@bal) &lt; val(#TraceAmt))
+  	    {
+  	      showmsg('账户余额不足,请选择现金支付...');
+  	      #Flag='0';
+  	      show(#Flag, true);
+  	      show(#L6, false);
+		  show(#L7, false);
+		  show(#ac_no, false);
+		  show(#PASSWD, false);
+		  return (false);
+  	    }
+		show(#L7, false);
+		show(#PASSWD,false);
+	 }
+  }"</ONLOSTFOCUS>
+  </ITEM--> 
+  
+  
+  <ITEM NAME="#OK1" LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" /> 
+  
+  
+
+  
+  <!--ITEM LINE="21" COL="59"  TYPE="%-6s" NAME="#BUTTON1" FUNCTIONS="T(下一页)" INPUT="BUTTON" >
+  <ONCLICK>
+	"{
+	if (#HND_TYPE == '1'){
+	
+		showblock('FROZENSELECT',true,true);	   	      
+		loadpage('PAGEFROZEN');   
+		goitem(#FROZEN_TYPE) ;  	
+			
+	}else {
+	
+		showblock('UNFROZENSELECT',true,true);	  
+		loadpage('PAGEUNFROZEN');  
+		goitem(#UNFROZEN_TYPE) ;     
+		         
+	}
+	      
+	}"
+	</ONCLICK>
+  </ITEM-->
+  <!--/PAGE--> 
+
+  <!--PAGE NAME="PAGEFROZEN">
+ 
+  <BLOCK NAME="FROZENSELECT" LINE="6" COL="0" VISABLE="FALSE" >  
+      
+
+  
+  </BLOCK> 
+  
+  
+  <BLOCK NAME="FROZENINFO" LINE="8" COL="0" VISABLE="FALSE" >  
+  </BLOCK> 
+  
+   </PAGE>
+   -->
+ 
+ 
+  <!--PAGE NAME="PAGEUNFROZEN">
+ 
+   
+     <BLOCK NAME="UNFROZENSELECT" LINE="7" COL="0" VISABLE="FALSE" >  
+      
+    <ITEM LINE="0"  COL="10" TYPE="%-10s" FUNCTIONS="T(解除止付方式:!)"/>
+    
+    <ITEM  LINE="0"  COL="20"  NAME="#UNFROZEN_TYPE" TYPE="%-1s"  ENABLE="TRUE" INPUT="SELECT" FUNCTIONS="T(1)" >
+  	<SELECT>
+  		<OPTION VALUE="1" TITLE="0.全部解除止付"/>
+  		<OPTION VALUE="2" TITLE="1.部分解除止付"/>			
+  	</SELECT>
+    <ONLOSTFOCUS>"{
+	if( #UNFROZEN_TYPE == '2' ) {
+		enable(#LUNFROZEN_AMT,true);
+	} else {
+		enable(#LUNFROZEN_AMT,false);  
+	}
+	showblock('UNFROZENINFO',true,true);	
+   	               
+    }"
+    </ONLOSTFOCUS>	
+    </ITEM>
+    
+   </BLOCK> 
+        
+
+    <BLOCK NAME="UNFROZENINFO" LINE="9" COL="0" VISABLE="FALSE" >  
+
+    <ITEM LINE="0"  COL="5"  TYPE="%-74s" FUNCTIONS="T(------------------------------------------------------------)"/>
+
+    <ITEM LINE="2"  COL="10" TYPE="%-10s" FUNCTIONS="T(止付序号:)"/>
+    <ITEM LINE="2"  COL="20" NAME="#HOLD_SEQN" INPUT="TEXT" TYPE="%-4s"  FUNCTIONS=""/>  
+  
+    <ITEM LINE="4"  COL="10" TYPE="%-10s" FUNCTIONS="T(解除止付金额:)"/>   
+    <ITEM LINE="4"  COL="24" NAME="#LUNFROZEN_AMT" INPUT="TEXT" TYPE="%17.2f" FUNCTIONS="J(#UNFROZEN_AMT)" />
+    <ITEM NAME="#UNFROZEN_AMT" TYPE="%-16s" FUNCTIONS="X(#LUNFROZEN_AMT)"/>  
+
+         
+    <ITEM NAME="#INTR_FLAG2"  TYPE="%-1s" FUNCTIONS="T(Y)"/>
+    <ITEM LINE="8"  COL="10" TYPE="%-10s" FUNCTIONS="T(解除止付备注:)"/>
+    <ITEM LINE="8"  COL="20" NAME="#UNFROZEN_MEMO" TYPE="%-50s" INPUT="TEXT" FUNCTIONS="" />  
+    
+    </BLOCK> 
+ 
+  
+    
+  <ITEM NAME="#GO2" TYPE="%-1s"  FUNCTIONS="T(0)G(0,#OK2)"/>
+  <ITEM LINE="21" COL="49"  TYPE="%-6s"  FUNCTIONS="T(上一页)" INPUT="BUTTON" >
+  <ONCLICK>
+	"{
+		loadpage('DEFAULT');   
+	}"
+	</ONCLICK>
+  </ITEM>
+  <ITEM NAME="#OK2" LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+  </PAGE>    
+   -->
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#HOLD_SEQN_RET" TYPE="%-4s" FUNCTIONS="T()"/>
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="打印后请核实关键要素">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		  print(6, 25,' 理   财 '+#SHOWTIP+' 成 功 !');		
+		  print(8, 22,'账\[卡\]号:[19 ]',#ACTNO);		
+		  print(9, 22,#SHOWTIP+'序号:[ 4 ]',#HOLD_SEQN_RET);		
+		 //print(10 ,22,#SHOWTIP+'备注:[50 ]',#FROZEN_MEMO);		
+
+	}"
+	</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		
+		print( 5,10,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:4684');
+		print( 5,10,'交易:理财'+ #SHOWTIP+'交易');
+		print( 7,10,'存折\[卡\]号:[19 ]',#ACTNO);
+		print( 8,10,'冻结序号: [ 4 ]',#HOLD_SEQN_RET);
+		
+		print( 9,10,'账户名称: [50]',#CUSTNAME_TMP);
+		print(10,10,'账户余额: [21                    ]',#LAVBAL);
+		print(11,10,'认购金额: [21]元',itoa(#LFROZEN_AMT));
+		print(12,10,'产品名称: [60]',rtrim(#CPMC));
+		print(13,10,'产品编号: [13]',#prot_code);
+		print(14,10,'币    种: [10]',#SCUR_NO);
+		if(#HND_TYPE=='1'){
+			print(15,10,'结构性存款账号: [20]',$FD37);
+		}
+		//print(12,10,#SHOWTIP+'方式:[16]',#SFROZEN_TYPE);
+		//print(13,10,'到期日期:[8]',#FROZEN_DATE);
+		
+		//print_sq();		
+		
+		print(20,10,'交易日期:[8]  [8]',$HDATE,@txtime);
+		print(20,5,'柜员:[6]',$FD7);
+		print(20,5,'流水号:[6]',substr($FD126,2,6));
+		//print(22,10,'备注:');
+		
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印理财产品认购确认书正面" CHECK="#HND_TYPE1=1" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+
+	<PRINT>"{
+		
+		$KINDNO='00';
+		dim @txtime as string;
+		dim @table_char as string;
+		dim @issue_char as string;
+		dim @prot_tchar as string;
+		
+		@table_char = '─';
+		if(#prot_type=='001')
+		{
+			@prot_tchar = '保本浮动收益';
+		}
+		else if(#prot_type=='002')
+		{
+			@prot_tchar = '非保本浮动收益';
+		}		
+		else
+		{
+				@prot_tchar = ' ';
+		}
+		
+		if(#issue_type=='1')
+		{
+			@issue_char = '单一型';
+		}
+		else if(#issue_type=='2')
+		{
+			@issue_char = '公开募集';
+		}		
+		else
+		{
+				@issue_char = ' ';
+		}
+		
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		print(8,30,'\H0[13 ]\H1',#prot_code);
+		
+		
+		print(13,18,'产品名称:[50]',rtrim(#CPMC));
+		
+		print(14,18,'产品编号:[13] ',#prot_code);
+		print(14,18,'发行方式: [18] ',@issue_char);
+		//print(15,17,'   产品类型:    □滚动  □单期');
+	  print(15,18,'理财期限: [4]天 ',#term);
+		print(15,24,'提前终止权: 投资者无提前终止权');
+		print(16,18,'理财产品认购日期:[4 ]年[2]月[2]日',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+		print(16,9,' 认购划款日: [4 ]年[2]月[2]日',substr(#assign_date,0,4),substr(#assign_date,4,2),substr(#assign_date,6,2));
+		print(17,18,'理财产品成立日:  [4 ]年[2]月[2]日',substr(#assign_date,0,4),substr(#assign_date,4,2),substr(#assign_date,6,2));
+		print(17,10,'理财到期日: [4 ]年[2]月[2]日',substr(#cls_date,0,4),substr(#cls_date,4,2),substr(#cls_date,6,2));
+		print(18,18,'持有到期收益率:[11]﹪',delspace(#repay_plan_rate));		     
+		print(18,12,' 本金保证:  [16]',@prot_tchar);
+
+			
+		//print(19,12,'────────────────────────────────────────────');
+		print(20,18,'客户名称: [30]',rtrim(#CUSTNAME_TMP));
+		print(20,2,'身份证号码 :[19]',#IDNO);		
+		print(21,18,'客户账号: [19]',#ACTNO);		
+		print(21,13,'手机号码: [12]',#MOBILE);		
+		print(22,18,'理财认购资金金额:(小写）RMB[17  ]元  (大写)人民币：[40]',itoa(#TX_AMT,'%16.2f'),#UTXAMT);
+		
+		print(26,14,'交易日期:[8] 交易时间 [8]',$HDATE,@txtime);			
+		print(26,3,'流水号:[6]',substr($FD126,2,6));	
+		print(27,14,'冻结序号:[ 4 ](撤单时需用)',#HOLD_SEQN_RET);		
+		print(28,14,'理财产品风险等级为[2],您的风险评估等级为[2],您已同意认购，请签字确认。',#prot_grade,#grade);
+		print(29,50,'客户签字：');
+		print(51,29,'[6]',$FD7);
+		
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

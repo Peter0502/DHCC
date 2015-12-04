@@ -1,0 +1,323 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"gl_note_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int gl_note_con ( struct gl_note_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct gl_note_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->br_no);
+	zip_tail(ps->note_type);
+}
+int Gl_note_Debug(struct gl_note_c *ps){
+	vtcp_log("gl_note_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("gl_note_c.br_no=[%s]\n",ps->br_no);
+	vtcp_log("gl_note_c.note_type=[%s]\n",ps->note_type);
+	vtcp_log("gl_note_c.date=[%ld]\n",ps->date);
+	vtcp_log("gl_note_c.cr_bal=[%f]\n",ps->cr_bal);
+	vtcp_log("gl_note_c.lcd_bal=[%f]\n",ps->lcd_bal);
+	vtcp_log("gl_note_c.rdd_cnt=[%ld]\n",ps->rdd_cnt);
+	vtcp_log("gl_note_c.rcd_cnt=[%ld]\n",ps->rcd_cnt);
+	vtcp_log("gl_note_c.rdd_amt=[%f]\n",ps->rdd_amt);
+	vtcp_log("gl_note_c.rcd_amt=[%f]\n",ps->rcd_amt);
+	vtcp_log("gl_note_c.tdcr_bal=[%f]\n",ps->tdcr_bal);
+	vtcp_log("gl_note_c.tddr_cnt=[%ld]\n",ps->tddr_cnt);
+	vtcp_log("gl_note_c.tdcr_cnt=[%ld]\n",ps->tdcr_cnt);
+	vtcp_log("gl_note_c.tddr_amt=[%f]\n",ps->tddr_amt);
+	vtcp_log("gl_note_c.tdcr_amt=[%f]\n",ps->tdcr_amt);
+	vtcp_log("gl_note_c.mcr_bal=[%f]\n",ps->mcr_bal);
+	vtcp_log("gl_note_c.mdr_cnt=[%ld]\n",ps->mdr_cnt);
+	vtcp_log("gl_note_c.mcr_cnt=[%ld]\n",ps->mcr_cnt);
+	vtcp_log("gl_note_c.mdr_amt=[%f]\n",ps->mdr_amt);
+	vtcp_log("gl_note_c.mcr_amt=[%f]\n",ps->mcr_amt);
+	vtcp_log("gl_note_c.qcr_bal=[%f]\n",ps->qcr_bal);
+	vtcp_log("gl_note_c.qdr_cnt=[%ld]\n",ps->qdr_cnt);
+	vtcp_log("gl_note_c.qcr_cnt=[%ld]\n",ps->qcr_cnt);
+	vtcp_log("gl_note_c.qdr_amt=[%f]\n",ps->qdr_amt);
+	vtcp_log("gl_note_c.qcr_amt=[%f]\n",ps->qcr_amt);
+	vtcp_log("gl_note_c.ycr_bal=[%f]\n",ps->ycr_bal);
+	vtcp_log("gl_note_c.ydr_cnt=[%ld]\n",ps->ydr_cnt);
+	vtcp_log("gl_note_c.ycr_cnt=[%ld]\n",ps->ycr_cnt);
+	vtcp_log("gl_note_c.ydr_amt=[%f]\n",ps->ydr_amt);
+	vtcp_log("gl_note_c.ycr_amt=[%f]\n",ps->ycr_amt);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Gl_note_Sel(reply,gl_note_c,fmtstr,va_alist)
+char    *reply;
+struct  gl_note_c *gl_note_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Gl_note_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Gl_note_Fet_Sel( gl_note_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Gl_note_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Gl_note_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,gl_note.* FROM gl_note WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE gl_note_sel FROM :comm;
+	EXEC SQL DECLARE sel_gl_note CURSOR FOR gl_note_sel;
+
+	EXEC SQL OPEN sel_gl_note;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_note_Fet_Sel ( struct gl_note_c *gl_note_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_gl_note INTO :gl_note_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch gl_note error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch gl_note finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(gl_note_c);
+
+	return 0;
+}
+
+int Gl_note_Clo_Sel (){
+	EXEC SQL CLOSE sel_gl_note;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Gl_note_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,gl_note.* FROM gl_note WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE gl_note_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_gl_note CURSOR FOR gl_note_upd;
+
+	EXEC SQL OPEN upd_gl_note;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_note_Fet_Upd( struct gl_note_c *gl_note_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_gl_note INTO :gl_note_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH gl_note finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(gl_note_c);
+
+	return 0;
+}
+
+int Gl_note_Upd_Upd( struct gl_note_c gl_note_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE gl_note SET br_no=:gl_note_c.br_no,
+			note_type=:gl_note_c.note_type,
+			"date"=:gl_note_c.date,
+			cr_bal=:gl_note_c.cr_bal,
+			lcd_bal=:gl_note_c.lcd_bal,
+			rdd_cnt=:gl_note_c.rdd_cnt,
+			rcd_cnt=:gl_note_c.rcd_cnt,
+			rdd_amt=:gl_note_c.rdd_amt,
+			rcd_amt=:gl_note_c.rcd_amt,
+			tdcr_bal=:gl_note_c.tdcr_bal,
+			tddr_cnt=:gl_note_c.tddr_cnt,
+			tdcr_cnt=:gl_note_c.tdcr_cnt,
+			tddr_amt=:gl_note_c.tddr_amt,
+			tdcr_amt=:gl_note_c.tdcr_amt,
+			mcr_bal=:gl_note_c.mcr_bal,
+			mdr_cnt=:gl_note_c.mdr_cnt,
+			mcr_cnt=:gl_note_c.mcr_cnt,
+			mdr_amt=:gl_note_c.mdr_amt,
+			mcr_amt=:gl_note_c.mcr_amt,
+			qcr_bal=:gl_note_c.qcr_bal,
+			qdr_cnt=:gl_note_c.qdr_cnt,
+			qcr_cnt=:gl_note_c.qcr_cnt,
+			qdr_amt=:gl_note_c.qdr_amt,
+			qcr_amt=:gl_note_c.qcr_amt,
+			ycr_bal=:gl_note_c.ycr_bal,
+			ydr_cnt=:gl_note_c.ydr_cnt,
+			ycr_cnt=:gl_note_c.ycr_cnt,
+			ydr_amt=:gl_note_c.ydr_amt,
+			ycr_amt=:gl_note_c.ycr_amt
+	WHERE rowid=:gl_note_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Gl_note_Del_Upd(struct gl_note_c gl_note_c , char * reply  ){
+
+	EXEC SQL DELETE FROM gl_note WHERE rowid=:gl_note_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Gl_note_Clo_Upd( ){
+	EXEC SQL CLOSE upd_gl_note;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Gl_note_Ins( struct gl_note_c gl_note_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO gl_note VALUES (:gl_note_c.br_no,
+			:gl_note_c.note_type,
+			:gl_note_c.date,
+			:gl_note_c.cr_bal,
+			:gl_note_c.lcd_bal,
+			:gl_note_c.rdd_cnt,
+			:gl_note_c.rcd_cnt,
+			:gl_note_c.rdd_amt,
+			:gl_note_c.rcd_amt,
+			:gl_note_c.tdcr_bal,
+			:gl_note_c.tddr_cnt,
+			:gl_note_c.tdcr_cnt,
+			:gl_note_c.tddr_amt,
+			:gl_note_c.tdcr_amt,
+			:gl_note_c.mcr_bal,
+			:gl_note_c.mdr_cnt,
+			:gl_note_c.mcr_cnt,
+			:gl_note_c.mdr_amt,
+			:gl_note_c.mcr_amt,
+			:gl_note_c.qcr_bal,
+			:gl_note_c.qdr_cnt,
+			:gl_note_c.qcr_cnt,
+			:gl_note_c.qdr_amt,
+			:gl_note_c.qcr_amt,
+			:gl_note_c.ycr_bal,
+			:gl_note_c.ydr_cnt,
+			:gl_note_c.ycr_cnt,
+			:gl_note_c.ydr_amt,
+			:gl_note_c.ycr_amt);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT gl_note error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

@@ -1,0 +1,694 @@
+# include <stdio.h>
+# include <stdlib.h>
+# include <string.h>
+# include "sqltool.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlstype ;
+EXEC SQL include sqltypes ;
+EXEC SQL include datetime ;
+EXEC SQL include locator ;
+EXEC SQL begin declare section ;
+  int d_max, nblobs; 
+  char d_id[19] ;
+EXEC SQL end declare section ;
+int _printf_proc=0, _printf_cut=1, _max_fold=1, _printf_numltrim=1;  /* 打印进程显示否, 打印字段是否截断, 折行数 ,是否删除数值型左边空格(在wprt_txt函数中） */
+int _nfcap_, _isfoot_=0;  /*SQL中是否有非正常字段域显示标识(不能含有,) */
+char _fcap_[1024] ;
+ 
+int initfcap(char *s)
+{
+	int k, i;
+	char *p, *p1, *p2, tms[6], *pfrom;
+	for (k=0, p=s; (p=strchr(p,'['))!=NULL && k<255 && *p ; p++, k++) ;
+	_nfcap_=k;
+	if (k==0) return 0;
+	memset(_fcap_,0x00, sizeof(_fcap_) );     
+	if (_nfcap_==NULL) {
+		_nfcap_=0;
+		return -1;
+	}
+	pfrom = strstr(s," from ");
+	if (pfrom==NULL) strstr(s," FROM ");
+	for (k=0, p=s, p1=_fcap_; (p=strchr(p,'['))!=NULL && *p && p<pfrom && k<255; p++, k++)
+	{
+		p2=strchr(p,']');
+		if (p2==NULL)  break;
+		sprintf(tms, ",%03d", k);
+		memcpy(p1, tms, 4);  p1 +=4;
+		memcpy(p1 , p+1, p2-p-1);  p1 +=p2-p-1;
+                sprintf(tms, "__%03d", k);
+		memcpy(p, tms, 5); 
+		if (p2-p+1-5>0) memset(p+5, ' ', p2-p+1-5);
+	}
+	*p1=',';
+	return _nfcap_;
+}
+
+char *getfcap( int col, char *keyfcap)
+{
+   char *p1, *p2, tms[5];
+   memcpy(tms, keyfcap, 4); tms[4]='\0';
+   if (*tms!=',') *tms=',';
+   p1=strstr( _fcap_, tms );
+   if (p1==NULL) return NULL;
+   p2=strchr(p1+1, ',');
+   if (p2==NULL) return NULL;
+   memcpy(sqlcur.Fields[col].f_caption, p1+4, (p2-p1+1-5<30 ? p2-p1+1-5 : 30) );
+   (sqlcur.Fields[col].f_caption)[p2-p1+1-5]='\0';
+   memcpy(sqlcur.Fields[col].f_name,sqlcur.Fields[col].f_caption,20);
+   return sqlcur.Fields[col].f_caption ;
+}
+
+int sql_Gettype(f_type, type_name)
+int f_type ;
+char *type_name ;
+{
+       	    switch (f_type) {
+		case SQLCHAR :  	strcpy(type_name, "CHAR"); 	break;
+		case SQLVCHAR :  	strcpy(type_name, "VCHAR"); 	break;
+     		case SQLSMINT :  	strcpy(type_name, "SMINT"); 	break;
+		case SQLINT:		strcpy(type_name, "INT"); 	break;
+		case SQLSERIAL :	strcpy(type_name, "SERIAL"); 	break;
+		case SQLDATE :		strcpy(type_name, "DATE"); 	break;
+  		case SQLSMFLOAT :	strcpy(type_name, "SMFLOAT"); 	break;
+		case SQLFLOAT :		strcpy(type_name, "FLOAT"); 	break;
+		case SQLDECIMAL :	strcpy(type_name, "DECIMAL"); 	break;
+		case SQLMONEY :		strcpy(type_name, "MONEY"); 	break;
+		case SQLDTIME:		strcpy(type_name, "DTIME"); 	break;
+    		case SQLINTERVAL :	strcpy(type_name, "INTERVAL"); 	break;
+		case SQLTEXT :		strcpy(type_name, "TEXT"); 	break;
+		case SQLBYTES:		strcpy(type_name, "BYTES"); 	break;
+		default :		strcpy(type_name, "NON"); 	break;
+		}
+}
+
+
+
+int sql_Prep(s, func)   /* 初始SQL语句, 返回字段数, 如返回0则为运行命令, 返回-1,为错误(错误号为SQLCODE) */
+char *s ;
+int (*func)();
+{
+ EXEC SQL begin declare section ;
+ char  *cp;
+ int d_count ;
+ EXEC SQL end declare section;
+ long type;
+
+ if (initfcap(s)<0) return -1 ;
+ cp=s;
+ _isfoot_=0;
+ sqlcur.sql_type = -1;
+ sqlcur.getstru_ed = 0 ;
+ d_max = DESC_MAX ;
+ strcpy(d_id, "descname");
+ sqlcur.Field_dofunc=func;
+ 
+ EXEC SQL allocate descriptor :d_id with max :d_max ; sqlfatal();
+
+ EXEC SQL prepare p1_id from :cp ;
+ if (SQLCODE) { if (_printf_proc) printf("ERROR:prepare(%d)!\n", SQLCODE );  return SQLCODE; }
+ else {
+	EXEC SQL describe p1_id using sql descriptor :d_id ;
+	type=SQLCODE ;
+	EXEC SQL get descriptor :d_id :d_count = count ;
+	sqlcur.FieldCount = d_count ;
+        /*sqlnonfatal(); */
+        if (SQLCODE) { if (_printf_proc) printf("ERROR:prepare(%d)!\n", SQLCODE );  return SQLCODE; }
+
+	if (0==type || SQ_EXECPROC == type )
+	{
+		sqlcur.sql_type = sqlcur.FieldCount ;
+	 	return  sqlcur.FieldCount ;  /*sql_select (d_count );*/
+	}
+ 	else  {
+ 		sqlcur.sql_type=0;
+ 		sqlcur.FieldCount =0;
+ 		return 0;
+ 	}
+  }
+}
+
+int sql_Close()
+{
+ if (sqlcur.sql_type>0) {
+  if (sqlcur.FieldCount>0) free(sqlcur.Fields);
+  EXEC SQL close c1_id ;
+  EXEC SQL free c1_id ;
+ }
+ EXEC SQL free p1_id ;
+ if (SQLCODE) return -1;
+ EXEC SQL deallocate descriptor :d_id;  sqlfatal();
+ return 0;
+}
+
+int sql_Open ()
+{
+  if (_nfcap_>0) free(_fcap_); 	
+  if (sqlcur.sql_type<=0) return -1;
+  EXEC SQL declare c1_id cursor for p1_id ;
+  if (SQLCODE) { sqlcur.FieldCount =0; if (_printf_proc) printf("ERROR:declare(%d)!\n", SQLCODE );  return SQLCODE ; }
+  EXEC SQL open c1_id ;
+  if (SQLCODE) { sqlcur.FieldCount =0; if (_printf_proc) printf("ERROR:cursor open(%d)!\n", SQLCODE );  return SQLCODE ; }
+  sqlcur.Fields = (ty_Field *) calloc( sqlcur.FieldCount , sizeof(ty_Field) );
+  return 0;
+}
+
+char * sql_insertvalues( str )
+char *str;
+{
+     int k;
+     char c_type ;
+     *str='\0' ;
+     
+     for (k=0; k<sqlcur.FieldCount ; k++)
+     {
+     	     if (k>0) strcat(str, ",");
+             c_type = sqlcur.Fields[k].f_type ;
+       	     switch (c_type) {
+		case SQLCHAR :  	
+		case SQLTEXT :	
+		case SQLBYTES:	
+		case SQLVCHAR :  	
+			 strcat(str,"'"); 
+			 strcat(str, btrim(sqlcur.Fields[k].f_char)); 
+			 strcat(str,"'");  	
+			 break;
+		default :	strcat(str, ltrim(sqlcur.Fields[k].f_char));  	break;
+		}
+     }
+     return (str);
+} 
+
+int sql_Fetch()
+{
+  if (sqlcur.sql_type<=0) return -1;
+  EXEC SQL fetch c1_id using sql descriptor :d_id ;
+  if (SQLCODE==0) sql_getdesc (sqlcur.FieldCount);
+  return SQLCODE ;
+}
+
+ty_Field * sql_Field( col )
+int col ;
+{
+	if (col<0 || col>=sqlcur.FieldCount) return NULL;
+	return (&(sqlcur.Fields[col]) ) ;
+}
+
+ty_Field * sql_FieldByName( name )
+char * name ;
+{
+	int col ;
+	for (col=0; col<sqlcur.FieldCount ; col++) {
+		if (strcasecmp( name, sqlcur.Fields[col].f_name)==0) break;
+	}
+	if (col<sqlcur.FieldCount) 
+		return (&(sqlcur.Fields[col]) ) ;
+	else
+		return (NULL) ;
+}
+
+int sql_FieldCount()
+{
+	return sqlcur.FieldCount ;
+}
+
+int sql_getdesc(d_count)
+    int d_count ;
+{
+  EXEC SQL begin declare section ;
+  int	col ;
+  char  c_name[19];
+  short c_length ;
+  short c_type ;
+  int	c_ind ;
+  int   c_int ;
+  int 	c_long ;
+  float c_float ;
+  double c_double;
+  dec_t 	c_dec;
+  dtime_t 	c_dtime ;
+  intrvl_t 	c_interval ;
+  loc_t		c_loc ;
+  char 	c_char[256] ;
+  EXEC SQL end declare section ;
+
+  char tmpstr[30] ;
+  char *cp;
+  int n;
+  int nb =0;
+  _max_fold=1;
+  for (col=1; col<=d_count; ++col) {
+  	if (sqlcur.getstru_ed) {
+        c_type = sqlcur.Fields[col-1].f_type ;
+        c_length = sqlcur.Fields[col-1].f_length  ;
+	EXEC SQL get descriptor :d_id value :col
+	     :c_ind = indicator ;
+	}
+	else {
+       EXEC SQL get descriptor :d_id value :col
+            :c_length = length ,
+            :c_type = type ,
+            :c_name = name ,
+	     :c_ind = indicator ;
+       if (SQLCODE) return -1;
+             sqlcur.Fields[col-1].f_type = c_type;
+       sqlcur.Fields[col-1].f_ind = 0;
+       sqlcur.Fields[col-1].f_length = c_length;
+       sqlcur.Fields[col-1].f_dec = 0;
+       sqlcur.Fields[col-1].f_foot = '0';
+       sqlcur.Fields[col-1].f_footsum = 0.0 ;
+       if (*c_name=='_' && *(c_name+1)<='9' && *(c_name+1)>='0' )
+       {
+          memcpy(tmpstr, c_name+1,2); tmpstr[2]='\0';
+          sqlcur.Fields[col-1].f_displen = atoi(tmpstr);
+          if (*(c_name+4)<='9' && *(c_name+4)>='0' )   /*  小数位数 */
+          {
+          	 switch (*(c_name+3)) {
+          	 case	'9':  
+				sqlcur.Fields[col-1].f_ind = 9;  
+				break;     /* ,号分隔 */
+          	 case	'D': case 'd': 
+				sqlcur.Fields[col-1].f_ind = 9;  
+				sqlcur.Fields[col-1].f_foot='C'; 
+				_isfoot_=1;  
+				break;	
+          	 case	'C':  case 'c': 
+				sqlcur.Fields[col-1].f_foot='C'; 
+				_isfoot_=1;
+				break;	
+          	 case	'T': case 't': 
+				sqlcur.Fields[col-1].f_ind = 9;  
+				sqlcur.Fields[col-1].f_foot='S';  
+				_isfoot_=1;
+				break;	
+          	 case	'S': case 's': 
+				sqlcur.Fields[col-1].f_foot='S';  
+				_isfoot_=1;
+				break;	
+          	 }	 
+          	 sqlcur.Fields[col-1].f_dec = *(c_name+4)-'0';
+          	 strcpy(sqlcur.Fields[col-1].f_name , btrim(c_name)+5);
+          }
+          else 	          
+          	 strcpy(sqlcur.Fields[col-1].f_name , btrim(c_name)+3);
+       }
+       else
+       {
+        switch(c_type) {
+       	case SQLCHAR :
+       	case SQLVCHAR :  sqlcur.Fields[col-1].f_displen = c_length; break;
+          		case SQLSMINT :
+       	case SQLINT:
+       	case SQLSERIAL : sqlcur.Fields[col-1].f_displen = INTWIDTH; break;
+       	case SQLDATE :   sqlcur.Fields[col-1].f_displen = 12; break;
+       	case SQLSMFLOAT :
+       	case SQLFLOAT :
+       	case SQLDECIMAL :
+       	case SQLMONEY :  
+       		if (c_length==3840) sqlcur.Fields[col-1].f_displen = INTWIDTH;
+       		else {
+       			sqlcur.Fields[col-1].f_displen = FLOATWIDTH;
+            sqlcur.Fields[col-1].f_dec = FLOATPREC;
+ 					}
+       		break;
+       	case SQLDTIME:   sqlcur.Fields[col-1].f_displen = DTIMEWIDTH ; break;
+                     case SQLINTERVAL : sqlcur.Fields[col-1].f_displen = INTERVALWIDTH ; break;
+                     default :   sqlcur.Fields[col-1].f_displen = 0 ; break;
+                }
+        strcpy(sqlcur.Fields[col-1].f_name , btrim(c_name));
+       }
+         /*  caption 赋值  */
+          cp=sqlcur.Fields[col-1].f_name ;
+          if (memcmp(cp,"__",2)==0) {
+          	if (getfcap(col-1, cp+1 )==NULL) strcpy(sqlcur.Fields[col-1].f_caption, cp) ;
+          }  
+          else strcpy(sqlcur.Fields[col-1].f_caption, cp) ;
+          /*  取字段属性结束 */
+  	}
+	if (c_ind==-1)  /*空值*/
+	{
+	    /*sprintf(sqlcur.Fields[col-1].f_char, "%-*s", c_length, " " );*/
+	    strcpy(sqlcur.Fields[col-1].f_char,"");
+	    sqlcur.Fields[col-1].f_int=0;
+	    sqlcur.Fields[col-1].f_double=0.0;
+	}
+	else {
+    	  switch(c_type) {
+		case SQLCHAR :
+		case SQLVCHAR :
+		     EXEC SQL get descriptor :d_id
+			value :col :c_char =data ;
+		     sqlfatal();
+		     n=strlen(btrim(c_char) );
+		     sprintf(sqlcur.Fields[col-1].f_char, "%s%-*s", btrim(c_char), c_length-n,"" );
+		     if (_printf_cut) *( sqlcur.Fields[col-1].f_char + sqlcur.Fields[col-1].f_displen )='\0';
+		     else if (n>sqlcur.Fields[col-1].f_displen) {
+		     	n= (n + sqlcur.Fields[col-1].f_displen-1) / sqlcur.Fields[col-1].f_displen ;
+		     	if (n>_max_fold) _max_fold=n;
+		     	sqlcur.Fields[col-1].f_ind=n;
+		     } 
+		     break;
+     		case SQLSMINT :
+		     EXEC SQL get descriptor :d_id
+			value :col  :c_int =data ;
+		     sqlfatal();
+		     sqlcur.Fields[col-1].f_int = c_int ;
+		     sqlcur.Fields[col-1].f_double = c_int ;
+ 	    	 sprintf(sqlcur.Fields[col-1].f_char,"%*d", sqlcur.Fields[col-1].f_displen, c_int );
+		     break;
+		case SQLINT:
+		case SQLSERIAL :
+		     EXEC SQL get descriptor :d_id
+			value :col :c_long = data ;
+		     sqlfatal();
+		     sqlcur.Fields[col-1].f_int = c_long ;
+		     sqlcur.Fields[col-1].f_double = c_long ;
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*ld", sqlcur.Fields[col-1].f_displen, c_long );
+		     break;
+		case SQLDATE :
+		     EXEC SQL get descriptor :d_id
+			value :col  :c_long =data ;
+		     sqlfatal();
+		     rdatestr(c_long, tmpstr);
+		     sprintf(sqlcur.Fields[col-1].f_char,"%s", tmpstr);
+  		case SQLSMFLOAT :
+		     EXEC SQL get descriptor :d_id
+			value :col :c_float =data;
+		     sqlfatal();
+		     sqlcur.Fields[col-1].f_double = c_float ;
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*.*f",sqlcur.Fields[col-1].f_displen,sqlcur.Fields[col-1].f_dec, c_float);
+		     break;
+		case SQLFLOAT :
+		     EXEC SQL get descriptor :d_id
+			value :col :c_double =data ;
+		     sqlfatal();
+		     sqlcur.Fields[col-1].f_double = c_double ;
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*.*f", sqlcur.Fields[col-1].f_displen, sqlcur.Fields[col-1].f_dec, c_double);
+		     break;
+		case SQLDECIMAL :
+		case SQLMONEY :
+		     EXEC SQL get descriptor :d_id value :col :c_dec=data;
+		     sqlfatal();
+		     dectoasc(&c_dec, tmpstr, FLOATWIDTH, -1);
+		     tmpstr[FLOATWIDTH]='\0';
+		     c_double = (double)atof(tmpstr) ;
+		     sqlcur.Fields[col-1].f_double = c_double ;
+		     if (c_length==3840) 
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*ld", sqlcur.Fields[col-1].f_displen, atoi(tmpstr) );
+		     else
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*.*f", sqlcur.Fields[col-1].f_displen, sqlcur.Fields[col-1].f_dec, c_double);
+		     break;
+		case SQLDTIME:
+		     EXEC SQL get descriptor :d_id value :col :c_dtime =data;
+		     sqlfatal();
+		     dttoasc(&c_dtime, tmpstr);
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*s",DTIMEWIDTH, btrim(tmpstr));
+		     break;
+    		case SQLINTERVAL :
+		     EXEC SQL get descriptor :d_id value :col :c_interval=data;
+		     sqlfatal();
+		     intoasc(&c_interval,tmpstr);
+		     printf("<inter=%.0f>", atof(tmpstr));
+		     sprintf(sqlcur.Fields[col-1].f_char,"%*s",INTERVALWIDTH,btrim(tmpstr));
+		     break;
+		case SQLTEXT :
+		case SQLBYTES:
+		     sprintf(sqlcur.Fields[col-1].f_char,"<byte>");
+		     break;
+		default :
+		     sprintf(sqlcur.Fields[col-1].f_char,"<未知类型>");
+		 /*    fatal("Illegal column type"); */
+		}
+    		if ( sqlcur.Fields[col-1].f_ind == 9) /* 加,号分隔 */ 
+       			strnumdos(sqlcur.Fields[col-1].f_char, sqlcur.Fields[col-1].f_displen, sqlcur.Fields[col-1].f_char, 1);
+        	switch ( sqlcur.Fields[col-1].f_foot ) {
+        	case	'C':  sqlcur.Fields[col-1].f_footsum += 1.0; break;
+        	case	'S':  sqlcur.Fields[col-1].f_footsum += sqlcur.Fields[col-1].f_double ; break;
+        	}
+ 	}
+   }
+   if (!sqlcur.getstru_ed) sqlcur.getstru_ed = 1;
+   if (sqlcur.Field_dofunc)  (*sqlcur.Field_dofunc)();
+   return 0;
+}
+
+/**XXXXX
+int sql_execute()
+{
+  EXEC SQL execute p1_id ;
+  sqlfatal();
+}
+*************/
+
+int fatal_loc(s, f, ln)
+ char *s, *f;
+ int ln ;
+{
+  printf("\n%s, file %s, line %d\n", s, f, ln);
+  exit(1);
+}
+
+int sqlfatal_loc(f, ln)
+ char *f;
+ int ln;
+{
+  char msg[160];
+  if (SQLCODE) {
+    printf("sqlcode=%ld, isam=%ld,file=%s,line=%d\n",
+       SQLCODE, sqlca.sqlerrd[1], f, ln);
+    rgetmsg((short)SQLCODE, msg, sizeof(msg) );
+    printf("SQL:");
+    printf(msg,sqlca.sqlerrm);
+    if (sqlca.sqlerrd[1]) {
+	rgetmsg((short)sqlca.sqlerrd[1],msg, sizeof(msg));
+	printf("%s", msg);
+    }
+    exit(1);
+  }
+}
+
+int sqlnonfatal()
+{
+   char msg[160];
+   if (SQLCODE) {
+	rgetmsg((short)SQLCODE,msg, sizeof(msg) );
+	printf("\n%ld:", SQLCODE);
+	printf(msg,sqlca.sqlerrm);
+	printf("\n");
+   }
+}
+
+/* 普遍格式文本打印   */
+int wprt_txt(sql, nskip, fprt, nr, n0, title, chsp, pg0, func )
+char *sql, *title ;   /* SQL语句, 标题(为空为不打印标题和表头)  */
+FILE *fprt ;
+int nskip, nr, n0, pg0;  /* nskip数据表跳过记录数,  nr页记录数, n0页起始记录数,  pg0起始页号  */
+char chsp ;   /* 字段分隔符 */
+int (*func)();
+{
+	int i=-1, k, j, ispg=1, pg=pg0;
+        char st[81];
+        if (chsp<1) return -1;
+	if (sql_Prep(sql,func ) > 0)
+	{
+	    if (sql_Open()==0) {
+		for (i=0; i< nskip; i++) if (sql_Fetch()!=0) break; 
+		i=n0;  
+		if (sql_Fetch()!=0) { sql_Close(); return -1 ; };
+		while (SQLCODE==0) {
+		if (_printf_proc) if (i % 10==0) printf(".");			
+		if ( ispg ) {  /*表头*/			
+			ispg=0;
+			if (strlen(title) > 4 ) {
+			  fprintf(fprt, "%s\n", title );	
+			  for (k=0; k<sqlcur.FieldCount; k++)
+			  	fprintf(fprt, "%s%c",sqlcur.Fields[k].f_caption , chsp );
+			  fprintf(fprt, "\n"); 	
+			}
+		}
+		for (k=0; k<sqlcur.FieldCount; k++)
+		{
+		    if (_printf_numltrim)
+		    switch (sqlcur.Fields[k].f_type)
+		    {
+           		case SQLSMINT :
+      			case SQLINT:
+      			case SQLSERIAL :
+        		case SQLSMFLOAT :
+      			case SQLFLOAT :
+      			case SQLDECIMAL :
+      			case SQLMONEY : 
+      				strltrim( sqlcur.Fields[k].f_char, sqlcur.Fields[k].f_char );
+      				fprintf(fprt, "%s%c",  sqlcur.Fields[k].f_char, chsp ); break;
+      			default : fprintf(fprt, "%s%c", btrim( sqlcur.Fields[k].f_char), chsp );  break;
+		    }	
+		    else fprintf(fprt, "%s%c", btrim( sqlcur.Fields[k].f_char), chsp );
+		    
+		}
+		if (k) fprintf(fprt, "\n");  
+		ispg= (sql_Fetch()!=0) ;  i++;
+		if (nr>100) if (i>=nr)  break;
+		if (nr>0) if ( i % nr==0 || ispg ) {  /*换页 */
+			ispg=1; 
+  			if  (SQLCODE==0)  fprintf(fprt, "%40s- %d -\014\n", " ", pg ); 
+  			pg++;
+		}
+	        }
+	    }	
+        }
+        else 
+        {
+           if (_printf_proc) printf(" <%d>SQL语句有错误<%s>.\n",SQLCODE, sql);
+           i=SQLCODE;
+        }
+        sql_Close();
+        return (i);
+}
+
+/* 汉字表格打印   */
+int wprt_hzcell(sql, nskip, fprt, nr, title, nsp, pg0, pgEnd , func_fd, func_newpg, func_btop, func_bbott  )
+char *sql, *title ;   /* SQL语句, 标题(NOTOP不打表头, NOBOTT不打表尾  NOTOPBOTT不打印表头表尾) */
+FILE *fprt ;
+int nskip, nr, nsp , pg0, pgEnd;  /* nskip数据表跳过记录数,  nr页记录数, nsp表格线相隔行数, pg0起始页号, pgEnd终止页号  */
+int (*func_fd)(), (*func_newpg)(), (*func_btop)(), (*func_bbott)();
+/*
+  func_fd();  //当前记录处理
+  func_newpg(r, i);  当前记录号, 页打印记录
+  func_btop(FILE *fprt, int pg); 
+  func_bbott(FILE *fprt, int pg, r);
+*/
+{
+	int i=0, k, j, r=0, ispg=1, w_tb, pg=pg0-1, ik, len, bTop=1, bBott=1 ;
+        char st[257];
+        if (nsp<0) return -1;
+        else if (nsp==0) nsp=212345678;
+        bTop = strcmp(title, "NOTOP") && strcmp(title, "NOTOPBOTT");
+        bBott = strcmp(title, "NOBOTT") && strcmp(title, "NOTOPBOTT");
+	if (sql_Prep(sql, func_fd) > 0)
+	{
+	    if (sql_Open()==0) {
+		for (r=0; r< nskip; r++) if (sql_Fetch()!=0 ) break; 
+		
+		if (sql_Fetch()!=0) { sql_Close(); return -1;  };
+		for (k=0, w_tb=2; k<sqlcur.FieldCount; k++)
+		{			
+	  	   if ( sqlcur.Fields[k].f_displen % 2 ) sqlcur.Fields[k].f_displen ++ ;
+	  	   w_tb += sqlcur.Fields[k].f_displen +2 ;
+                }
+                w_tb=(w_tb-strlen(title) )/2 ;
+		while (SQLCODE==0 ) {
+		if (_printf_proc) if (i % 10==0) printf(".");
+		if ( ispg ) {  /*表头*/			
+			ispg=0;  pg++;
+			i=0;
+		   if (bTop || pg> pg0) {
+			if (strlen(title) > 4  &&  bBott && bTop)  fprintf(fprt, "%*s%s\n",w_tb, " ",title );
+			if (func_btop) (*func_btop)(fprt, pg );   /*  表头打印函数 */
+			for (k=0; k<sqlcur.FieldCount; k++)
+			{			
+		   		if ( sqlcur.Fields[k].f_displen % 2 ) sqlcur.Fields[k].f_displen ++ ;
+		   		if (k==0) fprintf(fprt, "┌") ; else fprintf(fprt, "┬") ;
+		   		for (j=0; j<sqlcur.Fields[k].f_displen / 2; j++)  fprintf(fprt, "─") ; 
+			}
+			fprintf(fprt, "┐\n");  
+			for (k=0; k<sqlcur.FieldCount; k++)
+			{
+				strcent ( sqlcur.Fields[k].f_caption, sqlcur.Fields[k].f_displen , st);
+		   		fprintf(fprt, "│%s",st );
+			}
+			fprintf(fprt, "│\n"); 
+		   }	
+		}
+		if ( i % nsp ==0 ) {
+			for (k=0; k<sqlcur.FieldCount; k++)
+			{			
+		   		if (k==0) fprintf(fprt, "├") ; else fprintf(fprt, "┼") ;
+		   		for (j=0; j<sqlcur.Fields[k].f_displen / 2; j++)  fprintf(fprt, "─") ; 
+			}
+			fprintf(fprt, "┤\n");  
+	        }
+	        
+ 	        for (ik=1; ik<=_max_fold; ik++ ) 
+ 	        {
+        		for (k=0; k<sqlcur.FieldCount; k++)
+        		{
+        		    if ( _max_fold<2) fprintf(fprt, "│%*s",sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_char);
+        		    else   /* 折行 */  
+        		    {
+        		       	  if ( sqlcur.Fields[k].f_ind >= ik ) 
+        		          memcpy(st, sqlcur.Fields[k].f_char + (ik-1)*sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_displen );
+        		          else if (ik>1) strcpy(st, " ");
+        		          else memcpy(st, sqlcur.Fields[k].f_char  , sqlcur.Fields[k].f_displen );
+        		          st[sqlcur.Fields[k].f_displen]='\0';
+        		          len=strlen(st); 
+        		          fprintf(fprt, "│%s%*s",st, sqlcur.Fields[k].f_displen-len, "");
+        		       
+        		    }
+        		}
+        		fprintf(fprt, "│\n");  
+	        }
+		ispg= (sql_Fetch()!=0) ;  i++; r++;
+		if ( !ispg && func_newpg )  ispg=(*func_newpg)( r, i );
+		if (nr>100) if (i>=nr)  break;
+	        if (nr>0) if (i % nr==0 || ispg ) {  /*换页*/
+			ispg=1;
+		    	if ((SQLCODE==100 || pg==pgEnd) && bBott==0) break ;   /* 不打印表尾直接退出  */
+			if ( _isfoot_ &&  (SQLCODE==100 || pg==pgEnd) )  /* 打印foot */ 
+  			{
+				
+				for (k=0; k<sqlcur.FieldCount; k++)
+				{			
+			   		if (k==0) fprintf(fprt, "├") ; else fprintf(fprt, "┼") ;
+		   			for (j=0; j<sqlcur.Fields[k].f_displen / 2; j++)  fprintf(fprt, "─") ;
+		   			strcpy(sqlcur.Fields[k].f_char," "); 
+				}
+				fprintf(fprt, "┤\n");  
+          			if (func_bbott) (*func_bbott)(fprt, pg, r) ;    /* 触发表尾函数 */
+
+	        		for (k=0; k<sqlcur.FieldCount; k++)
+        			{
+        			    switch (sqlcur.Fields[k].f_foot) {
+        			    case	'C': 
+           				if (SQLCODE!=100) sqlcur.Fields[k].f_footsum -=1.0;
+					fprintf(fprt,"│%*.0f",sqlcur.Fields[k].f_displen,
+		 			sqlcur.Fields[k].f_footsum); break;
+        			    case	'S':
+ 					if (SQLCODE==0)    sqlcur.Fields[k].f_footsum -=sqlcur.Fields[k].f_double ; 
+			    		if ( sqlcur.Fields[k].f_ind == 9) {  /* 加,号分隔 */ 
+        			    	sprintf(sqlcur.Fields[k].f_char,"%*.*f",sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_dec, sqlcur.Fields[k].f_footsum);
+       					strnumdos(sqlcur.Fields[k].f_char, sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_char, 1);
+       					fprintf(fprt,"│%s",sqlcur.Fields[k].f_char);
+        				} 
+        				else fprintf(fprt,"│%*.*f",sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_dec, sqlcur.Fields[k].f_footsum);
+        			    	break;
+        			    default: 
+        			          if (k==0)  fprintf(fprt, "│%*s",sqlcur.Fields[k].f_displen, "=总计: ");
+        			          else  fprintf(fprt, "│%*s",sqlcur.Fields[k].f_displen, sqlcur.Fields[k].f_char ); break;
+        			    }
+        			}
+        			fprintf(fprt, "│\n");  
+  			}
+			
+          		for (k=0; k<sqlcur.FieldCount; k++)
+          		{			
+          	   		if ( sqlcur.Fields[k].f_displen % 2 ) sqlcur.Fields[k].f_displen ++ ;
+          	   		if (k==0) fprintf(fprt, "└") ; else fprintf(fprt, "┴") ;
+          	   		for (j=0; j<sqlcur.Fields[k].f_displen / 2; j++)  fprintf(fprt, "─") ; 
+          		}
+          		fprintf(fprt, "┘\n");  
+          		if (  _isfoot_==0  &&  func_bbott  ) (*func_bbott)(fprt, pg, r) ;   /* 触发表尾函数 */
+  			else if  (SQLCODE==0)  fprintf(fprt, "%*s - %d -\014\n", w_tb, " ", pg );
+  			if ( pg>=pgEnd) break;
+		}
+	        }
+	    }	
+        }
+        else 
+        {
+           if (_printf_proc) printf(" <%d>SQL语句有错误<%s>.\n",SQLCODE, sql);
+           i=SQLCODE;
+        }
+        sql_Close();
+        return (i);
+}
+

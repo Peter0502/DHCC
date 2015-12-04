@@ -1,0 +1,599 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11100000000000000000000000000000" TITLE="3602  银行个人短信通知业务签约"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+        initfd();
+        commsend_001();
+        $FD16='8891';
+        $FD31=#AC_NO;  //扣费帐户
+
+        $FD27 = getitems('#SJNO');
+        $FD25 = getitems('#new_phone');
+        $FD26 = getitems('#DEL_SJNO');
+        $FD40= getitems('#FEEAMT') ;
+        $FD71='1';
+        $FD69=#CHARGEFLAG; //收费标志
+        $FD86=#FWLX;        
+        $FD72=#YW_TYPE;
+        $FD70=#LN_TYPE;
+        $FD68=#CSTSIND; //转现标志              
+        $FD67=#PIN_FLAG;        //是否输入密码标志,标志是否进行授权 0--不授权 1--授权
+        
+        $FD37=#AC_NO1;
+
+}"
+</COMMSEND>
+<COMMRECV>
+"{	
+	  if(#YW_TYPE=='2'){
+	          #SJNO1=$FD27;
+	  }
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-48s" FUNCTIONS=
+                "T(3602                       银行个人短信通知业务签约)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+        "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8891)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXCD"    TYPE="%-4s"  FUNCTIONS="T(3602)"/>    <!---交易代码--->
+  <ITEM NAME="#TXNAME"  TYPE="%-18s" FUNCTIONS="T(银行个人短信通知业务签约)"/><!---交易名称--->
+  <ITEM NAME="#SRLX"      TYPE="%-1s"  FUNCTIONS="T(0)"/>       
+  <ITEM NAME="#FWLX" TYPE="%-6s"   FUNCTIONS=""/>
+  <ITEM NAME="#KHMC" TYPE="%-60s" FUNCTIONS=""/>
+  <ITEM NAME="#ZJLX"  TYPE="%-1s" />
+  <ITEM NAME="#ZJHM" TYPE="%-20s" />
+  <ITEM NAME="#TMPNO" TYPE="%-20s" />
+  <ITEM NAME="#OPN_BRNO" TYPE="%-5s" />
+  <ITEM NAME="#SJ" TYPE="%44s"/>
+  <ITEM NAME="#AMT" TYPE="%10.2f"/>
+  <ITEM NAME="#XZMC" TYPE="%-5s" />
+  
+  <ITEM NAME="#LDQFS" LINE="6"  COL="6"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="6" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#LACTNO" LINE="7"  COL="6"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(账/卡 号: )"/>
+  <ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+  <ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+  <ITEM NAME="#ACTNO1" DEVICE="MSR" INPUT="TEXT" LINE="7" COL="21" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO1=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="7"  COL="21" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO1=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM NAME="#AC_NO1"  TYPE="%-19s"  FUNCTIONS="" >
+  <ONLOSTFOCUS>
+  "{
+		dim @baktxno as string;
+    if((substr(#ACTNO1,0,6)=='621223' or substr(#ACTNO1,0,6)=='621780') and len(rtrim($MSR2))!=37)
+    {
+       showmsg('刷卡错误,请重试!');
+      // return(false);
+    }	
+		#MSR2BAK=$MSR2;
+		#MSR3BAK=$MSR3;
+		$MSR2='';
+		$MSR3='';
+		@baktxno=$TXNO;
+		$TXNO='9951';
+
+  }"
+  </ONLOSTFOCUS>
+  
+  <ONLOSTFOCUS>
+  "{	
+      dim @info as string;
+      dim @tmp  as string;
+      dim @sql  as string;
+      dim @buffer as string;
+      dim @tmpacid as string;
+      #KHMC1='';
+      #KHH='';
+      //#FWLX='1001';
+      #IDNO='';
+      #ZJHM='';
+      #ZJLX='';
+      #AATYPE='';
+      #DRAW_PWD='';
+      #OPN_BRNO='';
+      refresh();
+
+      initfd();
+      commsend_001();
+      $FD30=#AC_NO1;
+      $FD16='9598';
+      $FD123='select id_type,id_no,ac_id  from mdm_ac_rel where ac_no='+chr(39)+#AC_NO1+chr(39);
+      @info=callserver();
+      if($FD12!='0000')
+      {
+              showmsg(geterror());
+              return(false);
+      }
+      if(@info=='')
+      {
+              showmsg('账号不存在,如为老账号,请输入新账号!!');
+              return(false);
+      }
+      #ZJLX=delspace(strfld(@info,'|',0));
+      #ZJHM=delspace(strfld(@info,'|',1));
+      @tmpacid=delspace(strfld(@info,'|',2));
+      initfd();
+      commsend_001();
+      $FD16='9598';
+      @info='';
+      $FD123='select name, cif_no from dd_mst where ac_id='+chr(39)+@tmpacid+chr(39);
+      @info=callserver();
+      if($FD12!='0000')
+      {
+              showmsg(geterror());
+              return(false);
+      }
+      #KHMC1=delspace(strfld(@info,'|',0));//客户名称
+			#KHH=delspace(strfld(@info,'|',1));//客户号
+      #KHMC=#KHMC1;
+      #AATYPE=#ZJLX;
+      enable(#AATYPE,false);
+                     
+	    if(#YW_TYPE=='0') //开通业务
+	    {
+
+	    			#FWLX='1001';
+	          show(#LMM,true);
+	          show(#DRAW_PWD,true);
+	          enable(#LMM,true);
+        		enable(#DRAW_PWD,true);
+
+
+	    }
+	    else if(#YW_TYPE=='1') //变更业务
+	    {
+					  show(#LMM,true);
+	          show(#DRAW_PWD,true);
+	          enable(#LMM,true);
+        		enable(#DRAW_PWD,true);
+
+	    }
+	    else //解约业务
+	    {
+
+	    			show(#DRAW_PWD,true);
+	          show(#LMM,true);
+	          enable(#LMM,true);
+        		enable(#DRAW_PWD,true);
+
+	    }
+  }"
+  </ONLOSTFOCUS>
+  
+  </ITEM> 
+ 
+  <ITEM LINE="6"  COL="38" TYPE="%-12s"  INPUT="LABEL" FUNCTIONS="T(业务类型:!)"/>
+  <ITEM LINE="6" COL="48" NAME="#YW_TYPE" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+        <OPTION VALUE="0" TITLE="0.开通"/>
+        <OPTION VALUE="1" TITLE="1.变更"/>
+        <OPTION VALUE="2" TITLE="2.解约"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{	
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+	<ITEM NAME="#SYW_TYPE" TYPE="%-6s" FUNCTIONS="S(#YW_TYPE,#YW_TYPE)"/>
+  <ITEM LINE="7" COL="38"  TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(密    码:)" NAME="#LMM"/>
+  <ITEM NAME="#DRAW_PWD" LINE="7" COL="48" TYPE="%6d"  INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="T()i()I()">
+  <ONLOSTFOCUS>
+  "{
+    // 9317 密码检查
+    if(substr(#AC_NO1,0,6)!='621223' and substr(#AC_NO1,0,6)!='621780')
+    {
+	    dim @baktxno as string;
+	    @baktxno=$TXNO;
+	    $TXNO='9317';
+	    commsend_001();
+	    $FD30=#AC_NO1;
+	    $FD79=getitems('#DRAW_PWD');
+	    callserver();
+	    $TXNO=@baktxno;
+	    if($FD12!='0000'){
+	      showmsg(geterror());
+	      return (false);
+	    }
+    }
+    else if(substr(#AC_NO1,0,6) == '621223' or substr(#AC_NO1,0,6)=='621780')  //add by hxc 091121
+    {
+			initfd();
+			commsend_001();
+			$FD16='7007';
+			$FD30=#AC_NO1;
+			$FD68='4';   
+			$FD79=#DRAW_PWD;
+			callagn();
+			if( $FD12 != '0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+		}
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="8" COL="6"  TYPE="%-120s" VISABLE="TRUE" FUNCTIONS="T(------------------------------------------------------------------------------------------------------------)"/>
+  <ITEM LINE="9" COL="6"  TYPE="%-12s" INPUT="LABEL" FUNCTIONS="T(客户名称: )"/>
+  <ITEM LINE="9" COL="16" NAME="#KHMC1" INPUT="LABEL" TYPE="%-60s" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="10" COL="16" TYPE="%-8s"  INPUT="LABEL" FUNCTIONS="V(NB)" NAME="#KHH"/>
+  <ITEM NAME="#SAC_TYPE" TYPE="%-6s" FUNCTIONS="S(#AC_TYPE,#AC_TYPE)"/>
+
+  <ITEM LINE="10" COL="6"  TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="11" COL="16" TYPE="%-8s"  INPUT="LABEL" FUNCTIONS="V(NB)" NAME="#CIFNO1"/>
+
+  <ITEM LINE="11" COL="6"  TYPE="%-9s" INPUT="LABEL" FUNCTIONS="T(证件类型:)"/>
+  <ITEM LINE="11"  COL="17" NAME="#AATYPE"  INPUT="SELECT" TYPE="%-1s"  FUNCTIONS="T(1)V(NB)" >
+  <SELECT >
+        <OPTION VALUE="1" TITLE="身份证"/>
+        <OPTION VALUE="2" TITLE="户口本"/>
+        <OPTION VALUE="3" TITLE="护照"/>
+        <OPTION VALUE="4" TITLE="军人证"/>
+        <OPTION VALUE="5" TITLE="回乡证"/>
+        <OPTION VALUE="6" TITLE="士兵证"/>
+        <OPTION VALUE="8" TITLE="企业代码证"/>
+        <OPTION VALUE="9" TITLE="组织机构号"/>
+        <OPTION VALUE="A" TITLE="营业执照"/>
+        <OPTION VALUE="B" TITLE="经营许可证"/>
+        <OPTION VALUE="C" TITLE="事业法人证"/>
+        <OPTION VALUE="D" TITLE="其他（对公）"/>
+        <OPTION VALUE="H" TITLE="其他(对私)"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+
+        if(#AATYPE!=#ZJLX){
+          showmsg('证件类型与账户证件类型不一致');
+          return(false);
+        }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="11" COL="38" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件号码:)"/>
+  <ITEM LINE="11"  COL="48" NAME="#ZZZ"  INPUT="LABEL" TYPE="%-18s"  FUNCTIONS="V(NB) ">
+  <ONLOSTFOCUS>
+  "{	
+        #ZZZ = #ZJHM;
+   }"
+  </ONLOSTFOCUS>
+  <ONLOSTFOCUS>
+  "{
+		  dim @fldcnt as number;
+		  dim @info as string;
+		  dim @tota as string;
+		  dim @phones as string;
+			dim @tmplen as string;  			
+			if(#YW_TYPE=='0')//开通
+		  {
+		      show(#new_phone,true);
+          enable(#new_phone,true); 
+    			show(#FFLAG,true);
+          show(#CHARGEFLAG,true);
+
+		  }
+		  else //修改和解约
+		  {
+		  	initfd();
+        commsend_001();
+        $FD16='9597';
+        $FD30 = #AC_NO1;
+
+        @info = callserver();        
+        @tmplen = rtrim($FD25);
+        if($FD12!='0000')
+        {
+                showmsg(geterror());
+                return(false);
+        }
+        if(@tmplen == '')
+        {
+                showmsg('没有签约或签约记录有错误');
+                return(false);
+        }      
+        @fldcnt=strfldcnt($FD25,'|')-1;
+        #SJNO=strfld($FD25,'|',0);
+
+				if(#YW_TYPE=='1')//修改
+				{
+					show(#BG,true);
+					show(#SC,false);
+				}
+				else
+				{
+					show(#SC,true);
+					show(#BG,false);
+				}				
+				show(#upd_flag,true);
+				show(#SJNO,true);
+	    	enable(#SJNO,false);
+	    	
+        //后台传回phones是多个手机号用|隔开的
+        #TMPSJH = #SJNO;
+			}		
+		refresh();  
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#DEL_SJNO"  TYPE="%-11s" FUNCTIONS="T()"/>
+  <ITEM LINE="12" COL="6"  TYPE="%-120s" VISABLE="TRUE" FUNCTIONS="T(------------------------------------------------------------------------------------------------------------)"/>
+  <ITEM LINE="13" COL="6"  TYPE="%-10s" INPUT="LABEL"  NAME="#tel"   FUNCTIONS="T(手机号码:)"/>
+  <ITEM LINE="13" COL="16" NAME="#SJNO" INPUT="TEXT"  TYPE="%11d"  VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="13" COL="27"  TYPE="%-6s" INPUT="LABEL"  NAME="#BG" VISABLE="FALSE"  FUNCTIONS="T(变更:!)"/>
+  <ITEM LINE="13" COL="27"  TYPE="%-6s" INPUT="LABEL"  NAME="#SC" VISABLE="FALSE"  FUNCTIONS="T(删除:!)"/>
+  <ITEM LINE="13" COL="30"  TYPE="%-1s" INPUT="SELECT"  NAME="#upd_flag" VISABLE="FALSE" FUNCTIONS="T(0)V(NB)">
+  <SELECT>
+  <OPTION VALUE="0" TITLE="是"/>
+  <OPTION VALUE="1" TITLE="否"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+	  if(#upd_flag=='0' and #YW_TYPE != '2')
+	  {
+	  	show(#new_tel,true);
+	    enable(#new_tel,true);
+	  	show(#new_phone,true);
+	    enable(#new_phone,true);
+	  }
+		else
+		{
+			show(#new_tel,false);
+	    enable(#new_tel,false);
+	  	show(#new_phone,false);
+	    enable(#new_phone,false);
+	    if(#upd_flag == '1')
+	    {
+	    	#DEL_SJNO = '';
+	    }
+	    else
+	    {
+	    	#DEL_SJNO = #SJNO;
+	    }
+	    #new_phone = #SJNO;
+		}
+		
+    if(#upd_flag == '1')
+    {
+    	showmsg('手机号未更改或删除，请重新选择或退出交易.....');
+			return(false);
+    }
+		
+	  refresh();
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+ 	<ITEM LINE="13" COL="38"  TYPE="%-10s" INPUT="LABEL"  NAME="#new_tel" VISABLE="FALSE"  FUNCTIONS="T(新手机号:)"/>
+  <ITEM LINE="13" COL="48" NAME="#new_phone" INPUT="TEXT"  TYPE="%11d" VISABLE="FALSE" FUNCTIONS="V(13000000000,19000000000)I()">
+  <ONLOSTFOCUS>
+  "{
+	  if( len(#new_phone) &gt; 0 and len(#new_phone) != 11)
+	  {
+	          showmsg('手机号必须为11位!!');
+	          return(false);
+	  }
+	  if(#new_phone=='1' and #new_phone==#TMPSJH )
+	  {
+	          showmsg('注意:手机号1您没有做任何变更!');
+	  }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+	<ITEM LINE="14" COL="6"  TYPE="%-120s" VISABLE="TRUE" FUNCTIONS="T(------------------------------------------------------------------------------------------------------------)"/> 
+  
+  <ITEM LINE="15"  COL="6"  TYPE="%-10s" INPUT="LABEL" NAME="#FFLAG" VISABLE="FALSE"  FUNCTIONS="T(收费标志:)"/>
+  <ITEM LINE="15"  COL="16" TYPE="%-1s"  INPUT="SELECT" NAME="#CHARGEFLAG" VISABLE="FALSE" FUNCTIONS="T(1)V(NB)">
+  <SELECT>
+       <OPTION VALUE="0" TITLE="0.免费"/> 
+       <OPTION VALUE="1" TITLE="1.收费"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+        dim @info as string;
+        dim @temp as string;
+        @temp=substr(#FWLX,0,2);
+        
+        if( #YW_TYPE=='0')
+        {
+        	if(#CHARGEFLAG=='1')
+        	{
+              initfd();
+              commsend_001();
+              $FD16='9598';//根据123域返回查询结果
+              $FD123='select fee_standard from mob_server_type where server_type='+chr(39)+#FWLX+chr(39);
+              @info=callserver();
+              if($FD12!='0000')
+              {
+                      showmsg(geterror());
+                      return(false);
+              }
+              if(@info=='')
+              {
+                      showmsg('服务类型设置不正确，请联系科技部');
+                      return(false);
+              }
+              #FEEAMT=strfld(@info,'|',0);
+              //show(#FEEAMTNAME,true);
+        			//show(#FEEAMT,true);
+              show(#CSTSNM,true);
+        			show(#CSTSIND,true);
+        	}
+        	else
+        	{
+        			show(#CSTSNM,false);
+        			show(#CSTSIND,false);
+        	}
+                
+        }
+        else
+        {    		                       
+        		if(#CHARGEFLAG=='1')
+				    {
+							showmsg('修改解约时必须选择免费.');
+							return(false);
+				    }
+				    #CHARGEFLAG='0';
+        		show(#CSTSNM,false);
+        		show(#CSTSIND,false);
+        		show(#FEEAMTNAME,false);
+        		show(#FEEAMT,false);
+        		show(#KKZH2,false);
+        		show(#AC_NO,false);
+        		show(#ZHHM2,false);
+        		show(#NAME,false);
+        }
+        refresh();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <!---收费主界面,2010-12-28 add by wangxd 20101228--REPAY_AC_NO--->
+  
+  <ITEM LINE="16"  COL="6" TYPE="%-10s"   INPUT="LABEL" NAME="#CSTSNM"  VISABLE="FALSE"   FUNCTIONS="T(现转标志:!)" />
+  <ITEM LINE="16"  COL="16" NAME="#CSTSIND" TYPE="%1s" INPUT="SELECT" DEVICE="KEYBOARD"  VISABLE="FALSE" FUNCTIONS="V(NB)T(2)">
+  <SELECT>
+          <OPTION VALUE="1" TITLE="现金"/>
+          <OPTION VALUE="2" TITLE="转帐"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+      #AC_NO = #AC_NO1;
+      #KHMC2 = #KHMC1;
+      show(#KKZH2,true);
+      show(#AC_NO,true);
+      show(#ZHHM2,true);
+      show(#KHMC2,true);
+      #XZMC = '转帐' ;
+      show(#FEEAMTNAME,true);
+      enable(#FEEAMTNAME,true);
+      show(#FEEAMT,true);
+  }"
+  </ONLOSTFOCUS>
+	</ITEM>
+	
+	<ITEM LINE="17" COL="6"  NAME="#KKZH2"  VISABLE="FALSE"  INPUT="LABEL" TYPE="%-10s" FUNCTIONS="T(客户帐号:)"/>
+  <ITEM LINE="17" COL="16" NAME="#AC_NO" TYPE="%-19s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="" />
+  <ITEM LINE="18" COL="6"  NAME="#ZHHM2"  INPUT="LABEL"   VISABLE="FALSE"   TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="18" COL="16" NAME="#KHMC2" TYPE="%-60s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM LINE="19"  COL="6" TYPE="%-10s"  VISABLE="FALSE"  INPUT="LABEL" NAME="#FEEAMTNAME"     FUNCTIONS="T(收费金额:)" />
+  <ITEM LINE="19" COL="16" TYPE="%17.2f"  NAME="#FEEAMT"  VISABLE="FALSE"  INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(000000000001,999999999999)" ENABLE="FALSE" >
+  <ONLOSTFOCUS>
+  "{
+      if(#FEEAMT &gt; 5000000000)
+      {
+              if(msgbox('请检查是否金额输入错误,确认继续,取消重新输入','金额太大提示','ok|cancel') == 1)
+              {
+                return(false);
+              }
+      }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="22" COL="48" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  </VARIABLE>
+  <RESPONSE>
+  <PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="客户短信银行签约/解约成功">
+        NOTHING
+  </PACKAGE>
+
+  </RESPONSE>
+   
+<!----PRINTER---->
+  <RESPONSE>
+  <PACKAGE DEVICE="SCREEN" LINESPACE="24" DESC="请打印业务凭证">
+  NOTHING
+  </PACKAGE>
+  <PRINT>
+  "{
+        dim @txtime  as string;
+        dim @counter as number;
+        dim @tmpstr  as string;
+        dim @sfeeamt  as string;
+        
+				@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+				
+        print(1,16,'机构名称:[24]交易代码:[24   ] 交易名称: [24]',$BRNAME,#TXCD,#TXNAME);
+        
+        print(2,16,'通知账号:[24]户名:[20]',#AC_NO1,#KHMC);
+
+        print(3,16,'签约状态:[24][4]日期:[10]',#SYW_TYPE,#SYW_TYPE,$HDATE);
+        
+        if(#YW_TYPE=='0')//开通
+        {
+        	print(4,16,'手机号码:[11]  ',#new_phone);
+        }
+        else if(#YW_TYPE=='1')//修改
+        {
+        	print(4,16,'手机号码:[11] ',#SJNO);
+        	print(5,16,'变更号码:[11] ',#new_phone);
+        }
+        else //解约
+        {
+        	print(4,16,'解约号码:[11]',#new_phone);
+        }
+        
+				if(#CHARGEFLAG=='1' and #FEEAMT != 0.00)
+        {
+                print(5,16,'收费类型:收费                    现转标志:[4]',#XZMC);
+				        print(6,16,'付款账号:[24]付款人名称:[20]',#AC_NO,#KHMC2);
+                print(7,16,'交易金额:[10]',#FEEAMT);
+        }
+        else
+        {
+                print(6,16,'收费 类型: 免费');
+        }
+        if(#FEEAMT &gt; 0.0)
+        {
+                printacdtl_1();
+        }
+        print(12,16,'短信通知时间段：每天8:00-22:00  存取款及贷款账户金额变动时发送短信通知');
+        print(13,45,'客户签字:____________________________');
+        print(14,16,'备注:                         交易日期:[8] [8]      柜员:[6]     流水号:[6]',$HDATE,@txtime,$FD7,$FD4);
+  }"
+  </PRINT>
+  </RESPONSE>
+
+</TRANSACTION>

@@ -1,0 +1,35 @@
+drop index hv_uniontab_idx;
+drop  table hv_uniontab;
+create table hv_uniontab(
+	or_br_no varchar2(12),
+	br_sts varchar2(1),
+	br_categ varchar2(2),
+	br_code varchar2(3),
+	sendco varchar2(4),
+	dir_br_code varchar2(12),
+	node_code varchar2(5),
+	superior varchar2(130),
+	pb_code varchar2(12),
+	city_code varchar2(4),
+	acct_sts varchar2(1),
+	acctsts_chg_dt varchar2(8),
+	acctsts_chg_tm varchar2(14),
+	br_name_f varchar2(60),
+	br_name_s varchar2(20),
+	addr varchar2(60),
+	phone varchar2(30),
+	email varchar2(30),
+	postcode varchar2(6),
+	start_date varchar2(8),
+	end_date varchar2(8),
+	chg_date varchar2(8),
+	fax varchar2(20),
+	telegraph varchar2(8),
+	qs_no varchar2(12),
+	acct_lvl varchar2(1),
+	obr_no_attr varchar2(1),
+	upd_type varchar2(1),
+	rec_upd_no varchar2(8),
+	km_actno varchar2(16) 
+)tablespace users;
+create	 unique index hv_uniontab_idx on hv_uniontab( or_br_no)tablespace indx;

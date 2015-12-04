@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="2110 客户授信额度录入"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	commsend_001();
+	$FD21=#BZTYPE;
+	$FD28=#CUSTNO;
+	$FD40=itoa(#TXAMT*100,'%016.0f');
+	$FD58=#LOANNO;
+	$FD67=#XHTYPE;
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	#SXR = $FD9;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(2110                          客户授信额度录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=1110)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="7"  COL="20" TYPE="%-10s" FUNCTIONS="T(客 户 号:)"/>
+  <ITEM LINE="9"  COL="20" TYPE="%-10s" FUNCTIONS="T(合 同 号:)"/>
+  <ITEM LINE="11" COL="20" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="13" COL="20" TYPE="%-10s" FUNCTIONS="T(授信金额:)"/>
+  <ITEM LINE="15" COL="20" TYPE="%-10s" FUNCTIONS="T(循环使用:!)"/>
+  <ITEM NAME="#CUSTNO" 		INPUT="TEXT" LINE="7"  COL="30" TYPE="%-8s"   FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#LOANNO" 		INPUT="TEXT" LINE="9"  COL="30" TYPE="%-16s"  FUNCTIONS="T()V(NB)"/>
+  <ITEM NAME="#BZTYPE" 		INPUT="SELECT" LINE="11" COL="30" TYPE="%-2s"   FUNCTIONS="T(01)">
+      	<SELECT>
+		<OPTION VALUE="01" TITLE="0.人民币"/>
+		<OPTION VALUE="12" TITLE="0.英镑"/>
+		<OPTION VALUE="13" TITLE="0.港元"/>
+		<OPTION VALUE="14" TITLE="0.美元"/>
+		<OPTION VALUE="15" TITLE="0.瑞士法郎"/>
+		<OPTION VALUE="27" TITLE="0.日元"/>
+		<OPTION VALUE="28" TITLE="0.加元"/>
+		<OPTION VALUE="29" TITLE="0.澳元"/>
+		<OPTION VALUE="38" TITLE="0.欧元"/>	
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#BZNAME"  TYPE="%-10s" FUNCTIONS="S(#BZTYPE,#BZTYPE)"/>
+  <ITEM NAME="#TXAMT" 	INPUT="TEXT"   LINE="13" COL="30" TYPE="%16.2f"   FUNCTIONS="T()"/>
+
+
+
+  <ITEM NAME="#XHTYPE" 	INPUT="SELECT" LINE="15" COL="30" TYPE="%-2s"  FUNCTIONS="T(N)">
+      	<SELECT>
+		<OPTION VALUE="N" TITLE="否"/>
+		<OPTION VALUE="Y" TITLE="是"/>
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#S_XHTYPE" TYPE="%-2s" FUNCTIONS="S(#XHTYPE,#XHTYPE)"/>
+  <!--输出变量--->
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SXR" TYPE="%-11s" FUNCTIONS=""/>
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+<!--
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+    	<ONCLICK>
+    	"{
+    		dim @tota as string;
+    		dim @ch as string;
+		commsend_001();
+		$FD21=#BZTYPE;
+		$FD28=#CUSTNO;
+		$FD40=itoa(#TXAMT*100,'%016.0f');
+		$FD58=#LOANNO;
+		$FD67=#XHTYPE;
+    		@tota=callserver();
+       		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+			}
+		else{
+			showall();
+			showmsg('交易成功!');
+
+    			
+					}
+		runoutput();
+    		}"
+    		
+		</ONCLICK>    		
+  </ITEM>
+-->
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+	NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		print(8,30,        '录入成功！')
+		}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+    <PACKAGE DEVICE="PRINTER" DESC="打印凭条" >
+NOTHING
+</PACKAGE>
+    <PRINT>"{
+	$KINDNO='00';
+ 	dim @txtime  as string;
+	@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:2110');
+        print( 5, 13,'交易:客户授信额度录入');
+
+       		print( 7, 30,'客户授信额度');
+		print( 9, 20,'客 户 号: [8       ]                 合 同 号: [16                ]',#CUSTNO,#LOANNO);
+		print(10, 20,'币    种: [10        ]',#BZNAME);
+		print(11, 20,'授信金额: [16              ]         循环使用: [2 ]',ltrim(itoa(#TXAMT,'%16.2f')),#S_XHTYPE);
+		print(12, 20,'授 权 人: [4   ]',substr(#SXR,0,4));
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+ }"
+    </PRINT>
+</RESPONSE>
+</TRANSACTION>
+
+
+
+

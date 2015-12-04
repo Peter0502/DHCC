@@ -1,0 +1,908 @@
+/*****************************************************
+* 文 件 名:  sp3646.pc
+* 功能描述： 实现人工审票功能    (前台:1011.XML)
+* 作    者:  刘杨  (开封写) 
+* 完成日期： 2004/09/21
+* 修 改 人:  xyy
+* 修改记录： 改造成适应新系统的事后监督主程序
+* 日    期:  2007-1-10 13:06
+* 修 改 人:  YXJ
+* 修改日期:  2007-03-22
+* 修改内容:  
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include <varargs.h>
+#include "public.h"
+#include "tlrctl_c.h"
+#include "tranpara_c.h"
+#include "shjd_tlrpoot_c.h"
+#include "shjdcode_c.h"
+#include "trace_log_c.h"
+#include "mo_merge_ac_c.h"
+#include "com_item_c.h"
+#include "mdm_ac_rel_c.h"
+#include "prdt_ac_id_c.h"
+#include "dd_mst_c.h"
+#include "td_mst_c.h"
+#include "ln_mst_c.h"
+#include "od_mst_c.h"
+#include "in_mst_c.h"
+#include "dc_log_c.h"
+#include "note_parm_c.h"
+EXEC SQL INCLUDE sqlca;
+#define	HEAD_LEN 2
+#define BODY_NAME_LEN 20 
+#define BODY_LEN_LEN  2 
+#define BODY_FLAG_LEN 5 
+#define BODY_DSCPT_LEN 30
+extern char * trim( char * str );
+extern int check_shjd_tel_poot(char *);
+int  sp3646()
+{
+    	int  len =0 ;
+    	char cTel      [5];
+	int	cTrace_no;
+	int	cTrace_cnt;
+	char	cStrbuf[31];
+    	char cTxday    [9];
+/*******************************************************
+	定义一个长字串:1-2 要素个数
+	要素构成
+	1-16  要素名称
+	17-18 要素长度
+	19-23 要素类型
+	24... 要素值,长度根据 要素长度确定的长度来定义
+	..+30 每笔流水摘要
+********************************************************/
+	char tx_name[21];
+	char tx_date[9];
+	char tx_code[5];
+	char tel[5];
+	char tx_brno[6];
+	char re_buf[581];
+	char cflg[2];
+    	/***以上是要返回的变量****/
+    	struct shjdcode_c     wd_shjdcode;
+    	struct tranpara_c     wd_tranpara;
+    	struct shjd_tlrpoot_c shjd_tlrpoot;
+    	struct trace_log_c    trace_log;
+    
+    	memset(cTel      , '\0' , sizeof(cTel));
+    	memset(cTxday    , '\0' , sizeof(cTxday));
+    	memset(&wd_shjdcode, 0 , sizeof(wd_shjdcode));
+    	memset(&wd_tranpara, 0 , sizeof(wd_tranpara));
+    	memset(&shjd_tlrpoot, 0 , sizeof(shjd_tlrpoot));
+    	memset(&trace_log  , 0 , sizeof(trace_log));
+    	memset(&cflg  , 0 , sizeof(cflg));
+
+    	vtcp_log("[%s][%d] dh110700开始",__FILE__,__LINE__);
+    	pub_base_sysinit();
+
+    	/***这里从前台得到数值***/ 
+	get_fd_data("0070",cTel);
+	get_fd_data("0650",cStrbuf);
+	get_fd_data("0200",cflg);
+	cTrace_no=atoi(cStrbuf);
+    
+	sprintf(cTxday,"%8d",g_pub_tx.tx_date);
+    	vtcp_log("[%s][%d]这里看一下前台传过来的值是否正确!",__FILE__,__LINE__);
+    	vtcp_log("[%s][%d]cTel  === [%s]",__FILE__,__LINE__,cTel);
+    	vtcp_log("[%s][%d]cTrace_no == [%d]",__FILE__,__LINE__,cTrace_no);
+    	vtcp_log("[%s][%d]cTxday == [%s]",__FILE__,__LINE__,cTxday);
+    	vtcp_log("[%s][%d]cflg == [%s]",__FILE__,__LINE__,cflg);
+    	/**操作员未签到不允许做业务**/
+	if(check_shjd_tel_poot(cTel)){
+		strcpy(g_pub_tx.reply,"SH05");
+        	set_zd_data(DC_GET_MSG,acErrMsg);
+		goto ErrExit;
+	}
+	memset(re_buf,0x00,sizeof(re_buf));
+	memset(tx_name,0x00,sizeof(tx_name));
+	memset(tx_brno,'\0',sizeof(tx_brno));
+	memset(tx_date,'\0',sizeof(tx_date));
+	memset(tx_code,'\0',sizeof(tx_code));
+	memset(tel,'\0',sizeof(tel));
+	/*******监督量检查 看是否超过监督量*******/
+	if(shjd_bfbcz()){
+		vtcp_log("[%s][%d] 已经达到监督量,更新所有未监督为监督",__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH03");
+		WRITEMSG
+		goto ErrExit;
+	}
+	/*********检查此笔流水是否监督过**********/
+  	if( sql_count("trace_log","stat='0' and trace_no=%d",cTrace_no) <= 0){
+              	vtcp_log("[%s][%d]此笔流水不存在或此流水已监督",__FILE__,__LINE__);
+              	sprintf( acErrMsg,"[%s][%d]此笔流水不存在或此流水已监督",__FILE__,__LINE__);
+              	strcpy( g_pub_tx.reply, "SH00" );
+              	set_zd_data(DC_GET_MSG,acErrMsg);
+              	WRITEMSG
+		goto ErrExit;
+	}
+	if(cflg[0]=='1'){/****更新此笔流水状态 未监督---->已监督*****/
+		get_fd_data("0360",tel);
+		if(upd_trace_log(cTrace_no)){
+			goto ErrExit;
+		}
+		if(upd_check_num(cTel)){
+			goto ErrExit;
+		}
+vtcp_log("!!!>>>cTel[%s]",cTel);
+		if(upd_dc_log(cTrace_no)){
+			goto ErrExit;
+		}
+		if(spv_status(tel)){
+			goto ErrExit;
+		}
+	/*	goto OkExit;*/
+	}
+	vtcp_log("[%s][%d] re_buf = [%s]",__FILE__,__LINE__,re_buf);
+	if(re_sp3646(cTrace_no,re_buf,tx_name,tel,tx_date,tx_brno,tx_code)){
+		goto ErrExit;
+	}
+	vtcp_log("[%s][%d] re_buf = [%s]",__FILE__,__LINE__,re_buf);
+/***************返回此操作员扎帐情况***************/
+	if(spv_status(tel)){
+		goto ErrExit;
+	}
+    	set_zd_data("0360",tel);
+    	set_zd_data("0370",tx_name);
+    	set_zd_data("0440",tx_date);
+    	set_zd_data("0910",tx_brno);
+    	set_zd_data("0920",tx_code);
+    	set_zd_data("0950",re_buf);
+	vtcp_log("[%s][%d]tel[%s]",__FILE__,__LINE__,tel);
+	vtcp_log("[%s][%d]tx_name[%s]",__FILE__,__LINE__,tx_name);
+	vtcp_log("[%s][%d]tx_date[%s]",__FILE__,__LINE__,tx_date);
+	vtcp_log("[%s][%d]tx_brno[%s]",__FILE__,__LINE__,tx_brno);
+	vtcp_log("[%s][%d]tx_code[%s]",__FILE__,__LINE__,tx_code);
+
+	OkExit:
+	set_zd_data( DC_FILE_SND,"1");
+       	strcpy( g_pub_tx.reply, "0000" );
+       	sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       	WRITEMSG
+       	set_zd_data(DC_REPLY,g_pub_tx.reply);
+       	return 0;
+       	ErrExit:
+       	sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       	WRITEMSG
+       	set_zd_data(DC_REPLY,g_pub_tx.reply);
+    	return 1;     
+}
+/*检查是否超过监督量*/
+int shjd_bfbcz()
+{
+  	int   count;
+  	int   count_num;
+  	int   tpcount_num;
+  	int   tpcount_num1;
+  	char  text_count[4];
+  	char  cText     [201];
+  	double  ppcount_num;
+  	count = 0;
+  	count_num = 0;
+  	tpcount_num = 0;
+  	tpcount_num1 = 0;
+  	ppcount_num = 0;
+  	memset(cText,'\0',sizeof(cText));
+  	memset(text_count,'\0',sizeof(text_count));
+  	count = sql_count("trace_log","stat <>'3' ");
+  	count_num = count;
+  	count = 0;
+  	count = sql_count("trace_log","stat = '1' ");
+  	tpcount_num = count;
+	vtcp_log("[%s][%d],count_num[%d] tpcount_num[%d]",__FILE__,__LINE__,count_num,tpcount_num);
+  	EXEC SQL select text INTO :cText from shjdcode where trancode='7011';
+  	if(sqlca.sqlcode!=0){
+    		vtcp_log("[%s][%d]查询数据库出错!",__FILE__,__LINE__);
+    		return -1;
+  	}
+  	memcpy(text_count,cText+17,sizeof(text_count)-1);
+  	str2dbl(text_count,sizeof(text_count)-1,2,&ppcount_num);
+	vtcp_log("比例[%s] [%f]\n",text_count,ppcount_num);
+  	tpcount_num1 = (int)count_num*ppcount_num;
+	vtcp_log("[%s][%d],tpcount_num[%d] tpcount_num1[%d]",__FILE__,__LINE__,tpcount_num,tpcount_num1);
+  	if(tpcount_num > tpcount_num1){
+    		EXEC SQL update trace_log set stat='1' where stat='0';
+    		if(sqlca.sqlcode!=0){
+      			vtcp_log("[%s][%d]更新状态标志错!",__FILE__,__LINE__);
+      			return -1;
+    		}
+    		EXEC SQL commit;
+    		if(sqlca.sqlcode!=0){
+      			vtcp_log("[%s][%d]数据库操作提交失败!",__FILE__,__LINE__);
+      			return -1;
+    		}
+		return 1;
+  	}
+  	return 0;
+}
+char * trim( char * str )
+{
+        char *p;
+        for( p = str; isspace( *p ) && p < str + strlen( str ); p++ );
+        strcpy( str, p );
+        for( p = str + strlen( str ) - 1; isspace( *p ) && p > str ; p-- );
+        *( p + 1 ) = '\0';
+        return ( str );
+}
+int  re_sp3646(int trace_no,char *buf,char *tx_name,char *tel,char *tx_date,char *tx_brno,char *tx_code)
+{
+	struct trace_log_c   wd_trace_log;
+	struct tranpara_c    wd_tranpara;
+	struct shjdcode_c    wd_shjdcode;
+	struct mo_merge_ac_c wd_mo_merge_ac;
+	char reBuf[581];
+	char sqlBuf[301];
+	char value_s[81];
+	char ac_name[61];
+	double value_d;
+	int value_i;
+	int num=0;
+	int i=0;
+	int iNum=0;
+	int len=0;
+	int value_len=0;
+	char v_buf[101];
+	char v_brf[61];
+	double lvl_bal;
+	double max_bal;
+	memset(&reBuf,'\0',sizeof(reBuf));
+    	g_reply_int=Trace_log_Dec_Sel(g_pub_tx.reply,"trace_no=%d order by amt desc",trace_no);
+    	if( g_reply_int)
+    	{
+        	sprintf( acErrMsg,"[%s][%d]声明trace_log游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+        	strcpy( g_pub_tx.reply, "P015" );
+        	set_zd_data(DC_GET_MSG,acErrMsg);
+        	WRITEMSG
+		return g_reply_int;
+    	}
+	insert_black(reBuf,sizeof(reBuf));
+	vtcp_log("[%s][%d] v_buf = [%s] reBuf[%s]",__FILE__,__LINE__,v_buf,reBuf);
+	len+=HEAD_LEN;
+	i=0;
+	max_bal=0.00;
+    	while(1){
+        	g_reply_int = Trace_log_Fet_Sel(&wd_trace_log, g_pub_tx.reply );
+        	if(g_reply_int){
+			if(i==0){
+              			vtcp_log("[%s][%d]此笔流水无须监督或尚未配置!",__FILE__,__LINE__);
+              			sprintf( acErrMsg,"[%s][%d]此笔流水无须监督或尚未配置[%d]",__FILE__,__LINE__,g_reply_int);
+              			strcpy( g_pub_tx.reply, "P015" );
+              			set_zd_data(DC_GET_MSG,acErrMsg);
+              			WRITEMSG
+				return g_reply_int;
+			}
+          		break;
+        	}
+		memcpy(tel,wd_trace_log.tel,sizeof(wd_trace_log.tel)-1);
+		memcpy(tx_brno,wd_trace_log.tx_br_no,sizeof(wd_trace_log.tx_br_no)-1);
+		sprintf(tx_date,"%8d",wd_trace_log.tx_date);
+		vtcp_log("[%s][%d] tx_brno[%s] tel[%s]",__FILE__,__LINE__,tx_brno,tel);
+		/*由tx_code确定交易名称*/
+		memset(&wd_shjdcode,'\0',sizeof(wd_shjdcode));
+		g_reply_int=Shjdcode_Sel(g_pub_tx.reply, &wd_shjdcode,"trancode='%s' ",wd_trace_log.tx_code);
+		if(g_reply_int){
+              		vtcp_log("[%s][%d]查询shjdcode出错!",__FILE__,__LINE__);
+              		sprintf( acErrMsg,"[%s][%d]查询shjdcode出错![%d]",__FILE__,__LINE__,g_reply_int);
+              		strcpy( g_pub_tx.reply, "P015" );
+              		set_zd_data(DC_GET_MSG,acErrMsg);
+              		WRITEMSG
+			return g_reply_int;
+		}
+		/***************循环第一遍时检查*****************/
+		if(i==0){
+			/******检查是否需要监督*******/
+			if(wd_shjdcode.text[0]=='2'){
+				strcpy(g_pub_tx.reply,"SH01");
+              			WRITEMSG
+				return 1;
+			}
+			/******检查是否是此柜员监督这个机构************/
+			if(sql_count("shjd_tlrvsbrn","tlrno='%s' and brno='%s'",g_pub_tx.tel,wd_trace_log.tx_br_no)<=0){
+				strcpy(g_pub_tx.reply,"SH02");
+              			WRITEMSG
+				return 1;
+			}
+			/********取出此交易代码的金额限制,交易名称******/
+			memset(v_buf,'\0',sizeof(v_buf));
+			lvl_bal=0.00;
+			memcpy(v_buf,wd_shjdcode.text+1,16);
+			pub_base_strpack_all(v_buf);
+			str2dbl(v_buf,strlen(v_buf),0,&lvl_bal);
+			vtcp_log("[%s][%d] 交易代码[%s] 金额限制[%f]@[%s]",__FILE__,__LINE__,wd_trace_log.tx_code,lvl_bal,v_buf);
+			vtcp_log("tx_name[%s]",wd_shjdcode.tranname);
+			memset(tx_code,'\0',strlen(tx_code));
+			memcpy(tx_code,wd_trace_log.tx_code,sizeof(wd_trace_log.tx_code)-1);
+			memset(tx_name,'\0',sizeof(tx_name));
+			memcpy(tx_name,wd_shjdcode.tranname,sizeof(wd_shjdcode.tranname)-1);
+			/**********************************************/
+		}
+		/*由查到的tx_code,sub_tx_code来确定tranpara里的要素*/
+    		g_reply_int = Tranpara_Dec_Sel( g_pub_tx.reply,"trancode='%s' and subtxcode='%s' ", \
+						wd_trace_log.tx_code,wd_trace_log.sub_tx_code);
+    		if(g_reply_int)
+    		{
+        		sprintf( acErrMsg,"[%s][%d]声明tranpara游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+        		strcpy( g_pub_tx.reply, "P015" );
+        		set_zd_data(DC_GET_MSG,acErrMsg);
+        		WRITEMSG
+			return g_reply_int;
+    		}
+		while(1){
+			memset(&wd_tranpara,'\0',sizeof(wd_tranpara));
+			g_reply_int=Tranpara_Fet_Sel(&wd_tranpara,g_pub_tx.reply);
+		vtcp_log("[%s][%d] -------g_reply_int[%d]",__FILE__,__LINE__,g_reply_int);
+			if(g_reply_int){
+				vtcp_log("[%s][%d] g_reply_int[%d]",__FILE__,__LINE__,g_reply_int);
+				break;
+			}
+/*********************MODIFY BY YXJ 20070517*这里要素长度根据实际长度确定**********
+			memcpy(reBuf+len,wd_tranpara.name,strlen(wd_tranpara.name));
+	vtcp_log("[%s][%d] v_buf =[%s] reBuf[%s]",__FILE__,__LINE__,v_buf,reBuf);
+			len+=BODY_NAME_LEN;
+			memcpy(reBuf+len,wd_tranpara.length,strlen(wd_tranpara.length));
+	vtcp_log("[%s][%d] v_buf = [%s] eBuf[%s]",__FILE__,__LINE__,v_buf,reBuf);
+			len+=BODY_LEN_LEN;
+			memcpy(reBuf+len,wd_tranpara.xdtl_flag,strlen(wd_tranpara.xdtl_flag));
+	vtcp_log("[%s][%d] v_buf = [%s] reBuf[%s]",__FILE__,__LINE__,v_buf,reBuf);
+			len+=BODY_FLAG_LEN;
+			value_len=atoi(wd_tranpara.length);
+***********************************************************************************/
+	vtcp_log("[%s][%d] name[%s]",__FILE__,__LINE__,wd_tranpara.name);
+	vtcp_log("[%s][%d] length[%s]",__FILE__,__LINE__,wd_tranpara.length);
+	vtcp_log("[%s][%d] flag[%s]",__FILE__,__LINE__,wd_tranpara.xdtl_flag);
+			/*对应trace_log里的字段名称*/
+			memset(sqlBuf,'\0',sizeof(sqlBuf));
+			pub_base_strpack_all(wd_tranpara.xdtl_name);
+sprintf(sqlBuf,"select %s,brf from trace_log where trace_no=%d and trace_cnt=%d ",wd_tranpara.xdtl_name,wd_trace_log.trace_no,wd_trace_log.trace_cnt);
+			vtcp_log("[%s][%d] sqlBuf[%s]",__FILE__,__LINE__,sqlBuf);
+			EXEC SQL PREPARE s1 FROM :sqlBuf;
+       			if(sqlca.sqlcode)
+       			{
+            			vtcp_log("[%s][%d]准备游标错误![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+            			sprintf( acErrMsg,"[%s][%d]准备游标错误[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+            			strcpy( g_pub_tx.reply, "P015" );
+            			set_zd_data(DC_GET_MSG,acErrMsg);
+            			WRITEMSG
+				return g_reply_int;
+       			}
+       			EXEC SQL DECLARE c1 CURSOR FOR s1;
+       			EXEC SQL OPEN  c1;
+       			if(sqlca.sqlcode)
+       			{
+            			vtcp_log("[%s][%d]打开游标错误![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+            			sprintf( acErrMsg,"[%s][%d]打开游标错误[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+            			strcpy( g_pub_tx.reply, "P015" );
+            			set_zd_data(DC_GET_MSG,acErrMsg);
+            			WRITEMSG
+				return g_reply_int;
+       			}
+			/*根据xdtl_flag值判断用那种类型接收*/
+			value_d=0.00;
+			memset(value_s,'\0',sizeof(value_s));
+			memset(v_buf,'\0',sizeof(v_buf));
+			memset(v_brf,'\0',sizeof(v_brf));
+			switch(wd_tranpara.xdtl_flag[0]){ 
+				case '0':
+					EXEC SQL FETCH c1 INTO :value_s,:v_brf;
+					memcpy(v_buf,value_s,strlen(value_s));
+					break;
+				case '1':
+					EXEC SQL FETCH c1 INTO :value_d,:v_brf;
+					sprintf(v_buf,"%.2f",value_d);
+					pub_rpt_flttomon(v_buf,v_buf);
+					vtcp_log("[%s][%d] value_d[%.2f] v_buf[%s]",__FILE__,__LINE__,value_d,v_buf);
+					break;
+				default:
+					vtcp_log("错误的数据类型");
+			}
+       			EXEC SQL CLOSE  c1;
+			/*******************找此笔流水最大金额************************/
+			if(memcmp(wd_tranpara.xdtl_name,"amt",3)==0){
+/*************
+				if(value_d<0.0001) continue;
+*************/
+				if(value_d > lvl_bal){
+					max_bal=value_d;
+				}
+			}
+			/*********如果监督要素是凭证类型,那么找出凭证号码***********/
+			pub_base_strpack_all(v_buf);
+			if(strlen(v_buf)==0) continue;/****如果为空值则不返回****/
+			if(memcmp(wd_tranpara.xdtl_name,"note_type",9)==0){
+				memset(ac_name,'\0',sizeof(ac_name));
+				g_reply_int=serch_note_name(v_buf,ac_name);
+				if(g_reply_int){
+					return g_reply_int;
+				}
+				memset(v_brf,'\0',sizeof(v_brf));
+				pub_base_strpack_all(ac_name);
+				memcpy(v_brf,ac_name,strlen(ac_name));
+			}
+			/*******现转标志************/
+			if(memcmp(wd_tranpara.xdtl_name,"ct_ind",6)==0){
+				memset(v_brf,'\0',sizeof(v_brf));
+				if(v_buf[0]=='1'){
+					strcpy(v_brf,"现金");
+				}
+				else if(v_buf[0]=='2'){
+					strcpy(v_brf,"转账");
+				}
+			}
+			/********增减标志***********/
+			if(memcmp(wd_tranpara.xdtl_name,"add_ind",6)==0){
+				memset(v_brf,'\0',sizeof(v_brf));
+				if(v_buf[0]=='0'){
+					strcpy(v_brf,"减");
+				}
+				else if(v_buf[0]=='1'){
+					strcpy(v_brf,"增");
+				}
+			}
+			if(memcmp(wd_tranpara.xdtl_name,"ac_no",5)==0){
+				memset(ac_name,'\0',sizeof(ac_name));
+				/*******如果是账号那么摘要这里写成账号所对应的户名**************/
+				g_reply_int=serch_name(v_buf,ac_name);
+	vtcp_log("[%s][%d]  ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+				if(g_reply_int && g_reply_int!=1){
+					return g_reply_int;
+				}
+				else if(g_reply_int!=1){
+					pub_base_strpack_all(ac_name);
+					memset(v_brf,'\0',sizeof(v_brf));
+					memcpy(v_brf,ac_name,strlen(ac_name));
+				}
+	vtcp_log("[%s][%d]   ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+				/*******************如果是账号那么返回新旧帐号****************/
+				if(strlen(v_buf)!=3 && strlen(v_buf)!=5 && strlen(v_buf)!=7){
+					memset(&wd_mo_merge_ac,'\0',sizeof(wd_mo_merge_ac));
+					g_reply_int=Mo_merge_ac_Sel(g_pub_tx.reply,&wd_mo_merge_ac,"ac_no='%s'",v_buf);	
+					if(g_reply_int && g_reply_int!=100){
+						vtcp_log("[%s][%d]查询mo_merge_ac表出错!",__FILE__,__LINE__);
+						sprintf(acErrMsg,"[%s][%d]查询mo_merge_ac出错![%d]",__FILE__,__LINE__,g_reply_int);
+						strcpy( g_pub_tx.reply, "P015" );
+						set_zd_data(DC_GET_MSG,acErrMsg);
+						WRITEMSG
+						return g_reply_int;
+					}
+					if(g_reply_int!=100)
+						sprintf(v_buf+strlen(v_buf),"[%s]",wd_mo_merge_ac.old_ac_no);
+				}
+	vtcp_log("[%s][%d]  ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+			}
+	vtcp_log("[%s][%d]  ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+			pub_base_strpack_all(v_buf);
+			value_len=strlen(v_buf);/*****取实际长度*****/
+			memcpy(reBuf+len,wd_tranpara.name,strlen(wd_tranpara.name));
+	vtcp_log("[%s][%d] v_buf = [%s] reBuf[%s]",__FILE__,__LINE__,reBuf);
+			len+=BODY_NAME_LEN;
+			sprintf(reBuf+len,"%02d",value_len);
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+/***************
+			memcpy(reBuf+len,wd_tranpara.length,strlen(wd_tranpara.length));
+			value_len=atoi(wd_tranpara.length);
+***************/
+			len+=BODY_LEN_LEN;
+			memcpy(reBuf+len,wd_tranpara.xdtl_flag,strlen(wd_tranpara.xdtl_flag));
+			len+=BODY_FLAG_LEN;
+			insert_black(v_buf,sizeof(v_buf));
+			insert_black(v_brf,sizeof(v_brf));
+			vtcp_log("!!!trace_no[%d] trace_cnt[%d] brf[%s] v_buf[%s]",wd_trace_log.trace_no,wd_trace_log.trace_cnt,v_brf,v_buf);
+	vtcp_log("[%s][%d]  ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+			memcpy(reBuf+len,v_buf,value_len);
+			len+=value_len;
+	vtcp_log("[%s][%d] buf[%s]",__FILE__,__LINE__,reBuf);
+			memcpy(reBuf+len,v_brf,BODY_DSCPT_LEN);
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+			len+=BODY_DSCPT_LEN;
+			iNum++;
+		}
+		Tranpara_Clo_Sel();
+		memset(v_buf,'\0',sizeof(v_buf));
+		sprintf(v_buf,"%2d",iNum);
+		memcpy(reBuf,v_buf,HEAD_LEN);
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+		memcpy(buf,reBuf,sizeof(reBuf)-1);
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+		vtcp_log("[%s][%d]",__FILE__,__LINE__);
+		i++;
+	}
+    	Trace_log_Clo_Sel();
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+	vtcp_log("[%s][%d] 流水最大金额[%f]  限制金额[%f]",__FILE__,__LINE__,max_bal,lvl_bal);
+	/*******检查是否在金额限制之内*********/
+	if(max_bal < lvl_bal){
+		vtcp_log("[%s][%d] 此笔流水不在监督范围之内 最大金额[%f] < 限制金额[%f]",__FILE__,__LINE__,max_bal,lvl_bal);
+		/****更新此笔流水 未监督-->已监督****/
+		if(upd_trace_log(wd_trace_log.trace_no)){
+			return 1;
+		}
+		if(upd_dc_log(wd_trace_log.trace_no)){
+			return 1;
+		}
+		strcpy(g_pub_tx.reply,"SH04");
+		WRITEMSG
+		return 1;
+	}
+	/************************************/
+	vtcp_log("[%s][%d] reBuf[%s]",__FILE__,__LINE__,reBuf);
+	vtcp_log("[%s][%d]  ac_name = [%s]\n",__FILE__,__LINE__,ac_name);
+   	return 0;
+}
+int insert_black(char *s,int l)
+{
+	char *p;
+	p=s;
+	while(*p++);
+	p--;
+	l=l-strlen(s);
+	while(l--) {*p=' ';p++;}
+	return 0;
+}
+int upd_trace_log(int trace_no)
+{
+	struct trace_log_c wd_trace_log;
+	vtcp_log("begin upd trace_no[%d]\n",trace_no);
+	/*	dbs 的trace－log结构同事后的不同，所以不能用这种方法，只能写sql语句 *
+	g_reply_int=Trace_log_Dec_Upd(g_pub_tx.reply,"trace_no=%d",trace_no);
+	if(g_reply_int){
+		vtcp_log("[%s][%d] DEC CUR ERROR[%d]!",__FILE__,__LINE__,g_reply_int);
+		sprintf(acErrMsg,"DEC TRACE_LOG CUR ERROR[%s][%d]",__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+            	set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		return g_reply_int;
+	}
+	while(1){
+		memset(&wd_trace_log,'\0',sizeof(wd_trace_log));
+		g_reply_int=Trace_log_Fet_Upd(&wd_trace_log,g_pub_tx.reply);
+		if(g_reply_int && g_reply_int !=100){
+			vtcp_log("[%s][%d] Fet CUR ERROR[%d]!",__FILE__,__LINE__,g_reply_int);
+			sprintf(acErrMsg,"FET TRACE_LOG ERROR[%s][%d]",__FILE__,__LINE__);
+			strcpy(g_pub_tx.reply,"SH00");
+            		set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			return g_reply_int;
+		}
+		else if(g_reply_int){
+			break;
+		}
+		wd_trace_log.stat[0]='1';
+		g_reply_int=Trace_log_Upd_Upd(wd_trace_log,g_pub_tx.reply);
+		if(g_reply_int){
+			vtcp_log("[%s][%d] DEC CUR ERROR![%d]",__FILE__,__LINE__,g_reply_int);
+			sprintf(acErrMsg,"UPD TRACE_LOG ERROR[%s][%d]",__FILE__,__LINE__);
+			strcpy(g_pub_tx.reply,"SH00");
+            		set_zd_data(DC_GET_MSG,acErrMsg);
+			WRITEMSG
+			return g_reply_int;
+		}
+	}
+	g_reply_int=Trace_log_Clo_Upd();
+	*/
+	EXEC SQL update trace_log set stat='1' where trace_no=:trace_no;
+	if(sqlca.sqlcode){
+		vtcp_log("[%s][%d] DEC CUR ERROR![%d]",__FILE__,__LINE__,g_reply_int);
+		sprintf(acErrMsg,"UPD TRACE_LOG ERROR[%s][%d]",__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+            	set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		return g_reply_int;
+	}
+	return 0;
+}
+upd_check_num(char tel[])
+{
+	struct shjd_tlrpoot_c wd_shjd_tlrpoot;
+	int count=0;
+        memset(&wd_shjd_tlrpoot,'\0',sizeof(wd_shjd_tlrpoot));
+        g_reply_int = Shjd_tlrpoot_Dec_Upd(g_pub_tx.reply,"txday='%08d' and tlrno='%s'",g_pub_tx.tx_date,tel);
+        if(g_reply_int != 0){
+                sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR !! [%d]",g_reply_int);
+                WRITEMSG
+                return g_reply_int;
+        }
+        g_reply_int=Shjd_tlrpoot_Fet_Upd(&wd_shjd_tlrpoot,g_pub_tx.reply);
+        if (g_reply_int != 0){
+                sprintf(acErrMsg,"FETCH ERROR !! [%d]",g_reply_int);
+                WRITEMSG
+                return g_reply_int;
+        }
+	count=atoi(wd_shjd_tlrpoot.text);
+	count++;
+	sprintf(wd_shjd_tlrpoot.text,"%05d",count);
+        g_reply_int =Shjd_tlrpoot_Upd_Upd(wd_shjd_tlrpoot,g_pub_tx.reply);
+        if (g_reply_int != 0){
+                sprintf(acErrMsg,"修改柜员考勤表错误!!!");
+                WRITEMSG
+                return g_reply_int;
+        }
+        Shjd_tlrpoot_Clo_Upd();
+        return 0;
+}
+int serch_name(char *ac_no,char *ac_name)
+{
+	struct com_item_c wd_com_item;
+	struct mdm_ac_rel_c wd_mdm_ac_rel;
+	struct prdt_ac_id_c wd_prdt_ac_id;
+	struct dd_mst_c wd_dd_mst;
+	struct td_mst_c wd_td_mst;
+	struct ln_mst_c wd_ln_mst;
+	struct od_mst_c wd_od_mst;
+	struct in_mst_c wd_in_mst;
+	int len=0;
+	int ret=0;
+	len=strlen(ac_no);
+	vtcp_log("[%s][%d]  ac_no = [%s]\n",__FILE__,__LINE__,ac_no);
+	if(len==3||len==5||len==7){/*科目*/
+		memset(&wd_com_item,'\0',sizeof(wd_com_item));
+		/*******根据科目查科目名称*******/	
+	vtcp_log("[%s][%d]  ac_no = [%s]\n",__FILE__,__LINE__,ac_no);
+		ret=Com_item_Sel(g_pub_tx.reply,&wd_com_item,"acc_no='%s'",ac_no);	
+		if( ret==100 ){
+/*	不认为有错，因为没准放的是啥
+           		sprintf(acErrMsg,"该科目号不存在!!acc_no=[%s]", ac_no);
+           		WRITEMSG
+           		strcpy(g_pub_tx.reply,"O074");
+			return ret;
+*/
+       		}
+       		else if( ret ){
+           		sprintf( acErrMsg, "查询公共科目表异常!!ret=[%d]", ret );
+           		WRITEMSG
+			return ret;
+       		}
+		memcpy(ac_name,wd_com_item.acc_name,sizeof(wd_com_item.acc_name)-1);
+	vtcp_log("[%s][%d]  ac_no = [%s] ac_name = [%s]\n",__FILE__,__LINE__,ac_no,ac_name);
+	}
+	else{ /****账号***/
+		/*********根据账号找账户ID和账户序号**********/
+	vtcp_log("[%s][%d]  ac_no = [%s]\n",__FILE__,__LINE__,ac_no);
+		memset(&wd_mdm_ac_rel,'\0',sizeof(wd_mdm_ac_rel));
+		ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&wd_mdm_ac_rel,"ac_no='%s'",ac_no);
+		if(ret==100){
+			return 1;
+		}
+		else if(ret){
+           		sprintf( acErrMsg, "查询介质账号表异常!!ret=[%d]", ret );
+           		WRITEMSG
+			return ret;
+		}
+	vtcp_log("[%s][%d]  ac_no = [%s]\n",__FILE__,__LINE__,ac_no);
+		/**********取产品种类*************/
+		memset(&wd_prdt_ac_id,'\0',sizeof(wd_prdt_ac_id));
+	ret=Prdt_ac_id_Sel(g_pub_tx.reply,&wd_prdt_ac_id,"ac_id=%d and ac_seqn=%d", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+		if( ret==100 ){
+			return 0;
+/***************有在mdm_ac_rel里有的ac_id,ac_seq但在prdt_ac_id里没有数据,这种情况给返回空值
+           		sprintf(acErrMsg,"取prdt_ac_id表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           		WRITEMSG
+           		strcpy(g_pub_tx.reply,"M003");
+           		return ret;
+*****************/
+       		}
+       		else if( ret ){
+           	sprintf(acErrMsg,"取prdt_ac_id表出错!!ac_id=[%ld],ac_seqn=[%d],ret=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn,ret);
+           		WRITEMSG
+			return ret;
+       		}
+	vtcp_log("[%s][%d]  ac_no = [%s]\n",__FILE__,__LINE__,ac_no);
+		if(wd_prdt_ac_id.ac_id_type[0]=='1'){/*****活期*******/
+			memset(&wd_dd_mst,'\0',sizeof(wd_dd_mst));
+		ret=Dd_mst_Sel(g_pub_tx.reply,&wd_dd_mst,"ac_id=%d and ac_seqn=%d",wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+			if(ret==100){
+           			sprintf(acErrMsg,"取dd_mst_sel表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           			WRITEMSG
+           			strcpy(g_pub_tx.reply,"M003");
+           			return ret;
+			}	
+			else if(ret){
+           			sprintf(acErrMsg,"取dd_mst表异常!!ret=[%d]", ret);
+           			WRITEMSG
+				return ret;
+			}
+			memcpy(ac_name,wd_dd_mst.name,sizeof(wd_dd_mst.name)-1);
+	vtcp_log("[%s][%d]  ac_no = [%s] ac_name = [%s]\n",__FILE__,__LINE__,ac_no,ac_name);
+		}
+		else if(wd_prdt_ac_id.ac_id_type[0]=='2'){/****定期****/
+			memset(&wd_td_mst,'\0',sizeof(wd_td_mst));
+			ret=Td_mst_Sel(g_pub_tx.reply,&wd_td_mst,"ac_id=%d and ac_seqn=%d",wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+			if(ret==100){
+           			sprintf(acErrMsg,"取td_mst_sel表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           			WRITEMSG
+           			strcpy(g_pub_tx.reply,"M003");
+           			return ret;
+			}	
+			else if(ret){
+           			sprintf(acErrMsg,"取td_mst表异常!!ret=[%d]", ret);
+           			WRITEMSG
+				return ret;
+			}
+			memcpy(ac_name,wd_td_mst.name,sizeof(wd_td_mst.name)-1);
+	vtcp_log("[%s][%d]  ac_no = [%s] ac_name = [%s]\n",__FILE__,__LINE__,ac_no,ac_name);
+		}
+		else if(wd_prdt_ac_id.ac_id_type[0]=='3'){/****贷款****/
+			memset(&wd_ln_mst,'\0',sizeof(wd_ln_mst));
+			ret=Ln_mst_Sel(g_pub_tx.reply,&wd_ln_mst,"ac_id=%d and ac_seqn=%d",wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+			if(ret==100){
+           			sprintf(acErrMsg,"取ln_mst_sel表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           			WRITEMSG
+           			strcpy(g_pub_tx.reply,"M003");
+           			return ret;
+			}	
+			else if(ret){
+           			sprintf(acErrMsg,"取ln_mst表异常!!ret=[%d]", ret);
+           			WRITEMSG
+				return ret;
+			}
+			memcpy(ac_name,wd_ln_mst.name,sizeof(wd_ln_mst.name)-1);
+	vtcp_log("[%s][%d]  ac_no = [%s] ac_name = [%s]\n",__FILE__,__LINE__,ac_no,ac_name);
+
+		}
+		else if(wd_prdt_ac_id.ac_id_type[0]=='4'){
+		/****透支******
+			memset(&wd_od_mst,'\0',sizeof(wd_od_mst));
+			ret=Od_mst_Sel(g_pub_tx.reply,&wd_od_mst,"ac_id=%d and ac_seqn=%d",wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+			if(ret==100){
+           			sprintf(acErrMsg,"取od_mst_sel表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           			WRITEMSG
+           			strcpy(g_pub_tx.reply,"M003");
+           			return ret;
+			}	
+			else if(ret){
+           			sprintf(acErrMsg,"取od_mst表异常!!ret=[%d]", ret);
+           			WRITEMSG
+				return ret;
+			}
+		*************/
+		}
+		else{/******内部帐******/
+			memset(&wd_in_mst,'\0',sizeof(wd_in_mst));
+			ret=In_mst_Sel(g_pub_tx.reply,&wd_in_mst,"ac_id=%d and ac_seqn=%d",wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+			if(ret==100){
+           			sprintf(acErrMsg,"取in_mst_sel表出错!!ac_id=[%ld],ac_seqn=[%d]", wd_mdm_ac_rel.ac_id,wd_mdm_ac_rel.ac_seqn);
+           			WRITEMSG
+           			strcpy(g_pub_tx.reply,"M003");
+           			return ret;
+			}	
+			else if(ret){
+           			sprintf(acErrMsg,"取in_mst表异常!!ret=[%d]", ret);
+           			WRITEMSG
+				return ret;
+			}
+			memcpy(ac_name,wd_in_mst.name,sizeof(wd_in_mst.name)-1);
+	vtcp_log("[%s][%d]  ac_no = [%s] ac_name = [%s]\n",__FILE__,__LINE__,ac_no,ac_name);
+		}
+	}
+	return 0;
+}
+int spv_status(char *tel)
+{
+	int 	v1=0;	/*已督现金笔数*/
+	int 	v2=0;	/*已督转账笔数*/
+	int 	v3=0;	/*未督现金笔数*/
+	int 	v4=0;	/*未督转账笔数*/
+	double 	d1=0.00;/*已督现金金额*/
+	double 	d2=0.00;/*已督转账金额*/
+	double 	d3=0.00;/*未督现金金额*/
+	double 	d4=0.00;/*未督现金金额*/
+	char	v_buf1[21];
+	char	v_buf2[21];
+	char 	filename[41];
+	int	iNum=0;
+	FILE *fp=0x00;
+	memset(filename,'\0',sizeof(filename));
+	struct dc_log_c wd_dc_log;
+	vtcp_log("[%s][%d] tel[%s]",__FILE__,__LINE__,tel);
+	g_reply_int=Dc_log_Dec_Sel(g_pub_tx.reply,"tel=%s and amt<>0",tel);	
+	if(g_reply_int){
+		sprintf(acErrMsg,"[%s][%d] 声明游标出错[%d]",__FILE__,__LINE__,g_reply_int);
+		WRITEMSG
+		return g_reply_int;
+	}
+	while(1){
+		memset(&wd_dc_log,'\0',sizeof(wd_dc_log));
+		g_reply_int=Dc_log_Fet_Sel(&wd_dc_log,g_pub_tx.reply);
+		if(g_reply_int==100){
+			break;
+		}
+		else if(g_reply_int){
+			sprintf(acErrMsg,"[%s][%d] 取表dc_log数据出错[%d]",__FILE__,__LINE__,g_reply_int);
+			WRITEMSG
+			return g_reply_int;
+		}
+		/****************这里统计数据**********************/
+		if(wd_dc_log.stat[0]=='0'){/****未监督*****/
+			if(wd_dc_log.ct_ind[0]=='1'){/*现金*/
+				v3++;	
+				d3+=wd_dc_log.amt;
+			}
+			if(wd_dc_log.ct_ind[0]=='2'){/*转账*/
+				v4++;	
+				d4+=wd_dc_log.amt;
+			}
+		}	
+		else{
+			if(wd_dc_log.ct_ind[0]=='1'){
+				v1++;	
+				d1+=wd_dc_log.amt;
+			}
+			if(wd_dc_log.ct_ind[0]=='2'){/*转账*/
+				v2++;	
+				d2+=wd_dc_log.amt;
+			}
+		}
+		iNum++;
+	}
+	Dc_log_Clo_Sel();
+	if(iNum){
+		pub_base_AllDwnFilName(filename);
+		fp=fopen(filename,"w");
+        	if(!fp){
+			sprintf(acErrMsg," open file [%s] error ",filename );
+                	WRITEMSG
+                	strcpy( g_pub_tx.reply,"S047" );
+			return 1;
+		}
+		memset(v_buf1,'\0',sizeof(v_buf1));
+		memset(v_buf2,'\0',sizeof(v_buf2));
+		sprintf(v_buf1,"%.02f",d1+d3);
+		sprintf(v_buf2,"%.02f",d2+d4);
+		pub_rpt_flttomon(v_buf1,v_buf1);
+		pub_rpt_flttomon(v_buf2,v_buf2);
+		fprintf(fp,"扎  帐|%d|%s|%d|%s\n",v1+v3,v_buf1,v2+v4,v_buf2);
+		memset(v_buf1,'\0',sizeof(v_buf1));
+		memset(v_buf2,'\0',sizeof(v_buf2));
+		sprintf(v_buf1,"%.02f",d1);
+		sprintf(v_buf2,"%.02f",d2);
+		pub_rpt_flttomon(v_buf1,v_buf1);
+		pub_rpt_flttomon(v_buf2,v_buf2);
+		fprintf(fp,"已监督|%d|%s|%d|%s\n",v1,v_buf1,v2,v_buf2);
+		memset(v_buf1,'\0',sizeof(v_buf1));
+		memset(v_buf2,'\0',sizeof(v_buf2));
+		sprintf(v_buf1,"%.02f",d3);
+		sprintf(v_buf2,"%.02f",d4);
+		pub_rpt_flttomon(v_buf1,v_buf1);
+		pub_rpt_flttomon(v_buf2,v_buf2);
+		fprintf(fp,"未监督|%d|%s|%d|%s\n",v3,v_buf1,v4,v_buf2);
+		fclose(fp);
+	}
+	vtcp_log("v1[%d] v2[%d] v3[%d] v4[%d] d1[%f] d2[%f] d3[%f] d4[%f]",v1,v2,v3,v4,d1,d2,d3,d4);
+	return 0;
+}
+int upd_dc_log(int trace_no)
+{
+	struct dc_log_c wd_dc_log;
+	g_reply_int=sql_execute("update dc_log set stat='1' where trace_no=%d",trace_no);
+	if(g_reply_int){
+		vtcp_log("[%s][%d] UPDATE dc_log ERROR[%d]!",__FILE__,__LINE__,g_reply_int);
+		sprintf(acErrMsg,"UPDATE dc_log ERROR[%s][%d]",__FILE__,__LINE__);
+		strcpy(g_pub_tx.reply,"SH00");
+            	set_zd_data(DC_GET_MSG,acErrMsg);
+		WRITEMSG
+		return g_reply_int;
+	}
+	return 0;
+}
+int serch_note_name(char *note_type,char *note_name)
+{
+	int ret=0;
+	struct note_parm_c wd_note_parm;
+	memset(&wd_note_parm,'\0',sizeof(wd_note_parm));
+	ret=Note_parm_Sel(g_pub_tx.reply,&wd_note_parm,"note_type='%s'",note_type);
+	if(ret==100){
+		sprintf(acErrMsg,"取note_parm表出错!!note_type[%s]",note_type);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"SH00");
+           	return ret;
+	}
+        else if(ret){
+		sprintf( acErrMsg, "查询note_parm表异常!!ret=[%d]", ret );
+                WRITEMSG
+                return ret;
+	}
+	memcpy(note_name,wd_note_parm.name,sizeof(wd_note_parm.name)-1);
+	return 0;
+}

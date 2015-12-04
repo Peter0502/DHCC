@@ -1,0 +1,598 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"cif_basic_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int cif_basic_inf_con ( struct cif_basic_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct cif_basic_inf_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->type);
+	zip_tail(ps->name);
+	zip_tail(ps->local);
+	zip_tail(ps->poten);
+	zip_tail(ps->lvl);
+	zip_tail(ps->shareholder_ind);
+	zip_tail(ps->sts);
+}
+int Cif_basic_inf_Debug(struct cif_basic_inf_c *ps){
+	vtcp_log("cif_basic_inf_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_basic_inf_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_basic_inf_c.type=[%s]\n",ps->type);
+	vtcp_log("cif_basic_inf_c.name=[%s]\n",ps->name);
+	vtcp_log("cif_basic_inf_c.local=[%s]\n",ps->local);
+	vtcp_log("cif_basic_inf_c.poten=[%s]\n",ps->poten);
+	vtcp_log("cif_basic_inf_c.crt_date=[%ld]\n",ps->crt_date);
+	vtcp_log("cif_basic_inf_c.crt_time=[%ld]\n",ps->crt_time);
+	vtcp_log("cif_basic_inf_c.lvl=[%s]\n",ps->lvl);
+	vtcp_log("cif_basic_inf_c.shareholder_ind=[%s]\n",ps->shareholder_ind);
+	vtcp_log("cif_basic_inf_c.cif_seqn=[%ld]\n",ps->cif_seqn);
+	vtcp_log("cif_basic_inf_c.sts=[%s]\n",ps->sts);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_basic_inf_Sel(reply,cif_basic_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_basic_inf_c *cif_basic_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_basic_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_basic_inf_Fet_Sel( cif_basic_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_basic_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_basic_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_cif_basic_inf CURSOR FOR cif_basic_inf_sel;
+
+	EXEC SQL OPEN sel_cif_basic_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Sel ( struct cif_basic_inf_c *cif_basic_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_basic_inf INTO :cif_basic_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_basic_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_basic_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_cif_basic_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_basic_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_basic_inf CURSOR FOR cif_basic_inf_upd;
+
+	EXEC SQL OPEN upd_cif_basic_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Upd( struct cif_basic_inf_c *cif_basic_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_basic_inf INTO :cif_basic_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_basic_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Upd_Upd( struct cif_basic_inf_c cif_basic_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE cif_basic_inf SET cif_no=:cif_basic_inf_c.cif_no,
+			type=:cif_basic_inf_c.type,
+			name=:cif_basic_inf_c.name,
+			local=:cif_basic_inf_c.local,
+			poten=:cif_basic_inf_c.poten,
+			crt_date=:cif_basic_inf_c.crt_date,
+			crt_time=:cif_basic_inf_c.crt_time,
+			lvl=:cif_basic_inf_c.lvl,
+			shareholder_ind=:cif_basic_inf_c.shareholder_ind,
+			cif_seqn=:cif_basic_inf_c.cif_seqn,
+			sts=:cif_basic_inf_c.sts
+	WHERE rowid=:cif_basic_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Cif_basic_inf_Del_Upd(struct cif_basic_inf_c cif_basic_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM cif_basic_inf WHERE rowid=:cif_basic_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_cif_basic_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Cif_basic_inf_Ins( struct cif_basic_inf_c cif_basic_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO cif_basic_inf VALUES (:cif_basic_inf_c.cif_no,
+			:cif_basic_inf_c.type,
+			:cif_basic_inf_c.name,
+			:cif_basic_inf_c.local,
+			:cif_basic_inf_c.poten,
+			:cif_basic_inf_c.crt_date,
+			:cif_basic_inf_c.crt_time,
+			:cif_basic_inf_c.lvl,
+			:cif_basic_inf_c.shareholder_ind,
+			:cif_basic_inf_c.cif_seqn,
+			:cif_basic_inf_c.sts);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+/*****************************************************************************/
+/****                              查询函数部分[1]                       ****/
+/*****************************************************************************/
+int Cif_basic_inf_Sel1(reply,cif_basic_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_basic_inf_c *cif_basic_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_basic_inf_Dec_Sel1( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_basic_inf_Fet_Sel1( cif_basic_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_basic_inf_Clo_Sel1();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_basic_inf_Dec_Sel1 ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_sel1 FROM :comm;
+	EXEC SQL DECLARE sel_cif_basic_inf1 CURSOR FOR cif_basic_inf_sel1;
+
+	EXEC SQL OPEN sel_cif_basic_inf1;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Sel1 ( struct cif_basic_inf_c *cif_basic_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_basic_inf1 INTO :cif_basic_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_basic_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_basic_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Sel1 (){
+	EXEC SQL CLOSE sel_cif_basic_inf1;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_basic_inf_Dec_Upd1( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_upd1 FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_basic_inf1 CURSOR FOR cif_basic_inf_upd1;
+
+	EXEC SQL OPEN upd_cif_basic_inf1;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Upd1( struct cif_basic_inf_c *cif_basic_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_basic_inf1 INTO :cif_basic_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_basic_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Upd1( ){
+	EXEC SQL CLOSE upd_cif_basic_inf1;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              查询函数部分[2]                       ****/
+/*****************************************************************************/
+int Cif_basic_inf_Sel2(reply,cif_basic_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  cif_basic_inf_c *cif_basic_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Cif_basic_inf_Dec_Sel2( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Cif_basic_inf_Fet_Sel2( cif_basic_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Cif_basic_inf_Clo_Sel2();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Cif_basic_inf_Dec_Sel2 ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_sel2 FROM :comm;
+	EXEC SQL DECLARE sel_cif_basic_inf2 CURSOR FOR cif_basic_inf_sel2;
+
+	EXEC SQL OPEN sel_cif_basic_inf2;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Sel2 ( struct cif_basic_inf_c *cif_basic_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_cif_basic_inf2 INTO :cif_basic_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch cif_basic_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch cif_basic_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Sel2 (){
+	EXEC SQL CLOSE sel_cif_basic_inf2;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Cif_basic_inf_Dec_Upd2( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,cif_basic_inf.* FROM cif_basic_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE cif_basic_inf_upd2 FROM :comm;
+
+	EXEC SQL DECLARE upd_cif_basic_inf2 CURSOR FOR cif_basic_inf_upd2;
+
+	EXEC SQL OPEN upd_cif_basic_inf2;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Cif_basic_inf_Fet_Upd2( struct cif_basic_inf_c *cif_basic_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_cif_basic_inf2 INTO :cif_basic_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd cif_basic_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH cif_basic_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(cif_basic_inf_c);
+
+	return 0;
+}
+
+int Cif_basic_inf_Clo_Upd2( ){
+	EXEC SQL CLOSE upd_cif_basic_inf2;
+	return 0;
+}
+

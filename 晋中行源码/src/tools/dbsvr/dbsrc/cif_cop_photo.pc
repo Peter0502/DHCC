@@ -1,0 +1,468 @@
+/*************************************************
+* 文  件名: cif_cop_photo.pc
+* 功能描述: 操作客户图片信息的数据库函数
+* 作    者: liuyong
+* 完成日期: 2009年08月4日
+* 修改记录:   
+*     1.日    期:
+*       修 改 人:
+*       修改内容:
+*************************************************/
+#include <stdio.h>
+#include <varargs.h>
+#define EXTERN
+#include "global.h"
+#include "oci.h"
+
+EXEC SQL INCLUDE SQLCA;
+#include "cif_cop_photo_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+#define MAXBUFLEN 819200
+typedef unsigned char *buf;
+
+char *zip_tail(char *s);
+static void zip_struct(struct cif_cop_photo_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->photo);
+}
+int Cif_cop_photo_Debug(struct cif_cop_photo_c *ps){
+	vtcp_log("cif_cop_photo_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("cif_cop_photo_c.cif_no=[%ld]\n",ps->cif_no);
+	vtcp_log("cif_cop_photo_c.photo_seqn=[%ld]\n",ps->photo_seqn);
+	vtcp_log("cif_cop_photo_c.photo_type=[%s]\n",ps->photo_type);
+        vtcp_log("cif_cop_photo_c.photo=[%s]\n",ps->photo);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+char *key_strcat(char *,char *);
+int Cif_cop_photo_Sel(char *reply,struct cif_cop_photo_c *cif_cop_photo_c,char *fmtstr,...)
+{
+	int   ret;
+	char  wherelist[800];
+	FILE  *fp;
+        
+        sprintf(acErrMsg,"进入查询函数！");
+        WRITEMSG
+	
+	va_list ap;
+	va_start(ap, fmtstr);
+	vsprintf (wherelist,fmtstr,ap);
+	va_end(ap);
+  
+	EXEC SQL BEGIN DECLARE SECTION;
+	/*EXEC SQL TYPE buf IS LONG RAW(819200) REFERENCE;*/
+                unsigned char info[819200];
+                EXEC SQL VAR info IS LONG RAW;  	
+	        char    comm[1000];
+		int     len;
+		OCIBlobLocator *image;
+		/*buf     buffer;*/
+		long    cifno;
+                int     offset;
+                long    infosize;
+	EXEC SQL END DECLARE SECTION;
+        
+        offset = 1;
+        infosize = 819200;
+        memset(info,'\0',sizeof(info)); 
+        cifno = cif_cop_photo_c->cif_no;
+        sprintf(acErrMsg,"文件名：[%s]",cif_cop_photo_c->photo);
+        WRITEMSG	
+	fp = fopen(cif_cop_photo_c->photo,"wb");
+	if(fp == NULL)
+        {
+            sprintf(acErrMsg,"open file %s failed!",cif_cop_photo_c->photo);
+            WRITEMSG
+            strcpy(reply,"L206");
+            return -1;
+        }
+	EXEC SQL ALLOCATE :image;
+        sprintf(acErrMsg,"图片类型：[%s]",cif_cop_photo_c->photo_type);
+        WRITEMSG
+
+        if(cif_cop_photo_c->photo_type[0]=='1')
+        {
+            EXEC SQL SELECT photo INTO:image FROM cif_cop_photo WHERE cif_no = :cifno;
+        }
+        else if(cif_cop_photo_c->photo_type[0]=='2')
+        {
+            sprintf(acErrMsg,"开始取印件,客户号[%ld]",cifno);
+            WRITEMSG
+
+            EXEC SQL SELECT photo INTO:image FROM cif_cop_photo WHERE cif_no=:cifno;
+            sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+            WRITEMSG 
+        }
+	/*取图片长度*/
+	EXEC SQL LOB DESCRIBE:image GET LENGTH INTO:len;
+	if(sqlca.sqlcode)
+        {
+            return sqlca.sqlcode;
+        }
+        sprintf(acErrMsg,"读取图片的长度:[%ld]",len);
+        WRITEMSG
+        EXEC SQL LOB OPEN :image READ ONLY;
+        if(sqlca.sqlcode)
+        {
+            sprintf(acErrMsg,"打开图片信息失败！[%d]",sqlca.sqlcode);
+            WRITEMSG
+        }
+        if(len > 0)
+        {
+            sprintf(acErrMsg,"开始分配内存！");
+            WRITEMSG
+            /*分配内存*/
+            /*buffer = (unsigned char *)malloc(sizeof(unsigned char)*(len+1));*/
+            EXEC SQL LOB READ:len FROM:image AT :offset INTO :info WITH LENGTH:infosize; 
+            if(sqlca.sqlcode <0)
+            {
+                sprintf(acErrMsg,"将图片信息写入缓存中失败！[%d]aa",sqlca.sqlcode);
+                WRITEMSG
+                return sqlca.sqlcode;
+            }
+        }
+
+	EXEC SQL LOB CLOSE :image;
+	EXEC SQL FREE:image;
+        sprintf(acErrMsg,"开始将信息写入文件！");
+        WRITEMSG
+	fwrite(info,len,1,fp);
+        (void)fseek(fp,0L,SEEK_END);
+        len = 0;
+        len = (unsigned int)ftell(fp);
+        sprintf(acErrMsg,"写入文件的信息长度：[%ld]",len);
+        WRITEMSG
+	fclose(fp);
+        /*free(buffer);*/	
+	zip_struct(cif_cop_photo_c);
+        
+        sprintf(acErrMsg,"读取图片结束！");
+        WRITEMSG
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_cop_photo_Upd( struct cif_cop_photo_c cif_cop_photo_c , char * reply )
+{
+        int ret;
+	FILE *fp;
+        EXEC SQL BEGIN DECLARE SECTION;
+	EXEC SQL TYPE buf IS LONG RAW(819200) REFERENCE;
+            int amount;
+            int filelen;
+            long cifno;
+	    OCIBlobLocator *image;
+	    buf buffer;
+	EXEC SQL END DECLARE SECTION;
+        
+        sprintf(acErrMsg,"进入更新函数!");
+        WRITEMSG
+	
+	cifno = cif_cop_photo_c.cif_no;
+        sprintf(acErrMsg,"文件名：[%s]",cif_cop_photo_c.photo);
+        WRITEMSG
+
+        sprintf(acErrMsg,"上传图片类型:[%s]",cif_cop_photo_c.photo_type);
+        WRITEMSG
+        
+	EXEC SQL ALLOCATE :image;
+	fp = fopen(cif_cop_photo_c.photo,"r");
+	if(fp == NULL)
+	{
+	    sprintf(acErrMsg,"文件%s打开错误！",cif_cop_photo_c.photo);
+          WRITEMSG;
+          strcpy ( reply , "L206" );
+          return -1;
+
+	    /*删除已有图片
+	    sprintf(acErrMsg,"删除已有图片信息!");
+	    WRITEMSG*/
+	    
+	    /*filelen = 100;
+	    buffer = (unsigned char *)malloc(sizeof(unsigned char)*filelen);
+	    memset(buffer,0x00,filelen);
+            amount = filelen;
+	    if(cif_cop_photo_c.photo_type[0]=='2')
+            {
+                EXEC SQL UPDATE cif_cop_photo SET photo=empty_blob() WHERE cif_no=:cifno;
+            }
+            if(sqlca.sqlcode != 0)
+	    {
+	        sprintf(acErrMsg,"读取图片信息错误：%d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D103" );
+	        return CM_SQLCODE;
+	    }
+            sprintf(acErrMsg,"开始将图片写入数据库！");
+            WRITEMSG 
+            EXEC SQL LOB WRITE:amount FROM:buffer INTO:image;
+	    if(sqlca.sqlcode && sqlca.sqlcode != -1)
+	    {
+	        sprintf(acErrMsg,"写入图片信息错误：%d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D105" );
+	        return CM_SQLCODE;
+	    }
+	    else if ( sqlca.sqlcode == -1 )
+	    {
+	        sprintf(acErrMsg,"写入图片信息错误： %d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D108" );
+	        return CM_SQLCODE;
+	    }
+	    EXEC SQL COMMIT;
+	    EXEC SQL FREE:image;
+	    free(buffer);*/
+	}
+	else
+	{
+	      (void)fseek(fp,0L,SEEK_END);
+	      filelen = (unsigned int)ftell(fp);
+	
+	      buffer = (unsigned char *)malloc(sizeof(unsigned char) * filelen);
+	      (void)fseek(fp,0L,SEEK_SET);
+	      (void)fread(buffer,filelen,1,fp);
+	      amount = filelen;
+	      fclose(fp);
+        
+              sprintf(acErrMsg,"读取到的文件内容长度：[%ld]",filelen);
+              WRITEMSG
+        
+             /*进行更新*/
+             if(cif_cop_photo_c.photo_type[0]=='2')
+             {
+                sprintf(acErrMsg,"读取印件信息，准备更新!");
+                WRITEMSG
+                EXEC SQL SELECT photo INTO:image FROM cif_cop_photo WHERE cif_no=:cifno FOR UPDATE;
+            } 
+	     if(sqlca.sqlcode != 0)
+	     {
+	        sprintf(acErrMsg,"读取图片信息错误：%d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D103" );
+	        return CM_SQLCODE;
+	      }
+        sprintf(acErrMsg,"开始将图片写入数据库！");
+        WRITEMSG
+
+	     EXEC SQL LOB WRITE:amount FROM:buffer INTO:image;
+	     if(sqlca.sqlcode && sqlca.sqlcode != -1)
+	     {
+	        sprintf(acErrMsg,"写入图片信息错误：%d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D105" );
+	        return CM_SQLCODE;
+	      }
+	      else if ( sqlca.sqlcode == -1 )
+	      {
+	        sprintf(acErrMsg,"写入图片信息错误： %d",sqlca.sqlcode);
+	        WRITEMSG
+	        strcpy ( reply , "D108" );
+	        return CM_SQLCODE;
+	      }
+	      EXEC SQL COMMIT;
+	      EXEC SQL FREE:image;
+	      free(buffer);
+	
+        /*删除文件*/
+	      sprintf(acErrMsg,"开始删除文件！");
+        WRITEMSG
+
+        if(remove(cif_cop_photo_c.photo) ==0)
+        {
+            sprintf(acErrMsg,"删除文件[%s]成功!",cif_cop_photo_c.photo);
+            WRITEMSG
+        }
+        else
+        {
+           sprintf(acErrMsg,"删除文件[%s]失败！",cif_cop_photo_c.photo);
+           WRITEMSG
+        }
+	}
+	
+	return 0;
+}
+
+int Cif_cop_photo_Del_Upd(struct cif_cop_photo_c cif_cop_photo_c , char * reply  )
+{
+      EXEC SQL BEGIN DECLARE SECTION;
+          long cifno;
+      EXEC SQL END DECLARE SECTION;
+  
+      cifno = cif_cop_photo_c.cif_no;
+  
+      EXEC SQL DELETE FROM cif_cop_photo WHERE cif_no=:cifno;
+      if ( sqlca.sqlcode )
+      {
+	  sprintf(acErrMsg,"DELETE cif_cop_photo error %d",sqlca.sqlcode);
+	  WRITEMSG
+	  strcpy ( reply , "D105" );
+	  return CM_SQLCODE;
+      }
+
+      return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分[]                       ****/
+/*****************************************************************************/
+int Cif_cop_photo_Ins(struct cif_cop_photo_c cif_cop_photo_c , char * reply)
+{
+	int ret;
+	FILE *fp;
+        EXEC SQL BEGIN DECLARE SECTION;
+	EXEC SQL TYPE buf IS LONG RAW(819200) REFERENCE;
+	  int amount;
+	  int filelen;
+	  long cifno;
+	  int seqn;
+	  OCIBlobLocator *image;
+	  buf buffer;
+	EXEC SQL END DECLARE SECTION;
+	
+	sprintf(acErrMsg,"Enter Cif_cop_photo_Ins");
+	WRITEMSG
+	
+	Cif_cop_photo_Debug(&cif_cop_photo_c);
+	
+	sprintf(acErrMsg,"start open file:[%s]",cif_cop_photo_c.photo);
+	WRITEMSG
+	
+	EXEC SQL ALLOCATE :image;
+	
+	fp = fopen(cif_cop_photo_c.photo,"rb");
+	if(fp == NULL)
+	{
+	  sprintf(acErrMsg,"open file failed!");
+            WRITEMSG
+            return -1;
+
+	  /*sprintf(acErrMsg,"开始插入空记录");
+    WRITEMSG
+    cifno = cif_cop_photo_c.cif_no;
+    seqn = cif_cop_photo_c.photo_seqn;*/
+    /*插入记录*/
+	  /*if(cif_cop_photo_c.photo_type[0]=='2')
+    {
+        EXEC SQL INSERT INTO cif_cop_photo(cif_no,photo_seqn,photo) VALUES(:cifno,:seqn,empty_blob());
+        sprintf(acErrMsg,"插入印件信息！");
+        WRITEMSG
+    }
+    if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	  {
+        sprintf(acErrMsg,"INSERT cif_cop_photo error testa %d",sqlca.sqlcode);
+	      WRITEMSG
+	      strcpy ( reply , "D107" );
+	      return CM_SQLCODE;
+	  }
+	  else if ( sqlca.sqlcode == -1 )
+	  {
+	      sprintf(acErrMsg,"INSERT cif_cop_photo error testb %d",sqlca.sqlcode);
+	      WRITEMSG
+	      strcpy ( reply , "D108" );
+	      return CM_SQLCODE;
+	  } 
+	  EXEC SQL COMMIT;
+	  EXEC SQL FREE:image;*/
+	}
+	else
+	{
+	  (void)fseek(fp,0L,SEEK_END);
+	  filelen = (unsigned int)ftell(fp);
+	  sprintf(acErrMsg,"file length:[%d]",filelen);
+	  WRITEMSG
+	  buffer = (unsigned char *)malloc(sizeof(unsigned char) * filelen);
+	  (void)fseek(fp,0L,SEEK_SET);
+	  (void)fread(buffer,filelen,1,fp);
+	  amount = filelen;
+	  fclose(fp);
+	  
+	  sprintf(acErrMsg,"开始插入空记录");
+    WRITEMSG
+    
+    sprintf(acErrMsg,"客户号:%ld",cif_cop_photo_c.cif_no);
+    WRITEMSG
+  
+    sprintf(acErrMsg,"客户序列号：%d",cif_cop_photo_c.photo_seqn);
+    WRITEMSG
+    cifno = cif_cop_photo_c.cif_no;
+    seqn = cif_cop_photo_c.photo_seqn;
+    
+    /*插入记录*/
+	  if(cif_cop_photo_c.photo_type[0]=='2')
+    {
+        EXEC SQL INSERT INTO cif_cop_photo(cif_no,photo_seqn,photo) VALUES(:cifno,:seqn,empty_blob());
+        sprintf(acErrMsg,"插入印件信息！");
+        WRITEMSG
+    }
+    if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	  {
+        sprintf(acErrMsg,"INSERT cif_cop_photo error testa %d",sqlca.sqlcode);
+	      WRITEMSG
+	      strcpy ( reply , "D107" );
+	      return CM_SQLCODE;
+	  }
+	  else if ( sqlca.sqlcode == -1 )
+	  {
+	      sprintf(acErrMsg,"INSERT cif_cop_photo error testb %d",sqlca.sqlcode);
+	      WRITEMSG
+	      strcpy ( reply , "D108" );
+	      return CM_SQLCODE;
+	  } 
+	  EXEC SQL COMMIT;
+	
+	  sprintf(acErrMsg,"开始更新记录");
+    WRITEMSG
+    sprintf(acErrMsg,"文件长度amount：[%d]",amount);
+    WRITEMSG
+    
+    /*进行更新*/
+    if(cif_cop_photo_c.photo_type[0] =='2')
+    {
+        EXEC SQL SELECT photo INTO:image FROM cif_cop_photo WHERE cif_no=:cifno FOR UPDATE;
+    }
+    EXEC SQL LOB WRITE:amount FROM:buffer INTO:image;
+    
+    if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	  {
+		    sprintf(acErrMsg,"更新图片信息发生错误： %d",sqlca.sqlcode);
+		    WRITEMSG
+		    strcpy ( reply , "D107" );
+		    return CM_SQLCODE;
+	  }
+	  else if ( sqlca.sqlcode == -1 )
+	  {
+		    sprintf(acErrMsg,"更新图片信息发生错误： %d",sqlca.sqlcode);
+		    WRITEMSG
+		    strcpy ( reply , "D108" );
+		    return CM_SQLCODE;
+	  }
+	  sprintf(acErrMsg,"插入图片信息结束！");
+    WRITEMSG
+	  EXEC SQL COMMIT;
+	  EXEC SQL FREE:image;
+	  free(buffer);
+
+    /*删除文件*/
+	  sprintf(acErrMsg,"开始删除文件！");
+    WRITEMSG
+
+    if(remove(cif_cop_photo_c.photo) ==0)
+    {
+        sprintf(acErrMsg,"删除文件[%s]成功!",cif_cop_photo_c.photo);
+        WRITEMSG
+    }
+    else
+    {
+        sprintf(acErrMsg,"删除文件[%s]失败！",cif_cop_photo_c.photo);
+        WRITEMSG
+     }
+	}
+
+	return 0;
+}
+

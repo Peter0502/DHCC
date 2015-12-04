@@ -1,0 +1,618 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"mo_dc_inf_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int mo_dc_inf_con ( struct mo_dc_inf_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct mo_dc_inf_c* ps){
+	zip_tail(ps->rowid);
+	zip_tail(ps->acc_no_lvl1);
+	zip_tail(ps->acc_name_lvl1);
+	zip_tail(ps->acc_no_lvl2);
+	zip_tail(ps->acc_name_lvl2);
+	zip_tail(ps->acc_no_lvl3);
+	zip_tail(ps->acc_name_lvl3);
+	zip_tail(ps->sts);
+	zip_tail(ps->tel);
+	zip_tail(ps->br_no);
+}
+int Mo_dc_inf_Debug(struct mo_dc_inf_c *ps){
+	vtcp_log("mo_dc_inf_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("mo_dc_inf_c.acc_no_lvl1=[%s]\n",ps->acc_no_lvl1);
+	vtcp_log("mo_dc_inf_c.acc_name_lvl1=[%s]\n",ps->acc_name_lvl1);
+	vtcp_log("mo_dc_inf_c.acc_no_lvl2=[%s]\n",ps->acc_no_lvl2);
+	vtcp_log("mo_dc_inf_c.acc_name_lvl2=[%s]\n",ps->acc_name_lvl2);
+	vtcp_log("mo_dc_inf_c.acc_no_lvl3=[%s]\n",ps->acc_no_lvl3);
+	vtcp_log("mo_dc_inf_c.acc_name_lvl3=[%s]\n",ps->acc_name_lvl3);
+	vtcp_log("mo_dc_inf_c.dr_cash_amt=[%f]\n",ps->dr_cash_amt);
+	vtcp_log("mo_dc_inf_c.dr_cash_cnt=[%ld]\n",ps->dr_cash_cnt);
+	vtcp_log("mo_dc_inf_c.dr_ch_amt=[%f]\n",ps->dr_ch_amt);
+	vtcp_log("mo_dc_inf_c.dr_ch_cnt=[%ld]\n",ps->dr_ch_cnt);
+	vtcp_log("mo_dc_inf_c.dc_cash_amt=[%f]\n",ps->dc_cash_amt);
+	vtcp_log("mo_dc_inf_c.dc_cash_cnt=[%ld]\n",ps->dc_cash_cnt);
+	vtcp_log("mo_dc_inf_c.dc_ch_amt=[%f]\n",ps->dc_ch_amt);
+	vtcp_log("mo_dc_inf_c.dc_ch_cnt=[%ld]\n",ps->dc_ch_cnt);
+	vtcp_log("mo_dc_inf_c.sts=[%s]\n",ps->sts);
+	vtcp_log("mo_dc_inf_c.tel=[%s]\n",ps->tel);
+	vtcp_log("mo_dc_inf_c.br_no=[%s]\n",ps->br_no);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int Mo_dc_inf_Sel(reply,mo_dc_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  mo_dc_inf_c *mo_dc_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mo_dc_inf_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mo_dc_inf_Fet_Sel( mo_dc_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mo_dc_inf_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mo_dc_inf_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_sel FROM :comm;
+	EXEC SQL DECLARE sel_mo_dc_inf CURSOR FOR mo_dc_inf_sel;
+
+	EXEC SQL OPEN sel_mo_dc_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Sel ( struct mo_dc_inf_c *mo_dc_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mo_dc_inf INTO :mo_dc_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mo_dc_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mo_dc_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Sel (){
+	EXEC SQL CLOSE sel_mo_dc_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mo_dc_inf_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_mo_dc_inf CURSOR FOR mo_dc_inf_upd;
+
+	EXEC SQL OPEN upd_mo_dc_inf;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Upd( struct mo_dc_inf_c *mo_dc_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mo_dc_inf INTO :mo_dc_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mo_dc_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Upd_Upd( struct mo_dc_inf_c mo_dc_inf_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE mo_dc_inf SET acc_no_lvl1=:mo_dc_inf_c.acc_no_lvl1,
+			acc_name_lvl1=:mo_dc_inf_c.acc_name_lvl1,
+			acc_no_lvl2=:mo_dc_inf_c.acc_no_lvl2,
+			acc_name_lvl2=:mo_dc_inf_c.acc_name_lvl2,
+			acc_no_lvl3=:mo_dc_inf_c.acc_no_lvl3,
+			acc_name_lvl3=:mo_dc_inf_c.acc_name_lvl3,
+			dr_cash_amt=:mo_dc_inf_c.dr_cash_amt,
+			dr_cash_cnt=:mo_dc_inf_c.dr_cash_cnt,
+			dr_ch_amt=:mo_dc_inf_c.dr_ch_amt,
+			dr_ch_cnt=:mo_dc_inf_c.dr_ch_cnt,
+			dc_cash_amt=:mo_dc_inf_c.dc_cash_amt,
+			dc_cash_cnt=:mo_dc_inf_c.dc_cash_cnt,
+			dc_ch_amt=:mo_dc_inf_c.dc_ch_amt,
+			dc_ch_cnt=:mo_dc_inf_c.dc_ch_cnt,
+			sts=:mo_dc_inf_c.sts,
+			tel=:mo_dc_inf_c.tel,
+			br_no=:mo_dc_inf_c.br_no
+	WHERE rowid=:mo_dc_inf_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int Mo_dc_inf_Del_Upd(struct mo_dc_inf_c mo_dc_inf_c , char * reply  ){
+
+	EXEC SQL DELETE FROM mo_dc_inf WHERE rowid=:mo_dc_inf_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Upd( ){
+	EXEC SQL CLOSE upd_mo_dc_inf;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int Mo_dc_inf_Ins( struct mo_dc_inf_c mo_dc_inf_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO mo_dc_inf VALUES (:mo_dc_inf_c.acc_no_lvl1,
+			:mo_dc_inf_c.acc_name_lvl1,
+			:mo_dc_inf_c.acc_no_lvl2,
+			:mo_dc_inf_c.acc_name_lvl2,
+			:mo_dc_inf_c.acc_no_lvl3,
+			:mo_dc_inf_c.acc_name_lvl3,
+			:mo_dc_inf_c.dr_cash_amt,
+			:mo_dc_inf_c.dr_cash_cnt,
+			:mo_dc_inf_c.dr_ch_amt,
+			:mo_dc_inf_c.dr_ch_cnt,
+			:mo_dc_inf_c.dc_cash_amt,
+			:mo_dc_inf_c.dc_cash_cnt,
+			:mo_dc_inf_c.dc_ch_amt,
+			:mo_dc_inf_c.dc_ch_cnt,
+			:mo_dc_inf_c.sts,
+			:mo_dc_inf_c.tel,
+			:mo_dc_inf_c.br_no);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+/*****************************************************************************/
+/****                              查询函数部分[1]                       ****/
+/*****************************************************************************/
+int Mo_dc_inf_Sel1(reply,mo_dc_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  mo_dc_inf_c *mo_dc_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mo_dc_inf_Dec_Sel1( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mo_dc_inf_Fet_Sel1( mo_dc_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mo_dc_inf_Clo_Sel1();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mo_dc_inf_Dec_Sel1 ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_sel1 FROM :comm;
+	EXEC SQL DECLARE sel_mo_dc_inf1 CURSOR FOR mo_dc_inf_sel1;
+
+	EXEC SQL OPEN sel_mo_dc_inf1;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Sel1 ( struct mo_dc_inf_c *mo_dc_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mo_dc_inf1 INTO :mo_dc_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mo_dc_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mo_dc_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Sel1 (){
+	EXEC SQL CLOSE sel_mo_dc_inf1;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mo_dc_inf_Dec_Upd1( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_upd1 FROM :comm;
+
+	EXEC SQL DECLARE upd_mo_dc_inf1 CURSOR FOR mo_dc_inf_upd1;
+
+	EXEC SQL OPEN upd_mo_dc_inf1;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Upd1( struct mo_dc_inf_c *mo_dc_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mo_dc_inf1 INTO :mo_dc_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mo_dc_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Upd1( ){
+	EXEC SQL CLOSE upd_mo_dc_inf1;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              查询函数部分[2]                       ****/
+/*****************************************************************************/
+int Mo_dc_inf_Sel2(reply,mo_dc_inf_c,fmtstr,va_alist)
+char    *reply;
+struct  mo_dc_inf_c *mo_dc_inf_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = Mo_dc_inf_Dec_Sel2( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = Mo_dc_inf_Fet_Sel2( mo_dc_inf_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	Mo_dc_inf_Clo_Sel2();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int Mo_dc_inf_Dec_Sel2 ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_sel2 FROM :comm;
+	EXEC SQL DECLARE sel_mo_dc_inf2 CURSOR FOR mo_dc_inf_sel2;
+
+	EXEC SQL OPEN sel_mo_dc_inf2;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Sel2 ( struct mo_dc_inf_c *mo_dc_inf_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_mo_dc_inf2 INTO :mo_dc_inf_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch mo_dc_inf error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch mo_dc_inf finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Sel2 (){
+	EXEC SQL CLOSE sel_mo_dc_inf2;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int Mo_dc_inf_Dec_Upd2( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,mo_dc_inf.* FROM mo_dc_inf WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE mo_dc_inf_upd2 FROM :comm;
+
+	EXEC SQL DECLARE upd_mo_dc_inf2 CURSOR FOR mo_dc_inf_upd2;
+
+	EXEC SQL OPEN upd_mo_dc_inf2;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int Mo_dc_inf_Fet_Upd2( struct mo_dc_inf_c *mo_dc_inf_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_mo_dc_inf2 INTO :mo_dc_inf_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd mo_dc_inf error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH mo_dc_inf finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(mo_dc_inf_c);
+
+	return 0;
+}
+
+int Mo_dc_inf_Clo_Upd2( ){
+	EXEC SQL CLOSE upd_mo_dc_inf2;
+	return 0;
+}
+

@@ -1,0 +1,453 @@
+/*************************************************************
+* 文 件 名: rpt056.ec
+* 功能描述：承兑汇票扣款回单
+*
+* 作    者: jack
+* 完成日期: 2003年8月17日
+*
+* 注：格式文件为cdhpkkhd.tbl( sd 为 send delay 缩写 )
+*
+* 修改记录：
+* 日    期:
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "com_branch_c.h"
+#include "prdt_ac_id_c.h"
+#include "mo_bail_rate_c.h"
+#include "trace_log_bk_c.h"
+#include "dc_log_bk_c.h"
+#include "dd_mst_c.h"
+#include "mdm_ac_rel_c.h"
+
+EXEC SQL INCLUDE trace_log_bk_c.h;
+EXEC SQL INCLUDE sqlca.h;
+
+static struct com_sys_parm_c sComSysParm;
+
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		struct trace_log_bk_c sTraceLogBk;
+	EXEC    SQL END     DECLARE SECTION;
+struct   mo_bail_rate_c s_mo_bail_rate;
+struct   trace_log_bk_c s_trace_log_bk;
+struct   mdm_ac_rel_c	s_mdm_ac_rel;
+struct   dd_mst_c	s_dd_mst;
+struct   dc_log_bk_c	s_dc_log_bk;
+char     acc_hrt_dr[6];
+int get_ratio_cdhpkkhd(int bli,int bll,char str[100]);
+rpt056()
+{
+	int line, opncnt;
+	int hy_line;
+	char vpfm[21];
+	char fname[30];
+	char pre_br_no[6];
+	FILE *fp; 
+	short flag_count;
+
+
+	
+	memset( pre_br_no, 0x00, sizeof( pre_br_no ) );
+
+    g_reply_int = sql_begin(); /*打开事务*/
+    if( g_reply_int != 0 )
+    {
+        sprintf( acErrMsg, "BEGIN WORK error!!!" );
+        WRITEMSG
+        goto ErrExit;
+    }
+
+TRACE;
+    /**------- 初始化全局变量 --------**/
+    pub_base_sysinit();
+    
+	strcpy( fname, "BRcdhpkkhd" );
+	strcpy( fname, "RPT056");
+	g_reply_int = pub_rpt_rmfile_all( fname );
+	if ( g_reply_int != 0)
+	{
+		sprintf(acErrMsg,"删除承兑汇票扣款回单错误!!");
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	memset( &sComSysParm, 0x00, sizeof( struct com_sys_parm_c ) );
+	g_reply_int = Com_sys_parm_Sel( g_pub_tx.reply , &sComSysParm , "sys_date=%ld" , g_pub_tx.tx_date );
+	if( g_reply_int ) 
+	{ 
+		sprintf(acErrMsg, "SELECT com_sys_parm error![%d]", g_reply_int ); 
+		WRITEMSG 
+		goto ErrExit; 
+	}
+
+	strcpy(vpfm, "cdhpkkhd");
+	strcpy(vpfm, "RPT056");
+
+TRACE;
+	sqlca.sqlcode=0;
+	EXEC SQL declare sel_trace_log_bk1 cursor for 
+		select opn_br_no, ac_no, amt,trace_no,tx_date,note_no 
+		from trace_log_bk 
+		where tx_code = 'G090' and add_ind='0' and prdt_no!='131' 
+		union 
+		select a.payer_br_no, b.ac_no, b.amt,trace_no, b.tx_date, b.note_no 
+		from mo_bank_acc_po a, trace_log_bk b 
+		where tx_code = 'G090' and add_ind='0' and prdt_no='131' 
+		and a.bail_ac_no = b.ac_no 
+		order by 1,2,3,4,5,6;
+	if (sqlca.sqlcode)
+	{ 
+		sprintf(acErrMsg,"prepare error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( g_pub_tx.reply , "D101" ); 
+		goto ErrExit;
+	}
+
+	EXEC SQL OPEN sel_trace_log_bk1; 
+	if (sqlca.sqlcode) 
+	{ 
+		sprintf(acErrMsg,"OPEN in_mst_hst1 error %d",sqlca.sqlcode); 
+		WRITEMSG 
+		strcpy ( g_pub_tx.reply , "D102" ); 
+		goto ErrExit;
+	}
+	flag_count=0; /*JYW***/
+
+TRACE;
+	while(1) 
+	{
+		EXEC SQL FETCH sel_trace_log_bk1 INTO :sTraceLogBk.tx_br_no,
+			:sTraceLogBk.ac_no, :sTraceLogBk.amt, :sTraceLogBk.trace_no,
+			:sTraceLogBk.tx_date, :sTraceLogBk.note_no;
+		if ( sqlca.sqlcode == 1403 )
+		{
+TRACE;
+			g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "CC", &opncnt, get_ratio_cdhpkkhd );
+TRACE;
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM CC error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			
+			vtcp_log("111111111111111111111");
+			if(flag_count)fclose( fp );
+			vtcp_log("3333333333333333333333");
+			break;
+		}
+		else if ( sqlca.sqlcode )
+		{
+			sprintf( acErrMsg,"FETCH trace_log_bk CUR error![%d]", g_reply_int );
+			WRITEMSG
+			strcpy(g_pub_tx.reply, "D103");
+			goto ErrExit;
+		}
+
+TRACE;
+		/*机构号变,下一个文件*/
+		if( strcmp( sTraceLogBk.tx_br_no, pre_br_no ) )
+		{
+			/*不是第一个机构,打上个机构的结尾*/
+			if( strlen( pre_br_no ) )
+			{
+				g_reply_int = pub_rpt_read_pfm_qd( fp,&line,vpfm,"0001","CC",&opncnt,get_ratio_cdhpkkhd);
+				if( g_reply_int )
+				{
+					sprintf( acErrMsg,"RPT READ PFM CC error![%d]", g_reply_int );
+					WRITEMSG
+					goto ErrExit;
+				}
+				fclose( fp );
+			}
+
+			g_reply_int = pub_rpt_openfile( &fp, sTraceLogBk.tx_br_no , fname );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT OPEN FILE [%s]error![%d]", fname, g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			else flag_count=1; /*JYW 表示已经处理过文件*/
+
+			hy_line = 0;    /*换页计数器*/
+
+			strcpy( pre_br_no, sTraceLogBk.tx_br_no );
+		}
+TRACE;
+
+		g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "BB", &opncnt, get_ratio_cdhpkkhd );
+		if( g_reply_int )
+		{
+			sprintf( acErrMsg,"RPT READ PFM BB error![%d]", g_reply_int );
+			WRITEMSG
+			goto ErrExit;
+		}
+		
+		g_reply_int = Trace_log_bk_Sel(g_pub_tx.reply,&s_trace_log_bk,"trace_no=%ld and tx_date=%ld  and tx_code='G090' and sub_tx_code='D099'",
+				sTraceLogBk.trace_no,sTraceLogBk.tx_date);
+		if(g_reply_int==0 && s_trace_log_bk.amt>0.005)
+		{
+			
+			memset(&s_dc_log_bk,0x00,sizeof(s_dc_log_bk));
+			memset(&s_dd_mst   ,0x00,sizeof(s_dd_mst));
+			vtcp_log("[%s][%d]老大结息了，需要打印另外以个回单!\n",__FILE__,__LINE__);
+			g_reply_int = Dd_mst_Sel(g_pub_tx.reply,&s_dd_mst,"ac_id=%ld",s_trace_log_bk.ac_id);
+			
+			if(g_reply_int)
+			{
+				vtcp_log("[%s][%d]查找活期帐号表错误!g_reply_int==[%d]\n",__FILE__,__LINE__,g_reply_int);
+				goto ErrExit;
+			}
+			
+			g_reply_int = Dc_log_bk_Sel(g_pub_tx.reply,&s_dc_log_bk,"tx_date=%ld and trace_no=%ld and trace_cnt=%d  and dc_ind='2' and acc_hrt like '2%%' ",
+					s_trace_log_bk.tx_date,s_trace_log_bk.trace_no,s_trace_log_bk.trace_cnt);
+					
+			if(g_reply_int)
+			{
+				vtcp_log("[%s][%d]查找会计分录错误!\n",__FILE__,__LINE__);
+				goto ErrExit;
+			}
+			
+			
+			
+			g_reply_int = pub_rpt_read_pfm_qd( fp, &line, vpfm, "0001", "DD", &opncnt, get_ratio_cdhpkkhd );
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM BB error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}
+			/***打印好了客户回单***/
+		}
+
+TRACE;
+		hy_line++;    /*换页计数器*/
+			
+		if( hy_line == 2 )
+		{
+			/*g_reply_int = pub_rpt_read_pfm_qd( fp,&line,vpfm,"0001","CC",&opncnt,get_ratio_cdhpkkhd);
+			if( g_reply_int )
+			{
+				sprintf( acErrMsg,"RPT READ PFM CC error![%d]", g_reply_int );
+				WRITEMSG
+				goto ErrExit;
+			}*/
+			fprintf(fp,"\f");
+			fprintf(fp,"\n");
+
+			hy_line = 0;
+		}
+	}
+	
+vtcp_log("22222222222222222222222");
+TRACE;
+	EXEC SQL CLOSE sel_trace_log_bk1;
+/**JYW	EXEC SQL FREE sel_trace_log_bk1; **/
+
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"生成承兑汇票扣款回单成功![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0)
+    {
+        strcpy(g_pub_tx.reply,"G011");
+    }
+	sprintf(acErrMsg,"生成承兑汇票扣款回单失败![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}
+
+int get_ratio_cdhpkkhd( bli,bll,str )
+int bli,bll;
+char str[100];
+{
+	char vstr[101]; 
+	char fmt[10]; 
+	char tmp_amt[50];
+	struct com_branch_c sComBranch;
+	struct mdm_ac_rel_c sMdmAcRel;
+	struct prdt_ac_id_c sPrdtAcId;
+	struct dd_mst_c sDdMst;
+	struct td_mst_c sTdMst;
+	struct ln_mst_c sLnMst;
+	
+	
+	memset(tmp_amt,0x00,sizeof(tmp_amt));
+	memset(vstr,0x00,sizeof(vstr));
+	switch( bli ) 
+	{ 
+		case 'C': 
+			memset( &sComBranch, 0x00, sizeof( struct com_branch_c ) );
+			g_reply_int = Com_branch_Sel( g_pub_tx.reply, &sComBranch, "br_no='%s'", sTraceLogBk.tx_br_no );
+			if( g_reply_int ) 
+			{ 
+				sprintf(acErrMsg, "SELECT com_branch error![%d]", g_reply_int ); 
+				WRITEMSG 
+			}
+			pub_base_strpack( sComBranch.br_name );
+			sprintf(vstr, "%s（%s）", sComBranch.br_name, sComBranch.br_no );
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'E': 
+			sprintf(vstr, "%s", sTraceLogBk.ac_no );
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'M': 
+			pub_base_strpack( sTraceLogBk.ac_no );
+			if( !strcmp( sTraceLogBk.ac_no, "13602" ) )
+				strcpy( vstr, "银行垫款" );
+			else
+			{
+				g_reply_int = Mdm_ac_rel_Sel( g_pub_tx.reply, &sMdmAcRel, 
+					"ac_no='%s'", sTraceLogBk.ac_no );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号不存在![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				g_reply_int = Prdt_ac_id_Sel( g_pub_tx.reply, &sPrdtAcId, 
+					"ac_id='%ld' and ac_seqn='%d'", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+				if( g_reply_int )
+				{ 
+					sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+					WRITEMSG 
+				}
+				if( sPrdtAcId.ac_id_type[0] == '1' )
+				{
+					memset( &sDdMst, 0x00, sizeof( struct dd_mst_c ) );
+					g_reply_int = Dd_mst_Sel( g_pub_tx.reply, &sDdMst, 
+						"ac_id='%ld' and ac_seqn='%d'", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+					if( g_reply_int )
+					{ 
+						sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+						WRITEMSG 
+					}
+					strcpy( vstr, sDdMst.name );
+				}
+				if( sPrdtAcId.ac_id_type[0] == '2' )
+				{
+					memset( &sTdMst, 0x00, sizeof( struct td_mst_c ) );
+					g_reply_int = Td_mst_Sel( g_pub_tx.reply, &sTdMst,  
+						"ac_id='%ld' and ac_seqn='%d'", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+					if( g_reply_int )
+					{ 
+						sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+						WRITEMSG 
+					}
+					strcpy( vstr, sTdMst.name );
+				}
+				if( sPrdtAcId.ac_id_type[0] == '3' )
+				{
+					memset( &sLnMst, 0x00, sizeof( struct ln_mst_c ) );
+					g_reply_int = Ln_mst_Sel( g_pub_tx.reply, &sLnMst,  
+						"ac_id='%ld' and ac_seqn='%d'", sMdmAcRel.ac_id, sMdmAcRel.ac_seqn );
+					if( g_reply_int )
+					{ 
+						sprintf(acErrMsg, "扣款帐号有误![%s] error![%d]", sTraceLogBk.ac_no, g_reply_int ); 
+						WRITEMSG 
+					}
+					strcpy( vstr, sLnMst.name );
+				}
+
+			}
+			pub_base_strpack( vstr );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'J': 
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, pub_rpt_pcask(sTraceLogBk.amt ) );
+			break; 
+		case 'K': 
+			sprintf( vstr, "%16.2lf", sTraceLogBk.amt );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'N': 
+			sprintf( vstr, "%s", sTraceLogBk.note_no );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'X': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date/10000 ); 
+			break; 
+		case 'W': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date/100%100 ); 
+			break; 
+		case 'V': 
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, sTraceLogBk.tx_date%100 ); 
+			break; 
+			
+		case 'O': /*****收息帐号****/
+			sprintf( vstr, "%s", s_trace_log_bk.ac_no );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break;
+		case 'P': /*****收息帐号户名****/
+			sprintf( vstr, "%s", s_dd_mst.name );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break;
+		case 'Q': /***记息基数****/
+			sprintf( tmp_amt, "%.2f", sTraceLogBk.amt );
+			pub_rpt_flttomon( tmp_amt,tmp_amt); /* 小写金额 */
+			strcat(vstr," ￥");
+                        strcat(vstr,  tmp_amt);
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'R': /***起息日期**/
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, s_mo_bail_rate.beg_date ); 
+			break; 
+		case 'S': /***结息日期**/
+			sprintf(fmt, "%%%dld", bll);
+			sprintf( str, fmt, s_mo_bail_rate.end_date ); 
+			break; 
+		case 'T': /**结息利率**/
+			sprintf( vstr, "%.2f", s_mo_bail_rate.ic_rate );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break;
+		case 'U': /***结出利息金额****/
+			sprintf( tmp_amt, "%.2f", s_trace_log_bk.amt );
+			pub_rpt_flttomon( tmp_amt,tmp_amt); /* 小写金额 */
+			strcat(vstr," ￥");
+                        strcat(vstr,  tmp_amt);
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break; 
+		case 'Z': /***利息贷方科目字****/
+			sprintf( vstr, "%s", s_dc_log_bk.acc_hrt );
+			sprintf( fmt, "%%-%ds", bll );
+			sprintf( str, fmt, vstr );
+			break;
+		default : 
+			memset( str,' ',bll ); 
+			break; 
+	}
+	
+	return 0; 
+}

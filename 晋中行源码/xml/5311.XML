@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="10100000" TITLE="L10 定期借记业务录入)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  call_9986();
+
+  commsend_001();
+  #TXAMT15=itoa(#TX_AMT*100,'%16.0f');
+	if($FD68=='1')// 帐户类型 1活期帐号6内部帐户7科目
+	{
+	  #ACTSEQ='1';
+	}
+  if($FD68=='6')
+  {
+    #ACTSEQ='0';
+  }
+  #CURCD ='01';
+  #CT_IND='2'; // 转帐
+	$FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#ID_NO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+  #OPCD='10';
+  lvsend_123();
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+        lvrecv_123();
+}"
+</COMMRECV>
+
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5311                        定期借记业务录入)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5851)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <!-- 小额贷记基本信息录入 -->
+  <IMPORT>LV_DQJJ.IMP</IMPORT>
+  <ITEM NAME="#GOOK" TYPE="%1s" FUNCTIONS="j(#TXNUM=00114,T{0}T{1})G(0,#OK)"/>
+	<ITEM NAME="#BUFFER" TYPE="%-250s" FUNCTIONS=""/>
+  
+	<ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT" >
+  	<ONCLICK>"{
+  		#BUFFER=$BUFFER;
+  		submit();
+ 	 	}"
+  	</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE>
+	NOTHING
+</PACKAGE>
+<PRINT>"{
+				print(3,5, '                  定期借记往帐录入');
+        print(4,5, '委 托 日 期:[8]         支付交易序号:[8]',$HDATE,#ORDERNO);
+        print(5,5, '接收行行号:[12] 业务种类:[8]',#AC_BR_NO,#QTXNUM);
+        print(6,5, '付款人帐号 :[24]',#PAY_AC_NO);
+        print(7,5, '付款人名称 :[60]',#PAY_NAME);
+        print(8,5, '交 易 金 额:[21]',#XTX_AMT);
+        print(9,5, '对方清算行号: [12]',#CASH_QS_NO);
+        print(10,5,'收款人帐号:[24]',#CASH_AC_NO);
+        print(11,5,'收款人名称:[60]',#CASH_NAME);
+        print(12,5,'附      言:[60]',#BRF);
+        print(13,5,'流  水  号:[6]                                 操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="27" DESC="请打印业务专用凭证">
+ NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+  
+        print( 3,27, '[5    ]     [20                  ]     委托日期:[8       ]  [8]',$KINBR,$BRNAME,$HDATE,@txtime);
+				print( 4, 7, '                    5311 定期借记往帐录入');
+        print( 5,10, '支付交易序号:[8       ]                      流 水 号:[6     ]     操作员号:[4   ]',#ORDERNO,$FD4,$FD7);
+        print( 6,10, '接收行 行 号:[12          ]                  业 务  种 类:[8       ]',#AC_BR_NO,#QTXNUM);
+        print( 7,10, '付款人 帐 号:[24                      ]      交 易  金 额:[21                   ]',#PAY_AC_NO,#XTX_AMT);
+        print( 8,10, '付款人 名 称:[60                                                          ]',#PAY_NAME);
+        print( 9,10, '对方清算行号:[12          ]',#CASH_QS_NO);
+        print(10,10, '收款人 帐 号:[24                      ]',#CASH_AC_NO);
+        print(11,10, '收款人 名 称:[60                                                          ]',#CASH_NAME);
+        print(12,10, '附        言:[60                                                          ]',#BRF);
+        print(15,20, '对方清算行:[12          ]',#CASH_QS_NO);
+        }"
+  </PRINT>
+</RESPONSE>
+<!--打印信息 -->
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="24" DESC="打印业务专用凭证" >
+NOTHING  
+</PACKAGE>
+<PRINT>
+"{
+ $KINDNO='00';
+dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);  
+	print( 5, 2,'代码:5302');
+	print( 5, 13,'交易:定期借记往帐录入');
+	printacdtl_1();
+	print( lineno()+1,20,'备注:');
+	print( lineno()+2,27,'交易日期:[8] [8]',$HDATE,@txtime);
+	print( lineno()+3,5,'柜员:[4]',$FD7);
+	print( lineno()+4,5,'流水号:[6]',$FD4);	
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

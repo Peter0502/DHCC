@@ -1,0 +1,106 @@
+#include <stdio.h>
+#include "public.h"
+#include "svrpub_c.h"
+
+EXEC SQL INCLUDE "sqlca.h";
+EXEC SQL INCLUDE "sqlda.h";
+EXEC SQL INCLUDE "sqltypes.h";
+
+int main(int argc,char *argv[])
+{
+    int ret;
+	char old_dbname[20];
+	char dbname[20];
+	char comm[100];
+    char tabname[20],str[80],fname[30];
+	FILE *fp;
+
+EXEC SQL BEGIN DECLARE SECTION;
+	char sql[100];
+EXEC SQL END DECLARE SECTION;
+
+	if (argc != 2)
+	{
+		printf("请输入一位新数据库名\n");
+		return 1;
+	}
+
+	strcpy(dbname,argv[1]);
+	strcpy(old_dbname,getenv("DBNAME"));
+    printf("[%s],[%s]\n",old_dbname,dbname);
+
+    memset(comm,0x0,sizeof(comm));
+    sprintf(comm,"mkdir %s.exp",dbname);
+    ret = system(comm);
+	if (ret != 0)
+	{
+		printf("建新数据目录[%s.exp]错误!!\n",dbname);
+		return 1;
+	}
+
+    memset(comm,0x0,sizeof(comm));
+    sprintf(comm,"dbschema -ss -d %s %s.sql",old_dbname,dbname);
+    ret = system(comm);
+	if (ret != 0)
+	{
+		printf("取数据库[%s]结构生成[%s.sql]错误!!\n",old_dbname,dbname);
+		return 1;
+	}
+    memset(comm,0x0,sizeof(comm));
+    sprintf(comm,"mv %s.sql %s.exp/%s.sql",dbname,dbname,dbname);
+    ret = system(comm);
+	if (ret != 0)
+	{
+		printf("进入数据目录[%s.exp]错误!!\n",dbname);
+		return 1;
+	}
+
+    memset(fname,0x0,sizeof(fname));
+	strcpy(fname, "/home/cgh/src/init/unload.cfg");
+	fp = fopen(fname, "rt");
+	if (fp == NULL)
+	{
+		printf("读取文件错误!![%s]",fname);
+		return 1;
+	}
+
+    printf("fname='%s'\n",fname);
+    memset(str,0x0,sizeof(str));
+    memset(tabname,0x0,sizeof(tabname));
+	while (fgets(str, 80, fp)!=NULL)
+	{
+		memset(tabname,0x0,sizeof(tabname));
+		strcpy(tabname,str);
+        pub_base_strpack(tabname);
+		tabname[strlen(tabname)-1]='\0';
+		printf("表名为:[%s][%s][%d]\n",tabname,str,strlen(tabname));
+
+        /*******
+		memset(sql,0x0,sizeof(sql));
+		sprintf(sql,"unload to %s.int select * from %s",tabname,tabname);
+	 	EXEC SQL PREPARE sql_del FROM :sql;
+		if(sqlca.sqlcode)
+		{
+		 	printf("参数错误!! %d [%s] \n",sqlca.sqlcode,sql);
+			return 1;
+		}
+	 	EXEC SQL EXECUTE sql_del;
+	 	if(sqlca.sqlcode)
+		{
+			printf("删除表执行失败!! %s %d",sql,sqlca.sqlcode);
+			return -1;
+		}
+        *******/
+        ret = sql_execute("unload to %s.int select * from %s",tabname,tabname);
+        if (ret != 0)
+		{
+			printf("删除表执行失败!! %s %d",sql,sqlca.sqlcode);
+			return -1;
+		}
+		memset(str,0x0,sizeof(str));
+        memset(tabname,0x0,sizeof(tabname));
+	}
+	fclose(fp);
+
+	return 0;
+}

@@ -1,0 +1,312 @@
+/*************************************************************
+* 文 件 名: gT003.c
+* 功能描述：（处理相同证件号码不同客户号的情况）
+*           根据报的文件中的证件号码更新其争取的客户号
+* 作    者: 
+* 完成日期: 2007-2-27 9:31
+*
+* 修改记录：
+* 日    期: 2007-2-27 9:31
+* 修 改 人:
+* 修改内容:
+**************************************************************/
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/stat.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_mst_c.h"
+#include "com_item_c.h"
+EXEC SQL include sqlca;
+#include "dc_log_bk_c.h"
+#include "cif_basic_inf_c.h"
+#include "cif_alias_inf_c.h"
+#include "cif_id_code_rel_c.h"
+#include "cif_email_inf_c.h"
+#include "cif_addr_inf_c.h"
+#include "dd_mst_c.h"
+
+#include "td_mst_c.h"
+#include "ln_mst_c.h"
+#include "mdm_ac_rel_c.h"
+#include "prdt_ac_id_c.h"
+
+static struct cif_alias_inf_c    cif_alias_inf;
+static struct cif_basic_inf_c    cif_basic_inf;
+static struct cif_id_code_rel_c  cif_id_code_rel;
+static struct cif_addr_inf_c  	 cif_addr_inf;
+static struct cif_email_inf_c  	 cif_email_inf;
+static struct dd_mst_c           sDd_mst;
+static struct mdm_ac_rel_c       sMdm_ac_rel;
+static struct td_mst_c           sTd_mst;
+static struct prdt_ac_id_c       sPrdt_ac_id;
+static struct ln_mst_c           sLn_mst;
+
+gT003()
+{
+	int ret = 0;
+	int cnt=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	char cId    [21];
+	char cIdtype[2];
+	char cName  [81];
+	int  iTotCnt=0;
+	char cOld_Id    [21];
+	char cOld_Idtype[2];
+	char cOld_Name  [81];
+	int iCif_cnt=0;
+	char cAc_no[20];
+	long lAc_id;
+	char cCrd_no[21];
+	EXEC SQL END DECLARE SECTION;
+	memset(cCrd_no, 0 , sizeof(cCrd_no));
+	memset(cId    , 0 , sizeof(cId    ));
+	memset(cIdtype, 0 , sizeof(cIdtype));
+	memset(cName  , 0 , sizeof(cName  ));
+	memset(cOld_Id    , 0 , sizeof(cOld_Id    ));
+	memset(cOld_Idtype, 0 , sizeof(cOld_Idtype));
+	memset(cOld_Name  , 0 , sizeof(cOld_Name  ));
+	memset(cAc_no, 0 , sizeof(cAc_no));
+	memset(&cif_basic_inf, 0x00, sizeof(struct cif_basic_inf_c));
+	memset(&cif_alias_inf, 0x00, sizeof(struct cif_alias_inf_c));
+	memset(&cif_id_code_rel, 0x00, sizeof(struct cif_id_code_rel_c));
+	memset(&cif_id_code_rel, 0 ,sizeof(struct cif_id_code_rel_c));
+	memset(&cif_addr_inf   , 0 ,sizeof(struct cif_addr_inf_c));
+	memset(&cif_email_inf  , 0 ,sizeof(struct cif_email_inf_c));
+	
+	memset(&sDd_mst    , 0 , sizeof(sDd_mst    ));
+	memset(&sMdm_ac_rel, 0 , sizeof(sMdm_ac_rel));
+	memset(&sTd_mst    , 0 , sizeof(sTd_mst    ));
+	memset(&sPrdt_ac_id, 0 , sizeof(sPrdt_ac_id));
+	memset(&sLn_mst    , 0 , sizeof(sLn_mst    ));
+
+	cif_basic_inf.type[0]='2';
+	cif_id_code_rel.id_type[0]='A';
+	ret=sql_begin();
+	if( ret )
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL UPDATE CZCUST SET name=trim(name);
+	EXEC SQL update czcust set id_no=trim(id_no);
+	EXEC SQL DECLARE CUR_CNT CURSOR FOR select id_no,id_type,name,ac_no,ac_id,crd_no from czcust order by id_type,id_no ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL OPEN CUR_CNT;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		memset(cId    , 0 , sizeof(cId    ));
+		memset(cIdtype, 0 , sizeof(cIdtype));
+		memset(cName  , 0 , sizeof(cName  ));
+    memset(cAc_no , 0 , sizeof(cAc_no  ));
+		memset(cCrd_no, 0 , sizeof(cCrd_no));
+		lAc_id=0;
+		EXEC SQL FETCH CUR_CNT INTO :cId,:cIdtype,:cName,:cAc_no,lAc_id,:cCrd_no;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			goto ErrExit;
+		}
+		pub_base_strpack(cId);
+		pub_base_strpack(cIdtype);
+		pub_base_strpack(cName);
+		pub_base_strpack(cAc_no);
+		pub_base_strpack(cCrd_no);
+		if(strlen(cIdtype)==0) cIdtype[0]='A';/* 默认为营业执照号码 */
+		if(strlen(cId)<=1) continue;
+		memcpy(cif_id_code_rel.id_no,cId,sizeof(cif_id_code_rel.id_no)-1);
+		memcpy(cif_basic_inf.name,cName,sizeof(cif_basic_inf.name)-1);
+		strcpy(cif_basic_inf.local,"1");			/* 本地标志1-本地2-异地3-国外 */
+		strcpy(cif_basic_inf.poten,"Y");			/* 潜在标志Y-潜在 N-非潜在*/
+		strcpy(cif_basic_inf.shareholder_ind,"N");	/* 本行股东Y-是 N-否 */
+		strcpy(cif_basic_inf.lvl,"4");
+
+		ret=Cif_id_code_rel_Sel(g_pub_tx.reply,&cif_id_code_rel,"id_type='%s' and id_no='%s' ",cIdtype,cId);
+		if(ret)
+		{
+			vtcp_log("%s,%d name=[%s],ac_no=[%s]cId=[%s]",__FILE__,__LINE__,cName,cAc_no,cId);
+			sprintf(acErrMsg,"查询cif_id_code_rel表错误![%d]",ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+		}
+		
+		if(ret==0)
+		{
+			long cif_no=0;
+			cif_no=cif_id_code_rel.cif_no;
+			vtcp_log("%s,%d find id now use the cif_no,please wait ...",__FILE__,__LINE__);
+			cif_basic_inf.cif_no = cif_no ;
+			cif_id_code_rel.cif_no = cif_no ;	
+			/** 客户号产生完成，开始更新原有主表中的客户号 */
+			ret=Mdm_ac_rel_Sel(g_pub_tx.reply,&sMdm_ac_rel,"ac_no='%s'",cAc_no);
+			if(ret)
+			{
+				Mdm_ac_rel_Debug(&sMdm_ac_rel);
+				sprintf(acErrMsg,"查询mdm_ac_rel表错误![%d]",ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+			}
+			if(sMdm_ac_rel.ac_id!=lAc_id)
+			{
+				sprintf(acErrMsg,"%s,%d 报盘数据出现错误acno=[%s],ac_id[%ld],rel_ac_id=[%ld]",
+					__FILE__,__LINE__,cAc_no,lAc_id,sMdm_ac_rel.ac_id);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+			}
+			ret=Prdt_ac_id_Sel(g_pub_tx.reply,&sPrdt_ac_id,"ac_id='%ld'",lAc_id);
+			if(ret)
+			{
+				Prdt_ac_id_Debug(&sPrdt_ac_id);
+				sprintf(acErrMsg,"%s,%d 查询prdt_ac_id表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+			}
+			if(sPrdt_ac_id.ac_id_type[0]=='1')
+			{
+				ret=Dd_mst_Dec_Upd( g_pub_tx.reply , "ac_id=%ld ",lAc_id);
+				ret=Dd_mst_Fet_Upd(&sDd_mst , g_pub_tx.reply );
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d 查询dd_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+				EXEC SQL update czcust set ncif_no=:cif_no where ac_id=:lAc_id and ac_no=:cAc_no;
+				sDd_mst.cif_no=cif_no;
+				ret=Dd_mst_Upd_Upd( sDd_mst , g_pub_tx.reply);
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d update dd_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+			}
+			else if(sPrdt_ac_id.ac_id_type[0]=='2')
+			{
+				ret=Td_mst_Dec_Upd( g_pub_tx.reply , "ac_id=%ld ",lAc_id);
+				ret=Td_mst_Fet_Upd(&sTd_mst , g_pub_tx.reply );
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d 查询Td_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+				EXEC SQL update czcust set ncif_no=:cif_no where ac_id=:lAc_id and ac_no=:cAc_no;
+				sTd_mst.cif_no=cif_no;
+				ret=Td_mst_Upd_Upd( sTd_mst , g_pub_tx.reply);
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d update Td_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+			}
+			else if(sPrdt_ac_id.ac_id_type[0]=='3')
+			{
+				ret=Ln_mst_Dec_Upd( g_pub_tx.reply , "ac_id=%ld ",lAc_id);
+				ret=Ln_mst_Fet_Upd(&sLn_mst , g_pub_tx.reply );
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d 查询Ln_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+				EXEC SQL update czcust set ncif_no=:cif_no where ac_id=:lAc_id and ac_no=:cAc_no;
+				sLn_mst.cif_no=cif_no;
+				ret=Ln_mst_Upd_Upd( sLn_mst , g_pub_tx.reply);
+				if(ret)
+				{
+				sprintf(acErrMsg,"%s,%d update Ln_mst表错误![%d]",__FILE__,__LINE__,ret);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+				}
+			}
+			else
+			{
+				sprintf(acErrMsg,"%s,%d 在prdt_ac_id中得到的帐号类型非本次交易处理的![%c]",__FILE__,__LINE__,sPrdt_ac_id.ac_id_type[0]);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"C024");
+				goto ErrExit;
+			}
+			/* 根据客户号查找客户基本信息表,并已上报数据为主更改客户基本信息表 */
+			ret=Cif_basic_inf_Dec_Upd( g_pub_tx.reply , "cif_no=%ld ",cif_id_code_rel.cif_no);
+			ret=Cif_basic_inf_Fet_Upd(&cif_basic_inf , g_pub_tx.reply );
+			if(ret)
+			{
+			sprintf(acErrMsg,"%s,%d 查询Ln_mst表错误![%d]",__FILE__,__LINE__,ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+			}
+			memcpy(cif_basic_inf.name,cName,sizeof(cif_basic_inf.name)-1);
+			cif_basic_inf.cif_seqn++;
+			ret=Cif_basic_inf_Upd_Upd( cif_basic_inf , g_pub_tx.reply);
+			if(ret)
+			{
+			sprintf(acErrMsg,"%s,%d update Ln_mst表错误![%d]",__FILE__,__LINE__,ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+			}
+			/* 更新cif_cop_inf */
+		}
+		else
+		{
+			sprintf(acErrMsg,"%s,%d 错误,执行本程序不应该存在没有客户号的情况![%d]",__FILE__,__LINE__,ret);
+			WRITEMSG
+			strcpy(g_pub_tx.reply,"C024");
+			goto ErrExit;
+		}
+		
+		memcpy(cOld_Id    , cId     , sizeof(cOld_Id    )-1);
+		memcpy(cOld_Idtype, cIdtype , sizeof(cOld_Idtype)-1);
+		memcpy(cOld_Name  , cName   , sizeof(cOld_Name  )-1);
+		cnt++;
+	}
+	EXEC SQL CLOSE CUR_CNT;
+	vtcp_log("%s,%d ===== end =========",__FILE__,__LINE__);
+OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"测试程序执行成功!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+	strcpy(g_pub_tx.reply,"D008");
+	sprintf(acErrMsg,"测试程序执行失败!!!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

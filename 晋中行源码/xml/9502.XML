@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="9502 内部账明细查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+	commsend_001();
+	$FD24=#PZTYPE;
+	$FD29=#TXDAY1;
+	$FD38=#ACTNO;
+	$FD44=#TXDAY2;
+	$FD59=#PZHMA;
+	$FD66=#XZTYPE;
+	$FD70=#CRDB;
+	$FD91=#BRNO;
+	$FD100=itoa(#AVBAL1*100,'%016.0f')+itoa(#AVBAL2*100,'%016.0f');
+	}"
+</COMMSEND>
+<COMMRECV>"{
+	commrecv_001();
+	show(#HMI,true);
+	show(#CNAME,true);
+	
+}"
+</COMMRECV>
+
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(9502                         内部账明细查询)"/>
+  <ITEM LINE="5"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#HMI"   LINE="4"  COL="10" TYPE="%-5s"  INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(户名:)"/>
+  <ITEM NAME="#CNAME" LINE="4"  COL="15" TYPE="%-20s" INPUT="LABEL" VISABLE="FALSE" FUNCTIONS="T(#NAME)"/>
+   
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=8502)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  <!--输入变量-->
+  <ITEM LINE="8"   COL="15" TYPE="%-10s" FUNCTIONS="T(帐号/科目:)"/>
+  <ITEM LINE="9"   COL="15" TYPE="%-10s" FUNCTIONS="T(借    贷:)"/>
+  <ITEM LINE="10"  COL="15" TYPE="%-10s" FUNCTIONS="T(现转标志:)"/>
+  <ITEM LINE="11"  COL="15" TYPE="%-10s" FUNCTIONS="T(发 生 额:)"/>
+  <ITEM LINE="11"  COL="48" TYPE="%-3s" FUNCTIONS="T(->)"/>
+  <ITEM LINE="14"  COL="15" TYPE="%-10s" FUNCTIONS="T(凭证种类:)"/>
+  <ITEM LINE="15"  COL="15" TYPE="%-10s" FUNCTIONS="T(凭证号码:)"/>
+  <ITEM LINE="16"  COL="15" TYPE="%-10s" FUNCTIONS="T(开户机构:)"/>
+  <ITEM LINE="17"  COL="15" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+  <ITEM LINE="17"  COL="35" TYPE="%-3s" FUNCTIONS="T(->)"/>
+  <ITEM NAME="#ACTNO" 	INPUT="TEXT" LINE="8" COL="25" TYPE="%-20s" 	FUNCTIONS="T()">
+ 	 <ONLOSTFOCUS>
+ 	 "{
+ 	 	dim @txno_bak as string;
+ 	 	@txno_bak=$TXNO;
+ 	 	$TXNO='9958';
+ 	 	$FD38=#ACTNO;
+ 	 	commsend_001();
+ 	 	callserver();
+ 	 	$TXNO=@txno_bak;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+			} 
+		#NACTNO  = $FD38; //新帐号
+		//showmsg(#NACTNO);
+		@txno_bak= $TXNO;
+		$TXNO    = '9731';
+		$FD102   = #NACTNO;
+		commsend_001();
+		callserver();
+		$TXNO    = @txno_bak;
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#NAME = $FD25;
+		//showmsg(#NAME);
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>	 
+  <ITEM NAME="#NACTNO"  TYPE="%-20s"   FUNCTIONS=""/><!---新帐号--->
+  <ITEM NAME="#NAME"    TYPE="%-50s"   FUNCTIONS=""/><!---户名--->
+
+  <ITEM NAME="#CRDB" 	INPUT="SELECT" LINE="9" COL="25" TYPE="%-1s" 	FUNCTIONS="T()">
+  	<SELECT>
+  		<OPTION VALUE="1" TITLE="0.借方"/>
+  		<OPTION VALUE="2" TITLE="0.贷方"/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#XZTYPE" 	INPUT="SELECT" LINE="10" COL="25" TYPE="%-3s" 	DEVICE="KEYBOARD" FUNCTIONS="">
+  	<SELECT>
+  		<OPTION VALUE="1"  TITLE="0.现金"/>
+  		<OPTION VALUE="2"  TITLE="0.转帐"/>
+  		<OPTION VALUE="3"  TITLE="0.同城"/>
+  		<OPTION VALUE="4"  TITLE="0.大额"/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#AVBAL1" 	INPUT="TEXT" LINE="11" COL="25" TYPE="%16.2f" 	DEVICE="KEYBOARD" FUNCTIONS=""/>
+  <ITEM NAME="#AVBAL2" 	INPUT="TEXT" LINE="11" COL="51" TYPE="%16.2f" 	DEVICE="KEYBOARD" FUNCTIONS=""/>
+
+    <ITEM NAME="#PZTYPE" 	INPUT="SELECT" LINE="14" COL="25" TYPE="%-3s" 	FUNCTIONS="T()">
+  	<SELECT>
+  		<OPTION VALUE="121"  TITLE="0.特种转帐传票"/>
+  		<OPTION VALUE="122"  TITLE="0.转帐借方传票"/>
+  		<OPTION VALUE="123"  TITLE="0.转帐贷方传票"/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#PZHMA" 	INPUT="TEXT" LINE="15" COL="25" TYPE="%-16s" 	DEVICE="KEYBOARD" FUNCTIONS=""/>
+  <ITEM NAME="#BRNO" 	LINE="16" COL="25" TYPE="-5s"	FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#TXDAY1" 	INPUT="TEXT" LINE="17" COL="25" TYPE="%-8s" 	DEVICE="KEYBOARD" FUNCTIONS=""/>
+  <ITEM NAME="#TXDAY2" 	INPUT="TEXT" LINE="17" COL="38" TYPE="%-8s" 	DEVICE="KEYBOARD" FUNCTIONS=""/>
+
+  <ITEM NAME="#PASSWD"  TYPE="%-6s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+  
+  </VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE>
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

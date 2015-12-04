@@ -1,0 +1,79 @@
+#include "find_debug.h" 
+#define MYSQLERR if(sqlca.sqlcode){\
+	sprintf(acErrMsg,"sql error[%d]",sqlca.sqlcode); \
+	WRITEMSG \
+	strcpy( g_pub_tx.reply,"D103" ); \
+	goto ErrExit; \
+	}
+
+
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL include "dc_log_bk_c.h";
+
+/*******************************************************************
+汇总流水  按开户行来汇总
+*******************************************************************/
+pub_pubdb_sumdclog_Dec()
+{
+	int ret=0;
+
+	EXEC SQL declare sumdclog_cur cursor for
+		select tx_opn_br_no,acc_hrt,dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where sts='0' 
+		group by tx_opn_br_no,acc_hrt,dc_ind,ct_ind
+	UNION
+		select tx_opn_br_no,substr(acc_hrt,1,3)||'00',dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk
+		where acc_hrt not in(select acc_hrt from com_item
+			where sub_acc_yn='Y' )
+		and sts='0' 
+		group by tx_opn_br_no,substr(acc_hrt,1,3)||'00',dc_ind,ct_ind
+	UNION
+		select tx_opn_br_no,up_acc_hrt,a.dc_ind,ct_ind,sum(amt),count(*)
+		from dc_log_bk a,com_item b
+		where a.acc_hrt=b.acc_hrt and acc_lvl='3'
+		and sts='0' 
+		group by tx_opn_br_no,up_acc_hrt,a.dc_ind,ct_ind
+
+		order by 1,2,3,4;
+	MYSQLERR
+
+	EXEC SQL open sumdclog_cur;
+	MYSQLERR
+
+	return 0;
+ErrExit:
+	return 1;
+}
+pub_pubdb_sumdclog_Fet( struct dc_log_bk_c *pck)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		struct dc_log_bk_c dck;
+		short z1,z2;
+	EXEC SQL END DECLARE SECTION;
+
+		EXEC SQL fetch sumdclog_cur 
+			into :dck.tx_tx_br_no,:dck.acc_hrt,:dck.dc_ind,:dck.ct_ind,
+				:dck.amt:z1,:dck.trace_cnt:z2;
+		if( sqlca.sqlcode ) goto ErrExit;
+
+		if( z1 ) dck.amt=0.00;
+		if( z2 ) dck.trace_cnt=0;
+vtcp_log("CNT [%s][%s][%s][%s]%d",dck.tx_tx_br_no,dck.acc_hrt,dck.dc_ind,dck.ct_ind,dck.trace_cnt );
+	MEMCPY_DEBUG( pck,&dck,sizeof(dck) );
+
+	return 0;
+ErrExit:
+	return sqlca.sqlcode;
+}
+pub_pubdb_sumdclog_Clo()
+{
+	EXEC SQL close sumdclog_cur;
+}

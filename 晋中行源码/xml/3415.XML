@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="3415 备注管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	  commsend_001();
+	   $FD25=#BRF;
+     $FD44=#RDATE;
+     $FD66=#PROTYPE;
+     $FD86=#BACKNUM;
+     $FD101=#ACTNO+space(24-len(#ACTNO))+#XH+getitems('#AMT')+space(19)+#STATE+space(1)+#NAME+getitems('#AVBAL')+'01'+space(5)+'0000';
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3"  TYPE="%-52s" FUNCTIONS=
+    "T(3415                      备注管理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2415)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+   
+	<ITEM LINE="5"     COL="5"  TYPE="%-10s" FUNCTIONS="T(处理标志:!)"/>
+	<ITEM LINE="5"     COL="26"  TYPE="%-10s" FUNCTIONS="T(帐    号:)"/>
+	<ITEM LINE="5"     COL="61"  TYPE="%-10s" FUNCTIONS="T(账户序号:)"/>
+	
+  <ITEM LINE="6"     COL="5"  TYPE="%-10s" FUNCTIONS="T(备注编号:)"/>
+  
+  <ITEM LINE="8"     COL="5"  TYPE="%-70s" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+  
+  <ITEM LINE="10"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="11"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(余    额:)"/>
+  <ITEM LINE="12"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(备注状态:)"/>
+  <ITEM LINE="13"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(登记日期:)"/>
+  <ITEM LINE="14"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(登记机构:)"/>
+  <ITEM LINE="15"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(登记柜员:)"/>
+  <ITEM LINE="16"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(发 生 额:)"/>
+  <ITEM LINE="17"    COL="5"  TYPE="%-10s"   FUNCTIONS="T(摘    要:)"/>
+  
+  <ITEM LINE="5"     COL="16"  NAME="#PROTYPE" TYPE="%1s" INPUT="SELECT"  FUNCTIONS="T(1)">
+  <SELECT>
+			<OPTION VALUE ="1" TITLE= "1.登记" />
+			<OPTION VALUE ="2" TITLE= "2.注销" />
+			<OPTION VALUE ="3" TITLE= "3.查询" />
+		</SELECT>
+	</ITEM>
+	
+  <ITEM LINE="5"    COL="36" NAME="#ACTNO"     TYPE="%-24s"   INPUT="TEXT"    FUNCTIONS=""/> 
+  <ITEM LINE="5"    COL="71" NAME="#XH"        TYPE="%4d"     INPUT="TEXT"    FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+     dim @baktxno as string;
+     dim @tota as string;
+     @baktxno=$TXNO;
+     $TXNO = '9983';
+     $MSGTYPE='03001';
+     $FD66=#PROTYPE;
+     $FD101=#ACTNO+space(24-len(#ACTNO))+#XH;
+     commsend_001();
+     @tota=callserver();
+     $TXNO=@baktxno;
+     showmsg(@tota);
+     if($FD12!='0000')
+     {
+         showmsg(geterror());
+         return(false);
+     }
+     #BACKNUM=delspace($FD86);
+     show(#BACKNUM,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+ 
+  <ITEM LINE="6"    COL="16" NAME="#BACKNUM"   TYPE="%-10s"   INPUT="TEXT"    FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+     dim @baktxno as string;  
+     dim @tota as string;
+     @baktxno=$TXNO;
+     $TXNO = '9983';
+     $MSGTYPE='03001';
+     $FD66=#PROTYPE;
+     //$FD86=#BACKNUM;
+     $FD101=#ACTNO+space(24-len(#ACTNO))+#XH;
+     commsend_001();
+     @tota=callserver();
+     $TXNO=@baktxno;
+     if($FD12!='0000')
+     {
+         showmsg(geterror());
+         return(false);
+     }
+     showmsg(@tota);
+     
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>  
+  <BLOCK>
+  <ITEM LINE="10"   COL="16" NAME="#NAME"     TYPE="%-50s"   INPUT="TEXT"    FUNCTIONS=""/> 
+  <ITEM LINE="11"   COL="16" NAME="#AVBAL"    TYPE="%17.2f"  INPUT="TEXT"    FUNCTIONS="T(0)"/>
+  <ITEM LINE="12"   COL="16" NAME="#STATE"    TYPE="%-10s"     INPUT="TEXT"    FUNCTIONS=""/> 
+  <ITEM LINE="13"   COL="16" NAME="#RDATE"    TYPE="%8s"     INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="14"   COL="16" NAME="#RBRNO"    TYPE="%-5s"    INPUT="TEXT"    FUNCTIONS=""/>
+  <ITEM LINE="15"   COL="16" NAME="#RTRLNO"    TYPE="%-4s"    INPUT="TEXT"    FUNCTIONS=""/> 
+  <ITEM LINE="16"   COL="16" NAME="#AMT"      TYPE="%17.2f"  INPUT="TEXT"    FUNCTIONS="T(0)">
+    <ONLOSTFOCUS>
+  "{
+     if(#AMT==0)
+     {
+     showmsg('数据超界!!!');
+     }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="17"   COL="16" NAME="#BRF"      TYPE="%-50s"   INPUT="TEXT"    FUNCTIONS=""/>
+  </BLOCK>
+	<!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+	
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" NAME="#BUTTON1" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="备注管理!">
+      NOTHING
+	</PACKAGE>
+	    <!-- 打印格式还需要格式调整 -->
+	<PRINT>"{
+	   if(#PROTYPE=='3')
+	   {
+	     print(3,30,'交易成功!');
+	     print(5,20,'[50     ]',$FD13);
+	   }
+	}"
+	</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>
+

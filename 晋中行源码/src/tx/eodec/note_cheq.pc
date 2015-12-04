@@ -1,0 +1,133 @@
+/*******
+       初始化支行总帐主文件     gl_sub
+       argv[1] 新数据库名
+       argv[2] 日期
+       *******/
+#include <stdio.h>
+#include <stdlib.h>
+#include "public.h"
+#include "svrpub_c.h"
+EXEC SQL INCLUDE SQLCA;
+
+extern char *get_env_info(char *infoname);
+
+int db_connect()
+{
+EXEC	SQL	BEGIN	DECLARE	SECTION;
+	char	sql_username[16];
+	char	sql_passwd[16];
+EXEC	SQL	END		DECLARE	SECTION;
+
+	/****改为新加密形式 20121105
+	strcpy(sql_username,getenv("DB_USER"));
+	strcpy(sql_passwd,getenv("DB_PASSWD"));
+	****/
+
+	memcpy(sql_username,get_env_info("DB_USER"),sizeof(sql_username));
+	memcpy(sql_passwd,get_env_info("DB_PASSWD"),sizeof(sql_passwd));
+
+	vtcp_log("%s,%d,USER[%s],PASSWD[%s]\n",__FILE__,__LINE__,sql_username,sql_passwd);
+	EXEC SQL CONNECT :sql_username identified by :sql_passwd;
+	if(sqlca.sqlcode)
+	{
+		printf("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		vtcp_log("%s,%d,SQLCODE=[%d]\n",__FILE__,__LINE__,sqlca.sqlcode);
+		return -1;
+	}
+	return (0);
+}
+int note_cheq()
+{
+	 long ac_id=0;
+	 int 	ac_seqn=0;
+	 long	tx_date=0;
+	 long	tx_time=0;
+	 char note_type[4];
+	 char note_no[17];
+	 char tx_br_no[6];
+	 char tel[5];
+	 long trace_no;
+	 memset(note_type,0x00,sizeof(note_type));
+	 memset(note_no,0x00,sizeof(note_no));
+	 memset(tx_br_no,0x00,sizeof(tx_br_no));
+	 memset(tel,0x00,sizeof(tel));
+	int ret=0;
+	if(db_connect()!=0){
+		printf("连接数据库失败!\n");
+        return 1;
+    }
+		EXEC SQL DECLARE note_ligl CURSOR FOR select ac_id,ac_seqn,note_type,note_no,tx_br_no,tel,tx_date,tx_time,trace_no from note_martin order by ac_id;
+		EXEC SQL OPEN note_ligl;
+    if (sqlca.sqlcode)
+    {
+        printf("open error [%d]\n",sqlca.sqlcode);
+        goto ErrExit;
+    }
+    while(1)
+   	{
+			ac_id=0;
+			ac_seqn=0;
+			tx_date=0;
+			tx_time=0;
+			trace_no=0;
+			memset(note_type,0x00,sizeof(note_type));
+			memset(note_no,0x00,sizeof(note_no));
+			memset(tx_br_no,0x00,sizeof(tx_br_no));
+			memset(tel,0x00,sizeof(tel));
+    		   	EXEC SQL FETCH note_ligl INTO
+			    :ac_id,
+			    :ac_seqn,
+			    :note_type,
+			    :note_no,
+			    :tx_br_no,
+			    :tel,
+			    :tx_date,
+			    :tx_time,
+			    :trace_no;
+                        if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+                       {
+              			printf("Fetch erro!!! [%d]\n",sqlca.sqlcode);
+            			goto ErrExit;
+        		}
+        		else if (sqlca.sqlcode == 1403 )
+        		{
+        	    		break;
+        		}
+        		g_pub_tx.ac_id=ac_id;
+        		g_pub_tx.ac_seqn=ac_seqn;
+        		strcpy(g_pub_tx.note_type,note_type);
+        		strcpy(g_pub_tx.beg_note_no,note_no);
+        		strcpy(g_pub_tx.end_note_no,note_no);
+        		g_pub_tx.tx_date=tx_date;
+        		g_pub_tx.tx_time=tx_time;
+        		strcpy(g_pub_tx.tel,tel);
+        		strcpy(g_pub_tx.tx_br_no,tx_br_no);
+        		ret=pub_com_NoteUse(g_pub_tx.ac_id,g_pub_tx.ac_seqn,
+				g_pub_tx.note_type,g_pub_tx.beg_note_no,
+				g_pub_tx.end_note_no,g_pub_tx.tel);
+			 if( ret )
+			 {
+				sprintf(acErrMsg,"调用凭证销号错误!");
+				WRITEMSG
+				printf(" error,ac_id=[%ld] ,tx_date==[%ld],trace_no==[%ld]\n",g_pub_tx.ac_id,g_pub_tx.tx_date,trace_no);
+				goto ErrExit;
+			 }
+		}
+		EXEC SQL CLOSE note_ligl;
+    /**  生成总帐结束 ***/
+  OkExit:
+	sql_commit();	/*--提交事务--*/
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"计息结束[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sql_rollback();	/*--事务回滚--*/
+    if (strcmp(g_pub_tx.reply,"0000") == 0 || g_pub_tx.reply[0]=='\0')
+        strcpy(g_pub_tx.reply,"G009");
+	sprintf(acErrMsg,"计息!ERROR!!![%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

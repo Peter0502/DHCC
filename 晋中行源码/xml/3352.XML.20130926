@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111100000000000000000000000000" TITLE="3352  银联柜面通取现"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="HTTP://WWW.w3c.org">
+<COMMSEND>
+"{
+	commsend_001();
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+	commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+<ITEM LINE="3" COL="3" TYPE="%-44S" FUNCTIONS=
+"T(3352                         银联柜面通取现)"/>
+<ITEM LINE="4" COL="3" TYPE="%-74s" FUNCTIONS=
+"T(─────────────────────────────────────)"/>
+<ITEM NAME="#TXNO"     TYPE="%-4s"  FUNCTIONS="T($TXNO=3352)"/>
+<ITEM NAME="#MSGTYPE"  TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+<ITEM LINE="8"  COL="15" TYPE="%-10s" FUNCTIONS="T(取款卡号:)"/>
+<ITEM LINE="9"  COL="15" TYPE="%-10s" FUNCTIONS="T(交易币种:)"/>
+<ITEM LINE="11" COL="15" TYPE="%-10s" FUNCTIONS="T(取款密码:)"/>
+<ITEM LINE="12" COL="15" TYPE="%-10s" FUNCTIONS="T(交易金额:)"/>
+<ITEM NAME="#ACNAME_FLAG" LINE="14" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(账户姓名:)"/>
+<ITEM NAME="#ID_TYPE_FLAG" LINE="15" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(证件类型:!)"/>
+<ITEM NAME="#ID_NO_FLAG" LINE="16" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(证件号码:)"/>
+<ITEM NAME="#SELFYN_FLAG" LINE="18" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(是否本人:)"/>
+<ITEM NAME="#NAME_FLAG_DL" LINE="19" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(申 请 人:)"/>
+<ITEM NAME="#ID_TYPE_FLAG_DL" LINE="20" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(证件类型:!)"/>
+<ITEM NAME="#ID_NO_FLAG_DL" LINE="21" COL="15" TYPE="%-10s" VISABLE="false" FUNCTIONS="T(证件号码:)"/>
+<ITEM NAME="#CARD_SEQ_ID"     TYPE="%-3s"   FUNCTIONS=""/> 
+<ITEM NAME="#MSR2BAK" TYPE="%-37s"   FUNCTIONS=""/>
+<ITEM NAME="#MSR3BAK" TYPE="%-104s"  FUNCTIONS=""/>
+<ITEM NAME="#LDQFS" LINE="6"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+<ITEM LINE="6" COL="25" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/> 
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);  
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#ACTNO1"   DEVICE="FIXMSR" INPUT="TEXT" LINE="8" COL="25" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" >
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="FIXICC" LINE="8"  COL="25" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#AC_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#CASH_ACCT"  TYPE="%-19s"  FUNCTIONS="" />
+<ITEM NAME="#AC_NO"  TYPE="%-19s"  FUNCTIONS="" >
+<ONLOSTFOCUS>
+"{
+	<!--对于这些整个流程不需要去核心的交易，控制该交易必须在柜员已经签到的状态下-进行-->
+		initfd();
+		commsend_001();
+		$FD16='9803';//查询柜员信息
+		$FD92=$FD7;
+		callserver();
+		if('0000' != $FD12)
+		{
+		showmsg(geterror());
+		return(false);
+		}
+		if($FD70 != '0')
+		{
+		showmsg('该柜员尚未签到，请先做签到!');
+		return(false);
+		}
+	<!--对于这些整个流程不需要去核心的交易，控制该交易必须在柜员已经签到的状态下-进行-->
+	dim @tota as string;
+	if('' == $MSR2)
+	{
+		showmsg('二磁道信息为空,请注意账户介质是否为卡或是确定卡是否为可用!');
+		return(false);
+	}
+	#MSR2BAK=$MSR2;
+	#MSR3BAK=$MSR3;
+	dim @tmplen as number;
+	@tmplen = len(#AC_NO);
+	if(@tmplen &lt; 16)
+	{
+	showmsg('刷卡错误，请重刷！');
+	return(false);
+	}
+	if('621223' == substr(#AC_NO,0,6) or '621780' == substr(#AC_NO,0,6))
+	{
+		showmsg('本行卡不允许做该交易!');
+		return(false);
+	}
+	
+	initfd();
+	commsend_001();
+	$FD16 = '9930';
+	$FD68 = '7';
+	$FD21 = '01';
+	@tota=callserver();
+	if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		return(false);
+	}
+	#CASH_ACCT=$FD31;	
+	#TEL_BAL=itoa(val(delspace($FD41), 0.01), '%-12.2f');
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#REAL_BAL" TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#USE_BAL"  TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#WITHDRAW_FLAG"   TYPE="%-1s"   FUNCTIONS=""/>
+<ITEM NAME="#CUR_NO"   TYPE="%-3s"   INPUT="SELECT" LINE="9" COL="25" FUNCTIONS="T(156)V(NB)">
+	<SELECT>
+		<OPTION VALUE="156" TITLE="01.人民币"/>
+	</SELECT>
+<ONLOSTFOCUS>
+"{
+	showmsg('单笔金额1元->20万元!');
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#PWD" INPUT="TEXT" LINE="11" COL="25" DEVICE="PINPAD" TYPE="%-6s" FUNCTIONS="V(NB)i()">
+<ONLOSTFOCUS>
+"{
+	if(len(#PWD) != 6)
+	{
+		showmsg('密码必须为6位!');
+		return(false);
+	}
+	//dim @real_bal as string;
+	//dim @use_bal as string;
+	//initfd();
+	//commsend_001();
+	//$FD16 = 'c001';//查询余额
+	//$FD60 = 'CUPS';
+	//$FD30 = #AC_NO;
+	//$FD75 = $MSR2;		
+	//$FD76 = $MSR3;
+	//$FD79 = #PWD;
+	//$FD90 = #CUR_NO;
+	//callagn_card();
+	//if('0000' != $FD12)
+	//{
+	//	showmsg(geterror());
+	//	return(false);
+	//}
+	//@real_bal = itoa(val(delspace($FD41), 0.01), '%-12.2f');
+	//@use_bal  = itoa(val(delspace($FD42), 0.01), '%-12.2f');
+	//showhelp(5,22,8,50,'余额信息','账面余额:'+@real_bal+'可用额度:'+@use_bal);
+	//#REAL_BAL = val(@real_bal);
+	//#USE_BAL  = val(@use_bal);
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#TX_AMT" INPUT="TEXT" LINE="12" COL="25" TYPE="%12.2f"  FUNCTIONS="V(000000000100,999999999999)">
+<ONLOSTFOCUS>
+"{
+	if(#TX_AMT &gt; 200000.00 )
+	{
+		showmsg('取现单笔金额上限20万!请注意哦');
+		return(false);
+	}
+		if(#TX_AMT &gt;= 50000.00)
+	{
+	enable(#ACNAME,true);
+	show(#ACNAME_FLAG,true);
+	show(#ACNAME,true);
+	show(#ID_TYPE_FLAG,true);
+	show(#ID_TYPE,true);
+	show(#ID_NO_FLAG,true);
+	show(#ID_NO,true);
+	show(#SELFYN_FLAG,true);
+	show(#SELFYN,true);
+	#WITHDRAW_FLAG ='1';
+	}
+	else
+	{
+	enable(#ACNAME,false);
+	show(#ACNAME_FLAG,false);
+	show(#ACNAME,false);
+	show(#ID_TYPE_FLAG,false);
+	show(#ID_TYPE,false);
+	show(#ID_NO_FLAG,false);
+	show(#ID_NO,false);
+	show(#SELFYN_FLAG,false);
+	show(#SELFYN,false);
+	#WITHDRAW_FLAG ='0';
+	}
+	if(#TEL_BAL &lt; #TX_AMT)
+	{
+		showmsg('柜员尾箱现金不足!');
+		return(false);
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#XTX_AMT" TYPE="%-20s"  FUNCTIONS="X(#TX_AMT)"/>
+<ITEM NAME="#TEL_BAL" TYPE="%17.2f" FUNCTIONS=""/>
+<ITEM NAME="#ACNAME"     TYPE="%-30s"  INPUT="TEXT"  LINE="14" COL="25" VISABLE="false" FUNCTIONS="V(NB)"/>
+<ITEM NAME="#ID_TYPE" INPUT="SELECT" LINE="15" COL="25" TYPE="%-2s" VISABLE="false" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="1.身份证"/>
+		<OPTION VALUE="02" TITLE="2.军官证"/>
+		<OPTION VALUE="03" TITLE="3.护照"/>
+		<OPTION VALUE="04" TITLE="4.回乡证"/>
+		<OPTION VALUE="05" TITLE="5.台胞证"/>
+		<OPTION VALUE="06" TITLE="6.警官证"/>
+		<OPTION VALUE="07" TITLE="7.士兵证"/>
+		<OPTION VALUE="99" TITLE="8.其它证件"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#SID_TYPE"  TYPE="%-20s"  FUNCTIONS="S(#ID_TYPE,#ID_TYPE)"/>
+<ITEM NAME="#ID_NO"     TYPE="%-20s"  INPUT="TEXT"  LINE="16" COL="25" VISABLE="false" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+	dim @tota as string;
+	dim @txno_bak as string;
+	//新增加将全角转换为半角处理080301
+	if('01' == #ID_TYPE)
+	{
+		if(15 != len(#ID_NO) and 18 != len(#ID_NO))
+		{
+			showmsg('身份证号码位数错误,必须为15或18位!');
+			return(false);
+		}
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#SELFYN"  LINE="18" COL="25" TYPE="%-1s"    INPUT="SELECT" VISABLE="false" FUNCTIONS="T(1)">
+	<SELECT>
+	<OPTION VALUE="1" TITLE="是"/>
+	<OPTION VALUE="0" TITLE="否"/>
+	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+	<!--根据规则判断是否录入和打印申请人证件类型和证件号码-->
+	if(#TX_AMT &gt;= 50000.00 and #SELFYN == '0')
+	{
+	//代理人信息
+	enable(#ID_TYPE_DL,true);
+	enable(#ID_NO_DL,true);
+	enable(#NAME_FLAG_DL,true);
+	show(#NAME_FLAG_DL,true);
+	show(#NAME_DL,true);
+	show(#ID_TYPE_DL,true);
+	show(#ID_NO_DL,true);
+	show(#ID_TYPE_FLAG_DL,true);
+	show(#ID_NO_FLAG_DL,true);
+	}
+	else
+	{
+	//代理人信息
+	enable(#ID_TYPE_DL,false);
+	enable(#ID_NO_DL,false);
+	enable(#NAME_FLAG_DL,false);
+	show(#NAME_FLAG_DL,false);
+	show(#NAME_DL,false);
+	show(#ID_TYPE_DL,false);
+	show(#ID_NO_DL,false);
+	show(#ID_TYPE_FLAG_DL,false);
+	show(#ID_NO_FLAG_DL,false);
+	}
+}"
+	</ONLOSTFOCUS>
+	</ITEM>
+<ITEM NAME="#NAME_DL"     TYPE="%-30s"  INPUT="TEXT"  LINE="19" COL="25" VISABLE="false" FUNCTIONS="V(NB)"/>
+<ITEM NAME="#ID_TYPE_DL" INPUT="SELECT" LINE="20" COL="25" TYPE="%-2s" VISABLE="false" FUNCTIONS="T(01)">
+	<SELECT>
+		<OPTION VALUE="01" TITLE="1.身份证"/>
+		<OPTION VALUE="02" TITLE="2.军官证"/>
+		<OPTION VALUE="03" TITLE="3.护照"/>
+		<OPTION VALUE="04" TITLE="4.回乡证"/>
+		<OPTION VALUE="05" TITLE="5.台胞证"/>
+		<OPTION VALUE="06" TITLE="6.警官证"/>
+		<OPTION VALUE="07" TITLE="7.士兵证"/>
+		<OPTION VALUE="99" TITLE="8.其它证件"/>
+	</SELECT>
+</ITEM>
+<ITEM NAME="#SID_TYPE_DL"  TYPE="%-20s"  FUNCTIONS="S(#ID_TYPE_DL,#ID_TYPE)"/>
+<ITEM NAME="#ID_NO_DL"     TYPE="%-20s"  INPUT="TEXT"  LINE="21" COL="25" VISABLE="false" FUNCTIONS="V(NB)">
+<ONLOSTFOCUS>
+"{
+	dim @tota as string;
+	dim @txno_bak as string;
+	if('01' == #ID_TYPE_DL)
+	{
+		if(15 != len(#ID_NO_DL) and 18 != len(#ID_NO_DL))
+		{
+			showmsg('身份证号码位数错误,必须为15或18位!');
+			return(false);
+		}
+	}
+}"
+</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#SW_DATE"     TYPE="%8d"   FUNCTIONS=""/>
+<ITEM NAME="#SW_TRACE_NO" TYPE="%12s"  FUNCTIONS=""/>
+<ITEM NAME="#CARD_TRACENO_TRAN" TYPE="%-16s" FUNCTIONS=""/>
+<ITEM NAME="#HX_TRACENO" TYPE="%-10s" FUNCTIONS=""/>
+<ITEM NAME="#F55_ICC_DATA" TYPE="%-512s" FUNCTIONS=""/>
+<ITEM NAME="#F55_ICC_DATA_JB" TYPE="%-512s" FUNCTIONS=""/>
+<ITEM NAME="#RESP_CODE" TYPE="%-20s" FUNCTIONS=""/>
+<ITEM NAME="#F55_ICC_DATA_QKCZ" TYPE="%-512s" FUNCTIONS=""/>
+<ITEM NAME="#DTEMP"  TYPE="%-3d"  FUNCTIONS=""/>
+<ITEM NAME="#CTEMP"  TYPE="%-3s"  FUNCTIONS=""/>
+<ITEM LINE="22" COL="60"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONLOSTFOCUS>
+"{
+	if(#WITHDRAW_FLAG == '1')
+	{
+	<!--发往核心调用授权交易-->
+	initfd();
+	commsend_001();
+	$FD16='3369';
+	callserver();
+	if($FD12 !='0000')
+	{
+	showmsg(geterror());
+	return(false);
+	}
+	showmsg('授权成功!!...');
+	}
+	dim @shuju as string;
+	dim @update as string;
+	initfd();
+	commsend_001();
+	if(#WITHDRAW_FLAG == '1')
+	{
+	$FD62 = #ID_NO;
+	$FD22 = #ID_TYPE;
+	$FD25 = #ACNAME;
+	}
+	$FD6 = $HDATE;
+	$FD30 = delspace(#CASH_ACCT);
+	$FD31 = delspace(#AC_NO);
+	$FD40 = itoa(#TX_AMT*100,'%012.0f');
+	$FD16 = '7830';//取现
+	$FD79 = #PWD;
+	$FD75 = $MSR2;
+	$FD76 = $MSR3;
+	$FD90 = #CUR_NO;
+	$FD94 = #DQFS; //读取标志
+	$FD83='ylgmt'; //银联柜面通交易标志
+	
+	$FD67 = #WITHDRAW_FLAG;//大额取现标志 1为大额 0为小额
+	if(#DQFS == '1')
+	{
+		@shuju=initiccard('01','000000000000');
+		#CARD_SEQ_ID=strfld(@shuju,'|',4);
+		//showmsg('#CARD_SEQ_ID='+#CARD_SEQ_ID);
+		$FD23 ='0'+#CARD_SEQ_ID;//IC卡序列号
+		#F55_ICC_DATA=$FD95;  //IC卡55域初始化后自动被放在95域中
+	}
+		if(len(#PWD) != 6)
+	{
+		showmsg('密码必须为6位!');
+		return(false);
+	}
+	callagn();
+	if('0000' !=$FD12 )
+	{
+		#PWD='';
+	}
+	#SW_DATE = $FD44;
+	#SW_TRACE_NO = $FD52;
+	if('CF09'== $FD12 or 'F008'== $FD12)
+	{
+		if('CF09'== $FD12)
+		{
+		showmsg('银联处理中心收不到发卡方应答,发起取款冲正！');
+		}
+		if('F008'== $FD12)
+		{
+		showmsg('交易通讯超时,发起取款冲正！');
+		}
+		initfd();
+		commsend_001();
+		$FD16='7831';//取现冲正,只能是当日
+		$FD30=#AC_NO;
+		$FD40 = itoa(#TX_AMT*100,'%012.0f');
+		$FD58=#SW_TRACE_NO;
+		$FD90='156';//币种
+		$FD85=$HDATE;
+		if(len(#F55_ICC_DATA) !=0 )
+		{
+		restruc_fd55_qkcz();//取款冲正按要求重组银联55域
+		}
+		$FD94 = #DQFS; //读取标志
+		$FD94 = #DQFS; //读取标志
+		$FD95=#F55_ICC_DATA_QKCZ;
+		$FD83='ylgmt'; //银联柜面通交易标志
+		callagn();
+		if('0000' != $FD12)
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		showmsg('取款冲正成功！');
+		return(false);
+	}
+	if('0000' != $FD12)
+	{
+		showmsg(geterror());
+		return(false);
+	}
+		//showmsg('交易成功!');
+	#CARD_TRACENO_TRAN=$FD52;
+	if(#DQFS == '1' and len($FD108)  &gt; 34)
+	{
+	@update=updateiccard($FD108);
+	showmsg('@update='+@update);
+		<!--调用脚本处理结果通知-->
+	initfd();
+	commsend_001();
+	$FD16='jbtz';
+	$FD12=@update;
+	$FD30=#AC_NO;
+	$FD79 = #PWD;
+	#RESP_CODE='DF31052000000000';
+	if(@update != '9000|9000' and @update != '9000' and @update != '')
+	{
+		#RESP_CODE='DF31051000000000';
+		showmsg('脚本执行错误！返回码：'+@update);
+		//return (false);
+	}
+	restruc_fd55_jb();//脚本处理结果通知按要求重组银联55域
+	$FD95=#F55_ICC_DATA_JB;
+	$FD23 ='0'+#CARD_SEQ_ID;//IC卡序列号
+	$FD43=#CARD_TRACENO_TRAN;
+	$FD75=#MSR2BAK;
+	$FD76=#MSR3BAK;
+	$FD94=#DQFS; //读取标志
+	callagn();
+	if('0000' != $FD12)
+	{
+		showmsg(geterror());
+	}
+	showmsg('脚本通知返回！！！');
+	<!--调用脚本处理结果通知-->
+	}
+	$FD4=substr(#CARD_TRACENO_TRAN,7,6);
+	runoutput();
+	rerun();
+}"
+</ONLOSTFOCUS>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="银联柜面通取现">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 3,30,'银联柜面通取现');
+	print( 5,15,'取现卡号: [24]',#AC_NO);
+	print( 6,15,'取现金额: [12]',#XTX_AMT);
+		if(#WITHDRAW_FLAG=='1')
+	{
+	print( 7,15,'证件类型: [20]',#SID_TYPE);
+	if('01' == #ID_TYPE)
+	{
+		print( 8,15,'证件号码(后六位): [20]',substr(#ID_NO,12,6));
+	}
+	else
+	{
+		print( 8,15,'证件号码: [20]',#ID_NO);
+	}
+	}
+	print( 9,15,'平台流水: [12]',$FD52);
+	print(10,15,'核心流水: [8 ]',$FD4);
+
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证(银联柜面通取现)">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+		dim @txday  as string;
+		dim @txtime as string;
+		
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	
+		print( 5,20,'机构名称:[30]',$BRNAME);
+		print( 5, 2,'代码:3352');
+		print( 5,13,'交易名称:银联柜面通取现');
+		print( 7,30,'\L0银联柜面通取现凭条\L1');
+		if(#WITHDRAW_FLAG=='1')
+			{
+			print( 9, 20,'交易类型:跨行取款                 交 易 行:[6      ]',$FD2);
+			print( 10,20,'卡    号:[24                        ] 户    名:[24                        ]',#AC_NO,#ACNAME);
+			print( 11,20,'交易金额:[24                        ] 币    种:人民币',#XTX_AMT);
+			if('01' == #ID_TYPE)
+				{
+					print(12, 20,'证件类型:[20                    ]     证件号码(后六位):[20    ]',#SID_TYPE,substr(#ID_NO,12,6));
+				}
+			else
+				{
+					print(12, 20,'证件类型:[20                    ]     证件号码:[20    ]',#SID_TYPE,#ID_NO);
+				}
+				if( #SELFYN == '0' )
+				{
+				print(13, 20,'是否本人:否                       申 请 人:[30                    ]',#NAME_DL);
+				print(14, 20,'证件类型:[20                    ]     证件号码:[20    ]',#SID_TYPE_DL,#ID_NO_DL);
+				}
+				if( #SELFYN == '1' )
+				{
+				print(13, 20,'是否本人:是');
+				}
+			}
+		else
+			{
+			print( 9, 20,'交易类型:跨行取款                 交 易 行:[6      ]',$FD2);
+			print( 10,20,'卡    号:[24                        ] 币    种:人民币',#AC_NO);
+			print( 11,20,'交易金额:[24                        ]',#XTX_AMT);
+			}
+		print_sq();
+		print(19,80,'\H0本人已确认银行打印记录正确无误.\H1');
+		print(21,80,'客户签名:_____________________');
+		
+		print(23,20,'备注:');
+		print(23,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(23,5,'柜员:[4]',$FD7);
+		print(23,5,'平台流水:[6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

@@ -1,0 +1,38 @@
+#ifndef __chnl_single_acct_CH__
+#define __chnl_single_acct_CH__
+struct chnl_single_acct_c{
+	char      rowid[20];
+	long      tx_date;
+	char      tx_time[7];
+	long      trace_no;
+	char      cur_no[3];
+	char      ac_no[33];
+	char      ac_no1[33];
+	char      ac_no2[33];
+	char      new_ac_no2[33];
+	char      new_ac_name2[61];
+	char      g_ac_no2[33];
+	char      tx_code[5];
+	char      chnl_type[2];
+	char      tx_br_no[6];
+	char      opn_br_no[6];
+	char      tel[7];
+	char      bbmk[5];
+	char      ttyn[21];
+	long      pt_date;
+	char      pt_time[7];
+	char      pt_trace_no[13];
+	double    tx_amt;
+	double    th_amt;
+	char      ct_ind[2];
+	char      brf[31];
+	double    fee_amt;
+	char      sts[2];
+	long      o_tx_date;
+	char      o_trace_no[13];
+	long      o_pt_date;
+	char      o_pt_trace_no[13];
+	char      dz_ind[2];
+	char      dz_ref[29];
+};
+#endif 

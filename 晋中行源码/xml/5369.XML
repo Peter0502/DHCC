@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="5369     通存通兑异常包查询)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+		commsend_001();
+}"</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5369                       通存通兑异常包查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────
+)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=9598)"/>
+
+  <ITEM NAME="#DOLIST" TYPE="%1s"      FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+		dim @selid  as number;
+		dim @filename  as string;
+		dim @tota  as string;
+		if(#DOLIST != ''){
+			@selid = list_work();
+			//showmsg(itoa(@selid,'%d'));
+			if(@selid &lt; 0){
+				list_del();
+				refresh();
+				#DOLIST='';
+				return(true);
+			}
+			$BUFFER = list_getaction(@selid);
+			@filename='../xml/TCTDPACKINFO.DLG';
+			list_del();
+			if(opendlg(@filename)){
+				#DOLIST='1';
+				return(true);
+			}else{
+				showmsg('打开子窗口失败!');
+				list_del();
+				#DOLIST='';
+				return(true);
+			}
+		}
+		list_del();
+		#DOLIST='';
+		return(true);
+	}"</ONLOSTFOCUS>
+  </ITEM>
+
+
+  <!-- 贷记基本信息录入 -->
+
+  <ITEM LINE="11" COL="20"   TYPE="%-10s" FUNCTIONS="T(查询日期:)"/>
+  <ITEM LINE="11" COL="30"   NAME="#CX_DATE" TYPE="%8d"  INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)D()"/>
+  <ITEM LINE="13" COL="20"   TYPE="%-10s" FUNCTIONS="T(查询机构:)"/>
+  <ITEM LINE="13" COL="30"   NAME="#CX_BR_NO" TYPE="%5d"  INPUT="TEXT"  DEVICE="KEYBOARD" FUNCTIONS="T($KINBR)"/>
+  
+  <ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT=
+"BUTTON" >
+  <ONCLICK>"{
+		dim @tota as string;
+		dim @line as string;
+		dim @file as file;
+		dim @len as number;
+		dim @selid as number;
+		dim @sql_date as string;
+		dim @sql_br_no as string;
+
+		dim @br_no as string;
+		dim @pkg_no as string;
+		dim @pkg_name as string;
+		dim @pack_date as string;
+		dim @packid as string;
+		dim @pack_amt as string;
+		dim @pack_dtlcnt as string;
+		dim @packstat as string;
+		dim @pack_txnum as string;
+		dim @pack_qs_no as string;
+		dim @tag as string;
+		dim @num as number;
+		
+		dim @wt_date as string;
+		dim @orderno as string;
+		dim @tx_amt as string;
+		dim @pay_ac_no as string;
+		dim @pay_name as string;
+		dim @cash_ac_no as string;
+		dim @cash_name as string;
+		dim @lv_sts as string;
+		dim @rcpstat as string;
+		dim @lv_name as string;
+		dim @rcp_name as string;
+		dim @packstat_name as string;
+		initfd();
+		commsend_001();
+		$FD16='9598';
+		if(#CX_DATE != ''){
+			@sql_date=' and a.pack_date='+#CX_DATE;	
+		}
+		if($KINBR=='10001' and #CX_BR_NO != '' and #CX_BR_NO !='10001'){
+			@sql_br_no=' and a.br_no='+chr(39)+#CX_BR_NO+chr(39);
+		}else if($KINBR != '10001'){
+			@sql_br_no=' and a.br_no='+chr(39)+#CX_BR_NO+chr(39);
+		}
+		$FD123='select a.br_no,a.pkgno,a.pack_date,a.packid,a.totamt,a.dtlcnt,a.packstat,a.txnum,a.cash_qs_no,b.wt_date,b.orderno,b.tx_amt,b.pay_ac_no,b.pay_name,b.cash_ac_no,b.cash_name,b.lv_sts,b.rcpstat,b.txnum from lv_wbctl a,lv_pkgreg b where a.zc_date=0 and a.pkgno in('+chr(39)+'009'+chr(39)+','+chr(39)+'010'+chr(39)+') and (a.packstat='+chr(39)+'02'+chr(39)+' or a.packstat is NULL) and a.stat in ('+chr(39)+'3'+chr(39)+','+chr(39)+'4'+chr(39)+')'+@sql_date+@sql_br_no+' and b.pack_date=a.pack_date and b.packid=a.packid and b.lw_ind='+chr(39)+'1'+chr(39)+' and b.lv_sts != '+chr(39)+'B'+chr(39);
+		@tota=callserver();
+		if($FD12 != '0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		list_init(16,78,5,1);
+		list_setcolcnt(10);
+		list_setcol(0,'交易机构',9);
+		list_setcol(1,'包类型号',9);
+		list_setcol(2,'包类型名',20);
+		list_setcol(3,'  包日期',9);
+		list_setcol(4,'  包序号',9);
+		list_setcol(5,'对方清算行',13);
+		list_setcol(6,'包总笔数',9);
+		list_setcol(7,'包总金额',15);
+		list_setcol(8,'包处理状态',11);
+		list_setcol(9,'业务类型',16);
+		savefiletxt('../tmp/'+$KINBR+$TTYNAME,@tota);
+		@file=openfile('../tmp/'+$KINBR+$TTYNAME,'r');
+		if(@file &lt; 0){
+			showmsg('open file failed !!');
+			return(false);
+		}
+		@num=0;
+		while(true){
+			@line=readline(@file);
+			if(@line == ''){
+				if(@num==0){
+					showmsg('未找到符合条件的记录!');
+					return(false);
+				}
+				break;
+			}
+			@len=len(@line);
+			if(substr(@line,@len-1,1) == chr(10) or substr(@line,@len-1,1)== chr(13)){
+				@line=substr(@line,0,@len-1);	
+			}
+			@br_no = strfld(@line,'|',0);
+			@pkg_no = strfld(@line,'|',1);
+			if(@pkg_no == '009'){
+				@pkg_name='通存业务回执';
+			}else if(@pkg_no=='010'){
+				@pkg_name='通兑业务回执';
+			}
+			@pack_date = strfld(@line,'|',2);
+			@packid = strfld(@line,'|',3);
+			@pack_amt = strfld(@line,'|',4);
+			@pack_dtlcnt = strfld(@line,'|',5);
+			@packstat = strfld(@line,'|',6);
+			switch(@packstat){
+			case '01':
+				@packstat_name='已拒绝';
+				break;
+			case '02':
+				@packstat_name='已发送';
+				break;
+			case '04':
+				@packstat_name='已排队';
+				break;
+			default:
+				@packstat_name='      ';
+				break;
+			}
+			@pack_txnum = strfld(@line,'|',18);
+			if(@pack_txnum=='30101'){
+				@pack_txnum='实时通兑业务';
+			}else if(@pack_txnum=='30001'){
+				@pack_txnum='实时通存业务';
+			}
+			@pack_qs_no = strfld(@line,'|',8);
+			@wt_date = strfld(@line,'|',9);
+			@orderno=strfld(@line,'|',10);
+			@tx_amt=strfld(@line,'|',11);
+			@pay_ac_no=strfld(@line,'|',12);
+			@pay_name=strfld(@line,'|',13);
+			@cash_ac_no=strfld(@line,'|',14);
+			@cash_name=strfld(@line,'|',15);
+			@lv_sts=strfld(@line,'|',16);
+			switch(@lv_sts){
+			case '3':
+				@lv_name='往帐复核';
+				break;
+			case '4':
+				@lv_name='往帐发送';
+				break;
+			case '5':
+				@lv_name='往帐拒绝';
+				break;
+			case '7':
+				@lv_name='往帐排队';
+				break;
+			case 'B':
+				@lv_name='往帐退回';
+				break;
+			default:
+				@lv_name='        ';
+				break;
+			}
+			@rcpstat=strfld(@line,'|',17);
+			
+			switch(delspace(@rcpstat)){		
+			case '':			
+				@rcp_name='';			
+				break;		
+			case '00':			
+				@rcp_name='交易成功';			
+				break;		
+			case '10':			
+				@rcp_name='密码错误';			
+				break;		
+			case '03':			
+				@rcp_name='余额不足';			
+				break;		
+			case '04':			
+				@rcp_name='累计金额超限';			
+				break;		
+			default:			
+				@rcp_name='账户或协议异常';			
+				break;		
+			}
+			@tag=@pack_date+@packid+@wt_date+@orderno+comma(itoa(val(@tx_amt),'%.2f'),15)+@pay_ac_no+space(32-len(@pay_ac_no))+@pay_name+space(30-len(@pay_name))+@cash_ac_no+space(32-len(@cash_ac_no))+@cash_name+space(30-len(@cash_name))+@lv_name+space(10-len(@lv_name))+@rcp_name+space(20-len(@rcpstat))+@pack_txnum+space(20-len(@pack_txnum));
+			list_additem(@tag,@br_no,@pkg_no,@pkg_name,@pack_date,@packid,@pack_qs_no,@pack_dtlcnt,@pack_amt,@packstat_name,@pack_txnum);
+			@num=@num+1;
+		}
+		#DOLIST='1';
+  }"</ONCLICK>
+ </ITEM>
+</VARIABLE>
+
+<!--发送信息包-->
+<REQUEST>
+</REQUEST>
+
+<!--接收信息包-->
+<RESPONSE>
+</RESPONSE>
+<RESPONSE>
+</RESPONSE>
+<RESPONSE>
+</RESPONSE>
+
+<!--打印信息 -->
+</TRANSACTION>
+

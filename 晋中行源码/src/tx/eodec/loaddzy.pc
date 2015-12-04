@@ -1,0 +1,221 @@
+/***********************************************************
+* 文 件 名: loaddzy.pc
+* 功能描述: 用于过渡抵质押信息
+* 
+* 作    者: chenchao
+* 完成日期：2011-8-11 14:48:58
+*
+* 修改记录:
+* 日    期:
+* 修 改 人:
+* 修改内容:
+*
+***********************************************************/
+
+#include "public.h"
+#include "pact_gaga_rel_c.h"
+#include "ln_gage_reg_c.h"
+#include "mo_po_co_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+EXEC SQL INCLUDE SQLCA;
+
+int loaddzy()
+{
+	int	iRet = 0;
+	long	i=0;
+	char	cLoadName[201];
+	EXEC SQL BEGIN DECLARE SECTION;
+		char	sContract_no[21];
+		char	sPact_no[21];
+		long	dAc_id=0;
+		char	cName[101];
+		struct	mo_po_co_c	sMo_po_co;
+		struct	ln_gage_reg_c	sLn_gage_reg;
+	EXEC SQL END DECLARE SECTION;
+	iRet=sql_begin(); /*打开事务*/
+	if(iRet != 0)
+	{
+		sprintf( acErrMsg, "打开事务失败!!!" );
+		WRITEMSG
+		goto ErrExit;
+	}
+	
+	memset(cLoadName,0x00,sizeof(cLoadName));
+	memset(&sLn_gage_reg,0x00,sizeof(sLn_gage_reg));
+	memset(&sMo_po_co,0x00,sizeof(sMo_po_co));
+	/*** 建表 **/
+	memcpy(cLoadName,"dzy_20110927.txt",sizeof(cLoadName)-1);/*这一句 20110814*/
+	EXEC SQL create table ln_gage_reg_0927 as select * from ln_gage_reg  where 1=2;/**注意这儿不需要判断了***/
+	EXEC SQL drop table get_data;
+	/*** 首先将数据导入数据库中  ***/
+	EXEC SQL create table get_data (
+		contract_no	varchar2(20),		/**  合同号  **/
+		pact_no 	varchar2(20),		/**　借据号　**/
+		gaga_id		varchar2(20),		/**  抵质押物编号 **/
+		name		varchar2(60),		/**  户名    **/
+		gage_type	varchar2(1),		/**  种类 1:抵押 2:质押 **/
+		amt		number(17,2),		/**  抵押金额  **/
+		gage_inf	varchar2(60),		/**  抵质押名称  **/
+		in_date		number(9)		/**  入库日起  */
+	);/**注意这儿不需要判断了***/
+	iRet = tab_load( "dzy_20110927.txt", "get_data", "contract_no,pact_no,gaga_id,name,gage_type,amt,gage_inf,in_date" );/*从文件名为loaddzy的txt文件中导入相应表内*/
+	if( iRet )
+	{
+		sprintf(acErrMsg,"iRet [%d]",iRet);
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into ln_gage_reg_0927 select * from ln_gage_reg;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	} 
+	EXEC SQL delete from ln_gage_reg where (in_tx_date is null) or (in_tx_date<20110918 and out_tx_date<20110918);
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL delete from pact_gaga_rel where pact_no not in (select pact_no from ln_gage_reg );
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+
+	EXEC SQL insert into ln_gage_reg select distinct (contract_no),'','0','0','','','','0',in_date,'','','' from get_data where contract_no not in (select pact_no from ln_gage_reg );
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit; 
+	}
+	EXEC SQL insert into pact_gaga_rel select distinct contract_no,gaga_id,gage_inf,amt,'0','1','1','','','' from get_data where pact_no not in (select pact_no from pact_gaga_rel );
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL insert into mo_po_co select pact_no,contract_no from get_data where pact_no not in (select pact_no from mo_po_co );
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL DECLARE MOPOCO  CURSOR for select distinct pact_no,contract_no from mo_po_co where contract_no in (select contract_no from get_data) order by contract_no,pact_no;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	EXEC SQL OPEN MOPOCO ;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	while(1)
+	{
+		dAc_id = 0;
+		memset(cName,0x00,sizeof(cName));
+		memset(&sMo_po_co,0x00,sizeof(sMo_po_co));
+		memset(&sLn_gage_reg,0x00,sizeof(sLn_gage_reg));
+		memset(sPact_no,0x00,sizeof(sPact_no));
+		memset(sContract_no,0x00,sizeof(sContract_no));
+		EXEC SQL FETCH MOPOCO into :sPact_no,:sContract_no;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}else if(sqlca.sqlcode!=1403 && sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			goto ErrExit;
+		}
+		vtcp_log("[%s][%d]pact_no=[%s]i=[%d]",__FILE__,__LINE__,sPact_no,i++);
+		zip_space(sContract_no);
+		EXEC SQL select rowid,ln_gage_reg.* into :sLn_gage_reg from ln_gage_reg where pact_no=:sContract_no and rownum=1 order by ac_id ;
+		if(sqlca.sqlcode)
+		{	
+			vtcp_log("[%s][%d]select rowid,ln_gage_reg.*  from ln_gage_reg where pact_no='%s' and rownum=1 order by ac_id ",__FILE__,__LINE__,sContract_no);
+			sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			goto ErrExit;
+		}
+		if(sLn_gage_reg.ac_id >0) 
+		{
+			dAc_id=0;
+			zip_space(sPact_no);
+			EXEC SQL select ac_id ,name into :dAc_id,:cName from ln_mst where pact_no=:sPact_no and ac_sts<>'9';
+			if(sqlca.sqlcode && sqlca.sqlcode!=1403 )
+			{
+				sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+				WRITEMSG
+				goto ErrExit;
+			}
+			zip_space(sLn_gage_reg.pact_no);
+			sLn_gage_reg.ac_id = dAc_id;
+			memcpy(sLn_gage_reg.name,cName,sizeof(sLn_gage_reg.name)-1);
+			zip_space(sLn_gage_reg.name);
+			iRet = Ln_gage_reg_Ins(sLn_gage_reg);/*少一个reply参数可以吗？*/
+			if(iRet)
+			{
+				sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,iRet );
+				WRITEMSG
+				goto ErrExit;
+			}
+		}else{
+			zip_space(sPact_no);
+			EXEC SQL select ac_id ,name into :dAc_id,:cName from ln_mst where pact_no=:sPact_no and ac_sts<>'9';
+			if(sqlca.sqlcode && sqlca.sqlcode!=1403 )
+			{
+				sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+				WRITEMSG
+				goto ErrExit;
+			}
+			zip_space(sContract_no);
+			sLn_gage_reg.ac_id = dAc_id;
+			memcpy(sLn_gage_reg.name,cName,sizeof(sLn_gage_reg.name)-1);
+			zip_space(sLn_gage_reg.name);
+			EXEC SQL Update ln_gage_reg set ac_id=:sLn_gage_reg.ac_id ,name=:sLn_gage_reg.name where pact_no=:sContract_no and ac_id=0 and rownum=1;
+			if(sqlca.sqlcode)
+			{
+				sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+				WRITEMSG
+				goto ErrExit; 
+			}
+		}
+	}
+	EXEC SQL CLOSE MOPOCO;
+	EXEC SQL delete from ln_gage_reg where name is null;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d EXEC SQL  err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	/**EXEC SQL drop table get_data; ***/
+OKExit:
+	sql_commit();
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	vtcp_log("Before OK return: reply is [%s]\n",g_pub_tx.reply);
+	return (0);
+ErrExit:
+	sql_rollback();
+	strcpy(g_pub_tx.reply,"H034");
+	sprintf(acErrMsg,"Before return: reply is [%s]",g_pub_tx.reply);
+	WRITEMSG
+	vtcp_log("Before bad return: reply is [%s]\n",g_pub_tx.reply);
+	return 1;
+}

@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011000000000000000000000" TITLE="7008   卡查询余额"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE UPLOOP="TRUE">
+		<ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+		"T(7008                             卡查询余额)"/>
+		<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+		"T(─────────────────────────────────────)"/>
+		<ITEM NAME="#TXNO"    TYPE="%-4s"  FUNCTIONS="T($TXNO=7008)"/>
+		<ITEM NAME="#MSGTYPE" TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+		<ITEM NAME="#TXCD"    TYPE="%4s"   FUNCTIONS="T(7008)"/>      <!---交易代码--->
+	
+		<!--输出变量--->
+		<ITEM NAME="#LDQFS" LINE="6"  COL="15"  TYPE="%-10s" VISABLE="TRUE" FUNCTIONS="T(读取方式: )"/>
+  <ITEM LINE="6" COL="23" TYPE="%-1s"  NAME="#DQFS" INPUT="SELECT"   FUNCTIONS="V(NB)T(0)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="读取磁条方式"/>
+			<OPTION VALUE="1" TITLE="读取芯片方式"/>
+		</SELECT>
+  <ONLOSTFOCUS>"{
+     if(#DQFS=='1')
+     {
+     enable(#ACTNO1,false);
+     enable(#ACTNO2,true);
+     show(#ACTNO1,false);
+     show(#ACTNO2,true);
+     }
+     if(#DQFS=='0')
+     {
+     enable(#ACTNO1,true);
+     enable(#ACTNO2,false);
+     show(#ACTNO1,true);
+     show(#ACTNO2,false);
+      
+     }
+     refresh();
+   }"
+  </ONLOSTFOCUS>
+  </ITEM>
+		<ITEM LINE="7"  COL="17"  TYPE="%-5s" FUNCTIONS="T(卡号:)" />		
+		<!--ITEM LINE="9"  COL="17"  TYPE="%-11s" FUNCTIONS="T(检查标志:)" DEVICE="MSR"  m($MSR2,1,19)/-->
+		<ITEM LINE="9"  COL="17"  TYPE="%-5s" FUNCTIONS="T(序号:)" />
+
+		<ITEM LINE="11"  COL="17"  TYPE="%-5s" FUNCTIONS="T(密码:)" />
+		
+		<ITEM LINE="13"  COL="17"  TYPE="%-5s" FUNCTIONS="T(户名:)" />
+		
+		<ITEM LINE="15"  COL="17"  TYPE="%-5s" FUNCTIONS="T(余额:)" />
+		
+	  <ITEM NAME="#ACTNO1"   DEVICE="MSR" INPUT="TEXT" LINE="7" COL="23" TYPE="%-19s"   FUNCTIONS="V(NB)M($MSR2,1)" VISABLE="FALSE" >
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO1;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+<ITEM NAME="#ACTNO2"   INPUT="TEXT" DEVICE="ICC" LINE="7"  COL="23" TYPE="%-19s" VISABLE="FALSE" FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+	"{
+		#CARD_NO=#ACTNO2;
+	}"
+	</ONLOSTFOCUS>
+</ITEM>
+
+<ITEM NAME="#CARD_NO"  TYPE="%-19s"  FUNCTIONS="" >
+			<ONGOTFOCUS>
+					  "{
+					  	#CARD_NO='';
+					  	#PASSWORD='';
+					  	#CARD_NAME='';
+					  	#TRAN_FEE='';
+						#ACTSEQ='';
+					  	show(#CARD_NO,true);
+					  	show(#PASSWORD,true);
+					  	show(#CARD_NAME,true);
+					  	show(#TRAN_FEE,true);
+						show(#ACTSEQ,true);
+
+
+					  }"
+		  </ONGOTFOCUS>
+
+		  <ONLOSTFOCUS>
+					  "{
+						if(len(rtrim(#CARD_NO))!=19)
+						{
+						   showmsg('卡号长度不正确，请重新输入!');
+						   return(false);
+						}                       
+						if(substr(#CARD_NO,0,6)!= '621223' and substr(#CARD_NO,0,6)!= '621780')
+						{
+							showmsg('卡号的前6位必须为621223或者621780');
+							return(false);
+						}
+						 if(len(rtrim($MSR2))!=37)
+						{
+						  // showmsg('刷卡错误,请重试!');
+						  // return(false);
+						}
+						//$FD75 = $MSR2;
+						//$FD76 = $MSR3;									
+						dim @baktxno as string;
+						initfd();
+						@baktxno=$TXNO;
+						$TXNO='9952';
+						$FD102=#CARD_NO;						
+						commsend_001();
+						callserver();
+						$TXNO=@baktxno;
+						if($FD12!='0000'){
+						showmsg(geterror());
+						return(false);
+						}
+						//setitems('#ACTSEQ',$FD102);
+
+						#ACTSEQ=substr($FD102,24,4);	
+                        
+					  }"
+		  </ONLOSTFOCUS>
+       </ITEM>
+	  <ITEM LINE="9"  COL="23" NAME="#ACTSEQ" INPUT="TEXT"  TYPE="%-4s" FUNCTIONS="V(NB)"/>
+		
+		<ITEM  LINE="11"  COL="23"  DEVICE="PINPAD" NAME="#PASSWORD" TYPE="%-6s"  FUNCTIONS="i()V(NB)">
+			 <ONLOSTFOCUS>
+		 		"{
+				   if(substr(#CARD_NO,0,6) != '621223' and substr(#CARD_NO,0,6) != '621780' )
+				   {
+					   // 直接在这里校验密码了
+					   // 9317 密码检查
+					   dim @baktxno as string;
+					   @baktxno=$TXNO;
+					   initfd();
+					   commsend_001();
+					   $FD16='9317';
+					   $FD30=#CARD_NO;
+					   $FD79=getitems('#PASSWORD');
+					   callserver();
+					   $TXNO=@baktxno;
+					   if($FD12!='0000')
+					   {
+						 showmsg(geterror());
+						 return (false);
+					   }
+				   }
+						//2009-11-24 zhuxiaoping start
+				    else if(substr(#CARD_NO,0,6) == '621223' or substr(#CARD_NO,0,6) == '621780')
+				  {
+							initfd();
+							commsend_001();
+							$FD16='7007';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							//$FD75=$MSR2;
+							//$FD76=$MSR3;
+							$FD68='4';
+							callagn();
+							if($FD12!='0000')
+							{
+								showmsg(geterror());
+								return (false);
+							}
+					}
+					//2009-11-24 zhuxiaoping end
+		 		}"
+		 		</ONLOSTFOCUS>
+		</ITEM>
+		
+		<!--输出-->
+		<ITEM NAME="#TRACK2" TYPE="%-37s"  FUNCTIONS=""/>
+		<ITEM NAME="#TRACK3" TYPE="%-104s"  FUNCTIONS=""/>
+		<ITEM NAME="#PASSWD" TYPE="%-6s"  FUNCTIONS=""/>		
+		<ITEM LINE="13"  COL="23" NAME="#CARD_NAME" INPUT="LABEL" TYPE="%-30s" FUNCTIONS=""/>
+		<ITEM LINE="15"  COL="23" NAME="#TRAN_FEE" INPUT="LABEL" TYPE="%-17s" FUNCTIONS=""/>		
+		<ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+			<ONCLICK>
+					"{								
+							initfd();
+							commsend_001();
+							$FD16='7008';
+							$FD30=#CARD_NO;
+							$FD79=#PASSWORD;
+							$FD75=$MSR2;
+							$FD76=$MSR3;
+							callagn();
+							if($FD12 != '0000')
+							{		
+								showmsg(geterror());
+								return(false);
+							}
+
+							initfd();
+                            dim @val as string;
+							commsend_001();
+							$FD16='9925';
+							$FD102=#CARD_NO+'     '+#ACTSEQ+space(350);	
+							
+							callserver();
+							if($FD12 != '0000')
+							{		
+								showmsg(geterror());
+								return(false);
+							}
+                 
+							#CARD_NAME=delspace(substr($FD102,125,50));
+							show(#CARD_NAME,true);
+							@val=substr($FD102,185,16);							
+							#TRAN_FEE=delspace(itoa(val(@val,0.01),'%17.2f'));
+							show(#TRAN_FEE,true);
+							showhelp(5,38,16,20,'帐户信息','户名:'+#CARD_NAME+' 余额:'+#TRAN_FEE);
+						  #PASSWORD='';
+					}"
+			</ONCLICK>
+		</ITEM>
+		
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+
+
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="卡查询余额">
+NOTHING
+</PACKAGE>
+
+</RESPONSE>
+
+
+<OUTPUT>
+</OUTPUT>
+
+</TRANSACTION>

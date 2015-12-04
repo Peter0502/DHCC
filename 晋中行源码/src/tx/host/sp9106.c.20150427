@@ -1,0 +1,317 @@
+/*************************************************
+* 文 件 名: sp9106.c
+* 功能描述：日终后处理备份
+*
+* 作    者: rob
+* 完成日期：20030321
+*
+* 修改记录： 
+* 日   期:
+* 修 改 人:
+* 修改内容:
+*************************************************/
+
+#include <stdio.h>
+#include <math.h>
+#include <errno.h>
+#define EXTERN
+#include "public.h"
+#include "com_sys_parm_c.h"
+
+extern char *get_env_info(char *infoname);
+
+int sp9106( )
+{
+    int ret;
+    char bffs[2];
+    char cdqk[2];
+    long bfrq,bfrq_rm,bfrq_tmp;
+    char dbname[20],datadev[50],logdev[50];
+    char comm[1024],path[100];
+	char dbuser[10],dbpasswd[10],filename[80];
+	
+    struct com_sys_parm_c com_sys_parm_c;
+
+    memset(&com_sys_parm_c, 0x0, sizeof(struct com_sys_parm_c));
+
+    if (pub_base_sysinit())
+    {
+        sprintf(acErrMsg,"初始化公用结构错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+
+    memset(path,0x0,sizeof(path));
+    memset(dbname,0x0,sizeof(dbname));
+    memset(dbuser,0x0,sizeof(dbuser));
+    memset(dbpasswd,0x0,sizeof(dbpasswd));
+
+    strcpy(path,getenv("BFLDIR"));
+    strcpy(dbname,getenv("DBNAME"));
+    /****修改为新加密方式  20120604
+    strcpy(dbuser,getenv("DB_USER"));
+    strcpy(dbpasswd,getenv("DB_PASSWD"));
+    ****/
+    memcpy(dbuser,get_env_info("DB_USER"),sizeof(dbuser));
+    memcpy(dbpasswd,get_env_info("DB_PASSWD"),sizeof(dbpasswd));
+
+    vtcp_log("[%s][%d] dbuser==[%s] dbpasswd==[%s]",__FILE__,__LINE__,dbuser,dbpasswd);
+
+    ret = Com_sys_parm_Sel(g_pub_tx.reply,&com_sys_parm_c,"1=1");
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"查询公共参数表错误!![%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }
+   
+    bfrq = com_sys_parm_c.sys_date;
+
+    ret = pub_base_deadlineD(bfrq,-1,&bfrq_tmp);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"取一天前日期错误!!");
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O136");
+        goto ErrExit;
+    }
+    bfrq = bfrq_tmp;
+
+/****不删除目录了，因为日终前已经处理完了，目录已有内容
+    sprintf(comm,"rm -fr %s/%de 1>/dev/null 2>/dev/null",path,bfrq);
+    pub_base_strpack(comm);
+    sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret=system(comm) ;
+*********************************************************/
+
+	memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"%s/",path);
+	chdir( comm );
+	sprintf(acErrMsg,"chdir [%s]",comm);
+    WRITEMSG
+
+/******************不建目录了，在日终前已经生成了
+	memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"mkdir %s/%de 1>/dev/null",path,bfrq );
+	sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret = system( comm );
+*******************************************/
+
+    /***将报表备份 目前备份在rptpack/spool目录下
+	sprintf(acErrMsg,"生成报表目录备用! [%d] ",errno);
+	WRITEMSG
+
+	memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"mkdir %s/%de/rpt 1>/dev/null",path,bfrq );
+	sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret = system( comm );
+    if (ret != 0) 
+    {
+		sprintf(acErrMsg,"生成目录错误! [%d] ",errno);
+		WRITEMSG
+    }
+	*******************/
+
+/**报表备份暂时不做 JYW
+    memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"cp %s/rpt.*.%d.Z %s/%d/rpt/ 1>/dev/null",
+		getenv("RPTDIR"),bfrq,path,bfrq );
+	sprintf(acErrMsg,"%s",comm);
+	ret = system( comm );
+		sprintf(acErrMsg,"拷贝文件! [%d] ",errno);
+		WRITEMSG
+*****/
+
+	/*** 备份数据库备份设备文件 
+	strcpy(datadev,getenv("DB_DATA_BK"));
+	strcpy(logdev,getenv("DB_LOG_BK"));
+    memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"cp %s %s/%d/ 1>/dev/null",datadev,path,bfrq );
+    sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret = system( comm );
+    if (ret != 0) 
+    {
+		sprintf(acErrMsg,"拷贝文件错误! [%d] ",errno);
+		WRITEMSG
+        strcpy(g_pub_tx.reply,"O137");
+		goto ErrExit;
+    }
+	**compress**
+    memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"compress %s/%d/%s 1>/dev/null",path,bfrq,"datadev" );
+    sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret = system( comm );
+    if (ret != 0) 
+    {
+		sprintf(acErrMsg,"拷贝文件错误! [%d] ",errno);
+		WRITEMSG
+        strcpy(g_pub_tx.reply,"O137");
+		goto ErrExit;
+    }
+
+    memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"cp %s %s/%d/ 1>/dev/null",logdev,path,bfrq );
+    sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	ret = system( comm );
+		sprintf(acErrMsg,"拷贝文件! [%d] ",errno);
+		WRITEMSG
+
+    * 压缩数据库备份文件 *
+
+    memset(comm,0x00,sizeof(comm));
+	sprintf( comm,"%s",path );
+	sprintf(acErrMsg,"%s",comm);
+    WRITEMSG
+	chdir( comm );
+
+	sprintf(comm,"tar cvf RZQ%d %d 1>/dev/null",bfrq,bfrq);
+	pub_base_strpack(comm);
+	sprintf(acErrMsg,"%s",comm);
+	ret =  system(comm) ;
+	ret=0;
+	if (ret != 0)
+	{
+		sprintf(acErrMsg,"%s/%d/%s 不存在! [%d]",path,bfrq,dbname,errno);
+		WRITEMSG
+        strcpy(g_pub_tx.reply,"O139");
+		goto ErrExit;
+	}
+	*******************/
+	/**ORACLE用exp备份JYW***/
+
+    memset(comm,0x00,sizeof(comm));
+    sprintf(comm,"%s/%de/",path,bfrq);
+    ret = chdir(comm);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    if ( ret )
+    {
+        sprintf(acErrMsg,"进入目录失败[%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O141");
+        goto ErrExit;
+    }
+    
+    memset(comm,0,sizeof(comm));
+    memset(filename,0,sizeof(filename));
+    sprintf(filename,"expdat3_%d.dmp",bfrq);
+    if(getenv("DB_NAME")!=NULL){
+         sprintf(comm,"exp %s/%s@%s file=%s/%de/%s 1>/dev/null 2>/dev/null",dbuser,dbpasswd,getenv("DB_NAME"),path,bfrq,filename);
+    }else{
+	 sprintf(comm,"exp %s/%s file=%s/%de/%s 1>/dev/null 2>/dev/null",dbuser,dbpasswd,path,bfrq,filename);
+    }
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"日终后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+
+    memset(comm,0,sizeof(comm));
+    sprintf(comm,"compress -vf expdat3_%d.dmp",bfrq);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"压缩日终后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+	/* 为姚尧传数据 begin add by LiuHuafeng 20070306 */
+    memset(comm,0,sizeof(comm));
+    /****修改成新的加密方式 20120604
+    sprintf(comm,"fulldata_to_mis.sh %d",bfrq);
+    ****/
+    sprintf(comm,"fulldata_to_mis.sh %s %s %d",get_env_info("MIS_FTP_USER"),get_env_info("MIS_FTP_PWD"),bfrq);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"压缩日终后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+  /*为信贷系统传数据 add by robbit */
+    /****现在已经没有用处了  20121105
+    memset(comm,0,sizeof(comm));
+    sprintf(comm,"fulldata_to_xindai.sh %d",bfrq);
+    sprintf(comm,"fulldata_to_xindai.sh %s %s %d",get_env_info("CRDIT_FTP_USER"),get_env_info("CRDIT_FTP_PWD"),bfrq);
+    sprintf(acErrMsg,"comm[%s]",comm);
+    WRITEMSG
+    ret =  system(comm) ;
+    if ( ret )
+    {
+        sprintf(acErrMsg,"压缩日终后备份错误 [%d]",ret);
+        WRITEMSG
+        strcpy(g_pub_tx.reply,"O250");
+        goto ErrExit;
+    }
+    ****/
+    
+    strcpy(g_pub_tx.ac_no,"");
+    strcpy(g_pub_tx.brf,"日终后处理备份");
+/*
+    if (pub_ins_trace_log())
+    {
+        sprintf(acErrMsg,"登记交易流水错误!!");
+        WRITEMSG
+        goto ErrExit;
+    }
+*/
+/*JYW把修改系统状态放在这里,等于全部日终结束后修改为可以营业状态*/
+    ret = Com_sys_parm_Dec_Upd(g_pub_tx.reply,"1=1");
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"DECLARE FOR UPDATE ERROR [%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }
+
+	TRACE
+    ret = Com_sys_parm_Fet_Upd(&com_sys_parm_c,g_pub_tx.reply);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"FETCH ERROR [%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }
+
+	TRACE
+    com_sys_parm_c.sys_sts = 0; /*修改系统状态*/
+    ret = Com_sys_parm_Upd_Upd(com_sys_parm_c,g_pub_tx.reply);
+    if (ret != 0)
+    {
+        sprintf(acErrMsg,"UPDATE ERROR [%d]",ret);
+        WRITEMSG
+        goto ErrExit;
+    }
+    Com_sys_parm_Clo_Upd();
+/****JYW更改系统状态结束****/
+
+OkExit:
+	sql_commit();
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"日终后处理备份成功 reply is[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"日终后处理备份失败 reply is[%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data("0120",g_pub_tx.reply);
+	return 1;
+}

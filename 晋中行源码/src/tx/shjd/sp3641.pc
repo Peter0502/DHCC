@@ -1,0 +1,149 @@
+/***************************************************************************************
+*交易名称: 事后监督流程配置
+*文件名称: sp3641.pc
+*
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070109
+*
+***************************************************************************************/
+
+#define EXTERN
+#include "public.h"
+#include "tranpara_c.h"
+
+int sp3641()
+{
+	struct tranpara_c sTranpara;
+	int ret=0;
+	char cztype[2];
+	char jycode[5];
+	char zjycode[5];
+        char ysname[51];
+	char yslength[3];
+	char zdname[11];
+	char fltype[2];
+	char jdtype[2];
+	char zdtype[2];
+	char lstnumx[9];
+	int lsnum=0;
+	char text[201]; /*前台好像没有给此字段赋值所以赋空值*/
+	
+	memset(text,0x00,sizeof(text));
+	memset(&sTranpara,0x00,sizeof(struct tranpara_c));
+	memset(cztype,0x00,sizeof(cztype));
+	memset(jycode,0x00,sizeof(jycode));
+	memset(zjycode,0x00,sizeof(zjycode));
+        memset(ysname,0x00,sizeof(ysname));
+	memset(yslength,0x00,sizeof(yslength));
+	memset(zdname,0x00,sizeof(zdname));
+	memset(fltype,0x00,sizeof(fltype));
+	memset(jdtype,0x00,sizeof(jdtype));
+	memset(zdtype,0x00,sizeof(zdtype));
+	memset(lstnumx,0x00,sizeof(lstnumx));
+
+	pub_base_sysinit();
+	
+	get_fd_data("0670",cztype);
+	get_fd_data("0340",jycode);
+        get_fd_data("0350",zjycode);	
+        get_fd_data("0250",ysname);
+	get_fd_data("0210",yslength);
+	get_fd_data("0260",zdname);
+	get_fd_data("0680",fltype);
+	get_fd_data("0690",jdtype);
+	get_fd_data("0700",zdtype);
+	get_fd_data("0280",lstnumx);
+
+	zip_space(ysname);	
+	if(!strlen(cztype))
+	{
+		sprintf(acErrMsg,"操作类型没有值.[%s] [%s]--[%d]",cztype,__FILE__,__LINE__);
+		WRITEMSG	
+		goto ErrExit;	
+	}
+	ret=sql_count("tranpara"," trancode='%s' ",jycode);
+	if(cztype[0] == '0')
+	{
+		if(ret==0)
+		{
+			sprintf(acErrMsg,"表tranpara中没有交易码为的[%s]交易.[ret=%d] [%s]--[%d]",jycode,ret,__FILE__,__LINE__);
+			WRITEMSG	
+			goto ErrExit;	
+		}
+	}
+	else if(cztype[0] == '1')
+		lsnum=ret+1;
+
+	if(cztype[0] == '0' ) /*修改*/
+	{
+		/*修改操作*/
+		ret=Tranpara_Dec_Upd(g_pub_tx.reply,"trancode='%s' and  subtxcode='%s' and name='%s'",jycode,zjycode,ysname);
+		if(ret)
+		{
+			sprintf(acErrMsg,"声明游标出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+			WRITEMSG
+			goto ErrExit;
+		}
+		ret=Tranpara_Fet_Upd(&sTranpara,g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"FETCH tranpara出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+			WRITEMSG
+			goto ErrExit;
+		}
+			
+		memcpy(sTranpara.length,yslength,sizeof(sTranpara.length)-1);
+		memcpy(sTranpara.xdtl_no,lstnumx,sizeof(sTranpara.xdtl_no)-1);
+		memcpy(sTranpara.xdtl_name,zdname,sizeof(sTranpara.xdtl_name)-1);
+		memcpy(sTranpara.xdtl_flag,zdtype,1);
+		ret=Tranpara_Upd_Upd(sTranpara,g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"UPDATE tranpara出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+			WRITEMSG	
+			goto ErrExit;	
+		}
+		ret=Tranpara_Clo_Upd();		
+		if(ret)
+		{
+			goto ErrExit;	
+		}
+	}
+	else if(cztype[0] == '1' ) /*增加*/
+	{
+		
+		memcpy(sTranpara.trancode,jycode,sizeof(sTranpara.trancode)-1);
+                memcpy(sTranpara.subtxcode,zjycode,sizeof(sTranpara.subtxcode)-1);		
+                sTranpara.recno=lsnum;
+		memcpy(sTranpara.name,ysname,sizeof(sTranpara.name)-1);
+		memcpy(sTranpara.length,yslength,sizeof(sTranpara.length)-1);
+		memcpy(sTranpara.xdtl_no,lstnumx,sizeof(sTranpara.xdtl_no)-1);
+		memcpy(sTranpara.xdtl_name,zdname,sizeof(sTranpara.xdtl_name)-1);
+		memcpy(sTranpara.xdtl_flag,zdtype,1);
+		memcpy(sTranpara.text,text,sizeof(sTranpara.text)-1);
+		
+		ret=Tranpara_Ins(sTranpara,g_pub_tx.reply);
+		if(ret)
+		{
+			sprintf(acErrMsg,"插入记录出错.[%d] [%s]--[%d]",ret,__FILE__,__LINE__);
+			WRITEMSG	
+			goto ErrExit;	
+		}
+	}
+
+
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+	
+}

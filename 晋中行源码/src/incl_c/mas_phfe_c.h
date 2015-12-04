@@ -1,0 +1,30 @@
+#ifndef __mas_phfe_CH__
+#define __mas_phfe_CH__
+struct mas_phfe_c{
+	char      rowid[20];
+	char      seqn[33];
+	char      report_br_no[21];
+	char      report_br[61];
+	char      id_card_no[21];
+	char      name[61];
+	char      nationality[6];
+	char      tx_date[9];
+	char      rpt_std_code[5];
+	char      tx_code[33];
+	char      add_ind[2];
+	char      card_no[33];
+	char      tx_ind[9];
+	char      tw_bank_no[21];
+	char      tw_bank_name[61];
+	char      tw_name[61];
+	char      tw_acc_no[33];
+	char      tw_br_no[21];
+	char      tw_tx_date[9];
+	char      cur_no[4];
+	char      tx_amt_orig[16];
+	char      tx_amt_dollar[16];
+	char      code[33];
+	char      remark[21];
+	char      extend[21];
+};
+#endif 

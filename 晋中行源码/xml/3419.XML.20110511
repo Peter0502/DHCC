@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="3419 解挂交易"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+//卡解挂失
+	if(#CARDFLAG =='1')
+  {
+      initfd();
+	  commsend_001();
+	  $FD16 = '7010';
+	  $FD22 = #LOSS_OPTION;
+	  $FD60 = #LOST_NO;
+	  $FD30 = #ACTNO+space(5);
+	  $FD79 = #DRAW_PWD;
+	  $FD75 = $MSR2;
+	  $FD76 = $MSR3;
+	  $FD62 = #CERTNO;
+	  $FD81 = '卡解挂';
+	  $FD82 = #LOST_REASON;
+	  callagn();
+	  if($FD12 != '0000')
+	  {
+	    showmsg(geterror());
+	    return(false);
+	  }
+
+	 #CARD_TRACENO=delspace(itoa(val($FD43),'%16d'));
+	 //showmsg(#CARD_TRACENO);
+    
+  }
+ 
+         initfd();
+	    commsend_001();
+		if(substr(#ACTNO,0,6)=='621223')
+		{
+		$TXNO='3405';
+		}
+		else
+		{
+		$TXNO='2405';
+		}
+
+    	$FD22=#LOSSTYPE;
+    	$FD30=#ACTNO24;
+
+    	$FD25=#CUSTNAME;
+    	$FD26=#AGENTNAME+space(30);
+
+    	$FD63=#CERTNO;
+    	$FD68=#CERTTYPE;
+
+    	$FD114=getitems('#DRAW_UNCON_YN#PWDFLAG#SPACE6#DRAW_PWD#CERTFLAG#CERTNO2#SPACE1#CERTTYPE2#SPACE1#SPACE1');
+	    $FD9='          3';
+}"
+</COMMSEND>
+
+<COMMRECV>"{
+	commrecv_001();
+	$PBLINE='05';
+	$KINDNO='02';
+   //setitems('#FEETLRNO#FEE_PWD#FEEFLAG',$FD9);  //得到收费标志
+	//showmsg('收费标志='+#FEEFLAG);
+    
+	//卡交易核心处理失败往数码发送取消交易
+    if(($FD12!='0000') and ($FD12!='Z003') and (substr(#ACTNO,0,6)=='621223') and (len(#ACTNO)==19)) 
+	{
+		#RESP_CODE=$FD12;
+	   showmsg(geterror());
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#ACTNO;
+		$FD43=#CARD_TRACENO;
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		 showmsg('解挂交易失败!!...');
+		 rerun();
+	}
+
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{
+  #PIC='';
+  #PIC1='';
+  show(#LBLLOSTNO,false);
+  show(#LOST_NO,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(3419                           解 挂 交 易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+
+
+
+  <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2405)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM NAME="#ACTNO24"   TYPE="%-24s"  FUNCTIONS=""/>
+  <ITEM NAME="#SPACE354"  TYPE="%-354s" FUNCTIONS=""/>
+  <ITEM NAME="#SPACE1"    TYPE="%-1s"   FUNCTIONS=""/>
+  <ITEM NAME="#SPACE6"    TYPE="%-6s"   FUNCTIONS=""/>
+  <ITEM NAME="#SPACE20"   TYPE="%-20s"  FUNCTIONS=""/>
+
+
+  <PAGE NAME="DEFAULT">
+   <BLOCK NAME="COMM" LINE="0" COL="0">
+  <ITEM LINE="6"  COL="15" TYPE="%-15s" FUNCTIONS="T(解 挂 方 式:!)"/>
+  <ITEM NAME="#LOSSTYPE" LINE="6"  COL="30" TYPE="%-2s"  DEVICE="KEYBOARD" INPUT="SELECT" FUNCTIONS="T(21)" >
+	<SELECT>
+		<OPTION VALUE="21" TITLE="解口挂"/>
+		<OPTION VALUE="22" TITLE="解书挂"/>
+		<OPTION VALUE="23" TITLE="解密挂"/>
+		<!--
+		<OPTION VALUE="24" TITLE="解密挂兼书挂"/>
+		<OPTION VALUE="25" TITLE="解印挂"/>
+		-->
+	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SLOSSTYPE"  TYPE="%-12s"  FUNCTIONS="S(#LOSSTYPE,#LOSSTYPE)"/>
+ 
+  <ITEM NAME="#CARD_TRACENO" TYPE="%-16s" FUNCTIONS=""/>
+   <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#LOSS_OPTION" TYPE="%-2s" FUNCTIONS=""/>
+  <ITEM NAME="#CARDFLAG" TYPE="%-1s" FUNCTIONS=""/>
+  <ITEM NAME="#CERTTYPE20" TYPE="%-6s" FUNCTIONS=""/>
+ 
+  <ITEM NAME="#CERTNO20"   TYPE="%-20s"  FUNCTIONS=""/>
+  <ITEM LINE="8"  COL="15" TYPE="%-10s"  FUNCTIONS="T(账/卡 号:)"/>
+  <ITEM LINE="8"  COL="45" TYPE="%-10s"  FUNCTIONS="T(照    片:)"/>
+  <ITEM LINE="10"  COL="45" TYPE="%-10s"  FUNCTIONS="T(印    件:)"/>
+  <ITEM LINE="8"  COL="25" NAME="#ACTNO" INPUT="TEXT" TYPE="%-19s" VISABLE="TRUE" FUNCTIONS="V(NB)">
+  <ONLOSTFOCUS>"{
+         dim @baktxno as string;
+         dim @reginterval as number; //挂失间隔天数
+         dim @losslimit as number; //挂失天数限制
+    	@baktxno=$TXNO;
+    #CARDFLAG = '0';
+     if(len(rtrim(#ACTNO))&gt;6)
+      {
+        if(substr(#ACTNO,0,6) == '621223')
+        {
+          if(len(rtrim(#ACTNO)) &lt; 19)
+          {
+    	      showmsg('卡号长度应为19位，请重新输入！');
+    	      return(false);
+    	    }
+    	    else
+    	    {
+    	      if(#LOSSTYPE=='21')
+    	      {
+    	        #LOSS_OPTION = '02';
+    	      }
+    	      else if(#LOSSTYPE=='22')
+    	      {
+    	        #LOSS_OPTION = '04';
+    	      }
+    	      else
+    	      {
+    	        showmsg('卡不允许此类解挂方式！');
+    	      }
+    	      if(#LOSS_OPTION == '02' or #LOSS_OPTION == '04')
+    	      {
+    	        show(#LBLLOSTNO,true);
+              show(#LOST_NO,true);
+            }
+            #CARDFLAG = '1';
+    	    }
+        }
+        else
+        {
+          show(#LBLLOSTNO,false);
+          show(#LOST_NO,false);
+        }
+      }
+
+    	
+     	 initfd();
+	     commsend_001();
+		$FD2=$OPNBR;
+     	$FD3=$KINBR;
+     	$FD5=$HDATE;
+     	$FD7=$TLRNO;
+     	$FD10=$TTYNAME;
+     	$FD16='9706';
+     	$FD79=#PASSWD;
+
+    	$FD22=#LOSSTYPE;
+    	$FD30=#ACTNO+space(5);
+
+    	callserver();
+    	$TXNO=@baktxno;
+
+    	if($FD12!='0000'){
+    		showmsg(geterror());
+    		return(false);
+    	}
+
+    	setitems('#ACTNO24',$FD30);
+    	setitems('#CUSTNAME',$FD25);
+	    #AVBAL = val($FD41,0.01);  //得到余额
+    	setitems('#DRAW_UNCON_YN#PWDFLAG#SPACE6#SPACE6#CERTFLAG#SPACE20#SPACE1#CERTTYPE#SPACE1#SPACE1',$FD114);
+		#CERTNO20 = $FD62;
+        //showmsg(#CERTNO20);
+			showblock('ACTINFO2',true,true);
+//		showmsg('##CERTNO20==='+#CERTNO20);
+		#CERTTYPE20 = $FD67;
+		//showmsg(#CERTTYPE);
+//		showmsg('#CERTTYPE===='+#CERTTYPE);
+
+      if (#CERTTYPE == ' ')
+      {
+          #CERTTYPE='1';
+      }
+
+  //  if( (#LOSSTYPE == '11') or (#LOSSTYPE == '21') )
+        if ((#LOSSTYPE == '11'))
+	{
+        	  showblock('CERTINFO1',false,true);
+
+        }
+        else
+        {
+           showblock('CERTINFO1',true,true);
+        }
+
+
+        if ( '1'== substr(#LOSSTYPE,0,1))
+        {
+              #LABELCHECKPWD='【登记申请信息】';
+        }
+        else
+        {
+              #LABELCHECKPWD='【检验申请信息】';
+        }
+
+   	    showblock('ACTINFO1',true,true);
+        if ( ( #LOSSTYPE == '23') or  (#LOSSTYPE == '24' ))
+        {
+              #LABELCHECKPWD='【设定新密码】';
+        }
+        else
+        {
+
+              #LABELCHECKPWD='【支取检验栏】';
+        }
+  	    
+        if( (#LOSSTYPE == '13') or (#LOSSTYPE == '14') )
+        {
+        	 showblock('ACTINFO2',false,false);
+        }
+
+        if( #PWDFLAG == 'Y' )
+        {
+                show(#LDRAW_PWD,true);
+                show(#DRAW_PWD,true);
+        }
+        else
+        {
+                show(#LDRAW_PWD,false);
+                show(#DRAW_PWD,false);
+        }
+        showblock('CERTINFO2',true,true);
+        if( #CERTFLAG == 'Y' )
+        {
+                show(#LCERTTYPE2,true);
+                show(#CERTTYPE2,true);
+                show(#LCERTNO2,true);
+                show(#CERTNO2,true);
+        }
+        else
+        {
+                show(#LCERTTYPE2,false);
+                show(#CERTTYPE2,false);
+                show(#LCERTNO2,false);
+                show(#CERTNO2,false);
+        }
+		if (#LOSSTYPE == '14')
+		{
+         show(#LDRAW_PWD,false);
+         show(#DRAW_PWD,false);
+		}
+		if (#LOSSTYPE == '23')
+		{
+				 @reginterval=$FD36;
+				 @losslimit=$FD35;
+				 //showmsg('@reginterval'+@reginterval);
+				 //showmsg('@losslimit'+@losslimit);
+				 if(@reginterval &lt; @losslimit)
+				 {
+				 		//未到挂失天数，只输入一次
+           	show(#LDRAW_PWD,false);
+           	show(#DRAW_PWD,false);
+           	show(#TDRAW_PWD,true);
+           	show(#LTDRAW_PWD,true);
+           	#LABELCHECKPWD='【支取检验栏】';
+           	
+         }else
+         {
+         		#LABELCHECKPWD='【设定新密码】';
+         		show(#TDRAW_PWD,false);
+           	show(#LDRAW_PWD,true);
+           	show(#DRAW_PWD,true);
+         }
+		}
+		
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#AVBAL"      TYPE="%17.2f" FUNCTIONS="J(#XAVBAL)"/><!---余额--->
+  <ITEM NAME="#XAVBAL"     TYPE="%-21s"  FUNCTIONS="X(#AVBAL)"/>
+
+  <ITEM LINE="9"  COL="15" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+  <ITEM LINE="9"  COL="25" NAME="#CUSTNAME"  INPUT="LABEL" TYPE="%-50s" FUNCTIONS="J(#CUSTNAME30)"/>
+  <ITEM NAME="#CUSTNAME30" TYPE="%-30s" FUNCTIONS="T(#CUSTNAME)"/>
+  <ITEM NAME="#DRAW_UNCON_YN" TYPE="%-1s" FUNCTIONS=""/>
+  </BLOCK>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <ITEM NAME="#LYACNO" TYPE="%-19s" FUNCTIONS="" />
+  <ITEM LINE="8" COL="55" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96641();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="10" COL="55" LINES="220" COLS="160" NAME="#PIC1" TYPE="%-10s" VISABLE="FALSE" FUNCTIONS=""/>
+  <ITEM NAME="#SETPIC1" TYPE="%-10s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      #LYACNO=#ACTNO;
+      call_96642();
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!--added by liuyong 2009-9-15 显示图片信息 end-->
+  <BLOCK NAME="ACTINFO1" LINE="11" COL="0" VISABLE="FALSE">
+
+  <ITEM LINE="0"  COL="5"  TYPE="%-23s" FUNCTIONS="T(-----------------------------------)"/>
+  <ITEM LINE="0"  COL="30"  NAME="#LABELRIGSTINFO" INPUT="LABEL" TYPE="%-17s" FUNCTIONS="T(#LRIGSTINFO)"/>
+  <ITEM  NAME="#LRIGSTINFO"  TYPE="%-17s" FUNCTIONS="T(【登记申请信息】)" />
+  <ITEM LINE="0"  COL="48"  TYPE="%-23s" FUNCTIONS="T(-----------------------------------)"/>
+<!--	根据管总 2006－10－13 要求解挂失必须是本人
+  <ITEM  LINE="2"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(是否本人:!)"/>
+
+  <ITEM  LINE="2"  COL="25"  NAME="#SELFFLAG" INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="T(Y)" >
+  <SELECT>
+    		<OPTION VALUE="Y" TITLE="是"/>
+ 	</SELECT>
+  <ONLOSTFOCUS>"{
+        if( #SELFFLAG == 'Y'))
+        {
+                show(#LAGENTNAME,false);
+            	  show(#AGENTNAME,false);
+        }
+        else
+        {
+                show(#LAGENTNAME,true);
+                show(#AGENTNAME,true);
+        }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+ -->
+  <ITEM  NAME="#SELFFLAG"  TYPE="%-1s"  FUNCTIONS="T(Y)" >
+  <ONLOSTFOCUS>"{
+        if( #SELFFLAG == 'Y'))
+        {
+                show(#LAGENTNAME,false);
+            	 show(#AGENTNAME,false);
+        }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="2" COL="35" NAME="#LAGENTNAME" INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(代理人名:)" VISABLE="FALSE"/>
+  <ITEM LINE="2" COL="45" NAME="#AGENTNAME"  INPUT="TEXT"   TYPE="%-20s" FUNCTIONS="" VISABLE="FALSE"/>
+
+  </BLOCK>
+
+   <BLOCK NAME="CERTINFO1" LINE="14" COL="0" VISABLE="FALSE">
+  
+  <ITEM LINE="0"  COL="15"  NAME="#LCERTTYPE" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(证件类型:!)" />
+
+  <ITEM LINE="0"  COL="25"  NAME="#CERTTYPE"  INPUT="SELECT"  TYPE="%-1s"  FUNCTIONS="">
+    	<SELECT>
+    		<OPTION VALUE="1" TITLE="身份证"/>
+    		<OPTION VALUE="2" TITLE="户口簿"/>
+    		<OPTION VALUE="3" TITLE="护照"/>
+    		<OPTION VALUE="4" TITLE="军人证"/>
+    		<OPTION VALUE="5" TITLE="回乡证"/>
+    		<OPTION VALUE="6" TITLE="居住证"/>
+    		<OPTION VALUE="7" TITLE="驾照"/>
+    		<OPTION VALUE="8" TITLE="企业代码证"/>
+    		<OPTION VALUE="9" TITLE="组织机构号"/>
+    		<OPTION VALUE="A" TITLE="营业执照"/>
+    		<OPTION VALUE="B" TITLE="经营许可证"/>
+    		<OPTION VALUE="C" TITLE="事业法人证书"/>
+    	</SELECT>
+		  <ONLOSTFOCUS>"{
+		 if(#CERTTYPE!=rtrim(#CERTTYPE20))
+		 {
+		   showmsg('输入证件类型不符！');
+		   return(false);
+		 }
+	   }"
+	  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#SCERTTYPE" TYPE="%12s" FUNCTIONS="S(#CERTTYPE,#CERTTYPE)"/>
+
+  <ITEM LINE="0"  COL="45" NAME="#LCERTNO"  TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件号码:)" />
+  <ITEM LINE="0"  COL="55" NAME="#CERTNO"   TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)">
+	  <ONLOSTFOCUS>"{
+     if(#CERTNO!=rtrim(#CERTNO20)){
+       //showmsg('输入的证件号码['+#CERTNO+']与原登记证件号码['+#CERTNO20+']不同');
+       showmsg('非本人身份证号码，不能解挂');
+       return(false);
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#LBLLOSTNO" LINE="1" COL="15" TYPE="%-10s" INPUT="LABEL" FUNCTIONS="T(挂失编码:)"/>
+  <ITEM LINE="1" COL="25" TYPE="%-16s" INPUT="TEXT" DEVICE="KEYBOARD" NAME="#LOST_NO" FUNCTIONS="V(NB)"/> 
+   </BLOCK>
+
+   <BLOCK NAME="ACTINFO2" LINE="16" COL="0" VISABLE="FALSE">
+
+  <ITEM LINE="0"  COL="5"  TYPE="%-23s" FUNCTIONS="T(-------------------------------)"/>
+  <ITEM LINE="0"  COL="31" NAME="#LABELCHECKPWD" INPUT="LABEL" TYPE="%-15s" FUNCTIONS="T()" />
+  <ITEM LINE="0"  COL="48"  TYPE="%-23s" FUNCTIONS="T(-------------------------------)"/>
+
+  <ITEM  LINE="2"  COL="15"  TYPE="%-10s"  FUNCTIONS="T(密码支取:!)"/>
+  <ITEM  NAME="#PWDFLAG"  LINE="2"  COL="25" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T()" >
+  <SELECT>
+    		<OPTION VALUE="Y" TITLE="是"/>
+    		<OPTION VALUE="N" TITLE="否"/>
+ 	</SELECT>
+	<ONLOSTFOCUS>"{
+	if( #PWDFLAG == 'Y' )
+ {
+   if ( ( #LOSSTYPE == '23') or  (#LOSSTYPE == '24' ))//两次密码输入 0917重置密码
+        {
+           //show(#TDRAW_PWD,true);
+           //show(#LDRAW_PWD,true);
+           //show(#DRAW_PWD,false);
+        }
+   else //单次密码输入 0917重置密码
+   {
+     show(#LDRAW_PWD,true);
+     show(#DRAW_PWD,true);
+     show(#TDRAW_PWD,false);
+   }
+ }
+ else
+ {
+ 		show(#LDRAW_PWD,false);
+ 		show(#LTDRAW_PWD,false);
+ 		show(#DRAW_PWD,false);
+ 		show(#TDRAW_PWD,false);
+ }
+}"
+</ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM  LINE="2"  COL="45" NAME="#LDRAW_PWD" TYPE="%-14s"  FUNCTIONS="T(请输入新密码: )"  />
+  <ITEM  LINE="2"  COL="45" NAME="#LTDRAW_PWD" TYPE="%-14s"  VISABLE="FALSE"  FUNCTIONS="T(支取密码: )"  />
+  <!-- 增加TDRAW_PWD作为新密码输入两次 0917重置密码  -->
+  <ITEM  LINE="2"  COL="59" NAME="#TDRAW_PWD"  TYPE="%6d"  DEVICE="PINPAD"  INPUT="TEXT"  FUNCTIONS="i()V(NB)" >
+  <ONLOSTFOCUS>
+  "{
+    #DRAW_PWD=#TDRAW_PWD;
+    if(substr(#ACTNO,0,6) != '621223')
+   	{
+	 	 // 直接在这里校验密码了
+	  	dim @baktxno as string;
+	  	@baktxno=$TXNO;
+	  	$TXNO='9317';
+	  	commsend_001();
+	 	 	$FD30=#ACTNO;
+	  	$FD79=getitems('#DRAW_PWD');
+	  	callserver();
+	  	$TXNO=@baktxno;
+	  	if($FD12!='0000'){
+	  	showmsg(geterror());
+	  	return (false);
+	  	}
+    }
+	
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  LINE="2"  COL="59" NAME="#DRAW_PWD"  TYPE="%6d"  DEVICE="PINPAD"  INPUT="TEXT"  FUNCTIONS="i()I()V(NB)" >
+  <ONLOSTFOCUS>
+  "{
+  	//showmsg('#DRAW_PWD');
+   if(substr(#ACTNO,0,6) != '621223')
+   {
+	  // 直接在这里校验密码了
+	  dim @baktxno as string;
+	  @baktxno=$TXNO;
+	  $TXNO='9317';
+	  commsend_001();
+	  $FD30=#ACTNO;
+	  $FD79=getitems('#DRAW_PWD');
+	  //callserver();
+	  $TXNO=@baktxno;
+	  if($FD12!='0000'){
+	  showmsg(geterror());
+	  return (false);
+	  }
+    }
+	//2009-11-24 zhuxiaoping start
+	else if(substr(#ACTNO,0,6) == '621223' )
+	{
+		//initfd();		
+		//commsend_001();
+		//$FD16='7007';
+		//$FD30=#ACTNO;
+		//$FD79=#DRAW_PWD;
+		//$FD75=$MSR2;
+		//$FD76=$MSR3;
+		//$FD68='4';
+		//callagn();
+		//if($FD12!='0000')
+		//{
+		//	showmsg(geterror());
+		//	return (false);
+		//}
+	}
+	//2009-11-24 zhuxiaoping end
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="3"  COL="15" TYPE="%-10s" FUNCTIONS="T(证件支取:!)"/>
+  <ITEM NAME="#CERTFLAG"  LINE="3"  COL="25" TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="T(Y)" ENABLE="FALSE">
+	<SELECT>
+    		<OPTION VALUE="Y" TITLE="是"/>
+    		<OPTION VALUE="N" TITLE="否"/>
+	</SELECT>
+  </ITEM>
+
+   </BLOCK>
+
+  <BLOCK NAME="CERTINFO2" LINE="20" COL="0" VISABLE="FALSE">
+  <ITEM NAME="#LCERTTYPE2" LINE="0"  COL="15" TYPE="%-10s" INPUT="LABEL"  FUNCTIONS="T(证件类型:!)" />
+  <ITEM NAME="#CERTTYPE2"  LINE="0"  COL="25" TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="">
+    	<SELECT>
+    		<OPTION VALUE="1" TITLE="身份证"/>
+    		<OPTION VALUE="2" TITLE="户口簿"/>
+    		<OPTION VALUE="3" TITLE="护照"/>
+    		<OPTION VALUE="4" TITLE="军人证"/>
+    		<OPTION VALUE="5" TITLE="回乡证"/>
+    		<OPTION VALUE="6" TITLE="居住证"/>
+    		<OPTION VALUE="7" TITLE="驾照"/>
+    		<OPTION VALUE="8" TITLE="企业代码证"/>
+    		<OPTION VALUE="9" TITLE="组织机构号"/>
+    		<OPTION VALUE="A" TITLE="营业执照"/>
+    		<OPTION VALUE="B" TITLE="经营许可证"/>
+    		<OPTION VALUE="C" TITLE="事业法人证书"/>
+    	</SELECT>
+  </ITEM>
+
+  <ITEM NAME="#LCERTNO2" LINE="0"  COL="45"  TYPE="%-10s" INPUT="LABEL"     FUNCTIONS="T(证件号码:)" />
+  <ITEM NAME="#CERTNO2"  LINE="0"  COL="55"  TYPE="%-20s" DEVICE="KEYBOARD" INPUT="TEXT" FUNCTIONS="V(NB)"/>
+ <ITEM NAME="#LOST_REASON" LINE="1" COL="15" TYPE="%80s" INPUT="TEXT" FUNCTIONS="T(解挂失)" VISABLE="FALSE"/>
+  </BLOCK>
+
+   <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s"  FUNCTIONS="T(确  定)" INPUT="SUBMIT" />
+
+
+  </PAGE>
+
+
+
+</VARIABLE>
+
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+	<PACKAGE DEVICE="SCREEN" DESC="解挂失交易">
+      NOTHING
+	</PACKAGE>
+	    <!-- 打印格式还需要根据电请书格式调整 -->
+	<PRINT>"{
+		$KINDNO='00';
+    if ( '1'== substr(#LOSSTYPE,0,1))
+    {
+     print( 7, 22,'挂失方式:[20]',#SLOSSTYPE);
+     print( 8, 22,'挂失日期:[4]-[2]-[2] ',substr($FD5,0,4),substr($FD5,4,2),substr($FD5,6,2));
+     print( 9, 22,'挂失账/卡号:[24 ]',#ACTNO24);
+     print(16, 20,'提示:折(卡)挂失后，卡(折)可继续使用');
+    }
+    else
+    {
+      	print( 7, 22,'【账/卡号】:[24]',#ACTNO24);
+      	//print( 8, 22,'【新账/卡号】:[24]',$FD30);
+      	print( 8, 22,'【处理方式】:[20]',#SLOSSTYPE);
+      	print( 9, 22,'【处理日期】:[4]-[2]-[2]',substr($FD5,0,4),substr($FD5,4,2),substr($FD5,6,2));
+    }
+
+
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+	<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证" LINESPACE="24">
+      NOTHING
+	</PACKAGE>
+	<PRINT>"{
+		$KINDNO='00';
+		dim @txtime as string;
+		@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称: [30]',substr($BRNAME,0,20));
+		print( 5, 2,'交易代码: 3419');
+		print( 5,13,'交易名称: 解挂失交易');
+		print( 7, 30,'\L0解挂失交易凭条\L1');
+		if ( #SELFFLAG=='N')
+		{
+			print( 9, 20,'解挂失方式: [12          ]             交易行号: [7      ]',#SLOSSTYPE,$KINBR);
+			print(10, 20,'解挂  日期: [4]-[2]-[2]',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+			print(11, 20,'解挂账/卡号: [20                  ]     户          名: [50]',#ACTNO24,#CUSTNAME);
+			print(12, 20,'代理人名字: [10        ]               余          额: [21]',#AGENTNAME,#XAVBAL);
+			print(13, 20,'代理人证件: [12          ]             代理人证件号码: [20]',#SCERTTYPE,#CERTNO);
+		}
+		else
+		{
+			print( 9, 20,'解挂失方式: [12          ]             交易行号:[7      ]',#SLOSSTYPE,$KINBR);
+			print(10, 20,'解挂失日期: [4]-[2]-[2]',substr($HDATE,0,4),substr($HDATE,4,2),substr($HDATE,6,2));
+			print(11, 20,'解挂账/卡号: [20                   ]',#ACTNO24);
+			print(12, 20,'户      名: [50]',#CUSTNAME);
+			print(13, 20,'余      额: [21]',#XAVBAL);
+		}
+		print_sq();
+                print(24,20,'备注:');
+                print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                print(24,5,'柜员:[4]',$FD7);
+                print(24,5,'流水号:[6]',$FD4);
+
+	}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>

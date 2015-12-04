@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="1843 批量账户管理查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+  "{
+	refresh();
+	initfd();
+	commsend_001();
+  }"
+</COMMSEND>
+<COMMRECV>
+  "{
+	commrecv_001();
+  }"
+</COMMRECV>
+<VARIABLE>
+	<ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(1843                         批量帐户管理查询 )"/>
+	<ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS="T(─────────────────────────────────────)"/>
+	<ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+	<ONLOSTFOCUS>
+	"{
+		dim @selid as number;
+		if(#DOLIST=='1')
+		{
+			@selid=list_work();     
+			if(@selid &lt; 0)       
+			{                     
+				list_del();            
+				rerun();               
+				return(true);          
+			}           
+			@selid=list_getselid();
+			if(@selid &lt; 0)
+			{
+				list_del();
+				rerun();
+				return(true);
+			}
+		}
+		#DOLIST='';
+		list_del();
+	}"
+	</ONLOSTFOCUS>
+	</ITEM>
+	<!--<ITEM LINE="6"  COL="17"  TYPE="%-12s"  FUNCTIONS="T(交易  日期:)" />
+	<ITEM LINE="6"  COL="29"  NAME="#JYRQ" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="V(NB)T()D()" />-->
+	<ITEM LINE="6"  COL="17"  TYPE="%-12s"  FUNCTIONS="T(系统参考号:)" />
+	<ITEM LINE="6"  COL="29"  NAME="#XTCKH" TYPE="%-32s" INPUT="TEXT" FUNCTIONS="V(NB)T()" />
+	<ITEM LINE="19"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+		<ONCLICK>
+		 "{
+		 	dim @buffer as string;
+		  
+			initfd();
+			commsend_001();
+			$FD16 = '2046';
+			$FD18 = 'pbp';
+			$FD33 = #XTCKH;
+			@buffer = callagnpbp();
+			@buffer=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			
+			if(@buffer == '')
+			{
+				showmsg('未找到记录!');
+				return(false);
+			}
+			
+			autolist('~' + @buffer);
+			#DOLIST='1';
+			goitem('#DOLIST');
+			
+			return(true);
+		  }"
+		</ONCLICK>
+</ITEM>
+</VARIABLE>
+</TRANSACTION>

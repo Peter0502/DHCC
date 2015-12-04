@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111001" TITLE="7701  交易撤销"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	//卡撤销交易往数码发送 Begin Add By hxc 100607
+	  dim @baktxno as string;
+    if((substr(#AC_NO,0,6) == '621223' or substr(#AC_NO,0,6) == '621780') and ( #TX_CODE =='2201' or #TX_CODE =='2202' or #TX_CODE =='5802' or #TX_CODE =='5842' or #TX_CODE =='5844'))
+	{
+		@baktxno=$TXNO;
+		//initfd();
+		commsend_001();
+		$FD16='7701';
+		$FD33=#AC_NO;
+		$FD36=#TX_CODE;
+		$FD42=itoa(#TX_AMT*100,'%16.0f');
+		$FD44 =space(8-len(delspace(#WSSRNO)),'0')+delspace(#WSSRNO); /**核心交易流水号**/
+
+		callagn();
+		//$FD12='0000';
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+	}
+//卡撤销交易往数码发送 End Add By hxc 100607
+	commsend_001();
+	$FD44=space(8-len(delspace(#WSSRNO)),'0')+delspace(#WSSRNO);
+	$FD38=#TXNAME;
+	$FD40=space(16,'0');
+	$FD30=space(24);
+}"
+</COMMSEND>
+<COMMRECV>"{
+		commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(7701                            交易撤销)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5701)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="8" COL="12" TYPE="%-13s" FUNCTIONS="T(交易流水:)"/>
+  <!---根据协议编号联动出多个变量----->
+  <ITEM LINE="10" COL="12" TYPE="%-13s" FUNCTIONS="T(交易名称:)"/>
+
+  <ITEM NAME="#WSSRNO"    INPUT="TEXT"  LINE="8" COL="25" TYPE="%8s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+		限制柜面通业务	林冬燕 20110322
+		dim @brf as string;
+		dim @txnobak as string;
+		@txnobak=$TXNO;
+		initfd();
+		commsend_001();
+		$FD16='5563';
+		$FD44=#WSSRNO;
+		callserver();
+		$TXNO=@txnobak;
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return(false);
+		}
+		@brf=substr(delspace($FD83),0,6);
+		if(@brf=='柜面通'){
+			showmsg(delspace($FD83)+'不允许做撤销交易');
+			return(false);
+		}
+		//限制柜面通业务end
+		initfd();
+		dim @baktxno as string;
+		@baktxno=$TXNO;
+		$TXNO='9981';
+		$FD44 =space(8-len(delspace(#WSSRNO)),'0')+delspace(#WSSRNO);
+		commsend_001();
+		callserver();
+		$TXNO=@baktxno;
+		if($FD12!='0000')
+		{
+			showmsg(geterror());
+			return (false);
+		}
+		#TXNAME = $FD38;
+		#AC_NO = delspace($FD33);
+		#TX_CODE=delspace($FD36);
+		#TX_AMT=val($FD42,0.01);
+		//jk限制该交易不能撤销
+                if('5701' == #TX_CODE)
+		{
+			showmsg('该流水为撤销交易，不能撤销！');
+	        	return (false);
+     }
+    //有二级账户的交易先保留一份数据文件,lastwork时候使用这个文件读取信息发给平台
+		call('rm -f ../tmp/tmp_7701');
+		if( #TX_CODE == '2212' or #TX_CODE=='2214' or #TX_CODE=='2217' or #TX_CODE=='2508' or #TX_CODE=='6615' )
+		{
+				dim @tota as string;
+				commsend_001();
+				$FD16='9598';
+				$FD123='select ac_no||'+chr(39)+'-'+chr(39)+'||ac_id,amt,add_ind,ct_ind from trace_log where tx_date='+chr(39)+$HDATE+chr(39)+' and trace_no='+chr(39)+delspace(#WSSRNO)+chr(39)+' and svc_ind like'+chr(39)+'12%'+chr(39)+'order by trace_cnt desc';
+				@tota=callserver();
+				if($FD12!='0000')
+				{
+					showmsg(geterror());
+					return(false);
+				}
+			  savefiletxt('../tmp/tmp_7701',@tota);
+		}
+		showmsg('账号:'+#AC_NO+'; 交易码:'+#TX_CODE+'; 金额:'+delspace(itoa(#TX_AMT,'%16.2f')));
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#TXNAME"  LINE="10" COL="25" TYPE="%-20s" FUNCTIONS=""/>
+  <ITEM NAME="#AC_NO"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#TX_CODE"  TYPE="%-4s" FUNCTIONS=""/>
+  <ITEM NAME="#TX_AMT"  TYPE="%-16.2f" FUNCTIONS=""/>
+ <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#AUCODE" TYPE="%-1s" FUNCTIONS="T(#AUCODE)"/><!---授权标志--->
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="交易完成">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(8,25,'操 作 成 功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txday  as string;
+		dim @txtime as string;
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5, 20,'机构名称:[30]',$BRNAME);
+                print( 5, 2,'代码:7701');
+                print( 5, 13,'交易:交易撤销');
+		print( 7, 20,'被撤消交易名称:[20]',#TXNAME);
+		print( 8, 20,'被撤消  流水号:[ 8]',#WSSRNO);
+                printacdtl_h();
+                print_sq();
+                print( 24,20,'备注:')
+                print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                print( 24,5,'柜员:[4]',$FD7);
+                print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+<LASTWORK>
+"{
+	if( #TX_CODE == '2212' or #TX_CODE=='2214' or #TX_CODE=='2217' or #TX_CODE=='2508' or #TX_CODE=='6615' )
+	{
+		dim @file1 as file;
+		dim @filename1 as string;
+		dim @filename2 as string;
+		dim @line as string;
+		dim @acno as string;
+		dim @amt as string;
+		dim @jd as string;
+		dim @xz as string;
+		dim @txday  as string;
+		dim @txtime as string;
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+
+		@file1=openfile('../tmp/tmp_7701','r');
+    if(@file1 &lt; 0)
+		{
+			closefile(@file1);
+			return(true);
+		}
+
+		setvfile(true,true);
+		//把多账户的文件读出,提取二级账户的,组文件给平台算账户批量变动
+		while(true)
+		{
+			@line=readline(@file1);
+			if(@line=='')
+			{
+				break;
+			}
+			@acno=strfld(@line,'|',0);
+			@amt =strfld(@line,'|',1);
+			@jd  =strfld(@line,'|',2);
+
+			if(strfld(@line,'|',1)=='')
+			{
+				continue;
+			}
+      //由于是取消交易需要把原交易的借贷标志反过来发
+			if(@jd=='1' and @xz=='1')
+			{
+				addvfile(@acno+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'2现金取款'+'|'+chr(10));
+			}
+			else if(@jd=='0' and @xz=='1')
+			{
+				addvfile(@acno+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'1现金存款 '+'|'+chr(10));
+			}
+			else if(@jd=='1' and @xz=='2')
+			{
+				addvfile(@acno+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'2转账取款 '+'|'+chr(10));
+			}
+			else if(@jd=='0' and @xz=='2')
+			{
+				addvfile(@acno+'|'+@amt+'|'+$HDATE+'|'+$KINBR+'|'+'1转账存款 '+'|'+chr(10));
+			}
+		}
+		closefile(@file1);
+
+		@filename1='../tmp/'+$KINBR+$TTYNAME;
+		@filename2='../txt/二级账户取消交易_4310_'+$HDATE+'_'+@txtime+'.txt';
+
+		call('cp '+@filename1+' '+@filename2);
+
+		commsend_001();
+		setvfile(true,false);
+		$FD24='fwx';
+		$FD11='1';
+		$FD16='J012';
+		$FD5=$HDATE;                                  //交易日期
+		$FD41=$KINBR;                                 //银行代码
+		$FD82='PLZW_'+$HDATE+'_'+$FD4+'.txt';         //文件名
+		callagn();
+		if($FD12 != '0000')
+		{
+			showmsg('交易成功,发送平台失败,请联系技术人员'+geterror());
+			return(false);
+		}
+	}
+}"
+</LASTWORK>
+</TRANSACTION>

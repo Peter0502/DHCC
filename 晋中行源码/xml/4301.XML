@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="4301 内部帐户开户"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+  <COMMSEND>"{
+  
+  	$FD112=substr($FD112, 0, 3)+#DQRQ+substr($FD112, 11, 56)+#HM;
+
+		$FD12='';
+		$TXNO='2501';
+		commsend_001();
+		
+		
+	}"
+</COMMSEND>
+<COMMRECV>"{
+		#ZH=substr($FD112, 127, 24);
+}"
+</COMMRECV>
+<FIRSTWORK>"{
+	dim @txno_bak as string;
+	dim @tota as string;
+	initfd();
+	@txno_bak=$TXNO;
+	$TXNO='9924';
+	commsend_001();
+	@tota=callserver();
+	setsel(#CPBH,@tota,'o5t30o1v3o2');
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-60s" FUNCTIONS=
+    "T(4301                           内部帐开户  )"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   <ITEM NAME="#TXNO"    TYPE="%-4s" FUNCTIONS="T($TXNO=2501)"/>
+   <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <!--输入变量-->
+  <ITEM LINE="5"   COL="8" TYPE="%-10s" FUNCTIONS="T(业务种类:!)"/>
+ 
+  <ITEM LINE="7"   COL="8" TYPE="%-10s" FUNCTIONS="T(币    种:!)"/>
+  <ITEM LINE="9"   COL="8" TYPE="%-10s" FUNCTIONS="T(科 目 号: )"/>
+
+
+  <ITEM LINE="10"   COL="3" TYPE="%-70s" FUNCTIONS="T(--------------------------------------------------------------------)"/>
+
+ 	
+   <!--<ITEM LINE="11"   COL="8" TYPE="%-10s" FUNCTIONS="T(到期日期:)"/>-->
+    <ITEM LINE="13"   COL="8" TYPE="%-10s" FUNCTIONS="T(户    名:)"/>
+    <ITEM LINE="15"   COL="8" TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+
+  <ITEM NAME="#CPBH" INPUT="SELECT" LINE="5" COL="18" TYPE="%-3s" FUNCTIONS="T(904)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="904" TITLE="1.同业拆出 "/>
+  	</SELECT>
+	<ONLOSTFOCUS>
+	"{
+		dim @txno as string;
+		$FD112=#CPBH;
+		@txno=$TXNO;
+		$TXNO='9810';
+		commsend_001();
+
+		callserver();
+		if($FD12!='0000'){
+			showmsg(geterror());
+			return(false);
+		}
+		#BZ=substr($FD112, 58, 2);
+		#KMH=substr($FD112, 60, 7);
+		enable(#BZ, false);
+		enable(#KMH, false);
+	}"
+	</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  NAME="#SCPBH" TYPE="%-30s"  FUNCTIONS="S(#CPBH,#CPBH)"/>
+
+   <ITEM NAME="#BZ" INPUT="SELECT" LINE="7"  COL="18" TYPE="%-2s" FUNCTIONS="T(01)V(NB)">
+  	<SELECT>
+  		<OPTION VALUE="01" TITLE="01人民币"/>
+  		<OPTION VALUE="12" TITLE="12英镑"/>
+  		<OPTION VALUE="13" TITLE="13港元"/>
+  		<OPTION VALUE="14" TITLE="14美元"/>
+  		<OPTION VALUE="15" TITLE="15瑞士法郎"/>
+  		<OPTION VALUE="27" TITLE="27日元"/>
+  		<OPTION VALUE="28" TITLE="28加元"/>
+  		<OPTION VALUE="29" TITLE="29澳元"/>
+  		<OPTION VALUE="38" TITLE="38欧元"/>
+  	</SELECT>
+  </ITEM>
+  <ITEM NAME="#SBZ" TYPE="%-8s"  FUNCTIONS="S(#BZ,#BZ)"/>
+
+   <ITEM NAME="#KMH"  LINE="9"  COL="18" TYPE="%-7s"  INPUT="TEXT" FUNCTIONS="T()V(NB)"/>
+
+   <ITEM NAME="#DQRQ"  TYPE="%-8s"  FUNCTIONS="T(21000101)"/>
+
+   <ITEM NAME="#HM"   LINE="13" COL="18" TYPE="%-40s" INPUT="TEXT" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+		
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <!---<ITEM NAME="#ZH"     LINE="15" COL="18" TYPE="%-24s" INPUT="TEXT" FUNCTIONS="T()"/>
+--->
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#ZH"  TYPE="%-24s" FUNCTIONS="T()"/>
+  <ITEM NAME="#SUBMIT" LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+ 
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="内部帐开户" >
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+	print( 3,30,'内部帐开户');
+	print( 4,22,'帐    号:[24]',#ZH);
+	print( 5,22,'户    名:[40]',#HM);
+	print( 6,22,'业务种类:[30]',#SCPBH);
+	print( 7,22,'科 目 号:[ 7]',#KMH);
+	print( 8,22,'到期日期:[ 8]',#DQRQ);
+	print( 9,22,'流 水 号:[ 6]',$FD4);
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		$KINDNO = '00';
+		dim @txtime as string;
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5,20,'机构名称:[30]',$BRNAME);  
+		print( 5,2,'代码:4301');
+		print( 5,13,'交易:内部帐开户');
+
+		print( 7,20,'帐    号:[24]',#ZH);
+		print( 8,20,'户    名:[40]',#HM);
+		print( 9,20,'科 目 号:[ 7]',#KMH);
+		print(10,20,'业务种类:[30]',#SCPBH);
+		print(11,20,'币    种:[ 8]',#SBZ);
+		print_sq();
+		print(24,20,'备注:');
+		print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+		print(24,5,'柜员:[4]',$FD7);
+		print(24,5,'流水号:[6]',$FD4);
+			}"
+	</PRINT>
+</RESPONSE>
+
+</TRANSACTION>
+   

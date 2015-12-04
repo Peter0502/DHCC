@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="00000000" TITLE="8607      自动开户补开介质"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+	initfd();
+     	commsend_001();
+     	$FD37=#ACTNO;
+     	$FD116=#MDMTYPE+space(121)+#NOTENUM+space(1);
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(8607                       自动开户补开凭证)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6607)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="7"    COL="10"   TYPE="%-10s" FUNCTIONS="T(账    号:)"/>
+  <ITEM LINE="9"    COL="10"   TYPE="%-10s" FUNCTIONS="T(介质种类:!)" />
+  <ITEM LINE="11"   COL="10"   TYPE="%-10s" FUNCTIONS="T(凭 证 号:)" /> 
+   
+  <ITEM LINE="7"   COL="21"  NAME="#ACTNO"        TYPE="%-20s"        INPUT="TEXT"    FUNCTIONS=""/>
+   
+  <ITEM LINE="9"   COL="21"  NAME="#MDMTYPE"      TYPE="%-4s"        INPUT="SELECT"  FUNCTIONS="T(0010)">
+    <SELECT>
+       <OPTION VALUE ="0010" TITLE="0010.活期存折" />
+       <OPTION VALUE ="0013" TITLE="0013.整整定期存单" />
+      <!---
+       <OPTION VALUE ="0011" TITLE="0011.零整存折" />
+       <OPTION VALUE ="0012" TITLE="0012.贺卡定期存单" />
+       <OPTION VALUE ="0015" TITLE="0015.储蓄定活两便存单" />
+       <OPTION VALUE ="0016" TITLE="0016.定期一本通" />
+     --->
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="11"   COL="21"   NAME="#NOTENUM"         TYPE="%16d"       INPUT="TEXT"  FUNCTIONS="">
+   <ONLOSTFOCUS>
+		"{
+		    dim @txno_bak as string;
+        	    @txno_bak=$TXNO;
+		    $TXNO='9782';
+		    $FD116=#MDMTYPE+space(121)+#NOTENUM;
+		    commsend_001();		
+		    callserver();
+		    $TXNO=@txno_bak;
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		}"
+	 </ONLOSTFOCUS>
+  </ITEM>    
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD"   TYPE="%-6s"    FUNCTIONS="T()"/>
+
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="自动开户补开介质"> 
+ CZFY|@ac_no|@name|@cif_no|@sttl_type|@opn_date|@draw_type|@title|@brf|@tx_amt|@tel|@br_tele|@bal|
+</PACKAGE>
+<INIT>
+"{
+}"
+</INIT>
+<PRINT>
+"{
+print(4 ,20,'账 /卡号:  [24                       ]',@ac_no);
+print(5 ,20,'客户名称:  [24                       ]',@name);
+print(6 ,20,'客 户 号:  [24                       ]',@cif_no);
+print(7 ,20,'结算类型:  [24                       ]',@sttl_type);
+print(8 ,20,'开户日期:  [24                       ]',@opn_date);
+print(9 ,20,'支取方式:  [24                       ]',@draw_type);
+print(10,20,'产品描述:  [24                       ]',@title);
+print(11,20,'交易金额:  [24                       ]',@tx_amt);
+print(12,20,'操 作 员:  [24                       ]',@tel);
+print(13,20,'电话号码:  [24                       ]',@br_tele);
+print(14,20,'账户余额:  [24                       ]',@bal);
+
+
+}"
+</PRINT>
+</RESPONSE>
+
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER"  LINESPACE="13" DESC="请打印存折首页"> 
+CZFY|@ac_no|@name|@cif_no|@sttl_type|@opn_date|@draw_type|@title|@brf|@tx_amt|@tel|@br_tele|@bal|@cur_name|@rate|
+</PACKAGE>
+<INIT>
+"{
+	$KINDNO = '00';
+}"
+</INIT>
+<PRINT>
+"{
+dim @txamt  as string;
+dim @avbal  as string; //余额
+dim @mtxamt as string; //月存金额
+dim @tctd   as string; //通存通兑标志
+//不用￥符号
+@txamt=ltrim(comma(substr(@tx_amt,0,len(@tx_amt)-4),16));
+@avbal=ltrim(comma(substr(@bal,0,len(@bal)-4),16));
+
+if(len(@txamt)&lt;21)
+{
+	@txamt=space(21-len(@txamt))+@txamt;
+}
+if(@draw_type == '【 凭密支取 】' or @draw_type=='【 密码兼证件支取 】')
+{
+	@tctd = '通存通兑';
+}
+else
+{
+	@tctd = '        ';
+}
+
+print( 2, 8,'开户行名称:\L0[30]\L1',$BRNAME);
+print( 4, 8,'\L0[8        ]      [20]\L1',@cur_name,@title);
+print( 6, 8,'\L0                 [20]\L1',@sttl_type);
+print( 8, 8,'\L0                    [7]%\L1',@rate);
+print(12, 8,'\L0[20                    ]\L1',@name);
+print(16, 8,'\L0[20]\L1',@ac_no);
+print(20,16,'[10          ]          [20]',substr(@opn_date,0,4)+'/'+substr(@opn_date,4,2)+'/'+substr(@opn_date,6,2),@draw_type);
+print(22,16,'                       [8]',@tctd);
+print(28, 0,'[8       ] [4   ]                [14            ][18                ] [4   ]',@opn_date,@brf,substr(@txamt,7,14),substr(@avbal,3,18),@tel);
+}"
+</PRINT>
+</RESPONSE>
+</TRANSACTION>

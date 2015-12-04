@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000000000000000000000000000" TITLE="5821 银行本票兑付申请修改)"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+  commsend_001();
+  #RTXAMT=itoa(#TX_AMT*100,'%016.0f');
+  $FD102=getitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#ID_NO#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10');
+  #OPCD='10';
+  $FD22='05';
+  lvsend_123();
+}"
+</COMMSEND>
+<COMMRECV>"{
+        commrecv_001();
+        lvrecv_123();
+}"
+</COMMRECV>
+
+<VARIABLE>
+
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(5821                       银行本票兑付申请修改)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s"       FUNCTIONS="T($TXNO=5321)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s"    FUNCTIONS="T($MSGTYPE=03001)"/> 
+  <!-- 基本信息录入 -->
+  <ITEM LINE="05"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(委托  日期:)"/>
+  <ITEM LINE="05"  COL="36" TYPE="%-11s"  FUNCTIONS="T(交易  序号:)"/>
+  <ITEM LINE="06"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(接收  行号:)"/>
+  <ITEM LINE="06"  COL="36" TYPE="%-11s"  FUNCTIONS="T(出票行行号:)"/>
+  
+  <ITEM LINE="08"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(本票  类型:)"/>
+  <ITEM LINE="09"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(交易  金额:)"/>
+  
+  <ITEM LINE="11"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(收款人帐号:)"/>
+  <ITEM LINE="11"  COL="36" TYPE="%-11s"  FUNCTIONS="T(收款开户行:)"/>
+  <ITEM LINE="12"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(收款人名称:)"/>
+  <ITEM LINE="13"  COL="3"  TYPE="%-11s"  FUNCTIONS="T(收款人地址:)"/>
+  
+  <ITEM LINE="15"  COL="3"   TYPE="%-9s"  FUNCTIONS="T(票据号码:)"/>
+  <ITEM LINE="15"  COL="38"  TYPE="%-9s"  FUNCTIONS="T(出票日期:)"/>
+  <ITEM LINE="16"  COL="3"  TYPE="%-9s"   FUNCTIONS="T(出票金额:)"/>
+  <ITEM LINE="17"  COL="3"  TYPE="%-9s"   FUNCTIONS="T(密    押:)"/>
+  <ITEM LINE="18"  COL="35" TYPE="%-34s"   FUNCTIONS="T(注:若本票已背书,请输入原收款人名称)"/>
+  <ITEM LINE="19"  COL="3"  TYPE="%-13s"  FUNCTIONS="T(原收款人名称:)"/>
+  <ITEM LINE="20"  COL="3"  TYPE="%-13s"  FUNCTIONS="T(附        言:)"/>
+
+  <ITEM LINE="05" COL="14" NAME="#WT_DATE" TYPE="%8d"  DEVICE="KAYBOARD" FUNCTIONS="T($HDATE)"/>
+  <ITEM LINE="05" COL="47" NAME="#ORDERNO" TYPE="%8d"  DEVICE="KEYBOARD" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+      dim @baktxno as string;
+      dim @baktxno1 as string;
+      dim @baktxno2 as string;
+      dim @tota as string;
+      dim @bsrs as number;
+      dim @txamt as string;
+
+      dim @name as string;
+      dim @avbal as string;
+      dim @pwd_ind as string;
+      dim @actype as string;
+      @tota = ' ';
+      @baktxno=$TXNO;
+      $TXNO = '9404';
+      commsend_001();
+      lvsend_123();
+      @tota = callserver();
+      $TXNO=@baktxno;
+      $BUFFER=@tota;
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return (false);
+      }
+      
+      lvrecv_123();
+      #CPDAY = substr($BUFFER,0,8);
+      //showmsg('出票日期:'+#CPDAY);
+      #PNUM1 = substr($BUFFER,16,20);
+      //showmsg('出票号码:'+#PNUM1);
+      #PAYNO = substr($BUFFER,28,12);
+      #DLPAYNO = substr($BUFFER,40,12);
+      @txamt = substr($BUFFER,52,15);
+      //showmsg('出票金额:'+@txamt);
+      //#CPAMT = atoi(@txamt)/100;
+      
+      #USE = substr($BUFFER,67,60);
+      #BSREN = substr($BUFFER,127,2);
+      @bsrs = atoi(#BSREN);
+      //showmsg('背书人数:'+#BSREN);
+      #LVPTYPE = substr($BUFFER,641+@bsrs*60,2);
+      //showmsg('票据种类:'+#LVPTYPE);
+      #TSDAY = substr($BUFFER,643+@bsrs*60,8);
+      //showmsg('提示付款日期:'+#TSDAY);
+      #CASHACTNO19=#CASH_AC_NO;
+      #CPAMT = #TX_AMT;
+      
+      enable(#TX_AMT,true);
+      enable(#CASHACTNO19,true);
+      enable(#TSDAY,true);
+      enable(#LVPTYPE,true);
+      enable(#USE,true);
+      enable(#CPAMT,true);
+      enable(#DLPAYNO,true);
+      enable(#PAYNO,true);
+      enable(#PNUM1,true);
+      enable(#CPDAY,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>        
+
+
+  <ITEM LINE="06" COL="14" NAME="#AC_BR_NO" TYPE="%-12s"  DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()">
+      <ONLOSTFOCUS>"{
+          dim @baktxno as string;
+          @baktxno=$TXNO;
+          $TXNO='9553';
+          $FD32=#AC_BR_NO;
+          commsend_001();
+          callserver();
+          $TXNO=@baktxno;
+          if($FD12!='0000')
+          {
+              showmsg(geterror());
+              return(false);
+          }
+          showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+      }"</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="06" COL="47" NAME="#PAY_OPN_BR_NO" DEVICE="KEYBOARD" TYPE="%-12s"  FUNCTIONS="V(NB)T()">
+      <ONLOSTFOCUS>"{
+          dim @baktxno as string;
+          @baktxno=$TXNO;
+          $TXNO='9553';
+          $FD32=#PAY_OPN_BR_NO;
+          commsend_001();
+          callserver();
+          $TXNO=@baktxno;
+          if($FD12!='0000')
+          {
+              showmsg(geterror());
+              return(false);
+          }
+          showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+      }"</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM  NAME="#PAY_AC_NO"  TYPE="%-32s"  FUNCTIONS="V(NB)T(0                               )"/>
+  <ITEM  NAME="#PAY_NAME"   TYPE="%-60s"  FUNCTIONS="V(NB)T(0                                                           )"/>
+  <ITEM  NAME="#PAY_ADDR"   TYPE="%-60s"  FUNCTIONS="T(                                                            )"/>
+  
+  <ITEM LINE="08" COL="14" NAME="#BPTYPE" DEVICE="KEYBOARD" TYPE="%-1s"  FUNCTIONS="V(NB)T(0)">
+     <SELECT LINE="08" COL="15">
+   <OPTION VALUE="0 转帐本票"   TITLE="0.转帐本票  "/>
+   <OPTION VALUE="1 现金本票"   TITLE="1.现金本票  "/>
+   </SELECT>
+  <ONLOSTFOCUS>
+  "{
+     if(#BPTYPE=='1')
+     {
+          dim @baktxno as string;
+          @baktxno=$TXNO;
+          $TXNO='9406';
+          $FD48 = '0008';
+          $FD91 = $KINBR;
+          callserver();
+          $TXNO=@baktxno;
+          if($FD12!='0000')
+          {
+               showmsg(geterror());
+               return (false);
+          }
+          #CASHACTNO19=substr($FD120,0,20);
+          
+          showmsg(#CASHACTNO19);
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="09" COL="14" NAME="#TX_AMT"  TYPE="%16.2f" DEVICE="KEYBOARD" FUNCTIONS="V(NB)T()">
+      <ONLOSTFOCUS>
+       "{
+            if(#TX_AMT == 0 )
+            {
+                showmsg('交易金额要大于零!');
+                return(false);
+            }
+            if(#TX_AMT  &gt;= 100001 )
+            {
+                showmsg('交易金额上限是100000!');
+                return(false);
+            } 
+       }"
+      </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#AC_NO"   TYPE="%-24s" FUNCTIONS=""/>
+  <ITEM NAME="#AC_SEQN"   TYPE="%-4s" FUNCTIONS="T(0001)"/>
+  <ITEM LINE="11" COL="14" NAME="#CASHACTNO19" DEVICE="KEYBOARD" TYPE="%-19s"  FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CASH_AC_NO" TYPE="%-32s"  FUNCTIONS="T(#CASHACTNO19)">
+  <ONLOSTFOCUS>"{
+      dim @baktxno as string;
+      dim @name as string;
+      dim @avbal as string;
+      dim @pwd_ind as string;
+      dim @actype as string;
+      dim @prdt_name as string;
+      @baktxno=$TXNO;
+      $TXNO='9731';
+      #AC_NO=substr(#CASH_AC_NO,0,24)+space(24-len(#CASH_AC_NO))+'';
+      $FD102=#AC_NO+#AC_SEQN;
+      commsend_001();
+      callserver();
+      $TXNO=@baktxno;
+      if($FD12!='0000')
+      {
+          showmsg(geterror());
+          return(false);
+      }
+      @name=substr($FD102,125,60);
+      @avbal=substr($FD102,185,16);
+      @pwd_ind=substr($FD102,48,1);
+      @actype=substr($FD102,207,1);
+      #CASH_OPN_BR_NO = substr($FD52,0,12);
+      #CASH_NAME=rtrim(@name);
+      enable(#CASH_NAME,false);
+      enable(#CASH_OPN_BR_NO,false);
+      @prdt_name=rtrim(substr($FD102,313,30));
+      #TXAMT15=itoa(#TX_AMT*100,'%16.0f');
+      showhelp(4,68,5,10,'帐户信息','户名:'+@name+' 余额:'+itoa(val(@avbal,0.01),'%16.2f')+space(6)+' 产品名称:'+@prdt_name);
+      setitems('#ACTNO24#ACTSEQ#VOCTYPE#VOCNUM#FETCHFLAG#PWDFLAG#QUE_PWD#DRAW_PWD#ID_TYPE#CERTNO20#STAMPFLAG#PWDFLAG2#PWD16#PRINTDATE#TXAMT15#CERTTYPE#CUSTNAME#AVBAL#CURCD#CT_IND#DSCPT#ACTTYPE#ACTSEQ_2#ACCOUNTFLAG#INTEREST1#INTEREST2#INTEREST3#PAYAMOUNT#NEWVOCNUM#SPEFLAG#PRODNAME#ACTNO_24#EDUCREDIT#DESC10',$FD102);
+      
+      #ID_NO=rtrim(#CERTNO20);// for test
+      #CASH_AC_NO=rtrim(#CASH_AC_NO);
+      if(len(#CASH_AC_NO)!=7 and len(#CASH_AC_NO)!=3 and len(#CASH_AC_NO)!=5 )
+      {
+          @baktxno=$TXNO;
+          $TXNO = '9405';
+          #CASH_AC_NO=substr(#CASH_AC_NO,0,24)+space(24-len(#CASH_AC_NO))+'';
+          $FD32=#CASH_AC_NO;
+          commsend_001();
+          callserver();
+          if($FD12!='0000')
+          {
+              showmsg(geterror());
+              return (false);
+          }
+          $TXNO=@baktxno;
+      }
+ }"    
+ </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM LINE="11" COL="47" NAME="#CASH_OPN_BR_NO" DEVICE="KEYBOARD" TYPE="%-12s"  FUNCTIONS="V(NB)T()">
+      <ONLOSTFOCUS>"{
+          dim @baktxno as string;
+          @baktxno=$TXNO;
+          $TXNO='9553';
+          $FD32=#CASH_OPN_BR_NO;
+          commsend_001();
+          callserver();
+          $TXNO=@baktxno;
+          if($FD12!='0000')
+          {
+              showmsg(geterror());
+              return(false);
+          }
+          showhelp(3,70,8,3,'支付系统行名信息',substr($FD96,0,60));
+      }"</ONLOSTFOCUS>
+  </ITEM>
+   
+  <ITEM LINE="12" COL="14" NAME="#CASH_NAME"  DEVICE="NONE" TYPE="%-60s" INPUT="LABEL" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13" COL="14" NAME="#CASH_ADDR"  DEVICE="KEYBOARD" TYPE="%-60s"  FUNCTIONS="T()"/>
+  
+  
+  <ITEM NAME="#PNUM1"   LINE="15"  COL="12" DEVICE="KEYBOARD" TYPE="%16s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#PNUM3"   TYPE="%4s" FUNCTIONS="T(0000)"/>
+  <ITEM NAME="#PNUM2"   TYPE="%20s" FUNCTIONS="T(#PNUM3+#PNUM1)"/>
+  <ITEM NAME="#CPDAY"   LINE="15"  COL="47" DEVICE="KEYBOARD" TYPE="%8d"  FUNCTIONS="V(NB)T()D()">
+      <ONLOSTFOCUS>"{
+           dim @cnt as number;
+           if(#CPDAY>$HDATE)
+           {
+               showmsg('出票日期不能大于当前日期!');
+               return(false);
+           }
+           @cnt=func(#CPDAY,$HDATE);
+           
+      }"
+      </ONLOSTFOCUS>
+  </ITEM>
+  <ITEM NAME="#CPAMT" LINE="16" COL="12" DEVICE="KEYBOARD" TYPE="%16.2f" FUNCTIONS="T(#TX_AMT)"/>
+  <ITEM NAME="#TSDAY"  TYPE="%8d"  FUNCTIONS="T($HDATE)"/>
+
+  <ITEM NAME="#MAC"      LINE="17" COL="12" INPUT="TEXT" DEVICE="KEYBOARD" TYPE="%-20s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CONTENT"  LINE="19" COL="16"  DEVICE="KEYBOARD" TYPE="%-60s"   FUNCTIONS="V(NB)T(0                                                           )"/>
+  
+  <ITEM LINE="20" COL="16" NAME="#BRF"  TYPE="%-60s"  DEVICE="KEYBOARD" FUNCTIONS="T()"/>
+  <ITEM NAME="#XTX_AMT"    TYPE="%-21s"        FUNCTIONS="X(#TX_AMT)"/>
+  
+  <!--定义大额的FD123域-->
+  <ITEM NAME="#BSREN"          TYPE="%-2s"   FUNCTIONS=""/>
+  <ITEM NAME="#YW_TYPE"        TYPE="%-12s"  FUNCTIONS=""/>
+  <ITEM NAME="#CHRG_IND"       TYPE="%1d"    FUNCTIONS=""/>
+  <ITEM NAME="#TXNUM"          TYPE="%5d"    FUNCTIONS="T(30103)"/>
+  <ITEM NAME="#CRDB"           TYPE="%-1s"   FUNCTIONS="T(0)"/>   <!--借贷标志0借1贷--> 
+  <ITEM NAME="#OPCD"           TYPE="%-2s"   FUNCTIONS="T(10)"/>  <!--操作代码 -->
+  <ITEM NAME="#PKGNO"          TYPE="%3d"    FUNCTIONS="T(004)"/> <!--PKGNO-->
+  <ITEM NAME="#OR_BR_NO"       TYPE="%-12s"  FUNCTIONS="T()"/>    <!--发起行行号     --> 
+  <ITEM NAME="#AC_BR_NO"       TYPE="%-12s"  FUNCTIONS="T()"/>    <!--接收行行号     --> 
+  <ITEM NAME="#PAY_QS_NO"      TYPE="%-12s"  FUNCTIONS="T()"/>    <!--付款清算行行号 -->
+  <ITEM NAME="#PWD"            TYPE="%-8s"   FUNCTIONS="T()"/>    <!--储户密码       --> 
+  <ITEM NAME="#CASH_QS_NO"     TYPE="%-12s"  FUNCTIONS="T()"/>    <!--收款清算行行号 -->
+  <ITEM NAME="#AUTH_TEL"       TYPE="%-6s"   FUNCTIONS="T()"/>    <!--授权操作员号   --> 
+  <ITEM NAME="#AUTH_PWD"       TYPE="%-8s"   FUNCTIONS="T()"/>    <!--授权操作员密码 --> 
+  <ITEM NAME="#NOTE_TYPE"      TYPE="%-2s"   FUNCTIONS="T()"/>    <!--凭证种类      --> 
+  <ITEM NAME="#NOTE_NO"        TYPE="%-12s"  FUNCTIONS="T()"/>    <!--凭证号码      --> 
+  <ITEM NAME="#PACK_DATE"      TYPE="%-8s"   FUNCTIONS="T()"/>    <!--包日期,定期用 --> 
+  <ITEM NAME="#PACK_ID"        TYPE="%-8s"   FUNCTIONS="T()"/>    <!--包id,定期用   --> 
+  <ITEM NAME="#CHRG_AMT"       TYPE="%-15s"  FUNCTIONS="T()"/>    <!--手续费金额    --> 
+  <ITEM NAME="#RESP_DAY"       TYPE="%-8s"   FUNCTIONS="T()"/>    <!--期待应答日期  --> 
+  <ITEM NAME="#PO_TYPE"        TYPE="%-2s"   FUNCTIONS="T()"/>    <!--票据类型      --> 
+  <ITEM NAME="#PO_DATE"        TYPE="%-8s"   FUNCTIONS="T()"/>    <!--票据日期      --> 
+  <ITEM NAME="#PO_NUM"         TYPE="%-8s"   FUNCTIONS="T()"/>    <!--票据号码      --> 
+  <ITEM NAME="#PC_TX_AMT"      TYPE="%-15s"  FUNCTIONS="T()"/>    <!--赔偿金额      --> 
+  <ITEM NAME="#JF_TX_AMT"      TYPE="%-15s"  FUNCTIONS="T()"/>    <!--拒付金额      --> 
+  <ITEM NAME="#O_WT_DATE"      TYPE="%-8s"   FUNCTIONS="T()"/>    <!--原委托日期    --> 
+  <ITEM NAME="#O_TXNUM"        TYPE="%-5s"   FUNCTIONS="T()"/>    <!--原业务编号    --> 
+  <ITEM NAME="#O_ORDERNO"      TYPE="%-8s"   FUNCTIONS="T()"/>    <!--原支付交易序号--> 
+  <ITEM NAME="#RET_CODE"       TYPE="%-2s"   FUNCTIONS="T()"/>    <!--退汇原因代码  --> 
+  <ITEM NAME="#RCP_STS"        TYPE="%-2s"   FUNCTIONS="T()"/>    <!--业务回执状态  --> 
+  <ITEM NAME="#RESP1"          TYPE="%-8s"   FUNCTIONS="T()"/>    <!--Mbfe应答码    --> 
+  <ITEM NAME="#RESP2"          TYPE="%-8s"   FUNCTIONS="T()"/>    <!--Ccpc应答码    --> 
+  <ITEM NAME="#PACK_END"       TYPE="%-1s"   FUNCTIONS="T()"/>    <!--包结束标志    --> 
+  <ITEM NAME="#LV_STS"         TYPE="%-1s"   FUNCTIONS="T()"/>    <!--交易状态      -->
+  <ITEM NAME="#LW_IND"         TYPE="%-1s"   FUNCTIONS="T(1)"/>   <!--来往标识 -->
+  <ITEM NAME="#DFXYNO"         TYPE="%-60s"  FUNCTIONS="T()"/>    <!--多方协议号-->
+  <ITEM NAME="#OORBRNO"        TYPE="%-12s"  FUNCTIONS="T()"/>    <!--原发起行行号 -->
+  <ITEM NAME="#OACBRNO"        TYPE="%-12s"  FUNCTIONS=""/>       <!--原接收行行号-->
+  <ITEM NAME="#OPERLEVEL"      TYPE="%1d"    FUNCTIONS="T(0)"/>
+<!--------以上定义为大额的FD123  域填充的内容,需要时再添加----------->
+
+<!-- 102域变量 -->
+  <ITEM NAME="#ACTNO24"       TYPE="%-24s"     FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ"        TYPE="%-4s"      FUNCTIONS=""/>
+  <ITEM NAME="#VOCTYPE"       TYPE="%-3s"      FUNCTIONS=""/>
+  <ITEM NAME="#VOCNUM"        TYPE="%16d"      FUNCTIONS=""/>
+  <ITEM NAME="#FETCHFLAG"     TYPE="%1s"       FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG"       TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#QUE_PWD"       TYPE="%6s"       FUNCTIONS=""/>
+  <ITEM NAME="#ID_NO"         TYPE="%-20s"     FUNCTIONS=""/>
+  <ITEM NAME="#CERTFLAG"      TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#CERTNO20"      TYPE="%-20s"     FUNCTIONS=""/>
+  <ITEM NAME="#STAMPFLAG"     TYPE="%1s"       FUNCTIONS=""/>
+  <ITEM NAME="#PWDFLAG2"      TYPE="%1s"       FUNCTIONS=""/>  
+  <ITEM NAME="#PWD16"         TYPE="%-16s"     FUNCTIONS=""/>
+  <ITEM NAME="#PRINTDATE"     TYPE="%-8s"      FUNCTIONS=""/>      
+  <ITEM NAME="#TXAMT15"       TYPE="%-16s"     FUNCTIONS=""/>
+  <ITEM NAME="#CERTTYPE"      TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#CUSTNAME"      TYPE="%-50s"     FUNCTIONS=""/>
+  <ITEM NAME="#AVBAL"         TYPE="%17.2f"    FUNCTIONS=""/>
+  <ITEM NAME="#CURCD"         TYPE="%-2s"      FUNCTIONS=""/>
+  <ITEM NAME="#CT_IND"        TYPE="%-1s"      FUNCTIONS="T(2)"/>
+  <ITEM NAME="#DSCPT"         TYPE="%-3s"      FUNCTIONS=""/>
+  <ITEM NAME="#ACTTYPE"       TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#ACTSEQ_2"      TYPE="%-4s"      FUNCTIONS=""/>
+  <ITEM NAME="#ACCOUNTFLAG"   TYPE="%-1s"      FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST1"     TYPE="%-16s"     FUNCTIONS=""/>
+  <ITEM NAME="#INTEREST2"     TYPE="%-16s"     FUNCTIONS=""/>  
+  <ITEM NAME="#INTEREST3"     TYPE="%-16s"     FUNCTIONS=""/>
+  <ITEM NAME="#PAYAMOUNT"     TYPE="%-16s"     FUNCTIONS=""/>  
+  <ITEM NAME="#NEWVOCNUM"     TYPE="%-16d"     FUNCTIONS=""/>
+  <ITEM NAME="#SPEFLAG"       TYPE="%-20s"     FUNCTIONS=""/>    
+  <ITEM NAME="#PRODNAME"      TYPE="%-30s"     FUNCTIONS=""/>
+  <ITEM NAME="#ACTNO_24"      TYPE="%-24s"     FUNCTIONS=""/> 
+  <ITEM NAME="#EDUCREDIT"     TYPE="%1s"       FUNCTIONS=""/>   
+  <ITEM NAME="#DESC10"        TYPE="%-10s"     FUNCTIONS=""/>
+  <ITEM NAME="#DRAW_PWD"      TYPE="%-6s"      FUNCTIONS=""/>
+  <ITEM  NAME="#ID_TYPE"      TYPE="%-1s"      FUNCTIONS=""/>
+  <!-----以上是FD102域的内容---->
+
+<!----以下是附加域的信息----->
+  <ITEM NAME="#DLPAYNO"     TYPE="%12d"  FUNCTIONS="T()"/><!----出票行行号或代理清算行行号----->
+  <ITEM NAME="#LVPTYPE"     TYPE="%2s"   FUNCTIONS="V(NB)T(05)"/>
+  <ITEM NAME="#STOPDAY"     TYPE="%8d"   FUNCTIONS="T()D()"/>
+  <ITEM NAME="#PAYNO"       TYPE="%12d"  FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#USE"         TYPE="%-60s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#PAYBRNAME"   TYPE="%-60s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CASHBRNAME"  TYPE="%60s" FUNCTIONS="V(NB)T(                                                           0)"/>
+  <ITEM NAME="#XYNO"        TYPE="%-20s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#HTNO"        TYPE="%-20s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CDNAME"      TYPE="%-60s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#REQNAME"     TYPE="%60s" FUNCTIONS="V(NB)T(                                                           0)"/>
+  <ITEM NAME="#REQACTNO"    TYPE="%-32s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CDDAY"       TYPE="%8d"   FUNCTIONS="V(NB)T()D()"/>
+  <ITEM NAME="#CPNAME"      TYPE="%-60s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#CPACTNO"     TYPE="%-32s" FUNCTIONS="V(NB)T()"/>
+  <ITEM NAME="#PAYBRNAME2"  TYPE="%-60s" FUNCTIONS="V(NB)T()"/><!---注意这里是代理清算行名称--->
+<!----以上是附加域的信息----->
+  <ITEM NAME="#oXTxAmt"    TYPE="%-20s" FUNCTIONS="X(#CPAMT)"/>
+
+
+  <ITEM NAME="#OK" LINE="21"  COL="69"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+     <ONCLICK>"{
+         dim @text as string;
+         dim @len as number;
+
+         setvfile(true,true);
+         $BUFFER=getitems('#CPDAY#PNUM2#PAYNO#DLPAYNO')+itoa(#CPAMT*100,'%015.0f')+getitems('#USE#LVPTYPE#TSDAY#MAC#STOPDAY#XYNO#HTNO#CDDAY#CDNAME#REQNAME#REQACTNO#PAYBRNAME#CASHBRNAME#CPNAME#CPACTNO#PAYBRNAME2#CONTENT');
+         addvfile(substr($BUFFER,0,127));//先存基本信息第一部分
+         @len=len($BUFFER);
+         @len=@len-127;
+         @text=substr($BUFFER,127,@len);
+         
+         if(confirm('输入背书人吗?',0)!='Y')
+         {
+               if (delspace(#CONTENT) != '0')
+               {
+               showmsg('原收款人不为零必须有背书人')
+               return(false);
+               }
+               addvfile('00');                //背书人个数
+         }
+         else
+         {
+               opendlg('../xml/LV_BSRQD.DLG');    //录入背书人清单
+         }
+         addvfile(space(512,'x'));    //支票密码
+         addvfile(@text);            //基本信息第二部分
+         addvfile('00000000');        //正面图象
+         addvfile('00000000');        //反面图象
+         submit();
+     }"
+     </ONCLICK>
+  </ITEM>
+</VARIABLE>
+<!--发送信息包-->
+
+<!--接收信息包-->
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+        print(3,5, '                  银行本票兑付申请修改');
+        print(4,5, '委 托 日 期:[8]  支付交易序号:[8]',$HDATE,#ORDERNO);
+        print(5,5, '接收行行号:[12] ',#AC_BR_NO);
+        print(8,5, '交 易 金 额:[21]',#XTX_AMT);
+        print(9,5, '对方清算行号: [12]',#CASH_QS_NO);
+        print(10,5,'收款人帐号:[24]',#CASH_AC_NO);
+        print(11,5,'收款人名称:[60]',#CASH_NAME);
+        print(12,5,'包  序  号:[24]',#PACK_ID);
+        print(13,5,'包  日  期:[60]',#PACK_DATE);
+        print(14,5,'附      言:[60]',#BRF);
+        print(13,5,'流  水  号:[6]                    操作员号:[4]',$FD4,$FD7);
+      }"
+  </PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印普通凭证">
+NOTHING
+</PACKAGE>
+<PRINT>"{
+  $KINDNO='00';
+  dim @txtime as string;
+  @txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+        
+        print( 5, 20,'机构名称:[30]',$BRNAME);
+	      print( 5, 2,'代码:5821');
+	      print( 5, 13,'交易:银行本票兑付申请修改'); 
+        print( 7,20, '本 票  号 码:[20          ]            出票金额:[20    ]     出票日期:[8   ]',#PNUM2,#oXTxAmt,#CPDAY);
+        print( 8,20, '支付交易序号:[8       ]                      ',#ORDERNO);
+        print( 9,20, '接收行 行 号:[12                      ]      ',#AC_BR_NO);
+        print(10,20, '交 易  金 额:[21                   ]',#XTX_AMT);
+        print(11,20, '收款人 帐 号:[24                      ]      对方清算行号:[12]',#CASH_AC_NO,#CASH_QS_NO);
+        print(12,20, '收款人 名 称:[60                                                          ]',#CASH_NAME);
+        print(13,20, '包   序   号:[8      ]                       包   日   期:[8      ]',#PACK_ID,#PACK_DATE);
+        print(14,20, '附        言:[60                                                          ]',#BRF);
+        print(15,20, '密        押:[20                                                          ]',#MAC);
+        print(24,20,'备注:');
+        print(24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print(24,5,'柜员:[4]',$FD7);
+        print(24,5,'流水号:[6]',$FD4);   
+      }"
+  </PRINT>
+</RESPONSE>
+
+<!--打印信息 -->
+</TRANSACTION>
+

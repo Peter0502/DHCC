@@ -1,0 +1,1568 @@
+/*************************************************
+* 文 件 名:  gD998.pc
+* 功能描述： 信贷用批量接口
+*
+* 作    者:  李吉祥
+* 完成日期： 20110722
+*
+* 修改记录：
+* 日    期:
+* 修 改 人: 
+* 修改内容:
+* 说明：
+*************************************************/
+#define EXTERN
+
+#define DEBUG1 1
+#define DEBUG2 1
+#define DEBUG3 1
+#define DEBUG4 1
+#define DEBUG5 1
+/*#define DEBUG6 1 目前没有*/
+#define DEBUG7 1
+#define DEBUG8 1
+#define DEBUG9 1
+#define DEBUG10 1
+#define DEBUG11 1 
+#define DEBUG12 1 
+
+#include "public.h"
+#include "com_sys_parm_c.h"
+#include "gl_sub_c.h"
+EXEC SQL INCLUDE SQLCA;
+
+extern char *get_env_info(char *infoname);
+
+#if DEBUG1
+int makedata(char *reply,char* url)
+{/* 写系统信息。 将数据写入相应的url位置，reply用于返回执行信息。*/
+	int ret=0;
+	struct com_sys_parm_c m_com_sys_parm;
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	memset(&m_com_sys_parm,0,sizeof(m_com_sys_parm));
+	ret=Com_sys_parm_Sel(reply,&m_com_sys_parm,"1=1");
+	if (ret)
+	{
+		sprintf(acErrMsg,"查询数据库失败");
+		WRITEMSG
+			strcpy(reply, "AT03" );
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				/*查询失败*/
+	}	
+	fprintf(fp,"%ld|%ld|\n",m_com_sys_parm.sys_date,m_com_sys_parm.lst_date);
+	fclose(fp);
+	strcpy(reply, "0000" );
+	return 0;
+}
+#endif
+
+#if DEBUG2
+int makekmzz(char * reply,char* url)
+{/*写科目总账（kmzz）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	/*机构号，科目号，币种，余额，借贷方标志，日借发生额，日贷发生额*/
+
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_br_no[6],m_acc_no[8],m_cur_no[3],m_dc_ind[2];
+	double m_dr_bal,m_cr_bal,m_rdd_amt,m_rcd_amt;
+	
+	EXEC SQL END DECLARE SECTION;
+	
+  memset(m_br_no,0x00,sizeof(m_br_no));
+  memset(m_acc_no,0x00,sizeof(m_acc_no));
+  memset(m_cur_no,0x00,sizeof(m_cur_no));
+  memset(m_dc_ind,0x00,sizeof(m_dc_ind));
+  m_dr_bal=0.00;
+  m_cr_bal=0.00;
+  m_rdd_amt=0.00;
+  m_rcd_amt=0.00;
+  
+	EXEC SQL DECLARE m_curs2 CURSOR FOR 
+		SELECT a.br_no,b.acc_no,a.cur_no, a.dr_bal,a.cr_bal, a.dc_ind, a.rdd_amt,a.rcd_amt
+		from gl_sub a,com_item b where a.acc_hrt = b.acc_hrt 
+		ORDER BY a.br_no, b.acc_no;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		fclose(fp);
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs2;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/ 
+		fclose(fp); 
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	double tmpbal=0.0;
+	char *dcflag[3]={"T","D","C"};/*双性（T）借方（D），贷方（C）*/
+	char *bz="CNY";/*币种，CNY为人民币 此处币种转换有待商榷完善之处。*/
+	EXEC SQL FETCH m_curs2 
+		INTO :m_br_no,:m_acc_no,:m_cur_no,:m_dr_bal,:m_cr_bal,:m_dc_ind,:m_rdd_amt,:m_rcd_amt;	
+	while (sqlca.sqlcode != 1403)
+	{ /*表示查询结束*/		
+		tmpbal=(m_dc_ind[0]=='2'?m_cr_bal-m_dr_bal:m_dr_bal-m_cr_bal);/*轧差余额*/
+		fprintf(fp,"%s|%s|%s|%.2lf|%s|%.2lf|%.2lf|\n",m_br_no,m_acc_no,bz,tmpbal,dcflag[atoi(m_dc_ind)],m_rdd_amt,m_rcd_amt);
+		EXEC SQL FETCH m_curs2 
+			INTO :m_br_no,:m_acc_no,:m_cur_no,:m_dr_bal,:m_cr_bal,:m_dc_ind,:m_rdd_amt,:m_rcd_amt;
+	}
+	EXEC SQL CLOSE m_curs2;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;
+}
+#endif
+
+#if DEBUG3
+int makeptdktz(char * reply,char* url)
+{/*写普通贷款台账（ptdktz）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	/*借据号pact_no，贷款账号ac_no，本金科目号acc_no，状态 ac_sts，金额 amt_lmt，余额 bal，
+	到期日期 mtr_date，还款方式repay_type，利率 rate，逾期利率over_rate，
+	表内欠息in_lo_intst，表外欠息out_lo_intst，复利欠息cmpd_lo_intst，欠息累计 三项相加,机构码opn_br_no*/
+	/*prdt_no:ln_parm,dc_code:dc_acc_rel,acc_hrt:com_item,acc_no*/
+
+	EXEC SQL BEGIN DECLARE SECTION;
+		char m_pact_no[21],m_ac_no[20],m_acc_no[8],m_ac_sts[2],m_repay_type[2],m_opn_br_no[6],m_exp_ind[3];
+		double m_amt_lmt,m_bal,m_rate,m_over_rate,m_in_lo_intst,m_out_lo_intst,m_cmpd_lo_intst;
+		long m_mtr_date;
+		long m_ac_id;
+		int m_ac_seqn;
+		long m_exp_mtr_date=0;
+		double m_exp_rate;
+	EXEC SQL END DECLARE SECTION;
+		m_mtr_date=0;
+		m_ac_seqn=0;
+	EXEC SQL DECLARE m_curs3 CURSOR FOR 
+		select distinct ac_id,ac_seqn  from ln_mst 
+		where intst_type<>'6' and prdt_no not in('3Z1','3Z2','3Z3','3Z4') and ac_sts<>'9' and ac_id in (select ac_id from trace_log_bk) order by ac_id;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs3;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	double sum_lo_intst=0.0; /*欠息累计=表内、表外、复利欠息三项之和*/
+	m_ac_id=0;
+	EXEC SQL FETCH m_curs3 
+		INTO :m_ac_id,:m_ac_seqn;
+	if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		sprintf(acErrMsg,"真相只有一个！！sqlca.sqlcode=[%d]",sqlca.sqlcode);/*名侦探柯南到此一游。*/
+		WRITEMSG
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	double fuli=0.0;/*复利利率*/
+	while (sqlca.sqlcode != 1403)
+	{	
+		memset(m_ac_no,0x00,sizeof(m_ac_no));  
+		memset(m_pact_no,0x00,sizeof(m_pact_no)); 
+		memset(m_acc_no,0x00,sizeof(m_acc_no)); 
+		memset(m_ac_sts,0x00,sizeof(m_ac_sts)); 
+		memset(m_repay_type,0x00,sizeof(m_repay_type)); 
+		memset(m_opn_br_no,0x00,sizeof(m_opn_br_no)); 
+		memset(m_exp_ind,0x00,sizeof(m_exp_ind)); 
+		m_amt_lmt=0.00;
+		m_bal=0.00;
+		m_rate=0.00000;
+		m_over_rate=0.00000;
+		m_in_lo_intst=0.00;
+		m_out_lo_intst=0.00;
+		m_cmpd_lo_intst=0.00;
+		m_mtr_date=0;
+		m_exp_mtr_date=0;
+		m_rate=0.00;
+		
+		EXEC SQL 
+			SELECT distinct pact_no,ac_sts,amt_lmt,bal,mtr_date,repay_type,rate,over_rate,in_lo_intst,out_lo_intst,cmpd_lo_intst,opn_br_no ,exp_ind,exp_rate,exp_mtr_date
+			INTO :m_pact_no,:m_ac_sts,:m_amt_lmt,:m_bal,:m_mtr_date,:m_repay_type,:m_rate,:m_over_rate,:m_in_lo_intst,:m_out_lo_intst,:m_cmpd_lo_intst,:m_opn_br_no,:m_exp_ind,:m_exp_rate,:m_exp_mtr_date
+			FROM ln_mst WHERE ac_id=:m_ac_id;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				sprintf(reply,"AT03");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 
+		if(m_exp_ind[0]!='0')
+		{
+			m_rate=m_exp_rate;
+			m_mtr_date=m_exp_mtr_date;
+		}
+		EXEC SQL
+			SELECT ac_no INTO :m_ac_no FROM mdm_ac_rel WHERE ac_id=:m_ac_id and ac_seqn= :m_ac_seqn;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				sprintf(reply,"AT03");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 
+		EXEC SQL
+			SELECT acc_no INTO :m_acc_no from com_item where acc_hrt in(select acc_hrt from dc_acc_rel where data_code='0152' and dc_code in(select dc_code from ln_parm where prdt_no in(select prdt_no from ln_mst where ac_id=:m_ac_id)));	
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				sprintf(reply,"AT03");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 
+		/*sqlca.sqlcode只有一个，即为最后一次SQL的状态。不过while里的sqlcode逻辑上应该是游标查询的结果 因此将FETCH放到最后*/
+		sum_lo_intst=m_in_lo_intst+m_out_lo_intst+m_cmpd_lo_intst;
+		fprintf(fp,"%s|%s|%s|%s|%.2lf|%.2lf|%ld|%s|%.6lf|%.6lf|%.6lf|%.2lf|%.2lf|%.2lf|%.2lf|%s|\n",\
+			m_pact_no,m_ac_no,m_acc_no,m_ac_sts,m_amt_lmt,m_bal,m_mtr_date,m_repay_type,m_rate,m_over_rate,fuli,m_in_lo_intst,m_out_lo_intst,m_cmpd_lo_intst,sum_lo_intst,m_opn_br_no);
+		EXEC SQL FETCH m_curs3 
+			INTO :m_ac_id,:m_ac_seqn;
+		if (sqlca.sqlcode && sqlca.sqlcode!=1403 )
+		{
+			sprintf(reply,"D102");/*程序打开游标出错*/
+			sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+			WRITEMSG
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+	}    		
+	EXEC SQL CLOSE m_curs3;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;
+}
+#endif
+
+#if DEBUG4
+int makecdhp(char * reply,char * url)
+{/*写承兑汇票（cdhp）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+		char m_pact_no[21],m_acc_po_ind[2],m_po_sts[2],m_tx_br_no[6],m_po_no[31];
+		double m_advance_amt,m_bail_amt,m_bail_amt_ratio,m_sign_amt;
+		long m_sys_date=0;
+		char m_ac_no[20], m_note_no[17];
+		char note_no_tmp[21];
+		char cPact_num[21];
+		double dTd_bal=0;
+		long recordcount=0;/*出票笔数*/
+		long m_pact_num=0;
+		char cPo_sts[2];
+		short  iFlag_cc=0;
+		long lPact_num_new=0;/** add by chenchao 2011/11/23 20:24:41 **/
+	EXEC SQL END DECLARE SECTION;
+	memset(m_note_no,'\0',sizeof(m_note_no));
+	memset(cPact_num,'\0',sizeof(cPact_num));
+	memset(m_po_no,0x00,sizeof(m_po_no)); 
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE m_curs4 CURSOR FOR 
+		SELECT DISTINCT ac_no FROM trace_log_bk WHERE tx_code IN ('4335','4380','4371','4331','4332','4333','4334','4336','4337','4346','4347','4349','4373','4343','4344','4345','4374','4354','4355','4356','5621','5622','5623') AND ac_no IN (SELECT pact_no FROM mo_bank_acc_po);
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs4;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	int dkbz=-1;/*垫款标识 0表示垫款 1表示未垫款*/
+	long fkrq=-1;/*如果at_term_ind=Y 即到期则为m_sys_date的值 否则为0*/
+	double bzj=0.0;/*保证金扣款金额 暂定为0*/
+	double jszh=0.0;/*结算账户扣款金额 暂定为0*/
+	long hxrq=-1;/*核销日期*/
+
+	while (1)
+	{
+		iFlag_cc=0;
+		recordcount=0;
+		m_pact_num=0;
+		memset(cPo_sts,0x00,sizeof(cPo_sts));
+		memset(m_ac_no,0x00,sizeof(m_ac_no));
+		memset(m_po_no,0x00,sizeof(m_po_no));
+		EXEC SQL FETCH m_curs4 INTO :m_ac_no;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		}
+		pub_base_strpack(m_ac_no);/*字符串做条件的时候一定要清空空字符啊，啊啊啊啊啊*/
+		EXEC SQL DECLARE mobank CURSOR FOR 
+			SELECT  a.pact_no,a.advance_amt,a.acc_po_ind,a.bail_amt,a.bail_amt_ratio,a.sign_amt,a.acc_po_sts,a.tx_br_no,a.pact_num ,b.pact_no_num ,b.po_sts , b.po_no
+				FROM mo_bank_acc_po a,mo_bank_po b where a.pact_no =:m_ac_no and a.pact_no=b.pact_no order by a.pact_no,b.pact_no_num ;
+		if (sqlca.sqlcode)
+		{
+			sprintf(reply,"D101");/*程序定义游标出错*/
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+		EXEC SQL OPEN mobank;
+		if (sqlca.sqlcode)
+		{
+			sprintf(reply,"D102");/*程序打开游标出错*/
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+		while(1)
+		{
+			m_pact_num=0;
+			iFlag_cc=0;
+			lPact_num_new=0;
+			memset(cPo_sts,0x00,sizeof(cPo_sts));
+			memset(m_po_no,0x00,sizeof(m_po_no));
+			memset(m_pact_no,0x00,sizeof(m_pact_no));
+			memset(m_acc_po_ind,0x00,sizeof(m_acc_po_ind));
+			memset(m_po_sts,0x00,sizeof(m_po_sts));
+			memset(m_tx_br_no,0x00,sizeof(m_tx_br_no));
+			memset(cPact_num,0x00,sizeof(cPact_num));
+			m_advance_amt=0.00;
+			m_bail_amt=0.00;
+			m_bail_amt_ratio=0.00;
+			m_sign_amt=0.00;			
+			EXEC SQL FETCH mobank INTO :m_pact_no,:m_advance_amt,:m_acc_po_ind,:m_bail_amt,:m_bail_amt_ratio,:m_sign_amt,:m_po_sts,:m_tx_br_no,:cPact_num ,:m_pact_num ,:cPo_sts,:m_po_no;
+			if (sqlca.sqlcode)
+			{
+				if (sqlca.sqlcode==1403)
+				{
+					break;
+				}else
+				{
+					sprintf(reply,"D102");/*程序打开游标出错*/
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					return 1;				
+				}
+			}
+			dkbz=(m_advance_amt==0?1:0);
+			fkrq=(m_acc_po_ind[0]=='1' ? m_sys_date:0);
+			hxrq=(m_po_sts[0]=='2'?m_sys_date:0);
+			/***
+			if(!strcmp(m_acc_po_ind,"1")){
+			*bzj=m_bail_amt*m_bail_amt_ratio*0.01;*
+			bzj=m_bail_amt;
+			**begin *为保险，取结算户的金额=票面金额-垫款-保证金-存单金额 modify by chenchao 2011-8-5 9:15:14 ***
+			pub_base_strpack(cPact_num);
+			if(strlen(cPact_num)>0)
+			{
+			EXEC SQL select sum(tx_amt) into :dTd_bal from td_mst_hst where sub_tx_code='D203' and  ac_id in ( select ac_id from mdm_ac_rel where ac_no in (select mort_ac_no from impa_dep_reg where pact_no=:cPact_num));
+			if(sqlca.sqlcode)
+			{
+			vtcp_log("[%s][%d]统计定期存单总值失败!!!pact_num=[%s]",__FILE__,__LINE__,cPact_num);
+			sprintf(reply,"AT06");
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+			}
+			}
+			jszh=m_sign_amt-bzj-m_advance_amt-dTd_bal;
+			if(pub_base_CompDblVal(jszh,0.00)<0)
+			{
+			jszh = 0.00;
+			}
+			**end *为保险，取结算户的金额=票面金额-垫款-保证金-存单金额 modify by chenchao 2011-8-5 9:15:14 ***
+			}else{
+			bzj=0.0;
+			jszh=0.0;
+			}
+			****/
+			
+			pub_base_strpack(m_pact_no);
+			EXEC SQL SELECT COUNT(*) INTO :recordcount FROM mo_bank_po where pact_no=:m_pact_no;
+			if (sqlca.sqlcode)
+			{
+				if (sqlca.sqlcode==1403)
+				{
+					continue;
+				}else
+				{
+					sprintf(reply,"AT06");/*程序打开游标出错*/
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					return 1;				
+				}
+			}
+			/** begin add by chenchao 2011/11/23 20:27:20 增加换票后的新编号**/
+			EXEC SQL select new_num into :lPact_num_new :iFlag_cc from mo_bank_po_fee where pact_no=:m_pact_no and num=:m_pact_num;
+			if (sqlca.sqlcode ==1403 )
+			{
+				lPact_num_new=0;
+			} else if (sqlca.sqlcode )
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;
+			}
+			if(iFlag_cc)
+				lPact_num_new=0;
+			/** end add by chenchao 2011/11/23 20:27:20 增加换票后的新编号**/
+			/*fprintf(fp,"%s|%d|%.2lf|%.2lf|%.2lf|%s|%ld|%ld|%s|\n",\
+			m_pact_no,dkbz,m_advance_amt,bzj,jszh,m_po_sts,hxrq,fkrq,m_tx_br_no);*/
+			/***协议编号编号|垫款标志|垫款金额 |台帐状态 |核销日期|机构码|保证金比例|保证金金额|协议下票数量|序号|汇票状态|汇票号码|新序号|***/
+			fprintf(fp,"%s|%d|%.2lf|%s|%ld|%s|%.2lf|%.2lf|%ld|%ld|%s|%s|%ld|\n",\
+				m_pact_no,dkbz,m_advance_amt,m_po_sts,hxrq,m_tx_br_no,m_bail_amt_ratio,m_bail_amt,recordcount,m_pact_num,cPo_sts,m_po_no,lPact_num_new);
+		}
+		EXEC SQL CLOSE mobank;
+	}
+	EXEC SQL CLOSE m_curs4;
+	/*下面是查询tx_code='G090'待续*/
+	EXEC SQL DECLARE m_curs4_1 CURSOR FOR 
+		SELECT distinct note_no FROM trace_log_bk WHERE tx_code ='G090';
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs4_1;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	dkbz=-1;/*垫款标识 0表示垫款 1表示未垫款*/
+	fkrq=-1;/*如果at_term_ind=Y 即到期则为m_sys_date的值 否则为0*/
+	bzj=0.0;/*保证金扣款金额 暂定为0*/
+	jszh=0.0;/*结算账户扣款金额 暂定为0*/
+	hxrq=-1;/*核销日期*/
+
+	while (1)
+	{
+		iFlag_cc=0;
+		lPact_num_new=0;
+		memset(m_note_no,'\0',sizeof(m_note_no));
+		memset(m_po_no,0x00,sizeof(m_po_no));
+		EXEC SQL FETCH m_curs4_1 INTO :m_note_no;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		}
+		pub_base_strpack(m_note_no);/*字符串做条件的时候一定要清空空字符啊，啊啊啊啊啊*/
+		memset(note_no_tmp,'\0',sizeof(note_no_tmp));
+		int i=0;
+		for(i=0;i<7;i+=1){ note_no_tmp[i]=m_note_no[i];}
+		note_no_tmp[i]='%';
+		while(m_note_no[i]!='\0'){note_no_tmp[i+1]=m_note_no[i]; i+=1;}
+		note_no_tmp[i+1]='\0';
+		pub_base_strpack(note_no_tmp);
+		/*fprintf(fp,"%s|%s|\n",note_no_tmp,m_note_no);*/
+		vtcp_log("[%s][%d] note_no_tmp=[%s]\n m_note_no=[%s] \n",__FILE__,__LINE__,note_no_tmp,m_note_no);
+		pub_base_strpack(m_ac_no);/*字符串做条件的时候一定要清空空字符*/
+		EXEC SQL DECLARE mobank_1 CURSOR FOR 
+			SELECT  a.pact_no,a.advance_amt,a.acc_po_ind,a.bail_amt,a.bail_amt_ratio,a.sign_amt,a.acc_po_sts,a.tx_br_no,a.pact_num ,b.pact_no_num ,b.po_sts , b.po_no
+				FROM mo_bank_acc_po a,mo_bank_po b where a.pact_no like :note_no_tmp and a.pact_no=b.pact_no order by a.pact_no,b.pact_no_num ;
+		if (sqlca.sqlcode)
+		{
+			sprintf(reply,"D101");/*程序定义游标出错*/
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+		EXEC SQL OPEN mobank_1;
+		if (sqlca.sqlcode)
+		{
+			sprintf(reply,"D102");/*程序打开游标出错*/
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+		while(1)
+		{
+			iFlag_cc=0;
+			m_pact_num=0;
+			lPact_num_new=0;
+			memset(m_po_no,0x00,sizeof(m_po_no));
+			memset(cPo_sts,0x00,sizeof(cPo_sts));
+			memset(m_pact_no,0x00,sizeof(m_pact_no));
+			memset(m_acc_po_ind,0x00,sizeof(m_acc_po_ind));
+			memset(m_po_sts,0x00,sizeof(m_po_sts));
+			memset(m_tx_br_no,0x00,sizeof(m_tx_br_no));
+			memset(cPact_num,0x00,sizeof(cPact_num));
+			m_advance_amt=0.00;
+			m_bail_amt=0.00;
+			m_bail_amt_ratio=0.00;
+			m_sign_amt=0.00;
+			recordcount=0;			
+			EXEC SQL FETCH mobank_1 INTO :m_pact_no,:m_advance_amt,:m_acc_po_ind,:m_bail_amt,:m_bail_amt_ratio,:m_sign_amt,:m_po_sts,:m_tx_br_no,:cPact_num ,:m_pact_num ,:cPo_sts,:m_po_no;
+			if (sqlca.sqlcode)
+			{
+				if (sqlca.sqlcode==1403)
+				{
+					break;
+				}else
+				{
+					sprintf(reply,"D102");/*程序打开游标出错*/
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					return 1;				
+				}
+			}
+			dkbz=(m_advance_amt==0?1:0);
+			fkrq=(m_acc_po_ind[0]=='1' ? m_sys_date:0);
+			hxrq=(m_po_sts[0]=='2'?m_sys_date:0);
+			/***
+			if(!strcmp(m_acc_po_ind,"1")){
+			*bzj=m_bail_amt*m_bail_amt_ratio*0.01;*
+			bzj=m_bail_amt;
+			**begin *为保险，取结算户的金额=票面金额-垫款-保证金-存单金额 modify by chenchao 2011-8-5 9:15:14 ***
+			pub_base_strpack(cPact_num);
+			if(strlen(cPact_num)>0)
+			{
+			EXEC SQL select sum(tx_amt) into :dTd_bal from td_mst_hst where sub_tx_code='D203' and  ac_id in ( select ac_id from mdm_ac_rel where ac_no in (select mort_ac_no from impa_dep_reg where pact_no=:cPact_num));
+			if(sqlca.sqlcode)
+			{
+			vtcp_log("[%s][%d]统计定期存单总值失败!!!pact_num=[%s]",__FILE__,__LINE__,cPact_num);
+			sprintf(reply,"AT06");
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+			}
+			}
+			jszh=m_sign_amt-bzj-m_advance_amt-dTd_bal;
+			if(pub_base_CompDblVal(jszh,0.00)<0)
+			{
+			jszh = 0.00;
+			}
+			**end *为保险，取结算户的金额=票面金额-垫款-保证金-存单金额 modify by chenchao 2011-8-5 9:15:14 ***
+			}else{
+			bzj=0.0;
+			jszh=0.0;
+			}
+			****/
+			pub_base_strpack(m_pact_no);
+			EXEC SQL SELECT COUNT(*) INTO :recordcount FROM mo_bank_po where pact_no=:m_pact_no;
+			if (sqlca.sqlcode)
+			{
+				if (sqlca.sqlcode==1403)
+				{
+					continue;
+				}else
+				{
+					sprintf(reply,"AT06");/*程序打开游标出错*/
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+					return 1;				
+				}
+			}
+			/** begin add by chenchao 2011/11/23 20:27:20 增加换票后的新编号**/
+			EXEC SQL select new_num into :lPact_num_new from mo_bank_po_fee where pact_no=:m_pact_no and num=:m_pact_num;
+			if (sqlca.sqlcode ==1403 )
+			{
+				lPact_num_new=0;
+			} else if (sqlca.sqlcode )
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;
+			}
+			if(iFlag_cc)
+				lPact_num_new=0;
+			/** end add by chenchao 2011/11/23 20:27:20 增加换票后的新编号**/
+			/*fprintf(fp,"%s|%d|%.2lf|%.2lf|%.2lf|%s|%ld|%ld|%s|\n",\
+			m_pact_no,dkbz,m_advance_amt,bzj,jszh,m_po_sts,hxrq,fkrq,m_tx_br_no);*/
+			/***协议编号编号|垫款标志|垫款金额 |台帐状态 |核销日期|机构码|保证金比例|保证金金额|协议下票数量|序号|汇票状态|汇票号码|***/
+			fprintf(fp,"%s|%d|%.2lf|%s|%ld|%s|%.2lf|%.2lf|%ld|%ld|%s|%s|%ld|\n",\
+				m_pact_no,dkbz,m_advance_amt,m_po_sts,hxrq,m_tx_br_no,m_bail_amt_ratio,m_bail_amt,recordcount,m_pact_num,cPo_sts,m_po_no,lPact_num_new);
+		}
+		EXEC SQL CLOSE mobank_1;
+	}
+	EXEC SQL CLOSE m_curs4_1;
+
+	strcpy(reply, "0000" ); 
+	fclose(fp);
+	return 0;
+}	
+#endif
+
+#if DEBUG5
+int maketxtz(char * reply,char* url)
+{/*写贴现台账（txtz）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_pact_no[21],m_tpact_no[21],m_rpact_no[21],m_sts[2],m_br_no[6],m_pn_type[2],m_pnote_no[17];
+	long m_sys_date=0;
+	char m_ac_sts[2];
+	long m_ac_id=0;
+	int m_ac_seqn=0;
+	double m_pn_int,m_tpn_int,m_rpn_int;
+	EXEC SQL END DECLARE SECTION;
+	double dTmp_bal=0;
+	memset(m_ac_sts,0x00,sizeof(m_ac_sts));
+
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	/*EXEC SQL DECLARE m_curs5_1 CURSOR FOR SELECT ac_id,ac_seqn,pact_no,sts,br_no,pn_type FROM mo_discnt WHERE wrk_date=:m_sys_date;*/
+	EXEC SQL DECLARE m_curs5_1 CURSOR FOR SELECT pact_no,sts,br_no,pn_type,pn_int FROM mo_discnt WHERE wrk_date=:m_sys_date and pn_type in ('1');
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs5_1;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	/*long today=0;今天日期，默认为0*/
+	while (1)
+	{
+		m_pn_int=m_tpn_int=m_rpn_int=0.00;
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		memset(m_sts,0x00,sizeof(m_sts));
+		memset(m_br_no,0x00,sizeof(m_br_no));
+		memset(m_pn_type,0x00,sizeof(m_pn_type));
+		EXEC SQL FETCH m_curs5_1 
+			INTO :m_pact_no,:m_sts,:m_br_no,:m_pn_type,:m_pn_int;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+				WRITEMSG
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}	  		
+		}
+		fprintf(fp,"%s|%s|%s|%s|%.2lf|\n",m_pact_no,m_sts,m_br_no,m_pn_type,m_pn_int);	  
+	}
+	EXEC SQL CLOSE m_curs5_1;
+	/*转贴现*/
+	EXEC SQL DECLARE m_curs5_2 CURSOR FOR SELECT pact_no,tpact_no,sts,br_no,pn_type,pn_int,tpn_int,pnote_no FROM mo_discnt WHERE wrk_date=:m_sys_date and pn_type in ('2','4');
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs5_2;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	while (1)
+	{
+		m_pn_int=0.00;
+		m_pn_int=m_tpn_int=m_rpn_int=0.00;
+		memset(m_tpact_no,0x00,sizeof(m_tpact_no));
+		memset(m_sts,0x00,sizeof(m_sts));
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		memset(m_br_no,0x00,sizeof(m_br_no));
+		memset(m_pn_type,0x00,sizeof(m_pn_type));
+		memset(m_pnote_no,0x00,sizeof(m_pnote_no));
+		EXEC SQL FETCH m_curs5_2 
+			INTO :m_pact_no,:m_tpact_no,:m_sts,:m_br_no,:m_pn_type,m_pn_int,:m_tpn_int,:m_pnote_no;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+				WRITEMSG
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}	  		
+		}
+		/* 转贴现找到原贴现编号更改后 传给信贷 20151015 wudawei  */
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		EXEC SQL SELECT pact_no INTO :m_pact_no FROM mo_discnt where pn_type='1' and pnote_no=:m_pnote_no;
+		if(m_pn_type[0] == '2')
+		{
+			fprintf(fp,"%s|%s|%s|%s|%.2lf|\n",m_pact_no,m_sts,m_br_no,m_pn_type,m_pn_int);
+		} else if(m_pn_type[0] == '4')
+		{
+			fprintf(fp,"%s|%s|%s|%s|%.2lf|\n",m_pact_no,m_sts,m_br_no,m_pn_type,m_tpn_int);
+		}
+	}
+	EXEC SQL CLOSE m_curs5_2;
+	/*再贴现*/
+	EXEC SQL DECLARE m_curs5_3 CURSOR FOR SELECT rpact_no,sts,br_no,pn_type,rpn_int FROM mo_discnt WHERE wrk_date=:m_sys_date and pn_type in ('6','7');
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs5_3;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	while (1)
+	{
+		
+		m_pn_int=m_tpn_int=m_rpn_int=0.00;
+		memset(m_rpact_no,0x00,sizeof(m_rpact_no));
+		memset(m_sts,0x00,sizeof(m_sts));
+		memset(m_br_no,0x00,sizeof(m_br_no));
+		memset(m_pn_type,0x00,sizeof(m_pn_type));
+		EXEC SQL FETCH m_curs5_3 
+			INTO :m_rpact_no,:m_sts,:m_br_no,:m_pn_type,:m_rpn_int;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+				WRITEMSG
+					vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}	  		
+		}
+		fprintf(fp,"%s|%s|%s|%s|%.2lf|\n",m_rpact_no,m_sts,m_br_no,m_pn_type,m_rpn_int);	  
+	}
+	EXEC SQL CLOSE m_curs5_3;
+
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;	
+}
+#endif
+
+#if DEBUG6
+/*保函台账 目前没有*/
+#endif
+
+#if DEBUG7
+int makeptdkmx(char * reply,char* url)
+{/*写普通贷款交易明细（ptdkmx）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_pact_no[21],m_ac_no[20],m_ln_tx_type[2],m_add_ind[2],m_tx_br_no[6],m_tel[6],m_brf[21],m_intst_type[2];
+	double m_tx_amt;
+	long m_tx_date,m_trace_no;
+	long m_sys_date,m_ac_id;
+	int m_ac_seqn;
+	
+	EXEC SQL END DECLARE SECTION;
+	m_sys_date=0;
+	
+	m_ac_id=0;
+	m_ac_seqn=0;
+	m_tx_date=0;
+	m_trace_no=0;
+	m_tx_amt=0.00;
+	memset(m_ln_tx_type,0x00,sizeof(m_ln_tx_type));
+	memset(m_add_ind,0x00,sizeof(m_add_ind));
+	memset(m_tx_br_no,0x00,sizeof(m_tx_br_no));
+	memset(m_tel,0x00,sizeof(m_tel));
+	memset(m_brf,0x00,sizeof(m_brf));
+
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE m_curs7 CURSOR FOR
+		SELECT ac_id,ac_seqn,ln_tx_type,add_ind,tx_date,trace_no,tx_amt,tx_br_no,tel,brf
+		FROM ln_mst_hst WHERE tx_date=:m_sys_date ;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs7;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL FETCH m_curs7 
+		INTO :m_ac_id,:m_ac_seqn,:m_ln_tx_type,:m_add_ind,:m_tx_date,:m_trace_no,:m_tx_amt,:m_tx_br_no,:m_tel,:m_brf;
+	if (sqlca.sqlcode && sqlca.sqlcode != 1403)
+	{
+		sprintf(reply,"E102");/*程序打开游标出错*/
+		sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+		WRITEMSG
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	char *dcflag[2]={"C","D"};/*借方（D），贷方（C）*/
+	int jjlx=-1;/*借据类型(jjlx) 0普通 1按揭*/
+	while (sqlca.sqlcode!=1403)
+	{
+		memset(m_ac_no,0x00,sizeof(m_ac_no));
+		memset(m_intst_type,0x00,sizeof(m_intst_type));
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		EXEC SQL SELECT pact_no,intst_type INTO :m_pact_no,:m_intst_type FROM ln_mst WHERE ac_id = :m_ac_id and ac_seqn = :m_ac_seqn;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				sprintf(reply,"AT03");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 
+		EXEC SQL SELECT ac_no INTO :m_ac_no FROM mdm_ac_rel WHERE ac_id = :m_ac_id and ac_seqn = :m_ac_seqn;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				continue;
+			}else
+			{
+				sprintf(reply,"AT03");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		} 	
+		jjlx=(m_intst_type[0] =='6'?1:0);
+		fprintf(fp,"%s|%s|%s|%s|%ld|%ld|%.2lf|%s|%s|%s|%d|\n",\
+			m_pact_no,m_ac_no,m_ln_tx_type,dcflag[atoi(m_add_ind)],m_tx_date,m_trace_no,m_tx_amt,m_tx_br_no,m_tel,m_brf,jjlx);	
+		EXEC SQL FETCH m_curs7 
+			INTO :m_ac_id,:m_ac_seqn,:m_ln_tx_type,:m_add_ind,:m_tx_date,:m_trace_no,:m_tx_amt,:m_tx_br_no,:m_tel,:m_brf;	
+	}
+	EXEC SQL CLOSE m_curs7;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;	
+}
+#endif
+
+#if DEBUG8
+int makedktz(char * reply,char* url)
+{/*写垫款台账（dktz）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_pact_no[21],m_opn_br_no[6];
+	double m_amt_lmt,m_bal;
+	long m_opn_date;
+	long m_sys_date;
+	char m_prdt_no[4];
+	EXEC SQL END DECLARE SECTION;
+	memset(m_pact_no,0x00,sizeof(m_pact_no));
+	memset(m_opn_br_no,0x00,sizeof(m_opn_br_no));
+	memset(m_prdt_no,0x00,sizeof(m_prdt_no));
+	m_amt_lmt=0.00;
+	m_bal = 0.00;
+	m_opn_date = 0;
+	m_sys_date = 0;
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE m_curs8 CURSOR FOR
+		SELECT DISTINCT prdt_no,pact_no,opn_br_no,opn_date,amt_lmt,bal  
+		FROM ln_mst WHERE prdt_no IN ('3Z3','3Z4') and ac_id in (select ac_id from ln_mst_hst where tx_date=:m_sys_date) ORDER BY prdt_no;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs8;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL FETCH m_curs8 
+		INTO :m_prdt_no,:m_pact_no,:m_opn_br_no,:m_opn_date,:m_amt_lmt,:m_bal;
+	if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		sprintf(acErrMsg,"sqlca.sqlcode=[%d]",sqlca.sqlcode);
+		WRITEMSG
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	char dkzl[2];/*垫款种类 1银行承兑汇票，2保函*/
+	while (sqlca.sqlcode!=1403)
+	{
+		if (!strcmp(m_prdt_no,"3Z3"))
+		{
+			sprintf(dkzl,"1");
+		}
+		else if (!strcmp(m_prdt_no,"3Z4"))
+		{
+			sprintf(dkzl,"2");
+		}		
+		fprintf(fp,"%s|%s|%s|%ld|%.2lf|%.2lf|\n",m_pact_no,dkzl,m_opn_br_no,m_opn_date,m_amt_lmt,m_bal);
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		memset(m_opn_br_no,0x00,sizeof(m_opn_br_no));
+		memset(m_prdt_no,0x00,sizeof(m_prdt_no));
+		m_amt_lmt=0.00;
+		m_bal = 0.00;
+		m_opn_date = 0;	
+		EXEC SQL FETCH m_curs8 
+			INTO :m_prdt_no,:m_pact_no,:m_opn_br_no,:m_opn_date,:m_amt_lmt,:m_bal;	
+		if (sqlca.sqlcode && sqlca.sqlcode!=1403)
+		{
+			vtcp_log("[%s][%d]sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+			sprintf(reply,"D101");/*程序定义游标出错*/
+			EXEC SQL CLOSE m_curs8;
+			fclose(fp);
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+			return 1;				
+		}
+	}
+	EXEC SQL CLOSE m_curs8;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;		
+}
+#endif
+
+#if DEBUG9
+int makellb(char * reply,char* url)
+{					/*写利率表（llb）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	double m_rate_val;
+	long m_beg_date;
+	char m_rate_code[4],m_cur_no[3];
+	long m_sys_date;
+	EXEC SQL END DECLARE SECTION;
+	memset(m_rate_code,0x00,sizeof(m_rate_code));
+	memset(m_cur_no,0x00,sizeof(m_cur_no));
+	m_rate_val=0.00;
+	m_beg_date=0;
+	m_sys_date=0;
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE m_curs9 CURSOR FOR
+		select rate_val,beg_date,rate_code,cur_no from com_rate where rate_code in 
+		(select rate_no from ln_parm  union select over_rate_no from ln_parm) and end_date>:m_sys_date and rate_code not in ('L07','L08','L09','L10');
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs9;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	int flag01=0;
+	int min=0,max=0;
+	char flag[5];
+	char *ratetype="0";/*利率类型 目前固定为"0"，即普通*/
+	char *lldw="1";/*利率单位 1表示百分制% 目前皆为1*/
+	while (1)
+	{
+		memset(m_rate_code,0x00,sizeof(m_rate_code));
+		memset(m_cur_no,0x00,sizeof(m_cur_no));
+		m_rate_val=0.00;
+		m_beg_date=0;
+		
+		EXEC SQL FETCH m_curs9 
+			INTO :m_rate_val,:m_beg_date,:m_rate_code,:m_cur_no;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}
+			else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		}
+		if (!strcmp(m_rate_code,"L01"))
+		{
+			min=0;max=6; flag01=1;
+		}else
+		{
+			if (!strcmp(m_rate_code,"L02"))
+			{
+				min=6;max=12;
+			}else
+			{
+				if (!strcmp(m_rate_code,"L03"))
+				{
+					min=12;max=36;
+				}else
+				{
+					if (!strcmp(m_rate_code,"L04"))
+					{
+						min=36;max=60;
+					}else
+					{
+						if (!strcmp(m_rate_code,"L05"))
+						{
+							min=60;max=9999;
+						}else
+						{/*无期限的 比如贴现利率等*/
+							min=0;max=9999;
+						}
+					}
+				}
+			}
+		}
+		if (!strcmp(m_cur_no,"01"))
+		{
+			strcpy(flag,"CNY");
+		}
+		fprintf(fp,"%s|%lf|%ld|%d|%d|%s|%s|%s|\n",ratetype,m_rate_val,m_beg_date,min,max,lldw,flag,m_rate_code);
+	}
+	EXEC SQL CLOSE m_curs9;
+	if (flag01==0)
+	{
+		memset(m_rate_code,0x00,sizeof(m_rate_code));
+		memset(m_cur_no,0x00,sizeof(m_cur_no));
+		m_rate_val=0.00;
+		m_beg_date=0;
+		EXEC SQL select rate_val,beg_date,cur_no,rate_code INTO :m_rate_val,:m_beg_date,:m_cur_no,:m_rate_code 
+			from com_rate where rate_code='L01' and end_date>:m_sys_date;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+			}
+			else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}		
+		}else
+		{
+			if (!strcmp(m_cur_no,"01"))
+			{
+				strcpy(flag,"CNY");
+			}
+			min=0;max=6;
+			fprintf(fp,"%s|%lf|%ld|%d|%d|%s|%s|%s|\n",ratetype,m_rate_val,m_beg_date,min,max,lldw,flag,m_rate_code);
+		}
+	}
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;	
+}					 
+#endif
+
+#if DEBUG10
+int makedzy(char * reply,char* url)
+{/*写抵质押表（dzy）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_pact_no[21],m_stsvar[2];
+	long m_sys_date;
+	EXEC SQL END DECLARE SECTION;
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		memset(m_stsvar,0x00,sizeof(m_stsvar));
+		m_sys_date=0;
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE m_curs10 CURSOR FOR
+		select distinct pact_no,stsvar from pact_gaga_rel where pact_no in(select pact_no from ln_gage_reg where in_tx_date=:m_sys_date or out_tx_date=:m_sys_date);
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN m_curs10;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}	
+	while (1)
+	{
+		memset(m_stsvar,0x00,sizeof(m_stsvar));
+		memset(m_pact_no,0x00,sizeof(m_pact_no));
+		EXEC SQL FETCH m_curs10 
+			INTO :m_pact_no,:m_stsvar;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;				
+			}
+		}
+		fprintf(fp,"%s|%s|\n",m_pact_no,m_stsvar);
+	}
+	EXEC SQL CLOSE m_curs10;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;	
+}
+#endif
+
+#if DEBUG11
+int makebzjmx(char * reply,char* url)
+{/*写活期保证金明细表（bzjmx）直接用pro*c写了。*/
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+	char m_brf[21],m_note_type[4],m_name[21],m_ct_ind[2],m_note_no[17],m_tel[5],m_ac_no[20],m_name1[61];
+	long m_sys_date=0;
+	long m_tx_date=0;
+	long m_ac_id=0;
+	double m_tx_amt=0.00;
+	double m_bal=0.00;
+	long m_tx_time = 0;
+	EXEC SQL END DECLARE SECTION;
+	
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		return 1;
+	}
+	EXEC SQL DECLARE my_curs11 CURSOR FOR
+		select ac_id,tx_date,tx_amt,ct_ind,bal,brf,note_type,note_no,tel,tx_time from dd_mst_hst \
+		where ac_id in (select ac_id from dd_mst where prdt_no='131') and tx_date=:m_sys_date;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D101");/*程序定义游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL OPEN my_curs11;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"D102");/*程序打开游标出错*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}	
+	while (1)
+	{
+		memset(m_brf,0x00,sizeof(m_brf));
+		memset(m_note_type,0x00,sizeof(m_note_type));
+		memset(m_name,0x00,sizeof(m_name));
+		memset(m_ct_ind,0x00,sizeof(m_ct_ind));
+		memset(m_note_no,0x00,sizeof(m_note_no));
+		memset(m_tel,0x00,sizeof(m_tel));
+		memset(m_name1,0x00,sizeof(m_name1));
+		memset(m_ac_no,0x00,sizeof(m_ac_no));
+		m_tx_time = 0;
+		EXEC SQL FETCH my_curs11 INTO :m_ac_id,:m_tx_date,:m_tx_amt,:m_ct_ind,:m_bal,:m_brf,:m_note_type,:m_note_no,:m_tel,:m_tx_time;
+		if (sqlca.sqlcode)
+		{
+			if (sqlca.sqlcode==1403)
+			{
+				break;
+			}else
+			{
+				sprintf(reply,"D102");/*程序打开游标出错*/
+				vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+				return 1;
+			}
+		}
+		pub_base_dic_show_str(m_name,"note_type",m_note_type);
+		
+		EXEC SQL SELECT a.name,b.ac_no INTO :m_name1,:m_ac_no FROM dd_mst a,mdm_ac_rel b where a.ac_id = b.ac_id and b.ac_id = :m_ac_id;
+		if (sqlca.sqlcode)
+		{
+			sprintf(reply,"AT03");/*操作数据库错误*/
+			vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);
+			return 1;
+		}
+			fprintf(fp,"%ld|%.2lf|%s|%.2lf|%s|%s|%s|%s|%ld|%s|%s|\n",m_tx_date,m_tx_amt,m_ct_ind,m_bal,m_brf,m_name,m_note_no,m_tel,m_tx_time,m_ac_no,m_name1);
+		}
+	EXEC SQL CLOSE my_curs11;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	return 0;	
+}
+#endif
+#if DEBUG12
+int mkcxcf(char * reply,char* url)	/** 传给信贷查询查复登记 **/
+{
+	FILE * fp=NULL;
+	fp=fopen(url,"w");
+	if (fp==NULL)
+	{
+		sprintf(acErrMsg,"url is [%s] but bad",url);
+		WRITEMSG
+			strcpy(reply, "P157" );
+		return 2;	  
+	}
+	EXEC SQL BEGIN DECLARE SECTION;
+		char cMy_char[2001];
+		long	m_sys_date=0;
+	EXEC SQL END DECLARE SECTION;
+	EXEC SQL SELECT lst_date INTO :m_sys_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(reply,"AT03");/*操作数据库错误*/
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+		return 1;				
+	}
+	EXEC SQL DECLARE seltelreg_cur CURSOR FOR select qbrname ||'|'||qdate ||'|'||qmode ||'|'||qvocnum ||'|'||telamt ||'|'||rdate ||'|'||rmode ||'|'||rtxt ||'|'||cxnr from seltelreg where tx_date=:m_sys_date;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d declare cursor err =sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	EXEC SQL OPEN seltelreg_cur;
+	if(sqlca.sqlcode)
+	{
+		sprintf( acErrMsg, "%s,%d open cursor err sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		return (-1);
+	}
+	vtcp_log("%s,%d ",__FILE__,__LINE__);
+	while(1)
+	{
+		memset(cMy_char  ,0x00,sizeof(cMy_char  ));
+		EXEC SQL FETCH seltelreg_cur INTO :cMy_char;
+		if(sqlca.sqlcode==1403)
+		{
+			break;
+		}
+		else if(sqlca.sqlcode)
+		{
+			sprintf( acErrMsg, "%s,%d fetch cur error sqlcode[%ld]!",__FILE__,__LINE__,sqlca.sqlcode );
+			WRITEMSG
+			return (-1);
+		}
+		pub_base_strpack(cMy_char);
+		fprintf(fp,"%s|\n",cMy_char);	
+	}
+	EXEC SQL CLOSE seltelreg_cur;
+	strcpy(reply, "0000" );
+	fclose(fp);
+	vtcp_log("[%s][%d]seltelreg导出成功\n",__FILE__,__LINE__);
+	return 0;
+}
+#endif
+int gD998()
+{	
+	char path[100];
+	char	comm[30];
+	char filename[200];
+	char url[300];
+	int imsgcode=-1;
+	int ret=0;
+	memset(g_pub_tx.reply,0x00,sizeof(g_pub_tx.reply)); 
+	memset(url,'\0',sizeof(url));
+	memset(comm,0x00,sizeof(comm));
+	/*sprintf(path,"%s/txt/cms_%d/",getenv("HOME"),g_pub_tx.tx_date); 其实这一句还是很NB的，不过不这么整了*/
+	sprintf(path,"%s/cms_ftp/",getenv("HOME"));
+	int i=0;
+	EXEC SQL BEGIN DECLARE SECTION;
+	long m_lst_date;
+	EXEC SQL END DECLARE SECTION; 
+	m_lst_date=0;
+	EXEC SQL SELECT lst_date INTO :m_lst_date FROM com_sys_parm;
+	if (sqlca.sqlcode)
+	{
+		sprintf(g_pub_tx.reply,"D101");
+		goto ErrExit;/*取日期错误*/
+	}
+#if DEBUG1
+	sprintf(filename,"%d_0101.txt",m_lst_date);
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makedata(g_pub_tx.reply,url);
+	i=1;
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif	
+#if DEBUG2
+	sprintf(filename,"%d_0201.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makekmzz(g_pub_tx.reply,url);
+	i=2;
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG3
+	sprintf(filename,"%d_0301.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makeptdktz(g_pub_tx.reply,url);	
+	i=3;
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG4
+	sprintf(filename,"%d_0304.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makecdhp(g_pub_tx.reply,url);	
+	i=4;
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG5
+	sprintf(filename,"%d_0305.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=maketxtz(g_pub_tx.reply,url);
+	i=5;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG7
+	sprintf(filename,"%d_0401.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makeptdkmx(g_pub_tx.reply,url);	
+	i=7;
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG8
+	sprintf(filename,"%d_0501.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makedktz(g_pub_tx.reply,url);
+	i=8;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG9
+	sprintf(filename,"%d_0601.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makellb(g_pub_tx.reply,url);
+	i=9;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG10
+	sprintf(filename,"%d_0701.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makedzy(g_pub_tx.reply,url);
+	i=10;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+#if DEBUG11
+	sprintf(filename,"%d_0801.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=makebzjmx(g_pub_tx.reply,url);
+	i=11;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif  
+#if DEBUG12
+	sprintf(filename,"%d_0901.txt",m_lst_date);	
+	sprintf(url,"%s%s",path,filename);
+	imsgcode=mkcxcf(g_pub_tx.reply,url);
+	i=12;	
+	if (imsgcode)
+	{
+		vtcp_log("[%s][%d]err ",__FILE__,__LINE__);
+		goto ErrExit;
+	}
+#endif
+
+	/****改为新加密形式  20121103
+	sprintf(comm," ftp_to_cms.sh %ld ",m_lst_date);
+	****/
+	sprintf(comm," ftp_to_cms.sh %ld %s %s %s %s %s %s",m_lst_date,get_env_info("CMS_FTP_USER"),get_env_info("CMS_FTP_PWD"),get_env_info("DB_USER"),get_env_info("DB_PASSWD"),get_env_info("MIS_FTP_USER"),get_env_info("MIS_FTP_PWD"));
+	vtcp_log("[%s][%d]  comm = [%s]",__FILE__,__LINE__,comm);
+	ret=system(comm);
+	if (ret)
+	{
+		vtcp_log("[%s][%d]给信贷送数失败");
+		goto ErrExit;
+	}
+OKExit:
+		sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+		return 0;
+ErrExit:		
+	if (memcmp(g_pub_tx.reply,"0000",4)==0)
+	{
+		memcpy(g_pub_tx.reply,"H034",4);
+	}
+	sprintf(acErrMsg,"At Last i=[%d],msgcode=[%d] reply=[%s]",i,imsgcode,g_pub_tx.reply);
+	WRITEMSG
+		vtcp_log("[%s][%d]err_err sqlcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode);		
+	return 1;								
+}

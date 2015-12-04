@@ -1,0 +1,229 @@
+<BLOCK LINE="9" COL="4" NAME="IC_QCKH_INFO" VISABLE="FALSE">
+	<ITEM LINE="2" COL="1"  TYPE="%-13s" FUNCTIONS="T(户        名:)" />
+	<ITEM LINE="2" COL="15" TYPE="%-20s" NAME="#KH_NAME" INPUT="TEXT" FUNCTIONS="T()"/>
+	<ITEM LINE="4" COL="1"  TYPE="%-13s"  FUNCTIONS="T(账 户  余 额:)"/>
+	<ITEM LINE="4" COL="15" TYPE="%17.2f" NAME="#ICLAVBAL"  INPUT="TEXT" FUNCTIONS="V(0000000000000001,9999999999999999)" />
+	<ITEM LINE="5"  COL="1"  TYPE="%-16s"  NAME="#L_AC_BAL_ZD"  VISABLE="false" FUNCTIONS="T(电子现金余额:)" /> 
+	<ITEM LINE="5"  COL="15" TYPE="%17.2f" NAME="#AC_BAL_ZD"    VISABLE="false" INPUT="TEXT"  FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#OPEN_AC_ID"   LINE="4" COL="49" TYPE="%-5s"  VISABLE="false"  FUNCTIONS=""/>
+  <ITEM NAME="#L_PASSWORD" LINE="4" COL="39" TYPE="%-10s" VISABLE="false"  FUNCTIONS="T(密    码:)"/> 
+	<ITEM NAME="#PASSWORD"   LINE="4" COL="49" TYPE="%6s"  VISABLE="false"  INPUT="TEXT" DEVICE="PINPAD" FUNCTIONS="V(NB)i()">
+		<ONLOSTFOCUS>
+		"{
+			if(len(delspace(itoa(#PASSWORD)))!=6)
+				{
+				showmsg('密码长度必须为六位!');
+				return (false);
+				}
+			initfd(); 
+			commsend_001();
+			$FD16='7007'; 
+			if((#QCLX=='0') or (#QCLX=='1'))
+				{
+				$FD30=rtrim(#CARD_NO);
+				}
+				if(#QCLX=='2')
+				{
+				$FD30=rtrim(#CARD_NO_CT);
+				}
+			
+			$FD79=#PASSWORD;
+			$FD75=$TRACK2; //二磁
+			$FD76=$TRACK3;
+			$FD68='4';
+			<!--
+			if (isTxContinue() == false )
+		{
+			return(false);
+		}-->
+		callagn();
+			if($FD12!='0000')
+			{
+				showmsg(geterror());
+				return (false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#TEMP1"   TYPE="%6S" VISABLE="false" FUNCTIONS="">
+		<ONLOSTFOCUS>
+		"{  
+		
+		    if(#QCLX=='0')
+		    {
+		    show(#L_AMT_ZD,true);
+			  show(#AMT_ZD,true);
+			  }
+		    if(#QCLX=='1' or #QCLX=='2')
+		    {
+			  showmsg('请插入转入IC卡。。。');
+			  show(#L_CARD_NO_IN,true);
+				show(#CARD_NO_IN,true);
+				show(#L_FLAG3,true);
+			  show(#L_FLAG4,true);
+				enable(#CARD_NO_IN,true);
+				enable(#LTXAMT1,false);
+				}
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="7" COL="1"  TYPE="%-13s" VISABLE="false"  NAME="#L_AMT_ZD" FUNCTIONS="T(圈 存  金 额:)"/>
+	<ITEM LINE="7" COL="15" TYPE="%17.2f" VISABLE="false" NAME="#AMT_ZD"      INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#LTXAMT1"    TYPE="%17.2f" FUNCTIONS="E(#AMT_ZD+#AC_BAL_ZD)">
+		<ONLOSTFOCUS>
+		"{
+			//showmsg(itoa(#LTXAMT1,'%17.2f'));
+			if(#ICLAVBAL &lt; #AMT_ZD)
+			{
+				showmsg('账户余额不足!');
+				return(false);
+			}
+			if(#AC_BAL_ZD >= 1000) 
+			{
+			
+				showmsg('电子现金账户余额已为上限，不能再做圈存!');
+				return(false);
+			}
+		
+			if(#LTXAMT1 &gt; 1000)
+			{
+				showmsg('IC卡电子金额总数不能超过1000元，请重新输入!');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  TYPE="%17.2f" NAME="#ICLAVBAL_PZ"   FUNCTIONS="E(#ICLAVBAL-#AMT_ZD)" />
+
+	
+	<ITEM NAME="#L_FLAG3" LINE="6" COL="1"  TYPE="%-28s"  FUNCTIONS="T(【转入电子现金账户信息】)" VISABLE="false" />
+	<ITEM NAME="#L_FLAG4" LINE="7" COL="1" VISABLE="false"  TYPE="%-70s"   FUNCTIONS=
+		"T(----------------------------------------------------------------------)"/>
+	<ITEM LINE="8" COL="1"  TYPE="%-13s" VISABLE="false"  NAME="#L_CARD_NO_IN"  FUNCTIONS="T(转 入  卡 号:)"  />
+	<ITEM NAME="#OPEN_AC_ID_ZR"   LINE="4" COL="49" TYPE="%-5s"  VISABLE="false"  FUNCTIONS=""/>
+	<ITEM LINE="8" COL="15" TYPE="%-19s"  VISABLE="false" NAME="#CARD_NO_IN" VISABLE="false" INPUT="TEXT"  DEVICE="FIXICC"    FUNCTIONS="V(NB)M($MSR2,1)">
+	<ONLOSTFOCUS>
+		"{
+		  	dim @sdate1 as string;
+				dim @sdate2 as string;
+				if($MSR2 =='')
+					{
+					showmsg('读取二磁信息错误！');
+					return(false);
+					}
+				if(substr(#CARD_NO_IN,0,6) == #CARDBIN2)
+				{
+				@sdate1=substr($MSR2,20,4)+'31';
+				@sdate2=substr($HDATE,2,6);
+				 if(atoi(@sdate2)>=atoi(@sdate1))
+					{
+						showmsg('卡已到期，不能做此交易!');
+						return(false);
+					}
+				}
+		  dim @tagvalue as string;
+		  if(((#CARD_NO_IN)==(#CARD_NO) and (#QCLX=='1')) or (#CARD_NO_IN)==(#CARD_NO_CT))
+			{
+				showmsg('您没有换卡，请插入转入IC卡!');
+				return(false); 
+			}
+			if(len(rtrim(#CARD_NO_IN))!=19)
+			{
+				showmsg('卡号长度不正确，请重新输入!');
+				return(false); 
+			}
+			if(substr(#CARD_NO_IN,0,6) != #CARDBIN1 and substr(#CARD_NO_IN,0,6) != #CARDBIN2)
+			{
+				showmsg('卡号的前6位必须为'+#CARDBIN1 +'或'+#CARDBIN2);
+				return(false);
+			}
+
+			show(#L_ZR_NAME,true);
+		  show(#ZR_NAME,true);
+			show(#L_AC_BAL,true);
+			show(#AC_BAL,true);
+			show(#L_AMT,true);
+			show(#AMT,true);	
+			@tagvalue= ictagvalue('9f79');
+				if(strfld(@tagvalue,'|',0)!='9000')
+				{
+				showmsg('函数ictagvalue的返回值有误!');
+				return(false);
+				}
+			//showmsg(strfld(@tagvalue,'|',0));
+			@tagvalue= strfld(@tagvalue,'|',1);
+			//showmsg('电子现金余额#AC_BAL='+delspace(val(@tagvalue,0.01)));
+		  enable(#AC_BAL,false);
+			#AC_BAL=val(@tagvalue,0.01);
+			initfd();
+			commsend_001();
+			$FD62=rtrim(#CARD_NO_IN);
+			$FD16='1717' ;//查询账户信息
+			callserver();
+			if($FD12!='0000' and $FD12!='L098')//电子现金交易在查询时不被冻结状态卡住
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			enable(#ZR_NAME,false);
+			#ZR_NAME = $FD26;//户名
+			#OPEN_AC_ID_ZR = substr($FD44,3,5);//转入卡开户行
+			//showmsg('#OPEN_AC_ID_ZR ='+#OPEN_AC_ID_ZR);
+			}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM TYPE="%-19s"  NAME="#SWITCH"   FUNCTIONS="">
+	<ONLOSTFOCUS>
+		"{
+			if(#QCLX=='0')
+			{
+			show(#L_AC_BAL_ZD, true);
+			//show(#AC_BAL_ZD, true);
+			//show(#L_PASSWORD, true);
+			show(#PASSWORD, true);
+			}
+			if((#QCLX=='1') or (#QCLX=='2'))
+			{
+			show(#L_AC_BAL, true);
+			show(#AC_BAL, true);
+			show(#L_PASSWORD, true);
+			show(#PASSWORD, true);
+			show(#L_ZR_NAME, true);
+			show(#ZR_NAME, true);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM LINE="9"  COL="1" TYPE="%-18s"  NAME="#L_ZR_NAME" VISABLE="false" FUNCTIONS="T(户        名:)"  />
+	<ITEM LINE="9"  COL="15" TYPE="%-20s"  NAME="#ZR_NAME"  VISABLE="false"  INPUT="TEXT"   FUNCTIONS="T()"/>
+	<ITEM LINE="10"  COL="1"  TYPE="%-16s"  NAME="#L_AC_BAL"  VISABLE="false" FUNCTIONS="T(电子现金余额:)" /> 
+	<ITEM LINE="10"  COL="15" TYPE="%17.2f" NAME="#AC_BAL"    VISABLE="false" INPUT="TEXT"  FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM LINE="12" COL="1"  TYPE="%-10s" VISABLE="false"  NAME="#L_AMT" FUNCTIONS="T(圈存金额:)"/>
+	<ITEM LINE="12" COL="15" TYPE="%17.2f" VISABLE="false" NAME="#AMT"      INPUT="TEXT" DEVICE="KEYBOARD" FUNCTIONS="V(0000000000000001,9999999999999999)"/>
+	<ITEM NAME="#LTXAMT2"    TYPE="%17.2f" FUNCTIONS="E(#AMT+#AC_BAL)">
+		<ONLOSTFOCUS>
+		"{
+			//showmsg(itoa(#LTXAMT1,'%17.2f'));
+			if(#ICLAVBAL &lt; #AMT)
+			{
+				showmsg('账户余额不足!');
+				return(false);
+			}
+			if(#AC_BAL >= 1000)
+			{
+			
+				showmsg('电子现金账户余额已为上限，不能再做圈存!');
+				return(false);
+			}
+		
+			if(#LTXAMT2 &gt; 1000)
+			{
+				showmsg('IC卡电子金额总数不能超过1000元，请重新输入!');
+				return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM  TYPE="%17.2f" NAME="#ICLAVBAL_PZ1"   FUNCTIONS="E(#ICLAVBAL-#AMT)" />
+
+</BLOCK>

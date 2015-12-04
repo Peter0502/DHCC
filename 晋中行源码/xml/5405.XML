@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11110000" TITLE="支票业务历史查询"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-44s" FUNCTIONS=
+    "T(5405                        支票业务历史查询)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5929)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+   <ITEM NAME="#JG"  TYPE="%-1s"  FUNCTIONS="">
+   <ONLOSTFOCUS>
+  "{
+     #BRNO=$KINBR;
+     if($KINBR=='50000')
+      {
+       enable(#BRNO,true);
+      }
+     else
+      {
+       enable(#BRNO, false);
+      }
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>
+  "{
+        dim @selid as number;
+        dim @tota as string;
+        while(#DOLIST !='')
+        {
+                showall();
+                @selid=list_work();
+                if(@selid &lt; 0){
+                        list_del();
+                        rerun();
+                        return(true);
+                }
+                #FWTDAY =list_gettext(@selid,1);
+                #IORDERNO=list_gettext(@selid,2);
+                #FTXAMT=val(list_gettext(@selid,3));
+                #FORBRNO=list_gettext(@selid,5);
+                #FACBRNO=list_gettext(@selid,6);
+                #FPAYACTNO=list_gettext(@selid,7);
+                #FCASHACTNO=list_gettext(@selid,8);
+                #FTXNUM=list_gettext(@selid,10);
+                #FCASHACTNO=delspace(#FCASHACTNO);
+                #FPAYACTNO=delspace(#FPAYACTNO);
+
+                open('5406.XML','#WTDAY='+#FWTDAY+';#ORDERNO='+#IORDERNO+';#ORBRNO='+#FORBRNO+';#ACBRNO='+#FACBRNO+';#PAYACTNO='+#FPAYACTNO+';#CASHACTNO='+#FCASHACTNO+';#TXNUM='+#FTXNUM+';#ITXAMT='+list_gettext(@selid,3)+';'); 
+               //#ITXAMT='+#FTXAMT+';
+                return(true);
+        }
+
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="10"    COL="20" TYPE="%-14s" FUNCTIONS="T(交 易  行 号:)"/>
+  <ITEM LINE="12"   COL="20" TYPE="%-14s" FUNCTIONS="T(支 票  状 态:!)"/>
+
+  <!-------输入数据域----->
+  <ITEM LINE="10"    COL="34" NAME="#BRNO" TYPE="%-7s"   INPUT="TEXT"     DEVICE="KEYBOARD"  FUNCTIONS="T()"/>
+  <ITEM LINE="12" COL="34" NAME="#ZPSTAT"  TYPE="%-1s"   INPUT="SELECT"   DEVICE="KEYBOARD"   FUNCTIONS="T(1)">
+       <SELECT>
+          <OPTION VALUE="1" TITLE="1.往帐录入"/>
+      </SELECT>
+  </ITEM>
+   <!--返回的基本数据区-->
+   <ITEM NAME="#BRNO5"         TYPE="%-7s"    FUNCTIONS=""/>                 <!--交易机构-->
+   <ITEM NAME="#WTDAY"         TYPE="%-8s"    FUNCTIONS=""/>                 <!--委托日期-->
+   <ITEM NAME="#ORDERNO"       TYPE="%-8s"    FUNCTIONS=""/>                 <!--业务编号兼做支付交易序号-->
+   <ITEM NAME="#ORBRNO"        TYPE="%-12s"   FUNCTIONS=""/>                 <!--发起行行号  -->
+   <ITEM NAME="#ACBRNO"        TYPE="%-12s"   FUNCTIONS=""/>                 <!--接收行行号  -->
+   <ITEM NAME="#PAYNO"         TYPE="%-12s"   FUNCTIONS=""/>                 <!--付款行行号  -->
+   <ITEM NAME="#CASHNO"        TYPE="%-12s"   FUNCTIONS=""/>                 <!--收款行行号  -->
+   <ITEM NAME="#AVBAL"         TYPE="%16.2f"  FUNCTIONS="J(#XAVBAL)"/>       <!--交易金额  -->
+   <ITEM NAME="#XAVBAL"        TYPE="%-12s"   FUNCTIONS="X(#AVBAL)"/>       <!--交易金额  -->
+   <ITEM NAME="#PACKID"        TYPE="%-8s"   FUNCTIONS=""/>                 <!--包序号-->
+   <ITEM NAME="#STAT"          TYPE="%-20s"   FUNCTIONS=""/>                 <!--交易状态--> 
+   <!--返回的数据域--->
+   <ITEM NAME="#FORBRNO"   TYPE="%-12s"   FUNCTIONS=""/>
+   <ITEM NAME="#FWTDAY"    TYPE="%-8s"    FUNCTIONS=""/>
+   <ITEM NAME="#IORDERNO"  TYPE="%-8s"    FUNCTIONS=""/>
+   <ITEM NAME="#FTXNUM"    TYPE="%-5s"    FUNCTIONS=""/>
+   <ITEM NAME="#FACBRNO"   TYPE="%-12s"   FUNCTIONS=""/>
+   <ITEM NAME="#FPAYNO"    TYPE="%-12s"   FUNCTIONS=""/>
+   <ITEM NAME="#FTXAMT"    TYPE="%16.2f"   FUNCTIONS=""/>
+   <ITEM NAME="#FPAYACTNO"    TYPE="%-32s"   FUNCTIONS=""/>
+   <ITEM NAME="#FCASHACTNO"   TYPE="%-32s"   FUNCTIONS=""/>
+
+  <ITEM NAME="#SERVER"   TYPE="%-1s"   FUNCTIONS="T($ORKINBR=#OPNBR)T($TTSKID=IH)"/>
+  <ITEM NAME="#HEAD"     TYPE="%-1s"   FUNCTIONS="T($CCHED=1)"/>
+  <ITEM NAME="#TXCNT"    TYPE="%2d"    FUNCTIONS="T($OCCURS=#TXCNT)J(#TOTCNT)" />
+  <ITEM NAME="#TOTCNT"   TYPE="%5d"    FUNCTIONS="E(#TOTCNT+#TXCNT)J(#TOTCNTC)"/>
+  <ITEM NAME="#TOTCNTC"  TYPE="%5d"    FUNCTIONS="T($TOTCNT=#TOTCNT)"/>
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#OK" LINE="21"  COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON" >
+  <ONCLICK>"{
+        dim @tota as string;
+        dim @tota2 as string;
+		dim @a as number;
+		dim @file as file;
+		
+		list_init(17,78,5,1);
+        list_setcolcnt(11);
+        list_setcol(0,'交易日期',10);
+        list_setcol(1,'委托日期',10);
+        list_setcol(2,'交易序号',10);
+        list_setcol(3,'交易金额',20);
+        list_setcol(4,'支票状态',24);
+        list_setcol(5,'发起行号',14);
+        list_setcol(6,'接收行号',14);
+        list_setcol(7,'付款人帐号', 35);
+        list_setcol(8,'收款人帐号',35);
+        list_setcol(9,'业务类型',20);
+        list_setcol(10,'TXNUM',8);
+
+		initfd();
+		commsend_001();
+		$FD16='5929';
+		$FD28=#BRNO;
+		$FD67=#ZPSTAT;
+        @tota=callserver();
+        if($FD12 != '0000'){
+                showmsg(geterror());
+                list_del();
+                return(true);
+        }
+		@tota2 = substr(@tota,0,len(@tota));
+		savefiletxt('../tmp/dm'+$KINBR+$TTYNAME+$FD7+'.dat',@tota2);
+		list_load('../tmp/dm'+$KINBR+$TTYNAME+$FD7+'.dat');
+		list_work();
+       #DOLIST='1';
+   }"
+  </ONCLICK>
+  </ITEM>
+  </VARIABLE>
+
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE >
+NOTHING
+</PACKAGE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11000000" TITLE="8011 IC卡账户圈存"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+
+	
+}"
+</COMMSEND>
+<COMMRECV>"{
+}"
+</COMMRECV>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-54s" FUNCTIONS=
+    "T(8011                          IC卡账户圈存)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+   
+  <ITEM NAME="#TXNO"        TYPE="%-4s"  FUNCTIONS="T($TXNO=8011)"/>
+  <ITEM NAME="#MSGTYPE"     TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <PAGE NAME="DEFAULT">
+  <!--界面变量-->
+ 
+  
+<ITEM LINE="6" COL="5" TYPE="%-13s" FUNCTIONS="T(卡        号:)"/> 
+<ITEM NAME="#CARD_NO" INPUT="TEXT" LINE="6" COL="19" TYPE="%-19s" DEVICE="ICC"  FUNCTIONS="V(NB)M($MSR2,1)">
+<ONLOSTFOCUS>
+"{
+	#CARD_NO='6212230110800016390';
+  #TRACK2=$MSR2;
+  #TRACK3=$MSR3;
+  $MSR2='';
+  $MSR3='';
+    if(len(rtrim(#CARD_NO))!=19)
+    {
+       showmsg('卡号长度不正确，请重新输入!');
+       //return(false); for test
+    }
+    if(substr(#CARD_NO,0,6) != #CARDBIN1 and substr(#CARD_NO,0,6) != #CARDBIN2)
+    {
+    	showmsg('卡号的前6位必须为'+#CARDBIN1 +'或'+#CARDBIN2);
+    	//return(false); for test
+    }
+    initfd();
+    commsend_001();
+    $FD62=rtrim(#CARD_NO) ;
+    $FD16='1717' ;//查询账户信息
+    //showmsg('准备调查询核心'+$FD16);
+    callserver();
+    if($FD12!='0000'){
+    	showmsg(geterror());
+    	return(false);
+    }
+    showmsg('核心成功返回了');
+    showblock('IC_QCKH_INFO',true);
+    #KH_NAME = $FD26 ;//户名
+    enable(#KH_NAME,false);
+    //#KH_HM=delspace(itoa(atoi($FD54))) ;//客户号
+    //enable(#KH_HM,false);
+    #KH_ZJHM = $FD32 ;//证件号码
+    enable(#KH_ZJHM,false);
+    #AC_BAL = val(delspace($FD33),0.01);
+    enable(#AC_BAL,false);
+
+    #AVAIL_BAL = 12.5;//test 要换成IC卡电子现金余额
+    enable(#AVAIL_BAL,false);   
+ 
+    
+	  if (#QCLX == '0')
+	{
+		show(#lCARD_NO_IN,false);
+		show(#CARD_NO_IN,false);
+		enable(#lCARD_NO_IN,false);
+		enable(#CARD_NO_IN,false);
+	}
+	  else if (#QCLX == '1')
+	{
+		show(#lCARD_NO_IN,true);
+		show(#CARD_NO_IN,true);
+		enable(#lCARD_NO_IN,true);
+		enable(#CARD_NO_IN,true);
+	}
+	
+}"
+</ONLOSTFOCUS>
+</ITEM>
+  <!--ITEM LINE="7" COL="5" TYPE="%-10s" FUNCTIONS="T(照    片:)"/> 
+  <ITEM LINE="7" COL="15" LINES="160" COLS="120" NAME="#PIC" TYPE="%-10s" VISABLE="TRUE" FUNCTIONS=""/-->
+<ITEM LINE="8"  COL="5"   TYPE="%-70s" FUNCTIONS="T(----------------------------------------------------------------------)"/>
+   <IMPORT>IC_QCKH_INFO.IMP</IMPORT>
+
+  <ITEM NAME="#CARDBIN1" TYPE="%-6s" FUNCTIONS="T(621223)"/>  <!--卡bin1-->
+  <ITEM NAME="#CARDBIN2" TYPE="%-6s" FUNCTIONS="T(621780)"/>  <!--卡bin2--> 
+  <ITEM NAME="#TRACK2" TYPE="%-37s" FUNCTIONS=""/>  <!--卡二磁-->
+  <ITEM NAME="#TRACK3" TYPE="%-104s" FUNCTIONS=""/>	   <!--卡三磁-->
+  <ITEM NAME="#SVR_CON_CODE" TYPE="%-3s" FUNCTIONS="T()"/><!--服务点条件码-->
+  <ITEM NAME="#CARD_SEQ_ID" TYPE="%-3s" FUNCTIONS=""/><!--IC卡序列号-->
+  <ITEM NAME="#CCY" TYPE="%-3s" FUNCTIONS=""/><!--交易币种-->
+  <ITEM NAME="#TERMINAL_NO" TYPE="%-8s" FUNCTIONS="T()"/><!--终端编号-->
+  <ITEM NAME="#TERMINAL_SEQ_NO" TYPE="%-6s" FUNCTIONS="T()"/><!--终端流水号-->
+  <ITEM NAME="#IC_ATC" TYPE="%-4s" FUNCTIONS=""/><!--应用交易计数器-->
+  <ITEM NAME="#IC_AC" TYPE="%-16s" FUNCTIONS=""/><!--应用密文-->
+  <ITEM NAME="#MAC" TYPE="%-16s" FUNCTIONS=""/><!--MAC-->
+  <ITEM NAME="#CARD_TRACENO_TRAN" TYPE="%-16s" FUNCTIONS=""/><!--记录卡系统流水用于撤消交易-->
+  <ITEM NAME="#RESP_CODE" TYPE="%-4s" FUNCTIONS=""/><!--存返回码-->
+ <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#AUCODE" TYPE="%-1s" FUNCTIONS="T(#AUCODE)"/><!---授权标志--->
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  	<ONCLICK>"{
+  	dim @shuju as string ;
+  	dim @update as string;
+	initfd();
+	commsend_001();
+	$FD94 = #QCLX ;//圈存类型
+	showmsg('$FD94='+$FD94);
+	$FD30 = #CARD_NO ;//转出卡号
+	$FD79 = #PASSWORD ; //密码
+	$FD17 = #SVR_CON_CODE ;//服务点条件码
+	$FD86 = '567';//TOO #TERMINAL_NO ;//终端编号
+	$FD87 = '7890';//TOOD#TERMINAL_SEQ_NO ;//终端流水号
+	$FD23 = #CARD_SEQ_ID ;//IC卡序列号
+	$FD39 = delspace(itoa(val(itoa(#AVAIL_BAL,'%-17.2f'),100),'%-016.0f'));   // 电子现金余额
+	$FD40=delspace(itoa(val(itoa(#AMT,'%-17.2f'),100),'%-016.0f'));   // 交易金额
+	if (#QCLX == '0')//指定账户圈存
+	{
+		$FD37 = '';//转入卡号
+		$FD16='7780';
+		//showmsg('指定账户圈存');
+	}
+	else if (#QCLX == '1')//非指定账户圈存
+	{
+		$FD37 = delspace(#CARD_NO_IN); //转入卡号
+		$FD16='7703';
+		//showmsg('非指定账户圈存');
+	}
+	$FD85 =#CCY ;//币种
+	$FD75=#TRACK2 ; //二磁
+	$FD76 =#TRACK3; //三磁
+	showmsg('准备发往平台,fd16='+$FD16);
+	@shuju= initiccard();
+	#IC_ATC=strfld(@shuju,'|',0); 
+	#IC_AC=strfld(@shuju,'|',1); 
+	$FD34 = #IC_ATC ; //应用计数器
+	$FD33= #IC_AC ;//应用密文
+	if (isTxContinue() == false )
+	{
+		showmsg('交易过程中不能拔出IC卡');
+		return(false);
+	}
+	callagn();
+	if($FD12!='0000')
+	{
+		showmsg('账户圈存失败:['+geterror()+']');
+		//return (false);   //此处只提示错误信息而不返回,确保程序继续往下执行 fortest
+		powerdownic();
+	}
+	#CARD_TRACENO_TRAN=delspace(itoa(val($FD43),'%16d'));
+	@update=updateiccard('04DA9F790a0000000850006F94ABF1,04DC010C42703C9F61123635333132323139383630373135343431349F62010057136217800109002658D30122200004400284000F5F200848414E204348414F9F1F00260D27E7');
+	if (@update != '0000')
+	{
+		#RESP_CODE=$FD12;
+		showmsg('圈存失败@update='+@update);
+		initfd();
+		commsend_001();
+		$FD16='7777';
+		$FD12=#RESP_CODE;
+		$FD30=#CARD_NO;
+		showmsg('hhhhh');
+		$FD39=delspace(itoa(val(itoa(#AMT,'%-17.2f'),100),'%-016.0f'));
+		showmsg('hhhhh22222');
+		$FD43=#CARD_TRACENO_TRAN;
+		//showmsg('#CARD_TRACENO_TRAN='+#CARD_TRACENO_TRAN);
+		callagn();
+		if($FD12!='0000')
+		{
+			showmsg('撤销卡系统账户圈存失败:['+geterror()+']');
+			//return (false);  //由于要执行2次撤销交易,故执行撤销错误的情况下只返回错误信息,不退出而继续执行下一次撤销
+			powerdownic();
+		}
+	}
+	
+  		}"
+  	</ONCLICK>
+  </ITEM>
+</PAGE>
+   <!--IMPORT>ic_qc_accinfo.IMP</IMPORT-->
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN"  DESC="交易完成">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		print(8,25,'操 作 成 功!');
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证">
+NOTHING
+</PACKAGE>
+	<PRINT>
+	"{
+		dim @txday  as string;
+		dim @txtime as string;
+		@txday  = substr($HDATE,0,4)+'-'+substr($HDATE,4,2)+'-'+substr($HDATE,6,2);
+		@txtime = substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+		print( 5, 20,'机构名称:[30]',$BRNAME);
+                print( 5, 2,'代码:7701');
+                print( 5, 13,'交易:交易名称');
+		print( 7, 20,':[20]',#TXNAME);
+		print( 8, 20,'流水号:[ 8]','');
+                print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+                print( 24,5,'柜员:[4]',$FD7);
+                print( 24,5,'流水号:[6]',$FD4);
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

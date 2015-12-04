@@ -1,0 +1,237 @@
+#include<stdio.h>
+#include<varargs.h>
+
+#define EXTERN
+#include"global.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+#include"city_flag_c.h"
+#define CM_SQLCODE sqlca.sqlcode==1403?100:(sqlca.sqlcode==-1?-239:sqlca.sqlcode)
+
+int city_flag_con ( struct city_flag_c , char *);
+int put_mystery( char *, char * );
+char *zip_tail(char *s);
+static void zip_struct(struct city_flag_c* ps){
+	zip_tail(ps->rowid);
+}
+int City_flag_Debug(struct city_flag_c *ps){
+	vtcp_log("city_flag_c.rowid=[%s]\n",ps->rowid);
+	vtcp_log("city_flag_c.op_flag=[%ld]\n",ps->op_flag);
+	return(0);
+}
+/*****************************************************************************/
+/****                              查询函数部分[]                       ****/
+/*****************************************************************************/
+int City_flag_Sel(reply,city_flag_c,fmtstr,va_alist)
+char    *reply;
+struct  city_flag_c *city_flag_c;
+char    *fmtstr;
+va_dcl
+{
+	int   ret;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	ret = City_flag_Dec_Sel( reply , "%s" , wherelist );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+	ret = City_flag_Fet_Sel( city_flag_c , reply );
+	if (ret){
+		WRITEMSG
+		return ret;
+	}
+
+	City_flag_Clo_Sel();
+
+	return 0;
+}
+
+
+
+char *key_strcat(char *,char *);
+int City_flag_Dec_Sel ( reply , fmtstr , va_alist )
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm ," SELECT rowid,city_flag.* FROM city_flag WHERE  ");
+	key_strcat(comm,wherelist);
+
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE city_flag_sel FROM :comm;
+	EXEC SQL DECLARE sel_city_flag CURSOR FOR city_flag_sel;
+
+	EXEC SQL OPEN sel_city_flag;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"OPEN city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int City_flag_Fet_Sel ( struct city_flag_c *city_flag_c , char * reply )
+{
+
+	int   ret;
+
+	EXEC SQL FETCH sel_city_flag INTO :city_flag_c;
+	if (sqlca.sqlcode&&sqlca.sqlcode!=1403){
+		sprintf(acErrMsg,"Fetch city_flag error!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D103");
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"Fetch city_flag finished!!! %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy (reply,"D104");
+		return CM_SQLCODE;
+	}
+	zip_struct(city_flag_c);
+
+	return 0;
+}
+
+int City_flag_Clo_Sel (){
+	EXEC SQL CLOSE sel_city_flag;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              修改函数部分                           ****/
+/*****************************************************************************/
+int City_flag_Dec_Upd( reply , fmtstr , va_alist)
+char    *reply;
+char    *fmtstr;
+va_dcl
+{
+	EXEC    SQL BEGIN   DECLARE SECTION;
+		char    comm[1000];
+	EXEC    SQL END     DECLARE SECTION;
+	char    wherelist[800];
+
+	va_list ap;
+	va_start(ap);
+	vsprintf ( wherelist , fmtstr , ap );
+	va_end(ap);
+
+	sprintf ( comm , "SELECT rowid,city_flag.* FROM city_flag WHERE  ");
+	key_strcat(comm,wherelist);
+	strcat(comm," FOR UPDATE WAIT 5 ");
+	vtcp_log("%s,%d,SQLSTR=[%s]\n",__FILE__,__LINE__,comm);
+	sqlca.sqlcode=0;
+	EXEC SQL PREPARE city_flag_upd FROM :comm;
+
+	EXEC SQL DECLARE upd_city_flag CURSOR FOR city_flag_upd;
+
+	EXEC SQL OPEN upd_city_flag;
+	if (sqlca.sqlcode){
+		sprintf(acErrMsg,"open city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D102" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int City_flag_Fet_Upd( struct city_flag_c *city_flag_c , char * reply ){
+	int   ret;
+
+	EXEC SQL FETCH upd_city_flag INTO :city_flag_c;
+	if ( sqlca.sqlcode && sqlca.sqlcode!=1403 ){
+		sprintf(acErrMsg,"FETCH upd city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D103" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == 1403 ){
+		sprintf(acErrMsg,"FETCH city_flag finished %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D104" );
+		return CM_SQLCODE;
+	}
+	zip_struct(city_flag_c);
+
+	return 0;
+}
+
+int City_flag_Upd_Upd( struct city_flag_c city_flag_c , char * reply){
+	int ret;
+
+	EXEC SQL UPDATE city_flag SET op_flag=:city_flag_c.op_flag
+	WHERE rowid=:city_flag_c.rowid;
+	if ( sqlca.sqlcode && sqlca.sqlcode != 1403 ){
+		sprintf(acErrMsg,"UPDATE city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+
+int City_flag_Del_Upd(struct city_flag_c city_flag_c , char * reply  ){
+
+	EXEC SQL DELETE FROM city_flag WHERE rowid=:city_flag_c.rowid;
+	if ( sqlca.sqlcode ){
+		sprintf(acErrMsg,"DELETE city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D105" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}
+
+int City_flag_Clo_Upd( ){
+	EXEC SQL CLOSE upd_city_flag;
+	return 0;
+}
+
+/*****************************************************************************/
+/****                              增加函数部分                           ****/
+/*****************************************************************************/
+int City_flag_Ins( struct city_flag_c city_flag_c , char * reply ){
+	int ret;
+
+	EXEC SQL INSERT INTO city_flag VALUES (:city_flag_c.op_flag);
+	if ( sqlca.sqlcode && sqlca.sqlcode != -1 )
+	{
+		sprintf(acErrMsg,"INSERT city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D107" );
+		return CM_SQLCODE;
+	}
+	else if ( sqlca.sqlcode == -1 )
+	{
+		sprintf(acErrMsg,"INSERT city_flag error %d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy ( reply , "D108" );
+		return CM_SQLCODE;
+	}
+
+	return 0;
+}

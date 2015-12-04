@@ -1,0 +1,231 @@
+#include "find_debug.h" 
+#include <stdio.h>
+#include <varargs.h>
+
+#define EXTERN
+#include "public.h"
+
+#include "td_mst_hst_c.h"
+
+EXEC SQL INCLUDE sqlca.h;
+#include"td_mst_hst_c.h"
+
+int pub_chk_td_mst_hst() 
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	struct td_mst_hst_c td_mst_hst;
+	long   tmp_ac_id;
+EXEC SQL END DECLARE SECTION;
+	int jgys=0;
+	int yccs=0;
+
+	tmp_ac_id=g_td_mst.ac_id;
+	EXEC SQL DECLARE lz_fse_mxcur SCROLL CURSOR FOR
+		SELECT td_mst_hst.rowid,td_mst_hst.* INTO :td_mst_hst FROM td_mst_hst
+		WHERE ac_id=:tmp_ac_id AND add_ind='1' AND brf<>'更正'
+		AND brf<>'撤销' AND brf<>'改'
+		ORDER BY ac_id desc,tx_date desc,trace_no desc; /*JYW*/
+
+	EXEC SQL OPEN lz_fse_mxcur;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 ac_id=%d",tmp_ac_id);
+		strcpy(g_pub_tx.reply,"P289");
+		WRITEMSG
+		return -1;
+	}
+	/****最后一笔****/
+	EXEC SQL FETCH lz_fse_mxcur into :td_mst_hst;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 ac_id=%d",tmp_ac_id);
+		strcpy(g_pub_tx.reply,"P289");
+		WRITEMSG
+		return -1;
+	}
+	jgys=pub_base_CalMouths(td_mst_hst.tx_date,g_pub_tx.tx_date);
+	yccs=pub_base_CalMouths(g_td_mst.opn_date,g_pub_tx.tx_date)+1;
+
+	switch(jgys)
+	{
+		case 1:		/** 最后存款在上月 **/
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt))
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			break;
+		case 0:		/** 最后存款在本月 **/
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt))
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			/**SSH:如果是本月已有一笔交易,则必须:之前至少有一笔交易且至少是
+                   上上月之前*/
+			EXEC SQL FETCH lz_fse_mxcur into :td_mst_hst;
+			if( sqlca.sqlcode || pub_base_CalMouths(td_mst_hst.tx_date,g_pub_tx.tx_date)<2 ) 
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				sprintf(acErrMsg,"td_mst_hst.tx_date=[%d],tx_date=[%ld]",td_mst_hst.tx_date,g_pub_tx.tx_date);
+				strcpy(g_pub_tx.reply,"P291");
+				WRITEMSG
+				return 1;
+			}
+			break;
+		default:	/** 最后存款在上月之前 **/
+			if ((yccs-g_td_mst.tx_cnt)>2)
+			{sprintf(acErrMsg,"yccs=[%d],g_td_mst.tx_cnt=[%d]\n",yccs,g_td_mst.tx_cnt);
+			WRITEMSG;
+				strcpy(g_pub_tx.reply,"P290");
+                return 1;
+			}
+				
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt)
+				&& pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt*2) )
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			break;
+	}
+
+	if( g_td_mst.tx_cnt>=g_td_mst.ttl_cnt )
+	{
+		sprintf(acErrMsg,"存入次数超过总次数 tx_cnt=%d,ttl_cnt=%d",g_td_mst.tx_cnt,g_td_mst.ttl_cnt);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"P292");
+		return -1;
+	}
+
+	EXEC SQL CLOSE lz_fse_mxcur;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 sqlca.sqlcode=%d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"P289");
+		return -1;
+	}
+
+
+	return 0;
+}
+
+/*** mode=1 定额；mode=2 不定额 ***/
+int pub_chk_td_hst(int	mode) 
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	struct td_mst_hst_c td_mst_hst;
+	long   tmp_ac_id;
+EXEC SQL END DECLARE SECTION;
+	int jgys=0;
+	int	yccs=0;			/*** 应该存的次数 ***/
+
+	tmp_ac_id=g_td_mst.ac_id;
+	EXEC SQL DECLARE lz_hst_mxcur SCROLL CURSOR FOR
+		SELECT td_mst_hst.rowid,td_mst_hst.* INTO :td_mst_hst FROM td_mst_hst
+		WHERE ac_id=:tmp_ac_id AND add_ind='1' AND brf<>'更正'
+		AND brf<>'撤销' AND brf<>'改'
+		ORDER BY ac_id,tx_date desc,trace_no;
+
+	EXEC SQL OPEN lz_hst_mxcur;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 ac_id=%d",tmp_ac_id);
+		strcpy(g_pub_tx.reply,"P289");
+		WRITEMSG
+		return -1;
+	}
+	EXEC SQL FETCH lz_hst_mxcur into :td_mst_hst;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 ac_id=%d",tmp_ac_id);
+		strcpy(g_pub_tx.reply,"P289");
+		WRITEMSG
+		return -1;
+	}
+	jgys=pub_base_CalMouths(td_mst_hst.tx_date,g_pub_tx.tx_date);
+	yccs=pub_base_CalMouths(g_td_mst.opn_date,g_pub_tx.tx_date)+1;
+	switch(jgys)
+	{
+		case 1:		/** 最后存款在上月 **/
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt) && mode==1)
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			break;
+		case 0:		/** 最后存款在本月 **/
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt) && mode==1)
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			EXEC SQL FETCH lz_hst_mxcur into :td_mst_hst;
+			if( sqlca.sqlcode==1403 )	break;
+			vtcp_log("HAO yccs=[%d],tx_cnt=[%d]",yccs,g_td_mst.tx_cnt);
+			if( sqlca.sqlcode || yccs<g_td_mst.tx_cnt )  /** 可以预存一次 **/
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				sprintf(acErrMsg,"g_td_hst.tx_cnt=[%d],yccs=[%d]",g_td_mst.tx_cnt,yccs);
+				strcpy(g_pub_tx.reply,"P417");
+				WRITEMSG
+				return -1;
+			}
+			break;
+		default:	/** 最后存款在上月之前 **/
+			if(pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt)
+				&& pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt*2)
+				&& mode==1 )
+			{
+				sprintf(acErrMsg,"tx_amt1=[%.2f],td_amt=[%.2f]",g_pub_tx.tx_amt1,g_td_mst.td_amt);
+				WRITEMSG
+				strcpy(g_pub_tx.reply,"P290");
+				return -1;
+			}
+			if( pub_base_CompDblVal(g_pub_tx.tx_amt1,g_td_mst.td_amt*2)==0 )
+				g_td_mst.tx_cnt++;
+			break;
+	}
+
+	if( g_pub_tx.tx_date>g_td_mst.mtr_date )
+	{
+		sprintf(acErrMsg,"已超过产品到期日，不允许存入![%ld][%ld]", \
+				g_pub_tx.tx_date , g_td_mst.mtr_date);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"D235");
+		return -1;
+	}
+
+	if( g_td_mst.tx_cnt>=g_td_mst.ttl_cnt )
+	{
+		sprintf(acErrMsg,"存入次数超过总次数 tx_cnt=%d,ttl_cnt=%d",g_td_mst.tx_cnt,g_td_mst.ttl_cnt);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"P292");
+		return -1;
+	}
+
+	EXEC SQL CLOSE lz_hst_mxcur;
+	if( sqlca.sqlcode )
+	{
+		sprintf(acErrMsg,"取明细帐错 sqlca.sqlcode=%d",sqlca.sqlcode);
+		WRITEMSG
+		strcpy(g_pub_tx.reply,"P289");
+		return -1;
+	}
+
+
+	return 0;
+}

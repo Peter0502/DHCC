@@ -1,0 +1,34 @@
+#ifndef __protect_note_CH__
+#define __protect_note_CH__
+struct protect_note_c{
+	char      rowid[20];
+	char      tx_br_no[6];
+	char      pro_ac_no[20];
+	long      pro_cif_no;
+	char      ben_ac_no[20];
+	long      ben_cif_no;
+	char      bail_ac_no[20];
+	char      pact_no[21];
+	long      opn_date;
+	long      time_limt;
+	long      end_date;
+	long      nex_date;
+	double    sum_amt;
+	double    amt;
+	double    bail_amt;
+	double    ratio;
+	char      mort_typ[3];
+	char      mort_ac_no[21];
+	char      pro_name[51];
+	char      pro_addr[61];
+	char      ben_name[51];
+	char      ben_addr[61];
+	double    amends_amt;
+	double    over_rate;
+	char      protect_typ[2];
+	char      protect_sts[2];
+	long      tx_date;
+	char      tel[5];
+	long      trace_no;
+};
+#endif 

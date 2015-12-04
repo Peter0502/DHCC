@@ -1,0 +1,297 @@
+<?xml version="1.0"  encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111011100000000000001100010" TITLE="用户交易明细查询"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<VARIABLE>
+	<ITEM LINE="3" COL="3"   TYPE="%-70s"    FUNCTIONS="T(9955                        用户交易明细查询)"/>
+	<ITEM LINE="4" COL="3"   TYPE="%-70s"    FUNCTIONS="T(────────────────────────────────────────)"/>
+	<ITEM NAME="#TXNO"       TYPE="%-4s"     FUNCTIONS="T($TXNO=6606)"/>
+	<ITEM NAME="#MSGTYPE"    TYPE="%-5s"     FUNCTIONS="T($MSGTYPE=03001)"/>
+	
+	<ITEM LINE="6" COL="6"  TYPE="%-12s" NAME="#LAGENT_TYPE" FUNCTIONS="T(代收费类型: )"/>
+	<ITEM LINE="6" COL="15" TYPE="%-2s"  NAME="#AGENT_TYPE"  INPUT="SELECT"   FUNCTIONS="V(NB)T(01)">
+		<SELECT>
+			<OPTION VALUE="01" TITLE="晋中燃气"/> 
+			<OPTION VALUE="02" TITLE="国新洁源天然气"/>
+			<OPTION VALUE="03" TITLE="晋中供水"/>
+			<OPTION VALUE="04" TITLE="瑞阳供热"/>
+			<OPTION VALUE="07" TITLE="国网晋中供电"/>
+		</SELECT>
+	</ITEM>
+	<ITEM  TYPE="%-12s" NAME="#SDD" FUNCTIONS="" >
+		<ONLOSTFOCUS>"{
+			if(#AGENT_TYPE == '02' or #AGENT_TYPE == '04')
+			{
+				enable(#LCARD_TYPE,true);
+				enable(#CARD_TYPE,true);
+				if(#AGENTTYPE == '02')
+				{
+					#CARD_TYPE='02';
+				}
+			}else
+			{
+				
+				enable(#LCARD_TYPE,true);
+				enable(#CARD_TYPE,false);
+				#CARDTYPE = '01';
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="8"   COL="6"  TYPE="%-14s" NAME="#LCARD_TYPE"   FUNCTIONS="T(用户介质类型:)"/>
+	<ITEM LINE="8"   COL="17" TYPE="%-2s"  NAME="#CARD_TYPE"    INPUT="SELECT"   FUNCTIONS="V(NB)T(01)">
+		<SELECT>
+			<OPTION VALUE="01" TITLE="无卡普表"/>
+			<OPTION VALUE="02" TITLE="行业IC卡"/>
+			<!--<OPTION VALUE="03" TITLE="射频卡"/>-->
+			<OPTION VALUE="04" TITLE="代码表"/>
+		</SELECT>
+	</ITEM>
+	<ITEM  TYPE="%-12s" NAME="#ADD" FUNCTIONS="" >
+		<ONLOSTFOCUS>"{
+			if(  #AGENT_TYPE=='02' and #CARD_TYPE=='01')
+			{
+				showmsg('国新洁源天然气没有普表用户');
+				return(false);
+			}
+			if( #AGENTTYPE=='04' and #CARDTYPE=='04')
+			{
+				showmsg('瑞阳供热没有代码表用户');
+				return(false);
+			} 	 
+			if(#CARD_TYPE == '01' or #CARD_TYPE == '04')
+			{
+				show(#LCARDCONT,false);
+				show(#CARDNO,false);
+				enable(#CARDNO,false);
+				show(#LUSERID,true);
+				show(#USERID,true);
+				enable(#USERID,true);
+			}
+			else
+			{
+				enable(#USERID,false);
+				show(#LUSERID,false);
+				show(#USERID,false);
+				if(#AGENT_TYPE=='04')
+				{
+					show(#LCARDCONT,false);
+					show(#CARDNO,false);
+					enable(#CARDNO,false);
+				}
+				else
+				{
+					show(#LCARDCONT,true);
+					show(#CARDNO,true);
+					enable(#CARDNO,true);
+				}
+			}
+			
+			if(#AGENT_TYPE=='04' and  #CARD_TYPE == '01')
+			{
+				showmsg('用户号中字母请输入大写');
+			}
+			
+			//瑞阳专用读卡  begin
+			if(#AGENT_TYPE=='04' and #CARD_TYPE == '02')
+			{
+				showmsg('请放好卡，以保证读卡正常');
+				
+				#RYGRCARD=readheatcard();
+				//showmsg('#RYGRCARD='+#RYGRCARD);
+				#CARDCONT = #RYGRCARD;
+				//showmsg('#CARDCONT='+#CARDCONT);
+			}
+			//   end
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="8"   COL="33" TYPE="%-22s"  NAME="#LUSERID"  VISABLE="FALSE"  FUNCTIONS="T(用户号/代码表号:)"/>
+	<ITEM LINE="8"   COL="46" TYPE="%-20s"  NAME="#USERID"   VISABLE="FALSE"  INPUT="TEXT"   FUNCTIONS="T()V(NB)"/>
+	
+	<ITEM LINE="9" COL="6"    TYPE="%-14s"   NAME="#LCARDCONT"  VISABLE="FALSE"  FUNCTIONS="T(用户介质信息:)"/>
+	<ITEM LINE="9" COL="17"   TYPE="%-20s"  NAME="#CARDNO"   VISABLE="FALSE"  INPUT="TEXT"  DEVICE="SMARTCARD"  FUNCTIONS="V(NB)M($MSR2,1)">
+		<ONLOSTFOCUS>"{
+			#CARDCONT = $MSR3;
+			$MSR2='';
+			$MSR3='';
+			showmsg('ka内信息：'+#CARDCONT);
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+	<ITEM NAME="#CARDCONT"    TYPE="%-512s"      VISABLE="FALSE" />
+	<ITEM NAME="#CARD_NO"     TYPE="%-30s"      FUNCTIONS="" />
+	<ITEM NAME="#RYGRCARD"  TYPE="%-48s" FUNCTIONS="T()"/>
+	
+	<ITEM NAME="#USERQUERY"     FUNCTIONS="T()">
+		<ONLOSTFOCUS>
+		"{
+			initfd();
+			commsend_001();
+			$FD16='6601';             //平台用户查询接口
+			$FD60='AGENT';            //平台交易类型
+			$FD21='01';               //柜面发起标志
+			$FD22=#AGENT_TYPE;        //代收费类型
+			$FD67='2';                //查询模式 用户唯一标识
+			$FD76=#USERID;            //查询内容 用户唯一标识
+			$FD23=#CARD_TYPE;         //用户介质类型
+			$FD95=#CARDCONT;          //用户介质信息
+			$FD38='100';
+			
+			//瑞阳专用   begin
+			if(#AGENT_TYPE == '04' and #CARD_TYPE == '02')
+			{
+				$FD20='1';   //士达卡标识  1 有卡  0  无卡
+			}
+			else
+			{
+				$FD20='0';
+			}
+			
+			callagnpt();
+			if(#AGENT_TYPE!='02' and #AGENT_TYPE!='03' and #AGENT_TYPE!='04' and $FD12!='0000' )
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//国新洁源天然气本次购气量不是100/1000的倍数 报0802错误 但此种情况不卡
+			if(#AGENT_TYPE=='02' and $FD12!='0802' and $FD12!='0000' )
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//自来水欠费超过10W 报0006错误 但此种情况不卡
+			if(#AGENT_TYPE=='03' and $FD12!='0006' and $FD12!='0000' )
+			{
+				showmsg(geterror());
+				return(false);
+			}
+			//瑞阳供热 报0020错误 但此种情况不卡
+			if(#AGENT_TYPE=='04' and  $FD12!='0020' and $FD12!='0000')
+			{
+				showmsg(geterror());
+			}
+			if(#AGENT_TYPE=='04')
+			{
+			    	#USERID=delspace($FD30);           //用户唯一标识
+				#YHNAME=delspace($FD25);         //用户姓名
+				#ADDRESS=delspace($FD26);          //用户地址
+			}
+			else
+			{
+				#USERID=delspace($FD30);		//用户唯一标识
+			    	#CARD_NO=delspace($FD37);
+			    	#YHNAME=delspace($FD25);         //用户姓名
+			    	#ADDRESS=delspace($FD96);        //用户地址
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM LINE="9" COL="6"  NAME="#LACNAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-10s" FUNCTIONS="T(户    名:)" />
+	<ITEM LINE="9" COL="15" NAME="#AC_NAME" VISABLE="FALSE"  INPUT="LABEL"  TYPE="%-60s" FUNCTIONS="V(NB)"/>
+	
+	<ITEM LINE="10" COL="6"  TYPE="%-80s" VISABLE="TRUE" FUNCTIONS="T(-------------------------------------------------------------------------------)"/>
+	
+	<ITEM LINE="12"  COL="6" NAME="#LYHNAME"  TYPE="%-12s"    FUNCTIONS="T(用户姓名:)"/>
+	<ITEM LINE="12"  COL="15" NAME="#YHNAME"   TYPE="%-40s"    INPUT="LABEL" FUNCTIONS="T()"/>
+	<ITEM LINE="13"  COL="6"  NAME="#LADDRESS" TYPE="%-12s"    FUNCTIONS="T(地    址:)"/>
+	<ITEM LINE="13"  COL="15" NAME="#ADDRESS"  TYPE="%-64s"    INPUT="LABEL" FUNCTIONS="T()"/>
+	
+	<ITEM LINE="15"  COL="6"  TYPE="%-14s"    FUNCTIONS="T(交易类型:)"/>
+	<ITEM LINE="15"  COL="15" NAME="#TX_TYPE"  TYPE="%-1s"  INPUT="SELECT" FUNCTIONS="V(NB)T(1)">
+		<SELECT>
+			<OPTION VALUE="0" TITLE="0.全部"/>
+			<OPTION VALUE="1" TITLE="1.记账类"/>
+			<OPTION VALUE="2" TITLE="2.非记账类"/>
+		</SELECT>
+	</ITEM>
+
+	<ITEM LINE="17" COL="6" TYPE="%-10s" FUNCTIONS="T(交易日期:)"/>
+	<ITEM LINE="17" COL="24" TYPE="%-3s" FUNCTIONS="T( → )"/>
+	<ITEM LINE="17" COL="15" NAME="#BEG_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS="V(00000001,99999999)"/>
+	<ITEM LINE="17" COL="28" NAME="#END_DATE" INPUT="TEXT"  TYPE="%8s" FUNCTIONS="T($HDATE)V(00000001,99999999)">
+		<ONLOSTFOCUS>
+		"{
+			if(len(delspace(#BEG_DATE))!=8 or len(delspace(#END_DATE))!=8)
+			{
+			  showmsg('交易日期无效，请输入8位的交易日期!!');
+			  return(false);
+			}
+			if(substr(#BEG_DATE, 0, 4)!=substr(#END_DATE, 0, 4))
+			{
+			  showmsg('交易日期无效，单次只可查询同年内交易明细!!');
+			  return(false);
+			}
+			if((val(substr(#BEG_DATE, 4, 2))) &gt; 12 or (val(substr(#END_DATE, 4, 2)) &gt; 12))
+			{
+			  showmsg('交易日期无效，开始/结束日期输入有误!!');
+			  return(false);
+			}
+			if((val(substr(#BEG_DATE, 6, 2)) &gt; 31) or (val(substr(#END_DATE, 6, 2)) &gt; 31))
+			{
+			  showmsg('交易日期无效，开始/结束日期输入有误!!');
+			  return(false);
+			}
+			if(val(#BEG_DATE) &gt; val(#END_DATE))
+			{
+			  showmsg('查询日期无效，开始日期大于结束日期!!');
+			  return(false);
+			}
+		}"
+		</ONLOSTFOCUS>
+	</ITEM>
+
+	<ITEM  NAME="#BTN" LINE="21"  COL="63" TYPE="%-6s"    FUNCTIONS="T(确  定)" INPUT="BUTTON">
+		<ONCLICK>"{
+			dim @tota as string;
+			dim @selid as number;
+			initfd();
+			commsend_001();
+			$FD16='6606';             //平台用户交易明细查询接口
+			$FD60='AGENT';            //平台交易类型
+			$FD21='01';               //柜面发起标志
+			$FD22=#AGENT_TYPE;        //代收费类型
+			$FD30=#USERID;            //用户唯一标识
+			$FD23=#CARD_TYPE;         //用户介质类型
+			$FD37=#CARD_NO;           //用户介质号
+			$FD20=#TX_TYPE;           //交易类型
+			$FD28=#BEG_DATE;          //开始时间
+			$FD29=#END_DATE;          //结束时间
+			
+			if(#AGENT_TYPE=='04')
+			{
+				$FD23='01';	//代收费类型
+			}
+			
+
+			@tota=callagnpt();
+			if($FD12!='0000')
+			{
+			  showmsg(geterror());
+			  return(false);
+			}
+			@tota=getfiletxt('../tmp/'+$KINBR+$TTYNAME);
+			if(@tota=='')
+			{
+			  showmsg('未找到该用户交易记录!');
+			  rerun();
+			  return(false);
+			}
+			autolist(@tota);
+			@selid=list_work();
+			
+			runoutput();
+			rerun();
+		}"
+		</ONCLICK>
+	</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

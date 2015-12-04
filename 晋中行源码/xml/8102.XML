@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11100000" TITLE="8102    单位资料管理"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+    commsend_001();
+    $MSGTYPE='03001';
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO = '9986';
+    $FD12 = '6102';
+    $FD21=#AGENTYPE;
+    $FD25=#DWNAME;
+    $FD30=#ACTNO;
+    $FD31=#JSACTNO;
+    $FD35=#UPDWID;
+    $FD67=#AUTOCLSFLAG;
+    $FD70=#PROTYPE;
+    $FD71=#YWTYPE;
+    $FD72=#AUTOFLAG;
+    $FD92=#DWID;
+//    showmsg('$FD21='+$FD21);
+//    showmsg('$FD71='+$FD71);
+    commsend_001();
+    callserver();
+    $TXNO=@baktxno;
+    if($FD12!='0000')
+    {
+        showmsg(geterror());
+        return(false);
+    }
+    $FD16 = '6102';
+    $MSGTYPE='03001'; 
+        
+}"
+</COMMSEND>
+<COMMRECV>"{
+commrecv_001();
+#DWID1=$FD92;
+#T1   =$FD4;
+}"
+</COMMRECV>
+
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-52s" FUNCTIONS=
+    "T(8102                           单位资料管理)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=6102)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+  
+  <ITEM LINE="5"   COL="10"   TYPE="%-10s" FUNCTIONS="T(处理类型:!)"/>
+  <ITEM LINE="5"   COL="33"   TYPE="%-10s" FUNCTIONS="T(单位编号:)"/>
+  <ITEM LINE="7"   COL="10"   TYPE="%-14s" FUNCTIONS="T(单位结算账号:)" />
+  <ITEM LINE="9"   COL="10"   TYPE="%-14s" FUNCTIONS="T(单位过渡账号:)" />
+  <ITEM LINE="11"  COL="10"   TYPE="%-10s" FUNCTIONS="T(业务性质:!)" />
+  <ITEM LINE="11"  COL="35"   TYPE="%-10s" FUNCTIONS="T(代理类型:!)" />
+  
+  <ITEM LINE="13"  COL="10"   TYPE="%-10s" FUNCTIONS="T(单位名称:)" />
+ 
+  <ITEM LINE="15"  COL="10"   TYPE="%-14s" FUNCTIONS="T(自动开户标志:!)"/>
+  <ITEM LINE="15"  COL="35"   TYPE="%-18s" FUNCTIONS="T(自动清除代理金额:!)"/>
+  
+  <ITEM LINE="17"  COL="10"   TYPE="%-13s" FUNCTIONS="T(上级单位编号:)"/>
+  <ITEM LINE="17"  COL="30"   TYPE="%-13s" FUNCTIONS="T(上级单位名称:)"/>
+  <ITEM LINE="5" COL="22" NAME="#PROTYPE" TYPE="%-1s" INPUT="SELECT" FUNCTIONS="T(0)G(#PROTYPE=0,#JSACTNO)">
+    <SELECT>
+       <OPTION VALUE ="0" TITLE="增加" />
+       <OPTION VALUE ="1" TITLE="修改" />
+       <OPTION VALUE ="2" TITLE="2.删除" />
+    </SELECT>
+    <ONLOSTFOCUS>
+		"{
+		     if(#PROTYPE=='0')
+		    {
+		     dim @txno_bak as string;
+        	     @txno_bak=$TXNO;
+		     $TXNO='9841';
+		     $FD70=#PROTYPE;
+		     commsend_001();		
+		     callserver();
+		     if($FD12!='0000')
+		     {
+			    showmsg(geterror());
+			    return(false);
+		     }
+		     $TXNO=@txno_bak;
+		    }
+			//当删除时，给予提示
+			if(#PROTYPE == '2')
+			{
+				showhelp(4,63,5,8,'警告','删除单位时,将同时删除此单位与其下的所有代理帐户的关系,请慎重!');
+				return(true);
+			}
+		   
+		 }"
+	</ONLOSTFOCUS>
+  </ITEM>  
+  <ITEM NAME="#SPROTYPE" TYPE="%-4s"  FUNCTIONS="S(#PROTYPE,#PROTYPE)"/>
+	
+  <ITEM LINE="5"   COL="42"  NAME="#DWID"        TYPE="%-4s"        INPUT="TEXT"    FUNCTIONS="">
+   <ONLOSTFOCUS>
+		"{
+		    dim @txno_bak as string;
+        	    @txno_bak=$TXNO;
+		    $TXNO='9841';
+		    $FD70=#PROTYPE;
+		    $FD92=#DWID;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txno_bak;
+		    #DWNAME=delspace($FD25);
+		    #JSACTNO =delspace($FD31);
+		    #ACTNO =delspace($FD30);		    
+		    #YWTYPE=delspace($FD71);
+		    #AGENTYPE=delspace($FD21);
+		    #AUTOFLAG=delspace($FD72);
+		    #AUTOCLSFLAG=delspace($FD67);
+		    //enable(#DWNAME,false);
+		    //enable(#ACTNO,false);
+		    //enable(#YWTYPE,false);
+		    //enable(#AGENTYPE,false);
+		}"
+	 </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="7"   COL="22"  NAME="#JSACTNO"       TYPE="%-19s"       INPUT="TEXT"    FUNCTIONS="" >
+  	<ONLOSTFOCUS>
+		"{
+		    if(len(#JSACTNO) != 0)
+		    {
+				if(substr(#JSACTNO,0,1) != '5')
+				{
+					showmsg('结算账户必须为对公活期账户！');
+					return(false);
+				}
+		    dim @txnobak as string;
+        @txnobak=$TXNO;
+		    $TXNO='9964';
+		    $FD30=#JSACTNO;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txnobak;
+        #JSACTNO_T=delspace($FD25);
+        //enable(#DWNAME,false);
+        }
+		}"
+		</ONLOSTFOCUS>
+  </ITEM>
+  <ITEM LINE="7"   COL="42"  NAME="#JSACTNO_T"       TYPE="%-60s"         FUNCTIONS="" >
+  </ITEM>
+  <ITEM LINE="9"   COL="22"  NAME="#ACTNO"       TYPE="%-19s"       INPUT="TEXT"    FUNCTIONS="">
+  <ONLOSTFOCUS>
+		"{
+				if(substr(#ACTNO,0,1) != '9')
+				{
+				//	showmsg('过渡账户必须为内部账户！');
+				//	return(false);
+				}
+		    dim @txnobak as string;
+        @txnobak=$TXNO;
+		    $TXNO='9964';
+		    $FD30=#ACTNO;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txnobak;
+		    #ACTNO_T=delspace($FD25);
+        #DWNAME=delspace($FD25);
+        //enable(#DWNAME,false);
+		}"
+	</ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="9"   COL="42"  NAME="#ACTNO_T"       TYPE="%-60s"         FUNCTIONS="" >
+  </ITEM>
+  <ITEM LINE="11"  COL="21"  NAME="#YWTYPE"      TYPE="%-1s"        INPUT="SELECT"  FUNCTIONS="T(0)V(NB)">
+    <SELECT>
+       <OPTION VALUE ="0" TITLE="0.代收" />
+       <OPTION VALUE ="1" TITLE="1.代付" />
+    </SELECT>
+    
+  </ITEM>
+  <ITEM LINE="11"  COL="44"  NAME="#AGENTYPE"    TYPE="%-2s"        INPUT="SELECT"  FUNCTIONS="T(30)V(NB)">
+   <SELECT>
+       <OPTION VALUE ="30" TITLE="30.代发工资       " />
+       <OPTION VALUE ="36" TITLE="36.收益代发       " />
+       <OPTION VALUE ="41" TITLE="41.代收个人所得税 " />
+       <OPTION VALUE ="42" TITLE="42.代收罚款       " />
+       <OPTION VALUE ="43" TITLE="43.代收水费       " />
+       <OPTION VALUE ="44" TITLE="44.代收煤气费     " />
+       <OPTION VALUE ="45" TITLE="45.代收电费       " />
+       <OPTION VALUE ="46" TITLE="46.代收税款       " />
+       <OPTION VALUE ="47" TITLE="47.代收话费       " />
+       <OPTION VALUE ="48" TITLE="48.代收移动费    " />
+       <OPTION VALUE ="49" TITLE="49.代收理财费    " />
+    </SELECT> 
+    <ONLOSTFOCUS>
+		"{
+		    if(#YWTYPE=='0')
+		    {
+		     switch(atoi(#AGENTYPE))
+		     {
+		        case 30:
+		        case 31:
+		        case 32:
+		        case 33:
+		        case 35:
+		        case 36:
+		        case 37:
+		        case 38:
+		        case 39:
+		                showmsg('业务性质和缴费类型不匹配!!!');
+		                return(false);
+		                break;
+		        case 40:
+		        case 41:
+		        case 42:
+		        case 43:
+		        case 44:
+		        case 45:
+		        case 46:
+		        case 47:
+		        case 48:
+                case 49:
+		                break;
+		                
+		     }
+		    }
+		    else
+		    {
+		     switch(atoi(#AGENTYPE))
+		     {
+		        case 30:
+		        case 31:
+		        case 32:
+		        case 33:
+		        case 35:
+		        case 36:
+		        case 37:
+		        case 38:
+		        case 39:
+		                break;
+		        case 40:
+		        case 41:
+		        case 42:
+		        case 43:
+		        case 44:
+		        case 45:
+		        case 46:
+		        case 47:
+		        case 48:
+                case 49:
+		                showmsg('业务性质和缴费类型不匹配!!!');
+		                return(false);
+		                break;
+		                
+		     }
+		    }
+			}"
+	  </ONLOSTFOCUS>
+             
+  </ITEM>
+  <ITEM LINE="13"  COL="21"  NAME="#DWNAME"      TYPE="%-50s"      INPUT="TEXT"    FUNCTIONS=""/>
+  
+  <ITEM LINE="15"  COL="21"  NAME="#AUTOFLAG"    TYPE="%-1s"       INPUT="SELECT" ENABLE="FALSE" FUNCTIONS="T(0)">
+   <SELECT>
+       <OPTION VALUE ="0" TITLE="0.否" />
+       <OPTION VALUE ="1" TITLE="1.是" />
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="15"  COL="51"  NAME="#AUTOCLSFLAG"    TYPE="%-1s"       INPUT="SELECT" ENABLE="FALSE"  FUNCTIONS="T(0)">
+   <SELECT>
+       <OPTION VALUE ="0" TITLE="0.否" />
+       <OPTION VALUE ="1" TITLE="1.是" />
+    </SELECT>
+  </ITEM>
+  <ITEM LINE="17"   COL="24"  NAME="#UPDWID"    TYPE="%-4d"        INPUT="TEXT"  FUNCTIONS="T(0)">
+  <ONLOSTFOCUS>
+		"{
+		    dim @txno_bak as string;
+        	    @txno_bak=$TXNO;
+		    $TXNO='9904';
+		    $FD35=#UPDWID;
+		    commsend_001();		
+		    callserver();
+		    if($FD12!='0000')
+		    {
+			    showmsg(geterror());
+			    return(false);
+		    }
+		    $TXNO=@txno_bak;
+		    #UPDWID=delspace($FD35);
+		    
+    if(#AUTOFLAG!='1')// add by martin 2008-11-19 11:36
+    {
+    #AUTOFLAG='0';
+    }
+    if(#AUTOCLSFLAG!='1')// add by martin 2008-11-19 11:36
+    {
+    #AUTOCLSFLAG='0';
+    }
+		}"
+	</ONLOSTFOCUS>
+  </ITEM>  
+ <!-- <ITEM LINE="17"   COL="44"  NAME="#UPDWID"    TYPE="%-30s"       INPUT="TEXT"  FUNCTIONS=""/> --><!-- 同名变量，这个应该是多于的 liuhj  -->
+	 <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" 	 TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#DWID1"  	 TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#T1"  	 TYPE="%-6s" FUNCTIONS="T()"/>
+  
+  <ITEM NAME="#PRONAME"  TYPE="%-4s" FUNCTIONS="T()"/>
+  <ITEM NAME="#YWNAME" TYPE="%-4s" FUNCTIONS="S(#YWTYPE,#YWTYPE)"/>
+  <ITEM NAME="#AGENTNAME" TYPE="%-20s" FUNCTIONS="S(#AGENTYPE,#AGENTYPE)"/>
+  <ITEM LINE="21"  COL="59" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="SUBMIT"/>
+
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE DEVICE="SCREEN" DESC="单位资料管理!">
+      NOTHING
+	</PACKAGE>
+	    <!-- 打印格式还需要格式调整 -->
+	<PRINT>"{
+	  print(1,30,'单位资料管理');
+	  print(4,20,'单位编号:[4 ]',#DWID1);
+	  print(5,20,'单位名称:[50]',#DWNAME);
+	  print(6,20,'过渡帐号:[24]',#ACTNO);
+	  print(7,20,'结算帐号:[24]',#JSACTNO);
+	}"
+	</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" DESC="请打印业务专用凭证">
+      NOTHING
+	</PACKAGE>
+	    <!-- 打印格式还需要格式调整 -->
+	<PRINT>"{
+		if(#PROTYPE=='0') #SPROTYPE='增加';
+		//showmsg('#SPROTYPE='+#SPROTYPE);
+ $KINDNO='00';
+ dim @txtime  as string;
+@txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+	print( 5, 20,'机构名称:[30]',$BRNAME);
+        print( 5, 2,'代码:8102');
+	print( 5, 13,'交易:单位资料管理');
+	print( 7, 20,'处理类型:[4 ]',#SPROTYPE);
+	print( 8, 20,'单位编号:[4 ]',#DWID1);
+	print( 9, 20,'过渡帐号:[24]',#ACTNO);
+	print(10, 20,'结算帐号:[24]',#JSACTNO);
+	print(11, 20,'单位名称:[50]',#DWNAME);
+	print(12, 20,'业务类型:[4   ]  代理类型:[20 ]',#YWNAME,#AGENTNAME);
+        print( 24,20,'备注:')
+        print( 24,27,'交易日期:[8] [8]',$HDATE,@txtime);
+        print( 24,5,'柜员:[4]',$FD7);
+        print( 24,5,'流水号:[6]',$FD4);
+
+	}"
+	</PRINT>
+</RESPONSE>
+</TRANSACTION>

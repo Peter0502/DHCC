@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="GBK" ?>
+<TRANSACTION RIGHTS="11111111100000000000000000000000" TITLE="5532 批量扣税回执重新发送"
+  xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>"{
+       commsend_001();
+   $FD44=#TX_DATE
+   $FD16=$TXNO;
+}"
+</COMMSEND>
+<COMMRECV>"{
+   commrecv_001();
+}"
+</COMMRECV>
+<VARIABLE UPLOOP="TRUE">
+  <ITEM LINE="3"  COL="3" TYPE="%-50s" FUNCTIONS=
+    "T(5532                     批量扣税回执重新发送)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+   "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#DOLIST" TYPE="%1s" FUNCTIONS="">
+  <ONLOSTFOCUS>"{
+   if(#DOLIST!=''){
+      dim  @tota as number;
+      dim  @cnt as number;
+      dim  @selid as number;
+      dim  @taxorgcode as string;
+      dim  @wtdate as string;
+      dim  @tranno  as string;
+      list_work();
+      @selid=list_getselid();
+      @wtdate=list_gettext(@selid,0);
+      @tranno=list_gettext(@selid,1);
+      @taxorgcode=list_gettext(@selid,2);
+      showmsg(@taxorgcode);
+      while(true){
+         initfd();
+         commsend_001();
+         $FD52=@taxorgcode;
+         $FD44=@wtdate;
+         $FD78=@tranno;
+         $FD16='5553';
+         @tota=calltips();
+         if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+         }
+         list_rmitem(@selid);
+         @cnt=list_getrowcnt();
+         if(@cnt==0){
+            msgbox(' 未回执批量扣税包处理完毕!' +chr(10)+'-------');
+            break;
+         }   
+         list_work();
+         @selid=list_getselid();
+         @taxorgcode=list_gettext(@selid,0);
+         @wtdate=list_gettext(@selid,1);
+         @tranno=list_gettext(@selid,2);
+      }
+      list_del();
+      #DOLIST='';
+      return(true);
+   }
+  }"</ONLOSTFOCUS></ITEM>
+  <ITEM NAME="#TXNO" TYPE="%-4s" FUNCTIONS="T($TXNO=5552)"/>
+  <ITEM NAME="#MSGTYPE" TYPE="%-5s" FUNCTIONS="T($MSGTYPE=03001)"/>
+
+  <ITEM LINE="10" COL="30" TYPE="%-12s" FUNCTIONS="T(交 易 机 构:)"/>
+  <ITEM LINE="12" COL="30" TYPE="%-12s" FUNCTIONS="T(扣 税 日 期:)"/>
+  <!--<ITEM LINE="16" COL="10" TYPE="%-15s" FUNCTIONS="T(原 包 流 水 号:)"/>-->
+
+  <!--输入变量-->
+  <ITEM NAME="#TX_BR_NO" LINE="10" COL="42" TYPE="%-5s" ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T($KINBR)"/>
+  <ITEM NAME="#TX_DATE" LINE="12" COL="42" TYPE="%-8d"  ENABLE="FALSE" INPUT="TEXT" FUNCTIONS="T($HDATE)D()"/>
+  <!--<ITEM NAME="#OPACKNO" LINE="16" COL="25" TYPE="%-8s" INPUT="TEXT" FUNCTIONS="V(NB)"/>-->
+
+
+  <!------------一些没有用的变量,只是为了公共脚本执行时不报错------------>
+  <ITEM NAME="#PASSWD" TYPE="%-6s" FUNCTIONS="T()"/>
+  <ITEM NAME="#RETSTAT" TYPE="%-4s" FUNCTIONS="T()"/>
+
+  <ITEM LINE="21" COL="59"  TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+  <ONCLICK>"{
+   dim @tota as string;
+   initfd();
+   commsend_001();
+   $FD44=#TX_DATE;
+   $FD16=$TXNO;
+   @tota=calltips();
+         if($FD12 != '0000')
+         {
+           showmsg(geterror());
+           return(false);
+         }
+   if(autolist(@tota)){
+      //list_work();
+   }
+   #DOLIST='1';
+  }"
+ </ONCLICK></ITEM>
+   
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+
+<RESPONSE>
+    <PACKAGE DEVICE="SCREEN" DESC="显示内容" >
+    NOTHING
+    </PACKAGE>
+</RESPONSE>
+</TRANSACTION>

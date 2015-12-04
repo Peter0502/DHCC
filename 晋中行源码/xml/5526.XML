@@ -1,0 +1,387 @@
+<TRANSACTION RIGHTS="11111111"  TITLE="5526 三方协议录入/删除交易"
+xmlns="http://www.otd.org/MENU" xmlns:W3CNS="http://www.w3c.org">
+<COMMSEND>
+"{
+   // initfd();
+    commsend_001();
+    //$FD44=$HDATE;
+    //$FD3 =$KINBR;
+    //$FD7 =$TLRNO;
+    //$FD44=#WTDATE;     //8委托日期
+    //$FD66=#VCSIGN;     //1验证撤销标志
+    //$FD16='5546';
+    //$FD25=#SENDCODE;
+    //$FD26=#TAXORGCODE; //12征收机关代码
+    //$FD27=#TAXPAYNAME; //60纳税人名称
+    //$FD30=#TAXPAYCODE; //20纳税人编码
+    //$FD31=#PAYOPBKCODE;//12付款开户行行号
+    //$FD32=#PAYBKCODE;  //12付款行行号
+    //$FD75=#PAYACCT;    //32付款账户
+    //$FD81=#HANDORGNAME;//缴款单位名称
+    //$FD76=#PROTOCOLNO; //协议书号
+}"
+</COMMSEND>
+<COMMRECV>
+"{
+}"
+</COMMRECV>
+<FIRSTWORK>
+"{//查询自己支行的支付系统行号2009-6-29 22:06 ADD BY ZHGF 
+   commsend_001();
+   $FD16='9552';
+   $FD91=$KINBR;
+   callserver();
+   if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+   }
+   #SENDCODE=delspace($FD32);
+   #PAYBKCODE=itoa(313175000011);
+   enable(#SENDCODE,false);
+   enable(#PAYBKCODE,false);
+}"
+</FIRSTWORK>
+<VARIABLE>
+  <ITEM LINE="3"  COL="3" TYPE="%-70s" FUNCTIONS=
+  "T(5526                      三方协议录入/删除交易)"/>
+  <ITEM LINE="4"  COL="3"  TYPE="%-74s" FUNCTIONS=
+  "T(─────────────────────────────────────)"/>
+  <ITEM NAME="#TXNO"       TYPE="%-4s"  FUNCTIONS="T($TXNO=5546)"/>
+  <ITEM NAME="#MSGTYPE"    TYPE="%-5s"  FUNCTIONS="T($MSGTYPE=03001)"/>
+  <ITEM LINE="6"  COL="03" TYPE="%-13s" FUNCTIONS="T(发 起  机 构:)"/>
+  <!---验证的话只能是咱自己的行号--   RM BY ZHGF 2009-6-29 15:39 测试方便现在先写死，实际上线时要改成真实的自己的行号
+  <ITEM LINE="6"  COL="28" TYPE="%-32s" FUNCTIONS="T([征收机关代码或银行支付系统行号])"/>
+  --->
+  <ITEM LINE="6"  COL="28" TYPE="%-32s" FUNCTIONS="T([银行支付系统行号])"/>
+  <ITEM LINE="7"  COL="03" TYPE="%-13s" FUNCTIONS="T(验证撤销标志:)"/>
+  <ITEM LINE="8"  COL="03" TYPE="%-13s" FUNCTIONS="T(协 议  书 号:)"/>
+  <ITEM LINE="9"  COL="03" TYPE="%-13s" FUNCTIONS="T(委  托 日 期:)"/>
+  <ITEM LINE="10" COL="03" TYPE="%-13s" FUNCTIONS="T(征收机关代码:)"/>
+  <ITEM LINE="11" COL="03" TYPE="%-13s" FUNCTIONS="T(纳 税人 名称:)"/>
+  <ITEM LINE="12" COL="03" TYPE="%-13s" FUNCTIONS="T(纳税 人编 码:)"/>
+  <ITEM LINE="13" COL="03" TYPE="%-13s" FUNCTIONS="T(付 款  帐 户:)"/>
+  <ITEM LINE="14" COL="03" TYPE="%-13s" FUNCTIONS="T(付 款  单 位:)"/>
+  <ITEM LINE="15" COL="03" TYPE="%-13s" FUNCTIONS="T(付 款开户 行:)"/>
+  <ITEM LINE="16" COL="03" TYPE="%-13s" FUNCTIONS="T(付 款行行 号:)"/>
+  
+  <ITEM LINE="6"  COL="16" NAME="#SENDCODE" TYPE="%-12s" INPUT="TEXT"  ENABLE="FALSE" FUNCTIONS="T()V(NB)">
+  <HELP>发起机构代码、委托日期、验证撤消序号唯一标识一次验证撤消交易</HELP>
+  </ITEM> 
+  
+  <!---增加选项 录入 2009-6-29 15:45 MODIFY BY ZHGF --->
+  <ITEM LINE="7"  COL="16" NAME="#VCSIGN" TYPE="%-1s" DEVICE="KEYBOARD" FUNCTIONS="T(2)V(NB)">
+  <HELP>用于标明验证还是撤销,0验证，1撤销</HELP>
+  <SELECT>
+     <!--<OPTION VALUE="0" TITLE="验证"/>-->
+     <OPTION VALUE="1" TITLE="撤销"/>
+     <OPTION VALUE="2" TITLE="录入"/>
+     <OPTION VALUE="3" TITLE="删除"/>
+  </SELECT>
+  <ONLOSTFOCUS>
+  "{
+                if (#VCSIGN=='3')
+                {
+                showmsg('您将执行的为录入错误的三方协议记录删除操作，请谨慎操作!!!');
+                show(#TAXORGCODE,false);
+                show(#TAXPAYNAME,false);
+                show(#TAXPAYCODE,false);
+                //show(#PAYOPBKCODE,false);
+                //show(#PAYBKCODE,false);
+                //show(#PAYACCT,false);   
+                show(#HANDORGNAME,false);
+                }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#SVCSIGN" TYPE="%-4s" FUNCTIONS="S(#VCSIGN,#VCSIGN)"/>
+  <ITEM LINE="8"   COL="16" NAME="#PROTOCOLNO"  TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+    <ONLOSTFOCUS>"{
+    if (#VCSIGN=='3'){
+        initfd();
+        $FD66='3';
+        $FD67='0';
+        $FD75=#PAYACCT;    //32付款账户
+        $FD76=#PROTOCOLNO; //协议书号
+   	$FD16='5546';
+        commsend_001();
+        calltips();
+        if($FD12!='0000'){
+                  showmsg(geterror());
+      		  return (false);
+              }
+        #WTDATE=$FD44;
+        show(#WTDATE,true);
+        #TAXORGCODE=$FD26;
+        show(#TAXORGCODE,true);
+        #TAXPAYNAME=$FD27;
+        show(#TAXPAYNAME,true);
+        #TAXPAYCODE=$FD30;
+        show(#TAXPAYCODE,true);
+        #PAYOPBKCODE=$FD31;
+        show(#PAYOPBKCODE,true);
+        #PAYBKCODE=$FD32; 
+        show(#PAYBKCODE,true);
+        #PAYACCT=$FD75;
+        show(#PAYACCT,true);    
+        #HANDORGNAME=$FD81;
+        show(#HANDORGNAME,true);
+     }
+  }"
+  </ONLOSTFOCUS>
+  </ITEM> 
+  <ITEM LINE="9"   COL="16" NAME="#WTDATE" TYPE="%-8d" DEVICE="KEYBOARD" FUNCTIONS="T($HDATE)V(NB)D()"/>
+  <ITEM LINE="10"  COL="16" NAME="#TAXORGCODE" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)">
+    <ONLOSTFOCUS>
+  "{
+    dim @c as string;
+    dim @d as string;
+    dim @a as string;
+    dim @b as string;
+    dim @FullMsg as string;
+    @FullMsg='';
+    initfd();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9410';
+    $FD61=#TAXORGCODE;
+    commsend_001();
+    calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    @d = substr($FD95,12,60);
+    @c =substr($FD95,72,1);
+    @a = substr($FD95,73,1);
+    @b = substr($FD95,74,1);
+    @FullMsg='户名:'+@d+chr(10)+'类型:'+@c+chr(10)+'征收机关类型:'+@a+chr(10)+'机构级次:'+@b;
+    showhelp(6,70,8,3,'征收机关基本信息',@FullMsg);
+    // TODO在这里callserver判断征收机关代码是否存在
+  }"
+    </ONLOSTFOCUS>
+  </ITEM> 
+ 
+  <ITEM LINE="11" COL="16" NAME="#TAXPAYNAME" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="12" COL="16" NAME="#TAXPAYCODE" TYPE="%-20s" DEVICE="KEYBOARD" FUNCTIONS="V(NB)"/>
+  <ITEM LINE="13" COL="16" NAME="#PAYACCT"   TYPE="%-32s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{     //验证本行账户及账户状态 
+         dim @txno as string;
+         dim @hold as string;
+         dim @notests as string;
+         @txno=$TXNO;
+         commsend_001();
+         $TXNO='6708';
+         $FD16='6708';
+         $FD30=#PAYACCT;
+         $FD67='1';
+         callserver();
+         if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+         }
+         $TXNO=@txno;
+         #HANDORGNAME=delspace($FD25);
+         //开户机构的支付系统行号2009-6-29 22:23 ADD BY ZHGF 
+         @txno=$TXNO;
+         commsend_001();
+         $FD16='9552';
+         $FD91=$KINBR;
+         callserver();
+         if($FD12!='0000'){
+            showmsg(geterror());
+            return(false);
+         }
+         $TXNO=@txno;
+         #PAYOPBKCODE=delspace($FD32);
+         enable(#PAYOPBKCODE,true);
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM NAME="#HXACNAME" TYPE="%-60s"  FUNCTIONS=""/>
+  <ITEM LINE="14" COL="16" NAME="#HANDORGNAME" TYPE="%-60s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{
+  }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="15" COL="16" NAME="#PAYOPBKCODE" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+    <ONLOSTFOCUS>
+  "{  
+    dim @e as string;
+    dim @f as string;
+    dim @g as string;
+    dim @FMsg as string;
+    @FMsg='';
+    initfd();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    //$TXNO='9411';不调用TIPS的数据，直接查核心的，只要保证是咱自己行内的就行，因为这个对方不做校验2009-6-29 22:30
+    $TXNO='9551';
+    //$FD33=#PAYOPBKCODE;2009-6-29 22:31
+    $FD30=#PAYOPBKCODE;
+    commsend_001();
+    callserver();
+    //calltips();2009-6-29 22:30
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    }"
+    </ONLOSTFOCUS>
+  </ITEM>
+  
+  <ITEM LINE="16" COL="16" NAME="#PAYBKCODE" TYPE="%-12s" DEVICE="KEYBOARD" FUNCTIONS="T()V(NB)">
+  <ONLOSTFOCUS>
+  "{  
+    dim @h as string;
+    dim @i as string;
+    dim @j as string;
+    dim @FMsg2 as string;
+    @FMsg2='';
+    initfd();
+    dim @baktxno as string;
+    @baktxno=$TXNO;
+    $TXNO='9411';
+    $FD33=#PAYBKCODE;
+    commsend_001();
+    // callserver();
+    calltips();
+    $TXNO=@baktxno;
+    if($FD12!='0000'){
+      showmsg(geterror());
+      return (false);
+    }
+    @h = substr($FD95,12,60);
+    @i = substr($FD95,72,1);
+    @j = substr($FD95,73,12);
+    @FMsg2='行名:'+@h+chr(10)+'清算渠道:'+@i+chr(10)+'所属节点:'+@j;
+    showhelp(5,70,8,3,'付款开户行基本信息',@FMsg2);
+    }"
+  </ONLOSTFOCUS>
+  </ITEM>
+  
+
+<ITEM LINE="21" COL="65" TYPE="%-6s" FUNCTIONS="T(确  定)" INPUT="BUTTON">
+<ONCLICK>"{
+   if (#VCSIGN=='3')
+   $FD67='1';
+   commsend_001();
+   $FD3 =$KINBR;
+   $FD7 =$TLRNO;
+   $FD44=#WTDATE;     //8委托日期
+   $FD66=#VCSIGN;     //1验证撤销标志
+   $FD16='5546';
+   $FD25=#SENDCODE;
+   $FD26=#TAXORGCODE; //12征收机关代码
+   $FD27=#TAXPAYNAME; //60纳税人名称
+   $FD30=#TAXPAYCODE; //20纳税人编码
+   $FD31=#PAYOPBKCODE;//12付款开户行行号
+   $FD32=#PAYBKCODE;  //12付款行行号
+   $FD75=#PAYACCT;    //32付款账户
+   $FD81=#HANDORGNAME;//缴款单位名称
+   $FD76=#PROTOCOLNO; //协议书号
+   calltips();
+   if($FD12!='0000'){
+      showmsg(geterror());
+      return(false);
+   }
+   runoutput();
+   close();
+  }"
+</ONCLICK>
+</ITEM>
+</VARIABLE>
+<REQUEST>
+</REQUEST>
+<RESPONSE>
+<PACKAGE  DEVICE="SCREEN" DESC="按任意键退出">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+   dim @txtime as string;
+   @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+   print(3,17,'【三方协议录入验证与撤销交易】');
+   print( 5,20,'发起机构:[12          ]',#SENDCODE);
+   print( 6,20,'委托日期:[8]',#WTDATE);
+   print( 7,20,'验证撤销序号:[8]',$FD29);
+   print( 8,20,'验证撤销标志:[4]',#SVCSIGN);
+   print( 9,20,'征收机关:[12          ]',#TAXORGCODE);
+   print(10,20,'纳税人名称:[60]',#TAXPAYNAME);
+   print(11,20,'纳税人编码:[20]',#TAXPAYCODE);
+   print(12,20,'付款开户行:[12]',#PAYOPBKCODE);
+   print(13,20,'付款行行号:[12]',#PAYBKCODE);
+   print(14,20,'付款帐户:[32]',#PAYACCT);
+   print(15,20,'付款单位:[60]',#HANDORGNAME);
+   print(16,20,'协议书号:[60]',#PROTOCOLNO);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" CHECK="#VCSIGN=2">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+   dim @txtime as string;
+   @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+   print( 5,20,'机构名称:[30]',$BRNAME);
+   print( 5, 2, '交易代码:5526');
+   print( 5,5,'交易名称:三方协议验证与撤销交易');
+   print( 6,20,'发起机构:[12          ]',#SENDCODE);
+   print( 6,5,'委托日期:[8]',#WTDATE);
+   print( 7,20,'验证撤销序号:[8]',$FD29);
+   print( 7,5,'验证撤销标志:[4]',#SVCSIGN);
+   print( 7,5,'征收机关:[12          ]',#TAXORGCODE);
+   print( 8,20,'纳税人名称:[60]',#TAXPAYNAME);
+   print( 9,20,'纳税人编码:[20]',#TAXPAYCODE);
+   print( 10,20,'付款开户行:[12]',#PAYOPBKCODE);
+   print( 10,5,'付款行行号:[12]',#PAYBKCODE);
+   print(11,20,'付款帐户:[16]',#PAYACCT);
+   print(12,20,'付款单位:[60]',#HANDORGNAME);
+   print(13,20,'协议书号:[60]',#PROTOCOLNO);
+   print(23,20,'交易日期:[8] [8]',$HDATE,@txtime);
+   print(23,5,' 柜员:[6]',$FD7);
+   print(23,5,' 流水号:[6]',$FD4);
+   print(23,5,' 交易机构:[5]',$FD3);
+}"
+</PRINT>
+</RESPONSE>
+<RESPONSE>
+<PACKAGE DEVICE="PRINTER" LINESPACE="24" DESC="请打印业务专用凭证" CHECK="#VCSIGN=3">
+NOTHING
+</PACKAGE>
+<PRINT>
+"{
+   dim @txtime as string;
+   @txtime=substr($SYSTIME,0,2)+':'+substr($SYSTIME,2,2)+':'+substr($SYSTIME,4,2);
+   print( 5,20,'机构名称:[30]',$BRNAME);
+   print( 5, 2, '交易代码:5526');
+   print( 5,5,'交易名称:三方协议验证与撤销交易');
+   print( 6,20,'发起机构:[12          ]',#SENDCODE);
+   print( 6,5,'委托日期:[8]',#WTDATE);
+   print( 7,20,'验证撤销标志:[4]',#SVCSIGN);
+   print( 7,5,'征收机关:[12          ]',#TAXORGCODE);
+   print( 8,20,'纳税人名称:[60]',#TAXPAYNAME);
+   print( 9,20,'纳税人编码:[20]',#TAXPAYCODE);
+   print( 10,20,'付款开户行:[12]',#PAYOPBKCODE);
+   print( 10,5,'付款行行号:[12]',#PAYBKCODE);
+   print(11,20,'付款帐户:[16]',#PAYACCT);
+   print(12,20,'付款单位:[60]',#HANDORGNAME);
+   print(13,20,'协议书号:[60]',#PROTOCOLNO);
+   print(23,20,'交易日期:[8] [8]',$HDATE,@txtime);
+   print(23,5,' 柜员:[6]',$FD7);
+   print(23,5,' 流水号:[6]',$FD4);
+   print(23,5,' 交易机构:[5]',$FD3);
+}"
+</PRINT>
+</RESPONSE>
+<OUTPUT>
+</OUTPUT>
+</TRANSACTION>

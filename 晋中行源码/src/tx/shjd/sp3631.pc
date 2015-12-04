@@ -1,0 +1,306 @@
+/*****************************************************
+* 文 件 名:  sp3631.pc
+* 功能描述： 各柜员差错统计  (前台:3011.XML)
+* 作    者:  xyy
+* 完成日期： 2007-1-16 9:18
+* 修改记录： 
+* 日    期:
+* 修 改 人:
+* 修改内容:
+*****************************************************/
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "sherrmsg_c.h"
+#include "trace_log_c.h"
+
+EXEC SQL INCLUDE sqlca;
+
+extern char * pcGetWorkday();
+
+int  sp3631()
+{
+    FILE *fp=NULL;
+    int     i = 0,j = 0;
+    int     count = 0;
+    int     count1 = 0;
+    char    cZywnum  [101];
+    char    cLserrmsg[101];
+    char    cTlrname [21];
+    char    cBrname  [31];
+    char    cKinbr   [6];
+    char    cTlrno   [5];
+    char    filename  [256];
+    /***定义老系统的tis部分***/
+    char    cBgday   [9];
+    char    cEnday   [9];
+    /***以上是定义的老系统的tis***/        
+    /***定义老系统的tos部分***/
+    char    cRpmnum  [5];
+    char    cRtlrname[11];
+    char    cRbrname [31];
+    char    cRccnum  [4];
+    char    cRccnum1 [4];
+    char    cRccnum2 [4];
+    char    cRccnum3 [4];
+    char    cRzynum  [5];
+    /***以上是定义的老系统的tos***/
+    struct trace_log_c trace_log;
+    struct sherrmsg_c sherrmsg;
+    int yw_num=0;
+
+    count = 0;
+    memset(cBgday   , 0 , sizeof(cBgday));
+    memset(cEnday   , 0 , sizeof(cEnday));
+    memset(filename , 0 , sizeof(filename));
+    memset(cZywnum  , 0 , sizeof(cZywnum  ));
+    memset(cLserrmsg, 0 , sizeof(cLserrmsg));
+    memset(cTlrname , 0 , sizeof(cTlrname ));
+    memset(cBrname  , 0 , sizeof(cBrname  ));
+    memset(cKinbr   , 0 , sizeof(cKinbr   ));
+    memset(cRpmnum  , 0 , sizeof(cRpmnum  ));
+    memset(cRtlrname, 0 , sizeof(cRtlrname));
+    memset(cRbrname , 0 , sizeof(cRbrname ));
+    memset(cRccnum  , 0 , sizeof(cRccnum  ));
+    memset(cRccnum1 , 0 , sizeof(cRccnum1 ));
+    memset(cRccnum2 , 0 , sizeof(cRccnum2 ));
+    memset(cRccnum3 , 0 , sizeof(cRccnum3 ));
+    memset(cRzynum  , 0 , sizeof(cRzynum  ));
+    memset(cTlrno   , 0 , sizeof(cTlrno   ));
+    memset(&sherrmsg , 0 , sizeof(sherrmsg));
+    memset(&trace_log , 0 , sizeof(struct trace_log_c));
+    
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+    pub_base_sysinit();
+    /***这里从前台得到数值***/
+    
+    get_fd_data("0440",cBgday);
+    get_fd_data("0450",cEnday);
+    vtcp_log("[%s]%d]cBgday==[%s]",__FILE__,__LINE__,cBgday);
+    vtcp_log("[%s]%d]cEnday==[%s]",__FILE__,__LINE__,cEnday);
+    
+   /*以下是统计各个柜员在一个时期内得业务量*/ 
+    EXEC SQL DECLARE s1 CURSOR FOR select tlrno from sherrmsg where txday >= :cBgday and txday <= :cEnday group by tlrno;
+    EXEC SQL OPEN s1;
+    i = 0;
+    while(1)
+    {
+        memset(cZywnum,'\0',sizeof(cZywnum));
+        count1 = 0;
+        
+        EXEC SQL FETCH s1 INTO :cTlrno;
+        if(sqlca.sqlcode == 1403)
+        {
+            if(i == 0)
+            {
+                sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            break;
+        }
+	else if(sqlca.sqlcode)
+	{
+                sprintf(acErrMsg," sql error errcode=[%d]",sqlca.sqlcode );
+                WRITEMSG
+                goto ErrExit;
+	}
+        vtcp_log("[%s][%d]cTlrno===[%s]\n",__FILE__,__LINE__,cTlrno);
+        EXEC SQL select count(*) INTO :count1 from trace_log 
+          where tel= :cTlrno and tx_date >= :cBgday and tx_date <= :cEnday;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+vtcp_log("业务量:[%d],[%s][%d]",count1,__FILE__,__LINE__);
+        sprintf(cZywnum,"%4d",count1);
+        vtcp_log("[%s][%d]cZywnum===[%s]\n",__FILE__,__LINE__,cZywnum); 
+        EXEC SQL update sherrmsg set errmsg= :cZywnum 
+          where tlrno= :cTlrno and txday >= :cBgday and txday <= :cEnday;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        i++;
+        vtcp_log("[%s][%d]i===[%d]\n",__FILE__,__LINE__,i); 
+    }
+    EXEC SQL close s1;
+    EXEC SQL commit;
+    
+    EXEC SQL DECLARE c1 CURSOR FOR select count(*),tlrno,errmsg 
+      from sherrmsg where txday >= :cBgday and txday <= :cEnday 
+      group by tlrno,errmsg order by count(*) desc,errmsg;
+    
+    EXEC SQL OPEN  c1;
+    if(sqlca.sqlcode!=0)
+    {
+        sprintf(acErrMsg,"[%s][%d]查询差错登记簿错errcode=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+        strcpy( g_pub_tx.reply,"S047" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    i = 0;
+    j = 0;
+    while(1)
+    {
+        memset(cKinbr   , 0 , sizeof(cKinbr));
+        memset(cBrname  , 0 , sizeof(cBrname));
+        memset(cTlrno   , 0 , sizeof(cTlrno));
+        memset(cTlrname , 0 , sizeof(cTlrname));
+        memset(cLserrmsg, 0 , sizeof(cLserrmsg));
+        count = 0;
+        
+        EXEC SQL FETCH  c1 INTO :count,:cTlrno,:cLserrmsg;
+        if(sqlca.sqlcode!=0)
+        {
+            if(i == 0)
+            {
+                sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+                strcpy( g_pub_tx.reply,"S047" );
+                set_zd_data(DC_GET_MSG,acErrMsg);
+                WRITEMSG
+                goto ErrExit;
+            }
+            break;
+        }
+
+        
+        sprintf(cRccnum,"%3d",count);
+        count = 0;
+        vtcp_log("[%s][%d]cRccnum=[%s]\n",__FILE__,__LINE__,cRccnum); 
+        EXEC SQL select count(*) INTO :count from sherrmsg 
+                where tlrno=:cTlrno and errseq='1' and txday >= :cBgday and txday <= :cEnday;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        sprintf(cRccnum1,"%3d",count);
+        count = 0;
+        vtcp_log("[%s][%d]cRccnum1===[%s]\n",__FILE__,__LINE__,cRccnum1); 
+        EXEC SQL select count(*) INTO :count from sherrmsg 
+                where tlrno=:cTlrno and errseq='2' and txday >= :cBgday and txday <= :cEnday;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        sprintf(cRccnum2,"%3d",count);
+        vtcp_log("[%s][%d]cRccnum2===[%s]\n",__FILE__,__LINE__,cRccnum2);
+        count = 0;
+        EXEC SQL select count(*) INTO :count from sherrmsg 
+                where tlrno=:cTlrno and errseq='3' and txday >= :cBgday and txday <= :cEnday;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 原始记录未找到errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        sprintf(cRccnum3,"%3d",count);
+        vtcp_log("[%s][%d]cRccnum3===[%s]\n",__FILE__,__LINE__,cRccnum3);
+        count = 0;
+        vtcp_log("[%s][%d] cTlrno==[%s]",__FILE__,__LINE__,cTlrno);
+        EXEC SQL select br_no,name INTO :cKinbr,:cTlrname from com_tel where tel= :cTlrno;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg," 操作员不存在errcode=[%d]",sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        vtcp_log("[%s][%d] cKinbr==[%s]",__FILE__,__LINE__,cKinbr);
+        EXEC SQL select br_name INTO :cBrname from com_branch where br_no= :cKinbr;
+        if(sqlca.sqlcode != 0)
+        {
+            sprintf(acErrMsg,"[%s][%d]原始记录未找到code=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+            strcpy( g_pub_tx.reply,"S047" );
+            set_zd_data(DC_GET_MSG,acErrMsg);
+            WRITEMSG
+            goto ErrExit;
+        }
+        vtcp_log("[%s][%d]cBrname===[%s]\n",__FILE__,__LINE__,cBrname);
+        
+        if(!i)
+        {
+              pub_base_AllDwnFilName( filename );
+              fp = fopen( filename,"w" );
+              if( fp==NULL )
+              {
+                  sprintf(acErrMsg," open file [%s] error ",filename );
+                  strcpy( g_pub_tx.reply,"S047" );
+                  set_zd_data(DC_GET_MSG,acErrMsg);
+                  WRITEMSG
+                  goto ErrExit;
+              }
+              /**显示列标题**/
+              /*fprintf( fp,"~字段1|字段2|字段3|字段4|字段5|字段6|字段7|字段8|\n" );*/
+        }
+        i++;
+        sprintf(cRpmnum,"%3d",i);
+        memcpy(cRzynum,cLserrmsg,sizeof(cRzynum)-1);
+        memcpy(cRtlrname,cTlrname,sizeof(cRtlrname)-1);
+        memcpy(cRbrname,cBrname,sizeof(cRbrname)-1);
+        fprintf(fp,"3631%s|%s|%s|%s|%s|%s|%s|%s|\n",cRpmnum,cRtlrname,cRbrname,cRccnum1,cRccnum2,cRccnum3,cRccnum,cRzynum); 
+    }
+    if (sqlca.sqlcode != 1403) 
+    {
+        sprintf(acErrMsg," 程序不是正常退出errcode=[%d]",sqlca.sqlcode );
+        strcpy( g_pub_tx.reply,"S047" );
+        set_zd_data(DC_GET_MSG,acErrMsg);
+        WRITEMSG
+        goto ErrExit;
+    }
+    EXEC SQL close  c1;
+    vtcp_log("[%s][%d]关闭游标成功!",__FILE__,__LINE__);
+    if( !i )
+	  {
+	  	strcpy( g_pub_tx.reply,"S049" );
+	  	goto ErrExit;
+	  }
+	  else
+	  {
+	  	fclose(fp);
+	  	set_zd_data(DC_FILE_SND,"1" );
+	  }
+OkExit:
+       strcpy( g_pub_tx.reply, "0000" );
+       sprintf(acErrMsg,"Before OK return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 0;
+ErrExit:
+       if(memcmp(g_pub_tx.reply,"0000",4)==0)
+       {
+           memcpy(g_pub_tx.reply,"T063",4);
+       }     
+       sprintf(acErrMsg,"Before return: reply is[%s]\n",g_pub_tx.reply);
+       WRITEMSG
+       set_zd_data(DC_REPLY,g_pub_tx.reply);
+       return 1;    
+}
+

@@ -1,0 +1,162 @@
+/******************************************************************************
+*交易名称：本日工作进度查询                                                   *
+*函数名称：sp3666()                                                           *
+*          输入:无                                                            *
+*                                                                             *
+*          输出:无                                                            *
+*功能描述:                                                                    * 
+*编写人：         ligl                                                        *
+*编写日期：      2007-1-11 17:05                                              *
+*修 改 人:  YXJ                                                               *
+*修改日期： 2007-03-21                                                        *
+*数据库表:  trace_log,shjd_tlrvsbrn                                           *
+******************************************************************************/
+#define ERR_DEAL if( ret ) {\
+		sprintf( acErrMsg, "sql error" ); \
+		WRITEMSG \
+		goto ErrExit; \
+		}
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+#include "public.h"
+#include "shjd_tlrvsbrn_c.h"
+#include "com_tel_c.h"
+#include "com_branch_c.h"
+EXEC SQL INCLUDE sqlca;
+int sp3666()
+{
+	int ret=0;
+	int num=0;			/**读取的总条数**/
+	int i=0;
+	char brtype[11];
+  	char cKinbr[6];
+  	char cTlrno[5];/**注意这里以后还要改xyy**/
+  	char cStat[2];
+  	FILE *fp=NULL;
+  	char filename[100];
+	struct shjd_tlrvsbrn_c shjd_tlrvsbrn;
+	struct com_tel_c wd_com_tel;
+	struct com_branch_c wd_com_branch;
+	memset(&shjd_tlrvsbrn,0x00,sizeof(struct shjd_tlrvsbrn_c));
+	memset(cKinbr, 0 , sizeof(cKinbr));
+	memset(cTlrno, 0 , sizeof(cTlrno));
+	memset(cStat , 0 , sizeof(cStat));
+  	memset(filename,0x00,sizeof(filename));
+  	memset(brtype,0x00,sizeof(brtype));
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+  	pub_base_sysinit();
+  	vtcp_log("[%s][%d]sp3666.pc程序开始了",__FILE__,__LINE__);
+	EXEC SQL DECLARE c1 CURSOR FOR select brno,tlrno from shjd_tlrvsbrn group by brno,tlrno order by brno,tlrno;
+	EXEC SQL OPEN c1;
+	if(sqlca.sqlcode != 0)
+	{
+		vtcp_log("[%s][%d]操作员不存在![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		sprintf( acErrMsg, "[%s][%d]操作员不存在error=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+		WRITEMSG
+		goto ErrExit;
+	}
+	num = 0; 
+	while(1){
+		memset(cKinbr, 0 , sizeof(cKinbr));
+	    	memset(cTlrno, 0 , sizeof(cTlrno));
+		EXEC SQL FETCH c1	INTO :cKinbr,:cTlrno;
+		if(sqlca.sqlcode == 1403){
+			if(num == 0){
+              			vtcp_log("[%s][%d]未找到所要的纪录![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		          	sprintf( acErrMsg, "[%s][%d]未找到所要的纪录=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+		          	WRITEMSG
+		          	goto ErrExit;     
+			}
+			break;
+		}
+		vtcp_log("[%s][%d]ckinbr=[%s]ctlrno=[%s]",__FILE__,__LINE__,cKinbr,cTlrno);
+		num++;
+		EXEC SQL DECLARE s1 CURSOR FOR 
+			select stat from trace_log where opn_br_no=:cKinbr group by stat order by stat;
+		EXEC SQL OPEN  s1;
+		if(sqlca.sqlcode!=0){
+			vtcp_log("[%s][%d]查询登记簿错![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		      	sprintf( acErrMsg, "[%s][%d]查询登记簿错=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+		      	WRITEMSG
+		      	goto ErrExit;  
+		}
+		i = 0;
+		while(1){
+			memset(cStat , 0 , sizeof(cStat));
+			EXEC SQL FETCH  s1	INTO :cStat;
+			if(sqlca.sqlcode!=0){ 
+				if(sqlca.sqlcode != 1403){
+					vtcp_log("[%s][%d]未找到所要的纪录![%d]",__FILE__,__LINE__,sqlca.sqlcode);
+		             		sprintf( acErrMsg, "[%s][%d]未找到所要的纪录=[%d]",__FILE__,__LINE__,sqlca.sqlcode );
+		             		WRITEMSG
+		             		goto ErrExit; 
+				}
+				break;
+		  	}
+			vtcp_log("[%s][%d]cStat=[%s]",__FILE__,__LINE__,cStat);
+			if(!i){
+				pub_base_AllDwnFilName( filename );
+				fp = fopen( filename,"w");
+			  	if( fp==NULL ){
+					sprintf(acErrMsg," open file [%s] error ",filename );
+					WRITEMSG
+					strcpy( g_pub_tx.reply,"S047" );
+					goto ErrExit;
+				}
+				/**显示列标题**/
+				/*fprintf( fp,"~开户机构|机构名称|操作柜员|柜员名称|状态|\n" );*/
+		     	}
+			memset(&wd_com_tel,0x00,sizeof(wd_com_tel));
+			memset(&wd_com_branch,'\0',sizeof(wd_com_branch));
+			ret=Com_branch_Sel(g_pub_tx.reply,&wd_com_branch,"br_no='%s'",cKinbr);
+			ERR_DEAL
+			vtcp_log("[%s][%d]brname=[%s]",__FILE__,__LINE__,wd_com_branch.br_name);
+			ret=Com_tel_Sel( g_pub_tx.reply,&wd_com_tel,"tel='%s'",cTlrno);
+			ERR_DEAL	
+			vtcp_log("[%s][%d]tel_name=[%s]",__FILE__,__LINE__,wd_com_tel.name);
+			if(cStat[0]=='1'){
+             			memcpy(brtype,"完成监督  ",sizeof(brtype)-1);
+         		} 
+         		if(cStat[0]=='0'){
+             			memcpy(brtype,"监督进行中",sizeof(brtype)-1);
+         		} 
+         		if(cStat[0]!='3'){
+		vtcp_log("写文件[%s|%s|%s|%s|%s|",cKinbr,wd_com_branch.br_name,cTlrno,wd_com_tel.name,brtype);
+             			fprintf(fp,"%s|%s|%s|%s|%s|\n",cKinbr,wd_com_branch.br_name,cTlrno,wd_com_tel.name,brtype);  
+             			if(cStat[0]=='0'){
+                 			break;
+             			}
+             			i++;
+         		}
+         		vtcp_log("[%s][%d]i =[%d]",__FILE__,__LINE__,i);
+		}
+		EXEC SQL close  s1;
+		vtcp_log("[%s][%d]num =[%d]",__FILE__,__LINE__,num);
+	}
+	EXEC SQL close  c1;
+	if( !num ){
+		strcpy( g_pub_tx.reply,"S049" );
+		goto ErrExit;
+	}
+	else{
+		fclose(fp);
+	}
+vtcp_log(">>>>>>>>>>>>>>>>OK");
+GoodExit:
+	strcpy( g_pub_tx.reply, "0000" );
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+        set_zd_data(DC_FILE_SND,"1" );
+	return 0;
+ErrExit:
+	sprintf(acErrMsg,"Before bad return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;
+}

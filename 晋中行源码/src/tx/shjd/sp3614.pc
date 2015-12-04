@@ -1,0 +1,159 @@
+/***************************************************************************************
+*交易名称: 事后监督差错登记
+*文件名称: sp3614.pc
+*
+*
+*功能描述: 
+*改造者  : lyz
+*改造日期: 20070116
+*
+***************************************************************************************/
+#define ERR_DEAL if(ret){ \
+		 sprintf(acErrMsg,"sql error.[%d],[%s]--[%d]",ret,__FILE__,__LINE__); \
+		 WRITEMSG \
+		 goto ErrExit;\
+		 }
+#define EXTERN
+#include <string.h>
+#include "public.h"
+#include "hv_define.h"
+#include "sherrmsg_c.h"
+#include "xdtl_main_c.h"
+#include "trace_log_c.h"
+#include "shjdcode_c.h"
+
+int sp3614()
+{
+	FILE *fp;
+	char filename[100];
+	int ret=0;
+	int count=0;
+	int trace_no;
+	struct sherrmsg_c sherrmsg;
+	struct xdtl_main_c xdtl_main;
+	struct trace_log_c trace_log;
+	struct shjdcode_c shjdcode;
+	char tlrno[5];
+	char wssrno[7];
+	char descpt[51];
+	char txcode[4];
+	char cur_tlrno[5];
+	char txtime[9];
+	char cTlrno[5];
+	char tx_day[9];
+	if(check_shjd_tel_poot(g_pub_tx.tel)){
+		strcpy(g_pub_tx.reply,"SH05");
+		set_zd_data(DC_GET_MSG,acErrMsg);
+               	goto ErrExit;
+	}
+	memset(txtime,0x00,sizeof(txtime));
+	memset(filename,0x00,sizeof(filename));
+	memset(cur_tlrno,0x00,sizeof(cur_tlrno));
+	memset(txcode,0x00,sizeof(txcode));
+	memset(tlrno,0x00,sizeof(tlrno));
+	memset(wssrno,0x00,sizeof(wssrno));
+	memset(descpt,0x00,sizeof(descpt));
+	memset(cTlrno , 0 , sizeof(cTlrno));
+	memset(&sherrmsg,0x00,sizeof(struct sherrmsg_c));
+	memset(&xdtl_main,0x00,sizeof(struct xdtl_main_c));
+	memset(&trace_log,0x00,sizeof(trace_log));
+	memset(tx_day,0x00,sizeof(tx_day));
+	memset(&shjdcode,0x00,sizeof(struct shjdcode_c));
+	
+	pub_base_sysinit();
+	
+	get_fd_data("0020",cTlrno);
+	get_fd_data("0170",wssrno);
+	get_fd_data("0250",descpt);
+	get_fd_data("0070",cur_tlrno);
+	
+	memcpy(tlrno,cTlrno,sizeof(tlrno)-1);
+
+	vtcp_log("[%s][%d]cTlrno==[%s]",__FILE__,__LINE__,cTlrno);
+	vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+	vtcp_log("[%s][%d]wssrno=[%s]",__FILE__,__LINE__,wssrno);
+	vtcp_log("[%s][%d]descpt=[%s]",__FILE__,__LINE__,descpt);
+	vtcp_log("[%s][%d]cur_tlrno==[%s]",__FILE__,__LINE__,cur_tlrno);
+	
+	trace_no=atoi(wssrno);	
+	sprintf(tx_day,"%ld",g_pub_tx.tx_date);
+	sprintf(txtime,"%ld",g_pub_tx.tx_time);
+	pub_base_AllDwnFilName( filename);
+	vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+	fp=fopen(filename,"w");
+	if(!fp)
+	{
+		sprintf(acErrMsg,"[%s][%d]I cannot open the file.[%s] ",__FILE__,__LINE__,filename);
+		WRITEMSG
+		goto ErrExit;
+	}	
+	vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+	if((memcmp(tlrno+2,"98",2)==0) && (memcmp(wssrno,"000000",6)==0))
+	{
+		vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+		count=sql_count("sherrmsg"," txday='%s' and tlrno='%s' ",tx_day,tlrno);
+		if(count==0)
+		{
+			memset(&sherrmsg,0x00,sizeof(struct sherrmsg_c));
+			memcpy(sherrmsg.txday,tx_day,sizeof(sherrmsg.txday)-1);
+			memcpy(sherrmsg.txtime,txtime,sizeof(sherrmsg.txtime)-1);
+			memcpy(sherrmsg.tlrno,tlrno,sizeof(sherrmsg.tlrno)-1);
+			memcpy(sherrmsg.wssrno,wssrno,sizeof(sherrmsg.wssrno)-1);
+			memcpy(sherrmsg.errmsg+9,descpt,sizeof(descpt)-1);
+			memcpy(sherrmsg.sdtlrno,cur_tlrno,sizeof(sherrmsg.sdtlrno)-1);
+			ret=Sherrmsg_Ins(sherrmsg,g_pub_tx.reply);
+			ERR_DEAL
+		}
+	}
+	else
+	{
+		vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+		ret=Trace_log_Sel(g_pub_tx.reply,&trace_log,"trace_no=%d order by trace_cnt ",trace_no);
+		ERR_DEAL
+		vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+
+		ret=Shjdcode_Sel(g_pub_tx.reply,&shjdcode,"trancode='%s'",trace_log.tx_code);
+		ERR_DEAL
+		count=sql_count("sherrmsg","txday='%s' and tlrno='%s' and wssrno='%s' ",tx_day,tlrno,wssrno);
+		if(count==0){
+			memset(&sherrmsg,0x00,sizeof(struct sherrmsg_c));
+			memcpy(sherrmsg.txday,tx_day,sizeof(sherrmsg.txday)-1);
+			memcpy(sherrmsg.txtime,txtime,sizeof(sherrmsg.txtime)-1);
+			memcpy(sherrmsg.tlrno,tlrno,sizeof(sherrmsg.tlrno)-1);
+			memcpy(sherrmsg.wssrno,wssrno,sizeof(sherrmsg.wssrno)-1);
+			memcpy(sherrmsg.errmsg,"0        ",9);
+			memcpy(sherrmsg.errmsg+9,descpt,sizeof(descpt)-1);
+			memcpy(sherrmsg.sdtlrno,cur_tlrno,sizeof(sherrmsg.sdtlrno)-1);
+			memcpy(sherrmsg.kinbr,trace_log.tx_br_no,sizeof(sherrmsg.kinbr)-1);
+			memcpy(sherrmsg.tranname,shjdcode.tranname,sizeof(sherrmsg.tranname)-1);
+vtcp_log("--------以下为插入sherrmsg表值---------");
+vtcp_log("txday[%s]",sherrmsg.txday);
+vtcp_log("txtime[%s]",sherrmsg.txtime);
+vtcp_log("tlrno[%s]",sherrmsg.tlrno);
+vtcp_log("wssrno[%s]",sherrmsg.wssrno);
+vtcp_log("errmsg[%s]",sherrmsg.errmsg);
+vtcp_log("shtlrno[%s]",sherrmsg.sdtlrno);
+vtcp_log("kinbr[%s]",sherrmsg.kinbr);
+vtcp_log("tranname[%s]",sherrmsg.tranname);
+			ret=Sherrmsg_Ins(sherrmsg,g_pub_tx.reply);
+			ERR_DEAL
+		}	
+		vtcp_log("[%s][%d]tlrno==[%s]",__FILE__,__LINE__,tlrno);
+		ret=sql_execute("update sherrmsg set errseq='0' where txday='%s' and tlrno='%s' and wssrno='%s' ",tx_day,tlrno,wssrno);
+		ERR_DEAL	
+	}
+	fprintf(fp,"fp1041%s|%s|%s|%s|%s|\n",sherrmsg.kinbr,sherrmsg.txday,wssrno,tlrno,sherrmsg.sdtlrno);
+	fclose(fp);
+	set_zd_data(DC_FILE_SND,"1");
+OkExit:
+	strcpy(g_pub_tx.reply,"0000");
+	sprintf(acErrMsg,"Before OK return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 0;	
+ErrExit:
+	sprintf(acErrMsg,"Before ERROR return: reply [%s]",g_pub_tx.reply);
+	WRITEMSG
+	set_zd_data(DC_REPLY,g_pub_tx.reply);
+	return 1;	
+}
