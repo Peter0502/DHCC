@@ -63,6 +63,9 @@
 报"ES006主机系统状态异常"，是com_sys_parm参数表中的sys_sts状态为3-翻牌 导致的，改为0-正常即可登录。
 *****************************************************************
 
+借方科目： 借增贷减    借方产品：现金，贴现，贷款，应收利息,存放同业,垫款，利息支出，手续费支出，债券
+贷方科目： 借减贷增    贷方产品：活期存款，定期存款，利息收入
+
 三张交易定义表
 select * from tx_def;
 select * from tx_flow_def where tx_code='6346';
@@ -72,13 +75,16 @@ select * from tx_sub_rel t; --子交易关系表
 
 select * from com_eod_exec ; --日终批量配置表
 
+查看某个交易的配置：ttx 交易号    
+如ttx 2101  可以显示tx_def,tx_flow_def,tx_sub_def这三张表中2101交易的配置
+
 *********************************************************************
 
 前台脚本中除了可以使用以@开头的临时变量外,还可以使用以#开头的交易变量或者以$开头的系统变量。
 
 setsel()用指定格式的数据来初始化选择变量（即可以动态初始化控件内容。如动态初始化select控件的下拉选项）
 
-setsel(#VOCTYPE,@tota,'o5t20o1v3o2');--用@tota的内容重新初始化#VOCTYPE
+setsel(#VOCTYPE,@tota,'o5t20o1v3o2');--用@tota的内容重新初始化#VOCTYPE    注：有时title内容超长时会出现解析不成功
 
 ldchar(char *from, int num, char *to) 拷贝定长串到空值结尾的串
 
@@ -501,19 +507,19 @@ cFlag: 1-签约查询 2-短交易查询返回前台用 3-解约利息试算 4-签约利息试算
 109：按揭还款结构
 112:内部帐开户结构
 114:支取方式校验结构
+116:开介质结构
 120:内部帐借方记帐
 121:内部帐贷方记帐
 122:费用结构
 123:大额支付
 124:收费返回结构
 
+
 ***********************************************************************
 
 9901登记薄查询
 3410 更换介质
 3711 IC卡补换卡  后台2410(spD410中调pubf_acct_chg_mdm.pub_acct_chg_mdm）
-
-pub_acct_chg_mdm
 
 
 查哪些函数调pub_base_InsMo_opn_cls
@@ -548,25 +554,221 @@ pub_loss_chg_mdm()挂失换证函数逻辑：
 
 这个函数写的挺乱的，有必要多看看
 
-*********************************************************************************************************
-最近修改点： 后台set_zd_data()里用到的域要在交易的bit_map里的相应位设置为1
+*****************************************************************
+ 注意：后台set_zd_data()，set_zd_long(),set_zd_double()里用到的域变量要传到前台，需在交易的bit_map里的相应位设置为1,如
+2101交易的.c文件里有用到set_zd_data("0460",#str); 要在2101交易的tx_def.bitmap的第46位置为1.
 
-3701开卡交易，后台2101交易的bit_map第30，49，70位要置为1
-6223修改：sp8320.c 新增39域返回签约金额，修改2320交易tx_def中bitmap第39位为1 （后台返回值设置域时需要置为1）
-spD313: 修改取卡号的7，8位，判卡类型
-pubf_chg_mdm.c修改，新增正常换卡后新卡登记开销户登记簿
-修改3313.XML里98，102行，读取方式判断0-IC卡，1-磁条卡
+修改公函后，需重新编译。先appstop停掉服务，再在公函所在目录输入make，则会编译当前目录下的所有公函，并在/lib目录下生成lib+目录名.so文件，最后appstart启动服务。
+如在pubf/base/目录下修改pubf_base_acm.c后，停服务后直接输入make进行编译，在/lib目录下生成新的libbase.so文件后重启服务
+
+!!!!新增介质需要初始化的表：note_parm, mdm_attr,mdm_prdt_rel,dic_data
+
+发短信通知公函 pub_mob_sendmail_bat();
+
+u_servmain.c 执行错误时，会在当前目录下生成core,
+查看错误产生的源码方法：输入dbx uservmain core 进去后where 可看到是在哪个c文件执行时down掉了
+
+新旧账号对照表 Mo_merge_ac   pubf_base_ac.c里的pub_base_old_acno(char * ac_no)
+
+**********************************************
+最近修改点：
+
+1.3701开卡交易，后台2101交易的bit_map第30，49，70位要置为1
+
+2.6223.XML 新增返回亲子关联签约金额字段打印：
+(1)sp8320.c 182行 新增39域返回签约金额  set_zd_double("0390", sMo_qzgl.qy_amt); /**6223中返回签约金额**/
+(2)6223.XML 新增#PARCH_QY_AMT接收39域的值，赋给#QY_AMT_6进行打印显示
+(3)修改2320交易tx_def中bitmap第39位为1 （后台返回值设置域时需要置为1）
+
+3.3313 随心存签约,修改取卡号的7，8位进行判卡类型,控制非金太阳卡跳过签约
+(1)修改spD313.c   
+/**随心存只针对金太阳卡和复合测试卡2开放，其他卡不能签约随心存 20151128**/
+     
+if(strcmp(sMdm_ac_rel.mdm_code,"0027")!=0 && strcmp(sMdm_ac_rel.mdm_code,"0032")!=0)
+   goto OkExit;
+
+4.新增正常换卡后新卡登记开销户登记簿   20151110
+修改pubf_acct_chg_mdm.c 944-989行
+
+5.修改3313.XML里98，102行，读取方式判断0-IC卡，1-磁条卡
+
+6.3701开户记账，科目由21101-"活期储蓄存款"改记到"21104-"其他活期储蓄存款"    利息支出由52103-"活期储蓄存款利息支出"改记到52110-"其他利息支出"
+修改点：
+(1)屏蔽ICOPNACCTDEFAULT.IMP 539行， 原先为 #PRODNO='101';(下拉框由上一页选介质种类后查回并初始化,无需再赋值)
+(2)修改介质产品表中金太阳卡对应的产品编号prdt_no为104
+insert into MDM_PRDT_REL (PRDT_NO, MDM_CODE1, MDM_CODE2, MDM_CODE3) values ('104', '0027', '----', '----');
+(3)活期参数表新增
+--新增产品
+insert into dd_parm (PRDT_NO, TITLE, BEG_DATE, END_DATE, CIF_TYPE, CUR_NO, STTL_TYPE, AC_TYPE, BAL_TYPE, MIN_BAL, MAX_BAL, MIN_OPN_AMT, MAX_OPN_AMT, OPN_CHRG_IND, OPN_CHRG_CODE, THR_OPN_IND, THR_CLS_IND, LMT_CODE, FWD_INFRM_CODE, INTST_BAL_TYPE, INTST_TERM_TYPE, INTST_MAX_BAL, INTST_MIN_BAL, RATE_NO, RATE_TYPE, RATE_MODE, RATE_FUNC_CODE, MIN_FLT_RATIO, MAX_FLT_RATIO, INTST_TYPE, ACM_CALC_TYPE, INTST_MON, INTST_DAY, TAX_NO, CHRG_TERM_TYPE, CHRG_CODE, DRT_NO, MIN_DRT_AMT, LMT_DRT_AMT, KEEP_CHRG_CODE, OPN_DTR_TERM, OPN_DTR_TYPE, TX_DRT_IND, DTX_DRT_IND, SLP_COND, SLP_CHRG_IND, CLS_COND_NO, HST_KEEP_TERM, HST_KEEP_TYPE, PRT_IND, SLP_PRT_IND, PRT_TERM, PRT_TERM_TYPE, DPST_IND, DRAW_IND, THR_DPST_IND, THR_DRAW_IND, OPN_APLIC_IND, CASH_IND, SINGL_IND, OD_APLIC_IND, LKG_IND, OWNER_PRDT_NO, OPN_LMT, CLS_LMT, DC_CODE, PUT_IND)
+values ('104', '金太阳卡活期', 19850101, 99999999, '1', '01', 'D', '5', 'C', 0.00, 0.00, 1.00, 0.00, 'N', '000', 'Y', 'Y', '000', '000', 'C', '0', 0.00, 0.00, '100', '0', 'F', '000', 0.00000, 0.00000, '4', '2', 3, 20, '001', 'N', '000', '000', 0.00, 0.00, '000', 1, 'Y', 'Y', 'Y', '000', 'N', '000', 5, 'Y', 'Y', 'Y', 1, 'Y', 'Y', 'Y', 'Y', 'Y', 'N', 'Y', 'Y', 'N', 'N', '000', 0, 0, '2114', 'N');
+(4)会计代码对应科目表新增参数：
+insert into dc_acc_rel (DC_CODE, MO, ACC_HRT, DATA_CODE)
+values ('2114', '其他活期储蓄存款', '21104', '0152');
+insert into dc_acc_rel (DC_CODE, MO, ACC_HRT, DATA_CODE)
+values ('2114', '应付利息税', '26800', '0154');
+insert into dc_acc_rel (DC_CODE, MO, ACC_HRT, DATA_CODE)
+values ('2114', '其他利息支出', '52110', '0153');
+
+7.金太阳卡存取款交易后，mo_sxc.flag未更新为1-当日发生业务： 
+修改pubf_base_acm.c 166行，增加存取款判断条件
+strcmp(g_pub_tx.tx_code,"2201")==0 || strcmp(g_pub_tx.tx_code,"2202")==0 || strcmp(g_pub_tx.sub_tx_code,"D099")==0 || strcmp(g_pub_tx.sub_tx_code,"D003")==0
+
+8.修改金太阳卡存取款时凭证类型显示为空：
+(1)dic_data 表新增金太阳卡类型 insert into dic_data (PR_CODE, PR_SEQ, CONTENT) values ('per_dety', '027', '金太阳卡');
+(2)DPACTINFO.IMP 387行  #VOCTYPE下拉框，增加<OPTION VALUE="027" TITLE="0.金太阳卡"/>
+SVACTINFO.IMP 194行 #VOCTYPE 下拉框，增加<OPTION VALUE="027" TITLE="0.金太阳卡"/>
 
 
+9.对公活期开户，去掉签约随心存选项   屏蔽OPN_ACCT_PAGE3.IMP 中对应<item></item>
 
-sp9331.c   108行，科目号传入的是账号
-
-u_servmain.c
-里的pubf_com_pack会窜了trxno.
-
-开户依次调'1712','9838','9668','9917','9782','9844'
+10.sp9952.c 有用到71域返传前台数据，tx_def表中9952交易bitmap第71位要置为1
 
 
+11.增加取款时手输账号时对621780卡bin类型卡的过期判断：
+(1)sp8115.c 156行 增加 set_zd_long("0460",vmdm_ac_rel.end_date); /*返回给3202.XML交易查金太阳卡的过期日期 20151119*/
+(2)8115交易bitmap第46位置1
+(3)DPACTINFO.IMP  修改70-106行如下
+
+12. 3701交易新增介质种类的开户（复合员工卡，复合薪资卡，复合测试卡）
+修改ICOPNACCTDEFAULT.IMP 
+(1)168行新增返回复合员工卡，复合薪资卡，复合测试卡1，复合测试卡2：
+@sel_buf=substr(@tota,96,32)+substr(@tota,128,32)+substr(@tota,160,32)+substr(@tota,192,32)+substr(@tota,224,32)+substr(@tota,256,32);
+
+(2)修改379行  if(#JZZL=='0020' or #JZZL=='0024' or #JZZL=='0027'or #JZZL=='0028' or #JZZL=='0029' or #JZZL=='0031' or #JZZL=='0032')
+
+(3)343行 新增：
+//卡种账号与类型校验
+				
+if(substr(#CARDNO,6,2) != '30' and #JZZL == '0024')  普卡
+if(substr(#CARDNO,6,2) != '56' and #JZZL == '0028')  员工卡
+if(substr(#CARDNO,6,2) != '18' and #JZZL == '0029')  薪资卡
+if(substr(#CARDNO,6,2) != '44' and (#JZZL == '0031'or #JZZL == '0032')  测试卡
+
+(4)247行
+if(#JZZL!='0024' and #JZZL!='0027'and #JZZL!='0028'and #JZZL!='0029'and #JZZL!='0031'and #JZZL!='0032')
+
+
+13. 9917交易bitmap 103位置1
+14. 7101.xml，7102.xml，7103.xml，7104.xml，7106.xml，7110.xml 增加对凭证号码与所选卡种的校验
+15. 2204 IC卡销户交易增加D318亲子关联解约子交易。
+16.修改menu.xml里的金太阳卡名称
+17.修改3317.xml里显示和打印，由"父母"修改为"家长"
+18.修改2101.xml里,注掉 @rh=PrintBilldata(); 相关语句
+19.修改6223.xml里，2320交易bitmap 39位置1
+20.3317.XML 注掉身份证刷卡功能   275行增加判断是否已签约，提前提示
+21.修改sp8319.c "未签约"修改为"已解约"
+
+22.删除mo_qzgl表的唯一索引，允许客户多次进行亲子关联的签约，解约  drop index MO_QZGL_IDX1;
+
+23. 0008.XML 金太阳卡不能签约(大为已改)
+
+24.修改3204交易，ACINFO3204.XML 452行  #VOCTYPE 增加<OPTION VALUE="009" TITLE="0.金太阳成长存单"/>
+
+25.修改3103.xml，102行增加判断   if(#JZZL=='0009'){
+showmsg('请插入金太阳成长存单打印...');
+}
+   修改OPN_PRT_VOC.IMP,457行增加金太阳成长存单打印格式
+
+26.3317加“划转日期”HZ_RQ，可选择每月8，18，28日扣款。
+(1)修改3317.XML spD317   使用FD51域进行传值
+(2)gD158.c
+
+27.随心存余额在结息后没有正常减掉。 
+(1)修改pubf_base_intstHQ.c 中公函471行，加上对mo_sxc.bal的更新 
+/*更新随心存余额,这样已结利息会在日终转入随心存，产生复利 add by wp 20151126*/
+            
+iRet = sql_execute("update mo_sxc set bal=bal-%lf where ac_id=%ld and ac_seqn=%d and  sts='1'", \
+                                       dTx_amt, ac_id, ac_seqn);
+            
+if(iRet)
+            
+{
+ strcpy(g_pub_tx.reply, "D102");
+ 
+sprintf( acErrMsg, "更新Mo_sxc.bal出错!!!" );
+WRITEMSG
+ 
+goto ErrExit;
+}
+(2)修改gD156.c  209行增加结息转存随心存
+
+28.增加新功能8320交易，打印金太阳卡存取款明细 。修改menu.xml，新增2321交易，8321子交易，sp8321.c
+(1)新增8320.XML,sp8321.c
+
+29.修改3201，3202交易，打印凭证，对于金太阳卡不显示"利率"值（瑜平已改）
+
+30. 修改了mo_sxc_hst_intst.rate 为number(16,3) 投产时需要重新编译libpubdb.so 覆盖
+
+31.修改3101，3102，记表时dd_mst_hst.brf 摘要字段为"结息"
+
+32.9102 “随心息”改为“结息”：修改pubf_base_prt.c 
+
+33.3701金太阳卡开户，去掉最后一页中的"计息类型"  修改ICOPNACCTPAGE3.IMP 
+(1)142行  增加NAME="TJXLX"   
+(2)<FIRSTINIT>中增加介质类型判断，如是金太阳卡，屏蔽"计息类型"
+
+34.3204储蓄销户时，修改ACINFO3204.IMP  10行m($MSR2,1,19) 修改为M($MSR2,1,19)
+
+35.修改sp8315.c中 141行，“随心存余额”改为"计息中金额"
+
+36.ICOPNACCTDEFAULT.IMP 增加代理人年龄限制，不满18岁的不能代理
+
+37.8320.XML 增加对金太阳卡和家长卡的身份验证
+
+37.IC卡换卡后，自动转移亲子关联签约(签约时以ac_id建立关系的，无需修改)
+
+39.利息试算
+pub_base_deadlineM(g_pub_tx.tx_date,iMouth,&lQx_Date)   计算g_pub_tx.tx_date在iMouth个月后的日期lQx_Date
+
+
+40.修改spD313.c  51行  只针对金太阳卡和复合测试卡2开放随心存签约    
+ if(strcmp(sMdm_ac_rel.mdm_code,'0027')!=0 && strcmp(sMdm_ac_rel.mdm_code,'0032')!=0)
+     	
+  goto OkExit;
+
+41.mo_sxc_hst_intst 表字段(ac_id,ac_seqn,rate_date,sts)加索引
+
+42.3317.XML 139行，放开对挂失卡的亲子关联解约限制，挂失状态的允许解约亲子关联
+
+43.零整定期计息公式：
+利息=月存金额*累计月积数*月利率
+累计月积数= （存入次数+1）/2 * 存入次数
+零存整取一年期年利率 1.43%
+月存1000，存一年，利息=1000* [(12+1)/2*12]  * [1.43%/12]=1000*78*[1.43%/12]=92.95
+
+零整一年期 1.43%
+零整三年期 1.69%
+零整五年期 3.30%
+
+44.修改8315交易的“签约利息试算”结果列表中第一列名字为“存入日”.生产上替换sp8315.so即可
+
+45.修改3317.XML 在选择签约类型lostfocus时，判断介质状态；同时放开239-248行对家长卡的账户状态和冻结状态的控制
+
+******************************************************************************************************
+
+转序号公函：pubf_base_ac.c 
+如账户对应产品号为活期（产品号以1开头），使用币种转换ac_seqn
+ret=pub_base_CurToSeqn(g_pub_tx.cur_no,&g_pub_tx.ac_seqn);   (活期)币种转换成账户序号
+
+如g_mdm_ac_rel.ac_seqn=9999，即为多账户介质，使用pub_base_CrtAcSeqn( g_pub_tx.ac_id , &g_pub_tx.ac_seqn ); 查账户序号ID表中可用的最大账户序号，+1并更新ac_seqn_id.ac_seqn_id后，返回给g_pub_tx.ac_seqn
+
+ac_seqn_id表：记录了每个ac_id可使用的最大账户子序号
+
+******************************************************************************************************
+高级->配置->应用程序布局->文件标签->操作
+
+卡系统返回代码-->一代平台-->核心前台
+查返回码对应关系:用户jzsw
+app/jzsw/xml/ERRCONVERT.xml
+
+重启一代平台 用户：jzsw    >swman   DHC-Switch>stop  start
+
+#############################################################
+=0839; (000000)
+<1928: (111111)
+
+
+对公客户号：50168392
 
 
 
