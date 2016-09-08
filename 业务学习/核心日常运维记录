@@ -414,13 +414,13 @@ select t.opn_br_no,m.ac_no,t.tx_br_no,t.add_ind,t.ct_ind,t.tx_amt,t.bal,t.intst_
 
 29.
 --查询20151201-20160727 金太阳卡开销户及签约解约情况
-select c.opn_br_no,c.ac_no,c.name,c.id_no,c.mobile,c.amt,c.bal,c.tx_date,case when c.wrk_sts='1' then '开户' when c.wrk_sts='2' then '销户' else '其他' end, c.rpl_date,c.new_ac_no,q.tx_date,q.tx_br_no,q.untx_date,q.untx_br_no,q.qy_amt,q.sts,q.hz_date
+select distinct c.opn_br_no,c.ac_no,c.name,c.id_no,c.mobile,c.amt,c.bal,c.tx_date,case when c.wrk_sts='1' then '开户' when c.wrk_sts='2' then '销户' else '其他' end, c.rpl_date,c.new_ac_no,q.tx_date,q.tx_br_no,q.untx_date,q.untx_br_no,q.qy_amt,q.sts,q.hz_date
 from (select a.opn_br_no,a.ac_no,a.ac_id,a.name,a.id_no,a.mobile,a.amt,a.bal,a.tx_date,a.wrk_sts, b.rpl_date,b.new_ac_no from(
 select m.opn_br_no,m.ac_no,m.ac_id,d.name,m.id_no,e.email as mobile,o.amt,d.bal,o.tx_date,o.wrk_sts from mdm_ac_rel m, mo_opn_cls o,dd_mst d,cif_email_inf e 
 where m.ac_id=o.ac_id and m.ac_id=d.ac_id  and d.cif_no=e.cif_no  and m.mdm_code='0027' and o.tx_date between 20151201 and 20160727 and o.wrk_sts in('1','2'))a left join mo_rpl_note b on a.ac_no=b.old_ac_no order by a.tx_date)c left join mo_qzgl q on  c.ac_id=q.child_ac_id order by c.id_no,c.tx_date;
 
 --查询金太阳成长存单开销户情况
-select c.opn_br_no,c.ac_no,c.name,c.id_no,c.amt,c.bal,c.tx_date,case when c.wrk_sts='1' then '开户' when c.wrk_sts='2' then '销户' else '其他' end, c.rpl_date,c.new_ac_no from
+select distinct c.opn_br_no,c.ac_no,c.name,c.id_no,c.amt,c.bal,c.tx_date,case when c.wrk_sts='1' then '开户' when c.wrk_sts='2' then '销户' else '其他' end, c.rpl_date,c.new_ac_no from
 (select a.opn_br_no,a.ac_no,a.ac_id,a.name,a.id_no,a.amt,a.bal,a.tx_date,a.wrk_sts, b.rpl_date,b.new_ac_no from(
 select m.opn_br_no,m.ac_no,m.ac_id,td.name,m.id_no,o.amt,td.bal,o.tx_date,o.wrk_sts from mdm_ac_rel m, mo_opn_cls o,td_mst td
 where m.ac_id=o.ac_id and m.ac_id=td.ac_id  and m.mdm_code='0009' and o.tx_date between 20151201 and 20160727 and o.wrk_sts in('1','2'))a left join  mo_rpl_note b on a.ac_no=b.old_ac_no order by a.tx_date)c order by c.id_no,c.tx_date;
@@ -433,3 +433,28 @@ where m.ac_id=o.ac_id and m.ac_id=td.ac_id  and m.mdm_code='0009' and o.tx_date 
 --新增代销基金过渡户科目20160809
 select t.*,t.rowid from gls_com_item t where t.acc_no in('155106','231406','60210605') order by acc_no;
 select t.*,t.rowid from gls_com_item_rel t where t.in_acc_no in('155106','231406','60210605');
+
+32.
+--全行存折，存单，卡等数量统计
+select count(*) from mdm_ac_rel t where t.mdm_code  in('0000','0010','0011','0016','0018') and note_sts='0'; --存折
+select count(*) from mdm_ac_rel t where t.mdm_code  in('0006','0007','0008','0009','0012','0013','0014','0015','0017','0019','0033','0034','0035','0114') and note_sts='0';--存单
+select count(*) from mdm_ac_rel t where t.mdm_code  in('0020','0021','0022','0023','0024','0025','0026','0027','0028','0029') and note_sts='0'; --卡
+
+select count(*) from mdm_ac_rel t, dd_mst d where t.ac_id=d.ac_id  and ac_no like '5%' and t.note_sts='0'; --对公活期账户数
+select count(*) from mdm_ac_rel t, td_mst d where t.ac_id=d.ac_id  and ac_no like '5%' and t.note_sts='0'; --对公定期账户数
+
+select count(*) from mdm_ac_rel t, ln_mst d where t.ac_id=d.ac_id  and ac_no like '5%' and t.note_sts='0'; --对公贷款账户数
+select count(*) from mdm_ac_rel t, ln_mst d where t.ac_id=d.ac_id  and ac_no like '1%' and t.note_sts='0'; --对私贷款账户数
+
+select distinct a.cif_no from(select * from mdm_ac_rel t, ln_mst d where t.ac_id=d.ac_id  and ac_no like '5%' and t.note_sts='0')a ;  --对公贷款客户数
+select distinct a.cif_no from(select * from mdm_ac_rel t, ln_mst d where t.ac_id=d.ac_id  and ac_no like '1%' and t.note_sts='0')a ;  --对私贷款客户数
+
+select count(*) from mdm_ac_rel t, fn_reg f where t.ac_id=f.ac_id  and t.note_sts='0' and f.sts<>'*'; --理财账户数
+
+33.
+--查询某单位所有代发工资客户的联系方式
+select distinct t.cif_no,t.email,d.name from cif_email_inf t,dd_mst d,mdm_ac_rel m where t.cif_no=d.cif_no and d.ac_id=m.ac_id and m.ac_no in(select distinct bank_acct_no from ag_paytlcs where unit_no='1229')
+
+34.
+--按身份证号查询31户个人的账号，余额，开户行
+select m.ac_no,d.bal,m.opn_br_no,m.id_no,d.name from mdm_ac_rel m,dd_mst d where m.ac_id=d.ac_id and m.note_sts<>'*' and m.id_no in('142401196408270329') order by m.id_no ;
